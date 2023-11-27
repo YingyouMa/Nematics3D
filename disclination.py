@@ -3,12 +3,10 @@
 # Yingyou Ma, Physics @ Brandeis, 2023
 # -----------------------------------------------
 
-#qqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+#dddddddddddddddddddddddddddddddd
 
 import numpy as np
 import time
-
-# laaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 # -------------------------------------------------
 # Detect the disclinations in the 3D director field
