@@ -6,8 +6,6 @@
 import numpy as np
 import time
 
-# Let's check
-
 # -------------------------------------------------
 # Detect the disclinations in the 3D director field
 # -------------------------------------------------
