@@ -93,16 +93,19 @@ def nearest_neighbor_order(points):
 # -------------------------------------------------------------------------
 
 def show_loop_plane(
-        loop_box_indices, n_whole, 
-        width=0, margin_ratio=0.6, upper=0, down=0, norm_index=0, 
-        tube_radius=0.25, tube_opacity=0.5, scale_n=0.5
-        ):
+                    loop_box_indices, n_whole, 
+                    width=0, margin_ratio=0.6, upper=0, down=0, norm_index=0, 
+                    tube_radius=0.25, tube_opacity=0.5, scale_n=0.5,
+                    print_load_mayavi=False
+                    ):
     
-    from mayavi import mlab
+    if print_load_mayavi == True:
+        now = time.time()
+        from mayavi import mlab
+        print(f'loading mayavi cost {round(time.time()-now, 2)}s')
+    else:
+        from mayavi import mlab
     from .field import select_subbox
-    
-    if width == 0:
-        width = np.shape(n_whole)[0]
     
     def SLP_setup(loop_box_indices, n_whole, width, margin_ratio=0.6, norm_index=0):
 
@@ -143,7 +146,7 @@ def show_loop_plane(
         d_box = np.einsum('iabc, i -> abc', grid, norm_vec)
         dmean = np.average(d_box)
 
-        return dmean, d_box, grid, norm_vec, n_box, N
+        return dmean, d_box, grid, n_box, N, norm_vec, eigvec, eigval
 
 
     def SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box, scale_n):
@@ -179,13 +182,16 @@ def show_loop_plane(
             loop_coord = np.concatenate([loop_coord, [loop_coord[0]]])
             mlab.plot3d(*(loop_coord.T), tube_radius=tube_radius, opacity=tube_opacity)
 
+    N = np.shape(n_whole)[0]
+    if width == 0:
+        width = N
+        
+    dmean, d_box, grid, n_box, N, norm_vec, eigvec, eigval = SLP_setup(loop_box_indices, 
+                                                                        n_whole, 
+                                                                        width, 
+                                                                        margin_ratio=margin_ratio
+                                                                        )
     
-    dmean, d_box, grid, norm_vec, n_box, N = SLP_setup(loop_box_indices, 
-                                                      n_whole, 
-                                                      width, 
-                                                      margin_ratio=margin_ratio
-                                                      )
-  
     down, upper = np.sort([down, upper])
     if upper==down:
         upper = dmean + 0.5
@@ -200,6 +206,8 @@ def show_loop_plane(
                   n_box, loop_box_indices[:,0], 
                   N=N, width=width, tube_radius=tube_radius, tube_opacity=tube_opacity
                   )
+
+    return dmean, eigvec, eigval
 
 
 #
