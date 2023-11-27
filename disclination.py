@@ -8,8 +8,6 @@
 import numpy as np
 import time
 
-# laaaaaaaaaaaaaaaaaaaaaaaaaaaa
-
 # -------------------------------------------------
 # Detect the disclinations in the 3D director field
 # -------------------------------------------------
