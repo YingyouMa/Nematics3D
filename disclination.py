@@ -93,13 +93,16 @@ def nearest_neighbor_order(points):
 # -------------------------------------------------------------------------
 
 def show_loop_plane(
-        loop_box_indices, n_whole, width, 
-        margin_ratio=0.6, upper=0, down=0, norm_index=0, 
-        tube_radius=0.25, tube_opacity=0.5
+        loop_box_indices, n_whole, 
+        width=0, margin_ratio=0.6, upper=0, down=0, norm_index=0, 
+        tube_radius=0.25, tube_opacity=0.5, scale_n=0.5
         ):
     
     from mayavi import mlab
     from .field import select_subbox
+    
+    if width == 0:
+        width = np.shape(n_whole)[0]
     
     def SLP_setup(loop_box_indices, n_whole, width, margin_ratio=0.6, norm_index=0):
 
@@ -143,7 +146,7 @@ def show_loop_plane(
         return dmean, d_box, grid, norm_vec, n_box, N
 
 
-    def SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box):
+    def SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box, scale_n):
 
         index = (d_box<upper) * (d_box>down)
         index = np.where(index == True)
@@ -160,7 +163,7 @@ def show_loop_plane(
                 n_plane[:,0], n_plane[:,1], n_plane[:,2],
                 mode = '2ddash',
                 scalars = scalars,
-                scale_factor=0.5,
+                scale_factor=scale_n,
                 opacity = 1
                 )
         vector.glyph.color_mode = 'color_by_scalar'
@@ -192,7 +195,7 @@ def show_loop_plane(
         down  = dmean + down
 
     mlab.figure(bgcolor=(0,0,0))
-    SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box)
+    SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box, scale_n)
     SLP_plot_loop(
                   n_box, loop_box_indices[:,0], 
                   N=N, width=width, tube_radius=tube_radius, tube_opacity=tube_opacity
