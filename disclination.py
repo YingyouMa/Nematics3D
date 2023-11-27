@@ -97,31 +97,10 @@ def show_loop_plane(
         margin_ratio=0.6, upper=0, down=0, norm_index=0, 
         tube_radius=0.25, tube_opacity=0.5
         ):
-
-  from mayavi import mlab
-  from field import select_subbox
-
-  dmean, d_box, grid, norm_vec, n_box, N = SLP_setup(loop_box_indices, 
-                                                    n_whole, 
-                                                    width, 
-                                                    margin_ratio=margin_ratio
-                                                    )
-  
-    down, upper = np.sort([down, upper])
-    if upper==down:
-        upper = dmean + 0.5
-        down  = dmean - 0.5
-    else:
-        upper = dmean + upper
-        down  = dmean + down
-
-    mlab.figure(bgcolor=(0,0,0))
-    SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box)
-    SLP_plot_loop(
-                  n_box, loop_box_indices[:,0], 
-                  N=N, width=width, tube_radius=tube_radius, tube_opacity=tube_opacity
-                  )
-
+    
+    from mayavi import mlab
+    from .field import select_subbox
+    
     def SLP_setup(loop_box_indices, n_whole, width, margin_ratio=0.6, norm_index=0):
 
         # Find the region enclosing the loop. The size of the region is controlled by margin_ratio
@@ -196,6 +175,28 @@ def show_loop_plane(
             loop_coord = sort_loop_indices(loop_indices)/N*width
             loop_coord = np.concatenate([loop_coord, [loop_coord[0]]])
             mlab.plot3d(*(loop_coord.T), tube_radius=tube_radius, opacity=tube_opacity)
+
+    
+    dmean, d_box, grid, norm_vec, n_box, N = SLP_setup(loop_box_indices, 
+                                                      n_whole, 
+                                                      width, 
+                                                      margin_ratio=margin_ratio
+                                                      )
+  
+    down, upper = np.sort([down, upper])
+    if upper==down:
+        upper = dmean + 0.5
+        down  = dmean - 0.5
+    else:
+        upper = dmean + upper
+        down  = dmean + down
+
+    mlab.figure(bgcolor=(0,0,0))
+    SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box)
+    SLP_plot_loop(
+                  n_box, loop_box_indices[:,0], 
+                  N=N, width=width, tube_radius=tube_radius, tube_opacity=tube_opacity
+                  )
 
 
 #
