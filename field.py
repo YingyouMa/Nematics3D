@@ -97,18 +97,18 @@ def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid
     from itertools import product
 
     diagnal = vertex_indices[1] - vertex_indices[0]
-    num_origin = np.einsum('i, ji -> j', diagnal, axes)
+    num_origin = np.einsum('i, ji -> j', diagnal, axes_unit)
     axes = np.einsum('i, ij -> ij', np.abs(num_origin) / num_origin, axes_unit)
     num_origin = np.abs(num_origin)
-    num_scale = num_min / np.min(num_origin)
+    num_scale = num_min / np.min(num_origin) * np.array(ratio)
     numx, numy, numz = np.round(num_scale * num_origin).astype(int)
 
     box = list(product(np.arange(numx+1), np.arange(numy+1), np.arange(numz+1)))
-    box = np.array(subbox)
-    box = np.einsum('ai, ij -> aj', subbox[:,:3], (axes.T/num_scale).T)
-    box = subbox + vertex_indices[0]
+    box = np.array(box)
+    box = np.einsum('ai, ij -> aj', box[:,:3], (axes.T/num_scale).T)
+    box = box + vertex_indices[0]
 
-    sl0, sl1, sl2, ortho_box = select_subbox(vertex_indices, whole_box_grid_size,
+    sl0, sl1, sl2, ortho_box = select_subbox(loop_box, whole_box_grid_size,
                                               margin_ratio=margin_ratio)
     n_box = n[sl0,sl1,sl2]
     S_box = S[sl0,sl1,sl2]
@@ -133,17 +133,19 @@ def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid
       return result
 
     Q_out = np.zeros( (numz+1, numy+1, numx+1, 3, 3)  )
-    Q_out[..., 0,0] = interp_Q(0, 0, points, Q_box, Q_out, subbox, numx, numy, numz)
-    Q_out[..., 0,1] = interp_Q(0, 1, points, Q_box, Q_out, subbox, numx, numy, numz)
-    Q_out[..., 0,2] = interp_Q(0, 2, points, Q_box, Q_out, subbox, numx, numy, numz)
-    Q_out[..., 1,1] = interp_Q(1, 1, points, Q_box, Q_out, subbox, numx, numy, numz)
-    Q_out[..., 1,2] = interp_Q(1, 2, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 0,0] = interp_Q(0, 0, points, Q_box, Q_out, box, numx, numy, numz)
+    Q_out[..., 0,1] = interp_Q(0, 1, points, Q_box, Q_out, box, numx, numy, numz)
+    Q_out[..., 0,2] = interp_Q(0, 2, points, Q_box, Q_out, box, numx, numy, numz)
+    Q_out[..., 1,1] = interp_Q(1, 1, points, Q_box, Q_out, box, numx, numy, numz)
+    Q_out[..., 1,2] = interp_Q(1, 2, points, Q_box, Q_out, box, numx, numy, numz)
     Q_out[..., 1,0] = Q_out[..., 0,1]
     Q_out[..., 2,0] = Q_out[..., 0,2]
     Q_out[..., 2,1] = Q_out[..., 1,2]
     Q_out[..., 2,2] = - Q_out[..., 0,0] - Q_out[..., 1,1]
 
     Q_out = np.einsum('ab, ijkbc, dc -> ijkad', axes_unit, Q_out, axes_unit)
+
+    return Q_out
 
 
 
