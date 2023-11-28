@@ -9,7 +9,7 @@ import numpy as np
 # Diagonalization of Q tensor in 3D nematics.
 # --------------------------------------------------------
 
-def diagonalize(qtensor):
+def diagonalizeQ(qtensor, arccos_digit=5):
     """
     Diagonalization of Q tensor in 3D nematics.
     Currently it onply provides the uniaxial information.
@@ -32,31 +32,40 @@ def diagonalize(qtensor):
     """
     
     # derive Q field and calculate it with np.einsum() and np.linalg.det()
+
     N, M, L = np.shape(qtensor)[:3]
-    Q = np.zeros( (N, M, L, 3, 3)  )
-    Q[..., 0,0] = qtensor[0]
-    Q[..., 0,1] = qtensor[1]
-    Q[..., 0,2] = qtensor[2]
-    Q[..., 1,0] = qtensor[1]
-    Q[..., 1,1] = qtensor[3]
-    Q[..., 1,2] = qtensor[4]
-    Q[..., 2,0] = qtensor[2]
-    Q[..., 2,1] = qtensor[4]
-    Q[..., 2,2] = - Q[..., 0,0] - Q[..., 1,1]
+
+    if np.shape(qtensor) == (N, M, L, 3, 3):
+        Q = qtensor
+    elif np.shape(qtensor) == (N, M, L, 5):
+        Q = np.zeros( (N, M, L, 3, 3)  )
+        Q[..., 0,0] = qtensor[0]
+        Q[..., 0,1] = qtensor[1]
+        Q[..., 0,2] = qtensor[2]
+        Q[..., 1,0] = qtensor[1]
+        Q[..., 1,1] = qtensor[3]
+        Q[..., 1,2] = qtensor[4]
+        Q[..., 2,0] = qtensor[2]
+        Q[..., 2,1] = qtensor[4]
+        Q[..., 2,2] = - Q[..., 0,0] - Q[..., 1,1]
+    else:
+        raise NameError(
+            "The dimension of qtensor would be (N, M, L, 3, 3) or (N, M, L, 5, 5)"
+            )
 
     p = 0.5 * np.einsum('ijkab, ijkba -> ijk', Q, Q)
     q = np.linalg.det(Q)
     r = 2 * np.sqrt( p / 3 )
-    del Q
 
     # derive S and n
-    S = r * np.cos( 1/3 * np.arccos( 4 * q / r**3 ) )
+    S = r * np.cos( 1/3 * np.arccos( np.round(4 * q / r**3 , arccos_digit) ) )
     temp = np.array( [
-        qtensor[2] * ( qtensor[3] - S ) - qtensor[1] * qtensor[4] ,
-        qtensor[4] * ( qtensor[0] - S ) - qtensor[1] * qtensor[2] ,
-        qtensor[1]**2 - ( qtensor[0] - S ) * ( qtensor[3] - S  )
+        Q[..., 0,2] * ( Q[..., 1,1] - S ) - Q[..., 0,1] * Q[..., 1,2] ,
+        Q[..., 1,2] * ( Q[..., 0,0] - S ) - Q[..., 0,1] * Q[..., 0,2] ,
+        Q[..., 0,1]**2 - ( Q[..., 0,0] - S ) * ( Q[..., 1,1] - S  )
         ] )
     n = temp / np.linalg.norm(temp, axis = 0)
+    S = S * 1.5
 
     return S, n
 
