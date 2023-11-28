@@ -107,14 +107,14 @@ def show_loop_plane(
         from mayavi import mlab
     from .field import select_subbox
     
-    def SLP_setup(loop_box_indices, n_whole, width, margin_ratio=0.6, norm_index=0):
+    def SLP_setup(loop_box_indices, n_whole, width, margin_ratio, norm_index):
 
         # Find the region enclosing the loop. The size of the region is controlled by margin_ratio
         N = np.shape(n_whole)[0]
-        sl0, sl1, sl2 = select_subbox(loop_box_indices, 
-                                      [N, N, N], 
-                                      margin_ratio=margin_ratio
-                                      )
+        sl0, sl1, sl2, _ = select_subbox(loop_box_indices, 
+                                        [N, N, N], 
+                                        margin_ratio=margin_ratio
+                                        )
 
         # Select the local n around the loop
         n_box = n_whole[sl0,sl1,sl2]
@@ -173,7 +173,7 @@ def show_loop_plane(
         lut_manager = mlab.colorbar(object=vector)
         lut_manager.data_range=(0,1)
 
-    def SLP_plot_loop(n_box, origin, N=1, width=1, tube_radius=0.75, tube_opacity=0.5):
+    def SLP_plot_loop(n_box, origin, N, width, tube_radius, tube_opacity):
 
         loop_indices = find_defect(n_box)
         if len(loop_indices) > 0:
@@ -185,11 +185,12 @@ def show_loop_plane(
     N = np.shape(n_whole)[0]
     if width == 0:
         width = N
-        
+
     dmean, d_box, grid, n_box, N, norm_vec, eigvec, eigval = SLP_setup(loop_box_indices, 
                                                                         n_whole, 
                                                                         width, 
-                                                                        margin_ratio=margin_ratio
+                                                                        margin_ratio,
+                                                                        norm_index
                                                                         )
     
     down, upper = np.sort([down, upper])
@@ -204,7 +205,7 @@ def show_loop_plane(
     SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box, scale_n)
     SLP_plot_loop(
                   n_box, loop_box_indices[:,0], 
-                  N=N, width=width, tube_radius=tube_radius, tube_opacity=tube_opacity
+                  N, width, tube_radius, tube_opacity
                   )
 
     return dmean, eigvec, eigval

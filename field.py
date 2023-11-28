@@ -10,81 +10,146 @@ import numpy as np
 # --------------------------------------------------------
 
 def diagonalize(qtensor):
-  """
-  Diagonalization of Q tensor in 3D nematics.
-  Currently it onply provides the uniaxial information.
-  Will be updated to derive biaxial analysis in the future.
-  Algorythm provided by Matthew Peterson:
-  https://github.com/YingyouMa/3D-active-nematics/blob/405c8d54d797cc39c1f14c82112cb43d304ef16c/reference/order_parameter_calculation.pdf
+    """
+    Diagonalization of Q tensor in 3D nematics.
+    Currently it onply provides the uniaxial information.
+    Will be updated to derive biaxial analysis in the future.
+    Algorythm provided by Matthew Peterson:
+    https://github.com/YingyouMa/3D-active-nematics/blob/405c8d54d797cc39c1f14c82112cb43d304ef16c/reference/order_parameter_calculation.pdf
 
-  Parameters
-  ----------
-  qtensor:  numpy array, tensor order parameter Q of each grid
-            shape: (N, M, L, 5), where N, M and L are the number of grids in each dimension.
-            qtensor[..., 0] = Q_xx, qtensor[..., 1] = Q_xy, and so on. 
+    Parameters
+    ----------
+    qtensor:  numpy array, tensor order parameter Q of each grid
+              shape: (N, M, L, 5), where N, M and L are the number of grids in each dimension.
+              qtensor[..., 0] = Q_xx, qtensor[..., 1] = Q_xy, and so on. 
 
-  Returns
-  -------
-  S:  numpy array, the biggest eigenvalue as the scalar order parameter of each grid
-      shape: (N, M, L)
-  n:  numpy array, the eigenvector corresponding to the biggest eigenvalue, as the director, of each grid.
-      shape: (N, M, L)
-  """
-  
-  # derive Q field and calculate it with np.einsum() and np.linalg.det()
-  N, M, L = np.shape(Q)[:3]
-  Q = np.zeros( (N, M, L, 3, 3)  )
-  Q[..., 0,0] = qtensor[0]
-  Q[..., 0,1] = qtensor[1]
-  Q[..., 0,2] = qtensor[2]
-  Q[..., 1,0] = qtensor[1]
-  Q[..., 1,1] = qtensor[3]
-  Q[..., 1,2] = qtensor[4]
-  Q[..., 2,0] = qtensor[2]
-  Q[..., 2,1] = qtensor[4]
-  Q[..., 2,2] = - Q[..., 0,0] - Q[..., 1,1]
-
-  p = 0.5 * np.einsum('ijkab, ijkba -> ijk', Q, Q)
-  q = np.linalg.det(Q)
-  r = 2 * np.sqrt( p / 3 )
-  del Q
-
-  # derive S and n
-  S = r * np.cos( 1/3 * np.arccos( 4 * q / r**3 ) )
-  temp = np.array( [
-      qtensor[2] * ( qtensor[3] - S ) - qtensor[1] * qtensor[4] ,
-      qtensor[4] * ( qtensor[0] - S ) - qtensor[1] * qtensor[2] ,
-      qtensor[1]**2 - ( qtensor[0] - S ) * ( qtensor[3] - S  )
-      ] )
-  n = temp / np.linalg.norm(temp, axis = 0)
-
-  return S, n
-
-#
-#
-#
-
-def select_subbox(subbox_indices, box_grid_size, margin_ratio=0):
-
-  subbox  = subbox_indices
-  N, M, L = box_grid_size
-
-  if margin_ratio != 0:
-      xrange, yrange, zrange = subbox_indices[:,1] - subbox_indices[:,0]
-      margin = ( np.array([xrange, yrange, zrange]) * margin_ratio/2 ).astype(int)
-      subbox[:,0] -= margin
-      subbox[:,1] += margin
-
-  xmin, ymin, zmin = subbox[:,0]
-  xmax, ymax, zmax = subbox[:,1]
-
-  sl0 = np.array(range(xmin, xmax+1)).reshape(-1,1, 1)%N
-  sl1 = np.array(range(ymin, ymax+1)).reshape(1,-1, 1)%M
-  sl2 = np.array(range(zmin, zmax+1)).reshape(1,1,-1)%L
-
-  return [sl0, sl1, sl2]
-
+    Returns
+    -------
+    S:  numpy array, the biggest eigenvalue as the scalar order parameter of each grid
+        shape: (N, M, L)
+    n:  numpy array, the eigenvector corresponding to the biggest eigenvalue, as the director, of each grid.
+        shape: (N, M, L)
+    """
     
+    # derive Q field and calculate it with np.einsum() and np.linalg.det()
+    N, M, L = np.shape(qtensor)[:3]
+    Q = np.zeros( (N, M, L, 3, 3)  )
+    Q[..., 0,0] = qtensor[0]
+    Q[..., 0,1] = qtensor[1]
+    Q[..., 0,2] = qtensor[2]
+    Q[..., 1,0] = qtensor[1]
+    Q[..., 1,1] = qtensor[3]
+    Q[..., 1,2] = qtensor[4]
+    Q[..., 2,0] = qtensor[2]
+    Q[..., 2,1] = qtensor[4]
+    Q[..., 2,2] = - Q[..., 0,0] - Q[..., 1,1]
+
+    p = 0.5 * np.einsum('ijkab, ijkba -> ijk', Q, Q)
+    q = np.linalg.det(Q)
+    r = 2 * np.sqrt( p / 3 )
+    del Q
+
+    # derive S and n
+    S = r * np.cos( 1/3 * np.arccos( 4 * q / r**3 ) )
+    temp = np.array( [
+        qtensor[2] * ( qtensor[3] - S ) - qtensor[1] * qtensor[4] ,
+        qtensor[4] * ( qtensor[0] - S ) - qtensor[1] * qtensor[2] ,
+        qtensor[1]**2 - ( qtensor[0] - S ) * ( qtensor[3] - S  )
+        ] )
+    n = temp / np.linalg.norm(temp, axis = 0)
+
+    return S, n
+
+# ----------------------------------------------------------------------
+# With the indices of a pair of opposite vertices of sub-orthogonal-box,
+# select n and S within that subbox
+# ----------------------------------------------------------------------
+
+def select_subbox(subbox_indices, box_grid_size, 
+                  margin_ratio=0):
+
+    subbox  = subbox_indices
+    N, M, L = box_grid_size
+
+    if margin_ratio != 0:
+        xrange, yrange, zrange = subbox_indices[:,1] - subbox_indices[:,0]
+        margin = ( np.array([xrange, yrange, zrange]) * margin_ratio/2 ).astype(int)
+        subbox[:,0] -= margin
+        subbox[:,1] += margin
+
+    xmin, ymin, zmin = subbox[:,0]
+    xmax, ymax, zmax = subbox[:,1]
+
+    sl0 = np.array(range(xmin, xmax+1)).reshape(-1,1, 1)%N
+    sl1 = np.array(range(ymin, ymax+1)).reshape(1,-1, 1)%M
+    sl2 = np.array(range(zmin, zmax+1)).reshape(1,1,-1)%L
+
+    return sl0, sl1, sl2, subbox
+
+
+# 
+#
+#
+
+def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid_size,
+                        margin_ratio=2, num_min=20, ratio=[1,1,1]):
+    
+    from itertools import product
+
+    diagnal = vertex_indices[1] - vertex_indices[0]
+    num_origin = np.einsum('i, ji -> j', diagnal, axes)
+    axes = np.einsum('i, ij -> ij', np.abs(num_origin) / num_origin, axes_unit)
+    num_origin = np.abs(num_origin)
+    num_scale = num_min / np.min(num_origin)
+    numx, numy, numz = np.round(num_scale * num_origin).astype(int)
+
+    box = list(product(np.arange(numx+1), np.arange(numy+1), np.arange(numz+1)))
+    box = np.array(subbox)
+    box = np.einsum('ai, ij -> aj', subbox[:,:3], (axes.T/num_scale).T)
+    box = subbox + vertex_indices[0]
+
+    sl0, sl1, sl2, ortho_box = select_subbox(vertex_indices, whole_box_grid_size,
+                                              margin_ratio=margin_ratio)
+    n_box = n[sl0,sl1,sl2]
+    S_box = S[sl0,sl1,sl2]
+
+    Q_box = np.einsum('abci, abcj -> abcij', n_box, n_box)
+    Q_box = Q_box - np.eye(3)/3
+    Q_box = np.einsum('abc, abcij -> abcij', S_box, Q_box)
+
+    xmin, ymin, zmin = ortho_box[:,0]
+    xmax, ymax, zmax = ortho_box[:,1]
+    points = (
+        np.arange(xmin, xmax+1),
+        np.arange(ymin, ymax+1),
+        np.arange(zmin, zmax+1)
+        )
+
+    from scipy.interpolate import interpn
+    def interp_Q(index1, index2, points, Q_box, Q_out, subbox, numx, numy, numz):
+      result = interpn(points, Q_box[..., index1, index2], subbox)
+      result = np.reshape( result, (numx+1, numy+1, numz+1))
+      result = result.transpose((2,1,0))
+      return result
+
+    Q_out = np.zeros( (numz+1, numy+1, numx+1, 3, 3)  )
+    Q_out[..., 0,0] = interp_Q(0, 0, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 0,1] = interp_Q(0, 1, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 0,2] = interp_Q(0, 2, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 1,1] = interp_Q(1, 1, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 1,2] = interp_Q(1, 2, points, Q_box, Q_out, subbox, numx, numy, numz)
+    Q_out[..., 1,0] = Q_out[..., 0,1]
+    Q_out[..., 2,0] = Q_out[..., 0,2]
+    Q_out[..., 2,1] = Q_out[..., 1,2]
+    Q_out[..., 2,2] = - Q_out[..., 0,0] - Q_out[..., 1,1]
+
+    Q_out = np.einsum('ab, ijkbc, dc -> ijkad', axes_unit, Q_out, axes_unit)
+
+
+
+
+
+
   
   
   
