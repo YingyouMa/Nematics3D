@@ -88,6 +88,70 @@ def nearest_neighbor_order(points):
 
     return order
 
+# ----------------------------
+# Smoothen a disclination loop
+# ----------------------------
+
+def smoothen_loop(loop_coord, window_ratio=3, order=3, N_out=160):
+
+    pad = int(len(loop_coord)/window_ratio/2)*2 + 1
+
+    from scipy.signal import savgol_filter
+    from scipy.interpolate import splprep, splev
+    loop_points = savgol_filter(loop_coord, pad, order, axis=0, mode='wrap')
+    uspline = np.arange(len(loop_coord))/len(loop_coord)
+    tck = splprep(loop_points.T, u=uspline, s=0)[0]
+    new_indices = np.array(splev(np.linspace(0,1,N_out), tck)).T
+
+    return new_indices
+
+# --------------------------------------------------------------
+# Visualize a disclination loop by the coordinates of each point
+# --------------------------------------------------------------
+
+def plot_loop(
+            loop_coord, 
+            tube_radius=0.25, tube_opacity=0.5, if_add_head=False,
+            print_load_mayavi=False
+            ):
+
+    if print_load_mayavi == True:
+        now = time.time()
+        from mayavi import mlab
+        print(f'loading mayavi cost {round(time.time()-now, 2)}s')
+    else:
+        from mayavi import mlab
+
+    if if_add_head==True:
+        loop_coord = np.concatenate([loop_coord, [loop_coord[0]]])
+
+    mlab.plot3d(*(loop_coord.T), tube_radius=tube_radius, opacity=tube_opacity)
+
+# -----------------------------------------------------------------------------
+# Given a local director field. Visualize the disclination loop if there is any
+# -----------------------------------------------------------------------------
+
+def plot_loop_from_n(
+                    n_box, 
+                    origin=[0,0,0], N=1, width=1, 
+                    tube_radius=0.25, tube_opacity=0.5, if_add_head=True,
+                    if_smooth=True, window_ratio=3, order=3, N_out=160
+                    ):
+
+    loop_indices = find_defect(n_box)
+    if len(loop_indices) > 0:
+        loop_indices = loop_indices + np.tile(origin, (np.shape(loop_indices)[0],1) )
+        loop_coord = sort_loop_indices(loop_indices)/N*width
+        if if_smooth == True:
+            loop_coord = smoothen_loop(
+                                    loop_coord,
+                                    window_ratio=window_ratio, order=order, N_out=N_out
+                                    )
+        plot_loop(
+                loop_coord, 
+                tube_radius=tube_radius, tube_opacity=tube_opacity,
+                    )
+
 
 
 
@@ -99,6 +163,7 @@ def show_loop_plane(
                     loop_box_indices, n_whole, 
                     width=0, margin_ratio=0.6, upper=0, down=0, norm_index=0, 
                     tube_radius=0.25, tube_opacity=0.5, scale_n=0.5,
+                    if_smooth=True,
                     print_load_mayavi=False
                     ):
     
@@ -133,15 +198,6 @@ def show_loop_plane(
         vector.glyph.color_mode = 'color_by_scalar'
         lut_manager = mlab.colorbar(object=vector)
         lut_manager.data_range=(0,1)
-
-    def SLP_plot_loop(n_box, origin, N, width, tube_radius, tube_opacity):
-
-        loop_indices = find_defect(n_box)
-        if len(loop_indices) > 0:
-            loop_indices = loop_indices + np.tile(origin, (np.shape(loop_indices)[0],1) )
-            loop_coord = sort_loop_indices(loop_indices)/N*width
-            loop_coord = np.concatenate([loop_coord, [loop_coord[0]]])
-            mlab.plot3d(*(loop_coord.T), tube_radius=tube_radius, opacity=tube_opacity)
 
     N = np.shape(n_whole)[0]
     if width == 0:
@@ -183,15 +239,70 @@ def show_loop_plane(
 
     mlab.figure(bgcolor=(0,0,0))
     SLP_plot_plane(upper, down, d_box, grid, norm_vec, n_box, scale_n)
-    SLP_plot_loop(
-                  n_box, loop_box_indices[:,0], 
-                  N, width, tube_radius, tube_opacity
-                  )
+    plot_loop_from_n(
+                    n_box, 
+                    origin=loop_box_indices[:,0], N=N, width=width,
+                    tube_radius=tube_radius, tube_opacity=tube_opacity,
+                    if_smooth=if_smooth
+                    )
 
     return dmean, eigvec, eigval
 
+# ---------------------------------------------------
+# Derive the averaged norm vecor of given coordinates
+# ---------------------------------------------------
 
+def gat_plane(points):
+
+    svd  = np.linalg.svd(points.T)
+    left = svd[0]
+
+    return left[:, -1]
+
+# ------------------------------------------------------------------------------------
+# Visualize the disclination loop with directors projected on principle planes
+# ------------------------------------------------------------------------------------ 
+  
+def show_loop_plane_2Ddirector(
+                                n_box, S_box,
+                                height_list, if_omega_list,
+                                height_visual_list=0, if_rescale_loop=True,
+                                figsize=(1920, 1360), bgcolor=(1,1,1),
+                                print_load_mayavi=False
+                                ):
     
-  
-  
-  
+    if height_visual_list == 0:
+        height_visual_list = height_list
+    elif if_rescale_loop == True:
+        x, y, z = height_list
+        coe_matrix = np.array([
+                        [x**2, y**2, z**2],
+                        [x, y, z],
+                        [1,1,1]
+                        ])
+        del x, y, z
+        coe_parabola = np.dot(height_visual_list, np.linalg.inv(coe_matrix))
+        def parabola(x):
+            return coe_parabola[0]*x**2 + coe_parabola[1]*x + coe_parabola[2]
+
+    x = np.arange(np.shape(S)[0])
+    y = np.arange(np.shape(S)[1])
+    z = np.arange(np.shape(S)[2])
+    X, Y, Z = np.meshgrid(x,y,z, indexing='ij')
+
+    if print_load_mayavi == True:
+        now = time.time()
+        from mayavi import mlab
+        print(f'loading mayavi cost {round(time.time()-now, 2)}s')
+    else:
+        from mayavi import mlab
+
+    mlab.figure(size=figsize, bgcolor=bgcolor)
+    defect = find_defect(n_box)
+    if len(defect) > 0:
+        loop_index = defect[nearest_neighbor_order(defect)]
+        if if_rescale_loop == True:
+            loop_index[:,0] = parabola(loop_index[:,0])
+        loop_N = get_plane(loop_index)
+        plot_loop(loop_index, tupe_radius=0.75)
+
