@@ -96,6 +96,26 @@ def select_subbox(subbox_indices, box_grid_size,
     return sl0, sl1, sl2, subbox
 
 
+# ----------------------------------------------------
+# The biaxial analysis of directors within a local box
+# ----------------------------------------------------
+
+def local_box_diagonalize(n_box):
+
+    # Derive and take the average of the local Q tensor with the director field around the loop
+    Q = np.einsum('abci, abcj -> abcij', n_box, n_box)
+    Q = np.average(Q, axis=(0,1,2))
+    Q = Q - np.diag((1,1,1))/3
+
+    # Diagonalisation and sort the eigenvalues.
+    eigval, eigvec = np.linalg.eig(Q)
+    eigvec = np.transpose(eigvec)
+    eigidx = np.argsort(eigval)
+    eigval = eigval[eigidx]
+    eigvec = eigvec[eigidx]
+
+    return eigvec, eigval
+
 # 
 #
 #
@@ -135,18 +155,18 @@ def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid
         )
 
     from scipy.interpolate import interpn
-    def interp_Q(index1, index2, points, Q_box, Q_out, subbox, numx, numy, numz):
-      result = interpn(points, Q_box[..., index1, index2], subbox)
+    def interp_Q(index1, index2):
+      result = interpn(points, Q_box[..., index1, index2], box)
       result = np.reshape( result, (numx+1, numy+1, numz+1))
       result = result.transpose((2,1,0))
       return result
 
     Q_out = np.zeros( (numz+1, numy+1, numx+1, 3, 3)  )
-    Q_out[..., 0,0] = interp_Q(0, 0, points, Q_box, Q_out, box, numx, numy, numz)
-    Q_out[..., 0,1] = interp_Q(0, 1, points, Q_box, Q_out, box, numx, numy, numz)
-    Q_out[..., 0,2] = interp_Q(0, 2, points, Q_box, Q_out, box, numx, numy, numz)
-    Q_out[..., 1,1] = interp_Q(1, 1, points, Q_box, Q_out, box, numx, numy, numz)
-    Q_out[..., 1,2] = interp_Q(1, 2, points, Q_box, Q_out, box, numx, numy, numz)
+    Q_out[..., 0,0] = interp_Q(0, 0)
+    Q_out[..., 0,1] = interp_Q(0, 1)
+    Q_out[..., 0,2] = interp_Q(0, 2)
+    Q_out[..., 1,1] = interp_Q(1, 1)
+    Q_out[..., 1,2] = interp_Q(1, 2)
     Q_out[..., 1,0] = Q_out[..., 0,1]
     Q_out[..., 2,0] = Q_out[..., 0,2]
     Q_out[..., 2,1] = Q_out[..., 1,2]
