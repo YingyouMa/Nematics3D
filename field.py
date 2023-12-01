@@ -116,9 +116,10 @@ def local_box_diagonalize(n_box):
 
     return eigvec, eigval
 
-# 
-#
-#
+# ---------------------------------------------------------------------------
+# Interpolate the directors within a local box containing a disclination loop
+# The box is given by its unit vector and vertex coordinates
+# ---------------------------------------------------------------------------
 
 def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid_size,
                         margin_ratio=2, num_min=20, ratio=[1,1,1]):
@@ -158,10 +159,9 @@ def interpolate_subbox(vertex_indices, axes_unit, loop_box, n, S, whole_box_grid
     def interp_Q(index1, index2):
       result = interpn(points, Q_box[..., index1, index2], box)
       result = np.reshape( result, (numx+1, numy+1, numz+1))
-      result = result.transpose((2,1,0))
       return result
 
-    Q_out = np.zeros( (numz+1, numy+1, numx+1, 3, 3)  )
+    Q_out = np.zeros( (numx+1, numy+1, numz+1, 3, 3)  )
     Q_out[..., 0,0] = interp_Q(0, 0)
     Q_out[..., 0,1] = interp_Q(0, 1)
     Q_out[..., 0,2] = interp_Q(0, 2)
