@@ -65,6 +65,7 @@ def diagonalizeQ(qtensor, arccos_digit=5):
         Q[..., 0,1]**2 - ( Q[..., 0,0] - S ) * ( Q[..., 1,1] - S  )
         ] )
     n = temp / np.linalg.norm(temp, axis = 0)
+    n = n.transpose((1,2,3,0))
     S = S * 1.5
 
     return S, n

@@ -111,7 +111,7 @@ def smoothen_loop(loop_coord, window_ratio=3, order=3, N_out=160):
 
 def plot_loop(
             loop_coord, 
-            tube_radius=0.25, tube_opacity=0.5, if_add_head=False,
+            tube_radius=0.25, tube_opacity=0.5, if_add_head=True,
             print_load_mayavi=False
             ):
 
@@ -149,10 +149,9 @@ def plot_loop_from_n(
                                     )
         plot_loop(
                 loop_coord, 
-                tube_radius=tube_radius, tube_opacity=tube_opacity,
+                tube_radius=tube_radius, tube_opacity=tube_opacity, 
+                if_add_head=if_add_head
                     )
-
-
 
 
 # -------------------------------------------------------------------------
@@ -252,7 +251,7 @@ def show_loop_plane(
 # Derive the averaged norm vecor of given coordinates
 # ---------------------------------------------------
 
-def gat_plane(points):
+def get_plane(points):
 
     svd  = np.linalg.svd(points.T)
     left = svd[0]
@@ -268,11 +267,13 @@ def show_loop_plane_2Ddirector(
                                 height_list, if_omega_list,
                                 height_visual_list=0, if_rescale_loop=True,
                                 figsize=(1920, 1360), bgcolor=(1,1,1),
+                                norm_length=20,
                                 print_load_mayavi=False
                                 ):
     
     if height_visual_list == 0:
         height_visual_list = height_list
+        if_rescale_loop =False
     elif if_rescale_loop == True:
         x, y, z = height_list
         coe_matrix = np.array([
@@ -285,9 +286,9 @@ def show_loop_plane_2Ddirector(
         def parabola(x):
             return coe_parabola[0]*x**2 + coe_parabola[1]*x + coe_parabola[2]
 
-    x = np.arange(np.shape(S)[0])
-    y = np.arange(np.shape(S)[1])
-    z = np.arange(np.shape(S)[2])
+    x = np.arange(np.shape(S_box)[0])
+    y = np.arange(np.shape(S_box)[1])
+    z = np.arange(np.shape(S_box)[2])
     X, Y, Z = np.meshgrid(x,y,z, indexing='ij')
 
     if print_load_mayavi == True:
@@ -300,9 +301,21 @@ def show_loop_plane_2Ddirector(
     mlab.figure(size=figsize, bgcolor=bgcolor)
     defect = find_defect(n_box)
     if len(defect) > 0:
-        loop_index = defect[nearest_neighbor_order(defect)]
+        loop_indices = defect[nearest_neighbor_order(defect)]
         if if_rescale_loop == True:
-            loop_index[:,0] = parabola(loop_index[:,0])
-        loop_N = get_plane(loop_index)
-        plot_loop(loop_index, tupe_radius=0.75)
+            loop_indices[:,0] = parabola(loop_indices[:,0])
+        loop_N = get_plane(loop_indices)
+        loop_smooth = smoothen_loop(loop_indices)
+        plot_loop(loop_smooth, tube_radius=0.75, tube_opacity=1)
+
+        loop_center = loop_smooth.mean(axis=0)
+        mlab.quiver3d(
+        #*loop_center,
+        height_visual_list[0], loop_center[1], loop_center[2],
+        *(loop_N),
+        mode='arrow',
+        color=(0,0,1),
+        scale_factor=norm_length,
+        opacity=0.5
+        )  
 
