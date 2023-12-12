@@ -1,5 +1,5 @@
 # -----------------------------------------------
-# Basic detection and processing of disclinations
+# Basic detection and analysis of disclinations
 # Yingyou Ma, Physics @ Brandeis, 2023
 # -----------------------------------------------
 
