@@ -9,7 +9,7 @@ import numpy as np
 # Diagonalization of Q tensor in 3D nematics.
 # --------------------------------------------------------
 
-def diagonalizeQ(qtensor, arccos_digit=5):
+def diagonalizeQ(qtensor):
     """
     Diagonalization of Q tensor in 3D nematics.
     Currently it onply provides the uniaxial information.
@@ -39,18 +39,18 @@ def diagonalizeQ(qtensor, arccos_digit=5):
         Q = qtensor
     elif np.shape(qtensor) == (N, M, L, 5):
         Q = np.zeros( (N, M, L, 3, 3)  )
-        Q[..., 0,0] = qtensor[0]
-        Q[..., 0,1] = qtensor[1]
-        Q[..., 0,2] = qtensor[2]
-        Q[..., 1,0] = qtensor[1]
-        Q[..., 1,1] = qtensor[3]
-        Q[..., 1,2] = qtensor[4]
-        Q[..., 2,0] = qtensor[2]
-        Q[..., 2,1] = qtensor[4]
+        Q[..., 0,0] = qtensor[..., 0]
+        Q[..., 0,1] = qtensor[..., 1]
+        Q[..., 0,2] = qtensor[..., 2]
+        Q[..., 1,0] = qtensor[..., 1]
+        Q[..., 1,1] = qtensor[..., 3]
+        Q[..., 1,2] = qtensor[..., 4]
+        Q[..., 2,0] = qtensor[..., 2]
+        Q[..., 2,1] = qtensor[..., 4]
         Q[..., 2,2] = - Q[..., 0,0] - Q[..., 1,1]
     else:
         raise NameError(
-            "The dimension of qtensor would be (N, M, L, 3, 3) or (N, M, L, 5, 5)"
+            "The dimension of qtensor would be (N, M, L, 3, 3) or (N, M, L, 5)"
             )
 
     p = 0.5 * np.einsum('ijkab, ijkba -> ijk', Q, Q)
@@ -58,7 +58,10 @@ def diagonalizeQ(qtensor, arccos_digit=5):
     r = 2 * np.sqrt( p / 3 )
 
     # derive S and n
-    S = r * np.cos( 1/3 * np.arccos( np.round(4 * q / r**3 , arccos_digit) ) )
+    temp = 4 * q / r**3
+    temp[temp>1]  =  1
+    temp[temp<-1] = -1
+    S = r * np.cos( 1/3 * np.arccos( temp ) )
     temp = np.array( [
         Q[..., 0,2] * ( Q[..., 1,1] - S ) - Q[..., 0,1] * Q[..., 1,2] ,
         Q[..., 1,2] * ( Q[..., 0,0] - S ) - Q[..., 0,1] * Q[..., 0,2] ,
