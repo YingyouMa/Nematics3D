@@ -8,6 +8,8 @@ import time
 # ----------------------------------------------------------
 
 from .general import *
+from .datatypes import nField, DimensionPeriodicInput, DimensionFlagInput, as_dimension_info, DefectIndex
+from .logging_decorator import logging_and_warning_decorator
 
 
 DEFECT_NEIGHBOR = np.zeros((10,3))
@@ -22,9 +24,12 @@ DEFECT_NEIGHBOR[7] = (-0.5,     -0.5,   0)
 DEFECT_NEIGHBOR[8] = (-0.5,     0,      0.5)
 DEFECT_NEIGHBOR[9] = (-0.5,     0,      -0.5)
 
-def defect_detect(n_origin, threshold=0, 
-                  is_boundary_periodic=0, planes=[1,1,1], print_time=False, return_test=False):
-    #! defect_indices half integer
+@logging_and_warning_decorator()
+def defect_detect(n_origin: nField, 
+                  threshold: float = 0,
+                  is_boundary_periodic: DimensionPeriodicInput = 0, 
+                  planes: DimensionFlagInput = 1,
+                  logger=None) -> DefectIndex:
     '''
     Detect defects in a 3D director field.
     For each small loop formed by four neighoring grid points,
@@ -59,15 +64,7 @@ def defect_detect(n_origin, threshold=0,
              or in other words, it will NOT calculate the winding number along x-direction.
              Default is [1,1,1], to analyze all directions
 
-    print_time : bool, optional
-                 Flag to print the time taken for each direction. 
-                 Default is False.
-
-    return_test : bool, optional
-                  Flag to return the test result of each grid point.
-                  Test result is the inner product between the beginning and end director of small loop.
-                  This is usually used to determine the threshold.
-                  Default is False.
+    logger : See module-level "Logging note" and logging_and_warning_decorator.
 
     Returns
     -------
@@ -76,21 +73,12 @@ def defect_detect(n_origin, threshold=0,
                      In our current algorithm, for each defect's location, 
                      there must be one integer and two half-integers.
                      The integer stands for the plane that the defect sits on.
-                     #! defect_indices half integer
-
-    test_result : #! only <threshold
-
-    test_result_all : #! all of them
-
-    Dependencies
-    ------------
-    - NumPy: 1.26.4
-
-    Called by
-    ---------
     '''
 
-    is_boundary_periodic = array_from_single_or_list(is_boundary_periodic)
+    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
+    logger.debug(f"The flag of periodic boundary condition in each dimension is {is_boundary_periodic}")
+    planes = as_dimension_info(planes)
+    logger.debug(f"The flag of plane to be explored is {planes}")
 
     from .field import add_periodic_boundary
 
@@ -100,8 +88,6 @@ def defect_detect(n_origin, threshold=0,
     now = time.time()
 
     defect_indices = np.empty((0,3), float)
-    test_result = np.empty((0,), float)
-    test_result_all = np.empty((0,), float)
 
     # X-direction
     if planes[0]:
@@ -122,10 +108,7 @@ def defect_detect(n_origin, threshold=0,
         temp = np.array(np.where(testx<threshold)).transpose().astype(float)
         temp[:,1:] = temp[:,1:]+0.5
         defect_indices = np.concatenate([ defect_indices, temp ])
-        test_result = np.concatenate([test_result, testx[testx<threshold]])
-        test_result_all = np.concatenate([test_result_all, testx.reshape(-1)])
-        if print_time:
-            print('finish x-direction, with', str(round(time.time()-now,2))+'s')
+        logger.info('finish x-direction, with '+str(round(time.time()-now,2))+'s')
         now = time.time()
 
     # Y-direction
@@ -141,10 +124,7 @@ def defect_detect(n_origin, threshold=0,
         temp = np.array(np.where(testy<threshold)).transpose().astype(float)
         temp[:, [0,2]] = temp[:, [0,2]]+0.5
         defect_indices = np.concatenate([ defect_indices, temp ])
-        test_result = np.concatenate([test_result, testy[testy<threshold]])
-        test_result_all = np.concatenate([test_result_all, testy.reshape(-1)])
-        if print_time:
-            print('finish y-direction, with', str(round(time.time()-now,2))+'s')
+        logger.info('finish y-direction, with '+str(round(time.time()-now,2))+'s')
         now = time.time()
 
     # Z-direction
@@ -160,23 +140,15 @@ def defect_detect(n_origin, threshold=0,
         temp = np.array(np.where(testz<threshold)).transpose().astype(float)
         temp[:, :-1] = temp[:, :-1]+0.5
         defect_indices = np.concatenate([ defect_indices, temp ])
-        test_result = np.concatenate([test_result, testz[testz<threshold]])
-        test_result_all = np.concatenate([test_result_all, testz.reshape(-1)])
-        if print_time:
-            print('finish z-direction, with', str(round(time.time()-now,2))+'s')
-        now = time.time()
+        logger.info('finish z-direction, with '+str(round(time.time()-now,2))+'s')
 
     # Wrap with the periodic boundary condition
     for i, if_periodic in enumerate(is_boundary_periodic):
         if if_periodic == True:
             defect_indices[:,i] = defect_indices[:,i] % np.shape(n_origin)[i]
     defect_indices, unique = np.unique(defect_indices, axis=0, return_index=True)
-    test_result = test_result[unique]
 
-    if return_test:
-        return defect_indices, test_result, test_result_all
-    else:
-        return defect_indices
+    return defect_indices
     
 
 def defect_vinicity_grid(defect_indices, num_shell=2):

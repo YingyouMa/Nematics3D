@@ -1,0 +1,2 @@
+250 2 steady state
+1500 2 steady state

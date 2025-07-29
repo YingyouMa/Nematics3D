@@ -1,0 +1,16 @@
+[INFO]
+    Function `diagonalizeQ` STARTED in program `<interactive>`
+[INFO]
+    Computing tensor invariants (p, q, r).
+[INFO]
+    Tensor invariants computed in 4.921 seconds.
+[INFO]
+    Computing largest eigenvalue λ_max.
+[INFO]
+    λ_max computed in 1.383 seconds.
+[INFO]
+    Computing director field n.
+[INFO]
+    Director field computed in 4.688 seconds.
+[INFO]
+    Function `diagonalizeQ` FINISHED in program `<interactive>`. Elapsed time: 16.370 seconds.
