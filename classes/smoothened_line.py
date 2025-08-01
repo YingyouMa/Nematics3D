@@ -5,6 +5,7 @@ from scipy.interpolate import splprep, splev
 
 from ..logging_decorator import logging_and_warning_decorator
 
+
 class SmoothenedLine:
     """
     Smooth a polyline using Savitzky-Golay filtering and cubic spline interpolation.
@@ -82,7 +83,7 @@ class SmoothenedLine:
         order: int = 3,
         N_out_ratio: float = 3.0,
         mode: Literal["interp", "wrap"] = "interp",
-        is_keep_origin: bool = True
+        is_keep_origin: bool = True,
     ):
         self._order = order
         self._N_out_ratio = N_out_ratio
@@ -105,8 +106,10 @@ class SmoothenedLine:
         if self._window_length >= line_length:
             raise ValueError(
                 f"Filter window size {self._window_length} must be smaller than line length {line_length}"
-                )
-        line_points = savgol_filter(line_coord, self._window_length, order, axis=0, mode=mode)
+            )
+        line_points = savgol_filter(
+            line_coord, self._window_length, order, axis=0, mode=mode
+        )
 
         # Step 2: Define spline parameter u
         uspline = np.arange(self._N_init) / self._N_init

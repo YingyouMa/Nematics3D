@@ -198,19 +198,15 @@ def add_periodic_boundary(
     return output
 
 
-def align_directors(
-    n_reference: nField, 
-    n_target: nField
-) -> nField:
+def align_directors(n_reference: nField, n_target: nField) -> nField:
     """
     Align target director to have similar orientation as reference.
     This is used to handle the nematic symmetry of directors.
     """
-    n_reference = check_Sn(n_reference, 'n', is_3d_strict=False)
-    n_target = check_Sn(n_target, 'n', is_3d_strict=False)
+    n_reference = check_Sn(n_reference, "n", is_3d_strict=False)
+    n_target = check_Sn(n_target, "n", is_3d_strict=False)
     signs = np.sign(np.einsum("...i,...i->...", n_reference, n_target))
     return np.einsum("...,...i->...i", signs, n_target)
-    
 
 
 def generate_coordinate_grid(
@@ -384,8 +380,8 @@ def unwrap_trajectory(
     """
     Unwrap a trajectory of points across periodic boundaries to produce a geometrically continuous path.
 
-    In periodic systems, when a line crosses the periodic boundary, wrapped coordinates can create 
-    artificial discontinuities (large jumps between adjacent points). This function detects such jumps 
+    In periodic systems, when a line crosses the periodic boundary, wrapped coordinates can create
+    artificial discontinuities (large jumps between adjacent points). This function detects such jumps
     and corrects them by unwrapping the trajectory, making the path continuous in real space.
 
     Parameters
@@ -429,9 +425,11 @@ def unwrap_trajectory(
     return points_unwrap
 
 
-def get_box_corners(Lx: float, Ly: float, Lz: float) -> List[Tuple[float, float, float]]:
+def get_box_corners(
+    Lx: float, Ly: float, Lz: float
+) -> List[Tuple[float, float, float]]:
     """
-    Return the 8 corner coordinates of a rectangular box 
+    Return the 8 corner coordinates of a rectangular box
     from (0, 0, 0) to (Lx, Ly, Lz).
 
     Parameters
@@ -447,23 +445,24 @@ def get_box_corners(Lx: float, Ly: float, Lz: float) -> List[Tuple[float, float,
             (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (Lx, Ly, 0),
             (0, 0, Lz), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
     """
-    corners = np.array([
-        [0,   0,   0],
-        [Lx,  0,   0],
-        [0,  Ly,   0],
-        [Lx, Ly,   0],
-        [0,   0,  Lz],
-        [Lx,  0,  Lz],
-        [0,  Ly,  Lz],
-        [Lx, Ly,  Lz],
-    ], dtype=np.float64)
+    corners = np.array(
+        [
+            [0, 0, 0],
+            [Lx, 0, 0],
+            [0, Ly, 0],
+            [Lx, Ly, 0],
+            [0, 0, Lz],
+            [Lx, 0, Lz],
+            [0, Ly, Lz],
+            [Lx, Ly, Lz],
+        ],
+        dtype=np.float64,
+    )
     return corners
 
 
 def draw_box_from_corners(
-    corners: np.ndarray,
-    tube_radius: float = 0.05,
-    tube_sides: int = 6
+    corners: np.ndarray, tube_radius: float = 0.05, tube_sides: int = 6
 ) -> List:
     """
     Draw a rectangular box (wireframe) given its 8 corner points using mlab.plot3d.
@@ -487,15 +486,20 @@ def draw_box_from_corners(
     """
     if corners.shape != (8, 3):
         raise ValueError(f"`corners` must have shape (8, 3), got {corners.shape}")
-        
+
     from mayavi import mlab
 
     edges = [
-        (0, 1), (0, 2), (0, 4),
-        (1, 3), (1, 5),
-        (2, 3), (2, 6),
+        (0, 1),
+        (0, 2),
+        (0, 4),
+        (1, 3),
+        (1, 5),
+        (2, 3),
+        (2, 6),
         (3, 7),
-        (4, 5), (4, 6),
+        (4, 5),
+        (4, 6),
         (5, 7),
         (6, 7),
     ]
@@ -518,12 +522,13 @@ def draw_box(
     offset: Optional[Vect3D] = None,
     transform: Optional[np.ndarray] = None,
 ) -> List:
-    
+
     corners = get_box_corners(Lx, Ly, Lz)
     corners = apply_linear_transform(corners, offset=offset, transform=transform)
-    
+
     tubes = draw_box_from_corners(corners)
     return tubes
+
 
 # @time_record
 # def interpolateQ(n, result_points, S=0, is_boundary_periodic=0):

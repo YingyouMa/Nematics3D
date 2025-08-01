@@ -15,7 +15,7 @@ from .datatypes import (
     DimensionFlagInput,
     as_dimension_info,
     DefectIndex,
-    check_Sn
+    check_Sn,
 )
 from .logging_decorator import logging_and_warning_decorator
 
@@ -41,7 +41,7 @@ def detect_defects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     ----------
     n : nField, np.ndarray
         Director field of shape (A, B, C, 3), where C is the loop-normal axis.
-        
+
     threshold : float
         Threshold for defect detection.
 
@@ -50,10 +50,11 @@ def detect_defects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     coords : np.ndarray
         Coordinates of detected defects in reoriented space.
     """
-    
-    n = check_Sn(n, 'n')
-    
+
+    n = check_Sn(n, "n")
+
     from .field import align_directors
+
     a = n[:-1, :-1]
     b = align_directors(a, n[1:, :-1])
     c = align_directors(b, n[1:, 1:])
@@ -118,14 +119,14 @@ def defect_detect(
         The geometrical meaning of these components is explained in the definition of `DefectIndex`
         in `datatype.py`.
     """
-    
-    n_origin = check_Sn(n_origin, 'n')
-    
+
+    n_origin = check_Sn(n_origin, "n")
+
     from .field import add_periodic_boundary
-    
+
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
-    
+
     logger.info("Start to defect defects")
     logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
     logger.debug(f"Planes selected for detection: {planes}")
@@ -173,7 +174,7 @@ def defect_classify_into_lines(
     box_size_periodic: DimensionFlagInput = np.inf,
     offset: Optional[Vect3D] = None,
     transform: Optional[np.ndarray] = None,
-    logger=None
+    logger=None,
 ) -> List["DisclinationLine"]:
     """
     Group defect points into disclination lines based on graph connectivity.
@@ -251,9 +252,7 @@ def defect_classify_into_lines(
     ]
 
     lines = [
-        DisclinationLine(
-            path, box_size_periodic, offset=offset, transform=transform
-        )
+        DisclinationLine(path, box_size_periodic, offset=offset, transform=transform)
         for path in paths
     ]
 
@@ -352,6 +351,7 @@ def defect_neighbor_possible_get(
 
     return result
 
+
 # @logging_and_warning_decorator()
 # def draw_multiple_disclination_lines(
 #     lines: List["DisclinationLine"],
@@ -370,10 +370,10 @@ def defect_neighbor_possible_get(
 #     outline_radius: float = 3,
 #     logger=None
 # ):
-    
+
 #     from mayavi import mlab
 #     from .general import blue_red_in_white_bg, sample_far
-    
+
 #     if color_input is None:
 #         color_map = blue_red_in_white_bg()
 #         color_map_length = np.shape(color_map)[0] - 1
@@ -385,17 +385,17 @@ def defect_neighbor_possible_get(
 #         mlab.figure(bgcolor=bgcolor, size=fig_size)
 
 #     for i, line in enumerate(lines):
-#         line.figure_init(tube_color=tuple(lines_color[i]), 
-#                          is_new=False, 
+#         line.figure_init(tube_color=tuple(lines_color[i]),
+#                          is_new=False,
 #                          is_wrap=is_wrap,
 #                          is_smooth=is_smooth,
-#                          tube_opacity=tube_opacity, 
+#                          tube_opacity=tube_opacity,
 #                          tube_radius=tube_radius)
-#         line.figure_update(tube_spec=tube_specular, 
-#                            tube_spec_col=tube_specular_col, 
+#         line.figure_update(tube_spec=tube_specular,
+#                            tube_spec_col=tube_specular_col,
 #                            tube_spec_pow=tube_specular_pow)
-        
-        
+
+
 #     if outline_corners is not None:
 #         try:
 #             from .field import draw_box_from_corners
@@ -403,14 +403,6 @@ def defect_neighbor_possible_get(
 #         except:
 #             logger.exception("Corner error is caught")
 #             logger.recovery("Discarded outline")
-        
-        
-            
-        
-    
-    
-
-
 
 
 # def add_mid_points_disclination(line, is_loop=False):

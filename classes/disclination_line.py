@@ -27,7 +27,7 @@ class DisclinationLine:
         Grid-based defect point indices. Each point has one integer and two half-integer components.
         The geometrical meaning of these components is explained in the definition of `DefectIndex`
         in `datatype.py`.
-    
+
     _defect_coord : np.ndarray of shape (N_defects, 3)
         Real-space coordinates of the defect points, after applying transformation and offset.
 
@@ -118,7 +118,6 @@ class DisclinationLine:
         self._box_size_periodic = box_size_periodic
 
         self.update_to_coord(grid_transform=transform, grid_offset=offset)
-
 
     def update_to_coord(
         self,

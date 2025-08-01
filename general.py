@@ -3,7 +3,9 @@ import time
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping
 
 
-def make_hash_table(input: Iterable[Iterable[Hashable]]) -> dict[Tuple[Hashable, ...], int]:
+def make_hash_table(
+    input: Iterable[Iterable[Hashable]],
+) -> dict[Tuple[Hashable, ...], int]:
     """
     Create a hash table that maps each item (as a tuple) to its index in the input.
 
@@ -18,15 +20,15 @@ def make_hash_table(input: Iterable[Iterable[Hashable]]) -> dict[Tuple[Hashable,
     hash_table : dict[Tuple[Hashable, ...], int]
         A dictionary mapping each item's tuple form to its index in the input sequence.
         If a key is not found in the table, it returns NaN (via defaultdict fallback).
-    
+
     Examples
     --------
     >>> make_hash_table([[1, 2], [3, 4]])
     {(1, 2): 0, (3, 4): 1}
     """
-    
+
     from collections import defaultdict
-    
+
     hash_table = defaultdict(lambda: np.nan)
     for idx, item in enumerate(input):
         item_hash = tuple(item)  # Ensure it's hashable
@@ -38,7 +40,7 @@ def make_hash_table(input: Iterable[Iterable[Hashable]]) -> dict[Tuple[Hashable,
 def search_in_reservoir(
     items: Sequence[Sequence[float]],
     reservoir: Union[Sequence[Sequence[float]], Mapping[tuple, float]],
-    is_reservoir_hash: bool = False
+    is_reservoir_hash: bool = False,
 ) -> np.ndarray:
     """
     Search a list of items within a reservoir, and return the corresponding index or value.
@@ -90,7 +92,7 @@ def search_in_reservoir(
 
 
 def nearest_neighbor_order(
-    points: Union[np.ndarray, Sequence[Sequence[float]]]
+    points: Union[np.ndarray, Sequence[Sequence[float]]],
 ) -> list[int]:
     """
     Determine a greedy nearest-neighbor visiting order for a set of points.
@@ -175,11 +177,11 @@ def blue_red_in_white_bg() -> np.ndarray:
       when visualized on white backgrounds.
     """
 
-    colormap = np.zeros((511,3))
-    colormap[:256,1] = np.arange(256)
-    colormap[:256,2] = 255 - np.arange(256)
-    colormap[255:,1] = 255 - np.arange(256)
-    colormap[255:,0] = np.arange(256)
+    colormap = np.zeros((511, 3))
+    colormap[:256, 1] = np.arange(256)
+    colormap[:256, 2] = 255 - np.arange(256)
+    colormap[255:, 1] = 255 - np.arange(256)
+    colormap[255:, 0] = np.arange(256)
     colormap = colormap / 255
     colormap = colormap / np.linalg.norm(colormap, axis=-1, keepdims=True)
 
@@ -189,7 +191,7 @@ def blue_red_in_white_bg() -> np.ndarray:
 def sample_far(num: int) -> np.ndarray:
     """
     Generate a sequence of `num` sample points between 0 and 1 that are maximally spaced.
-    
+
     The algorithm begins with [0, 1], and each subsequent point is placed to maximize
     its distance from previous samples, using a binary partitioning rule.
 
@@ -209,20 +211,20 @@ def sample_far(num: int) -> np.ndarray:
     - Good for progressive refinement, plotting, or hierarchical sampling
     """
 
-    result_init = [0,1]
+    result_init = [0, 1]
     if num <= 2:
         result = np.array(result_init[:num])
         return result
 
     n = np.arange(2, num)
-    a = 2**np.trunc(np.log2(n-1)+1)
-    b = 2*n - a - 1
+    a = 2 ** np.trunc(np.log2(n - 1) + 1)
+    b = 2 * n - a - 1
 
     result = np.zeros(num)
 
     result[0] = 0
     result[1] = 1
-    result[2:] = b/a
+    result[2:] = b / a
 
     return result
 
@@ -240,9 +242,6 @@ def sample_far(num: int) -> np.ndarray:
 #     condition_large = dist <= dist_large - strict[0] * epsilon
 
 #     return np.where(condition_large * condition_small)
-
-
-
 
 
 # def get_square_each(size, num, dim=2):
