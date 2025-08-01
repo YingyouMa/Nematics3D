@@ -25,8 +25,11 @@ Example usage:
         ...
 """
 
-from typing import Union, Sequence
+from typing import Union, Sequence, Literal
 import numpy as np
+
+import logging
+from .logging_decorator import logging_and_warning_decorator
 
 # __all__ = [
 #     "NumericInput",
@@ -117,7 +120,7 @@ def as_dimension_info(input_data: DimensionInfoInput) -> DimensionInfo:
 # - np.inf → non-periodic
 # - int → periodic, with value as the boundary size
 # Like DimensionInfo, it is a NumPy array of shape (3,).
-DimensionPeriodic = DimensionInfo  
+DimensionPeriodic = DimensionInfo
 
 # Input type for DimensionPeriodic
 # - scalar → broadcasted to all 3 dimensions
@@ -165,7 +168,7 @@ def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag
 # Physical field types
 # -------------------------
 
-# All fields are NumPy arrays defined over a 3D grid of shape (N, M, L).
+# All fields are NumPy arrays defined over a 3D grid of shape (Nx, Ny, Nz).
 #
 # `GeneralField` is the abstract base type of all physical fields, where each voxel
 # may hold scalar, vector, tensor, or feature-vector data.
@@ -174,35 +177,66 @@ def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag
 # Base type
 # -------------------------
 
-# General field type defined over a 3D grid (N, M, L), with arbitrary per-voxel data shape.
+# General field type defined over a 3D grid (Nx, Ny, Nz), with arbitrary per-voxel data shape.
 # This serves as the base type for all derived fields (scalar, vector, tensor, etc).
 #
 # Examples:
-# - Scalar field: shape (N, M, L)
-# - Vector field: shape (N, M, L, 3)
-# - Tensor field: shape (N, M, L, 3, 3)
-# - Custom feature vector per voxel: shape (N, M, L, D)
+# - Scalar field: shape (Nx, Ny, Nz)
+# - Vector field: shape (Nx, Ny, Nz, 3)
+# - Tensor field: shape (Nx, Ny, Nz, 3, 3)
+# - Custom feature vector per voxel: shape (Nx, Ny, Nz, D)
 GeneralField = np.ndarray
 
 # -------------------------
 # Specialized field types (all are subtypes of GeneralField)
 # -------------------------
 
-# Director field (unit vector), shape: (N, M, L, 3)
+# Director field (unit vector), shape: (Nx, Ny, Nz, 3)
 # Subtype of GeneralField
 nField = np.ndarray
 
-# Scalar order parameter field, shape: (N, M, L)
+
+def check_Sn(
+    data, 
+    datatype: Literal["n", "S"], 
+    is_3d_strict: bool = True):
+
+    data = np.asarray(data, dtype=np.float64)
+    shape = np.shape(data)
+
+    if datatype == "n":
+        if shape[-1] != 3:
+            raise ValueError(
+                f"Director field must end with shape (..., 3), got {shape}"
+            )
+        if is_3d_strict and len(shape) != 4:
+            raise ValueError(
+                f"Strict 3D director field must have shape (Nx, Ny, Nz, 3), got {shape}"
+            )
+
+    elif datatype == "S":
+        if is_3d_strict and len(shape) != 3:
+            raise ValueError(
+                f"Strict 3D scalar field must have shape (Nx, Ny, Nz), got {shape}"
+            )
+
+    else:
+        raise TypeError(f"Unsupported datatype '{datatype}': expected 'S' or 'n'")
+
+    return data
+
+
+# Scalar order parameter field, shape: (Nx, Ny, Nz)
 # Subtype of GeneralField
 # In the perfect ordered state, S is defined to be 1.
 SField = np.ndarray
 
-# Tensor order parameter in 5-component representation, shape: (N, M, L, 5)
+# Tensor order parameter in 5-component representation, shape: (Nx, Ny, Nz, 5)
 # Subtype of GeneralField
 # Components: [Q_xx, Q_xy, Q_xz, Q_yy, Q_yz]
 QField5 = np.ndarray
 
-# Tensor order parameter in full 3x3 matrix form, shape: (N, M, L, 3, 3)
+# Tensor order parameter in full 3x3 matrix form, shape: (Nx, Ny, Nz, 3, 3)
 # Subtype of GeneralField
 # Symmetric traceless tensor Q_ij with:
 # Q[..., 0,0] = Q_xx, Q[..., 0,1] = Q_xy, Q[..., 1,0] = Q_xy, etc.
@@ -214,6 +248,7 @@ QField = np.ndarray
 
 
 def as_QField9(qtensor: QField) -> QField9:
+    #! strict3d
     """
     Convert a Q-tensor field into full 3×3 matrix form (QField9).
 
@@ -318,7 +353,7 @@ def as_QField5(qtensor: QField) -> QField5:
         Q5[..., 4] = qtensor[..., 1, 2]  # Q_yz
 
         return Q5
-    
+
     if len(shape) == 4 and shape[-1] == 5:
         Q5 = qtensor
         return Q5
@@ -327,7 +362,7 @@ def as_QField5(qtensor: QField) -> QField5:
         "Invalid QField shape: expected (..., 5) or (..., 3, 3), "
         f"but got shape {shape}"
     )
-    
+
 
 # -------------------------
 # Disclination points type

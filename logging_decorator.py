@@ -190,7 +190,7 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
 
         if safe_log != dummy_logger:
             safe_log(
-                logging.INFO,
+                logging.DEBUG,
                 f"Function `{func.__name__}` STARTED in program `{get_program_name()}`",
             )
 
@@ -204,7 +204,7 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
             elapsed = time.time() - start_time
             if safe_log != dummy_logger:
                 safe_log(
-                    logging.INFO,
+                    logging.DEBUG,
                     f"Function `{func.__name__}` FINISHED in program `{get_program_name()}`. "
                     f"Elapsed time: {elapsed:.3f} seconds.",
                 )
