@@ -15,6 +15,7 @@ from .datatypes import (
     DimensionFlagInput,
     as_dimension_info,
     DefectIndex,
+    check_Sn
 )
 from .logging_decorator import logging_and_warning_decorator
 
@@ -49,6 +50,9 @@ def detect_defects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     coords : np.ndarray
         Coordinates of detected defects in reoriented space.
     """
+    
+    n = check_Sn(n, 'n')
+    
     from .field import align_directors
     a = n[:-1, :-1]
     b = align_directors(a, n[1:, :-1])
@@ -69,63 +73,6 @@ def defect_detect(
     planes: DimensionFlagInput = 1,
     logger=None,
 ) -> DefectIndex:
-    """
-    Detect defects in a 3D director field using loop closure across x/y/z directions.
-    """
-    
-    from .field import add_periodic_boundary
-    
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
-    planes = as_dimension_info(planes)
-
-    logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
-    logger.debug(f"Planes selected for detection: {planes}")
-
-    n = add_periodic_boundary(n_origin, is_boundary_periodic)
-    defect_indices = np.empty((0, 3), dtype=float)
-
-    axis_permutations = {
-        0: (2, 1, 0),  # x-direction → move axis 0 to back
-        1: (0, 2, 1),  # y-direction → move axis 1 to back
-        2: (0, 1, 2),  # z-direction → identity
-    }
-
-    now = time.time()
-
-    for axis in range(3):
-        if not planes[axis]:
-            continue
-
-        perm = axis_permutations[axis]
-        n_rot = np.moveaxis(n, [0, 1, 2], perm)  # shape (A, B, C, 3)
-
-        coords = detect_defects_xyplane(n_rot, threshold)
-
-        # Restore original axis order
-        inv_perm = np.argsort(perm)
-        coords = coords[:, inv_perm]
-
-        defect_indices = np.vstack((defect_indices, coords))
-        logger.info(f"Finished axis {axis}-direction in {round(time.time() - now, 2)}s")
-        now = time.time()
-
-    # Wrap indices under periodic conditions
-    for i, periodic in enumerate(is_boundary_periodic):
-        if periodic:
-            defect_indices[:, i] %= n_origin.shape[i]
-
-    defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
-    return defect_indices
-
-@logging_and_warning_decorator()
-def defect_detect_old(
-    n_origin: nField,
-    threshold: float = 0,
-    is_boundary_periodic: DimensionFlagInput = 0,
-    planes: DimensionFlagInput = 1,
-    logger=None,
-) -> DefectIndex:
-    #! Loop
     """
     Detect defects in a 3D director field.
     For each small loop formed by four neighoring grid points,
@@ -171,88 +118,52 @@ def defect_detect_old(
         The geometrical meaning of these components is explained in the definition of `DefectIndex`
         in `datatype.py`.
     """
-
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
-    logger.debug(
-        f"The flag of periodic boundary condition in each dimension is {is_boundary_periodic}"
-    )
-    planes = as_dimension_info(planes)
-    logger.debug(f"The flag of plane to be explored is {planes}")
-
+    
+    n_origin = check_Sn(n_origin, 'n')
+    
     from .field import add_periodic_boundary
+    
+    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
+    planes = as_dimension_info(planes)
+    
+    logger.info("Start to defect defects")
+    logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
+    logger.debug(f"Planes selected for detection: {planes}")
 
-    # Consider the periodic boundary condition
-    n = add_periodic_boundary(n_origin, is_boundary_periodic=is_boundary_periodic)
+    n = add_periodic_boundary(n_origin, is_boundary_periodic)
+    defect_indices = np.empty((0, 3), dtype=float)
+
+    axis_permutations = {
+        0: (2, 1, 0),  # x-direction → move axis 0 to back
+        1: (0, 2, 1),  # y-direction → move axis 1 to back
+        2: (0, 1, 2),  # z-direction → identity
+    }
 
     now = time.time()
 
-    defect_indices = np.empty((0, 3), float)
+    for axis in range(3):
+        if not planes[axis]:
+            continue
 
-    # X-direction
-    if planes[0]:
-        # for each small loop, select the initial director
-        here = n[:, 1:, :-1]
-        # enforce the next director to have the similar orientation with the initial director
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:, :-1, :-1], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[:, 1:, :-1])
-        # do it successively until the initial one
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:, 1:, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[:, 1:, 1:])
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:, :-1, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[:, :-1, 1:])
-        # derive the inner product between the initial and last director
-        # if the inner product is smaller than the threshold,
-        # the center of the loop is identified as a defect
-        testx = np.einsum("lmni, lmni -> lmn", n[:, :-1, :-1], here)
-        temp = np.array(np.where(testx < threshold)).transpose().astype(float)
-        temp[:, 1:] = temp[:, 1:] + 0.5
-        defect_indices = np.concatenate([defect_indices, temp])
-        logger.info(
-            "finish x-direction, with " + str(round(time.time() - now, 2)) + "s"
-        )
+        perm = axis_permutations[axis]
+        n_rot = np.moveaxis(n, [0, 1, 2], perm)  # shape (A, B, C, 3)
+
+        coords = detect_defects_xyplane(n_rot, threshold)
+
+        # Restore original axis order
+        inv_perm = np.argsort(perm)
+        coords = coords[:, inv_perm]
+
+        defect_indices = np.vstack((defect_indices, coords))
+        logger.info(f"Finished axis {axis}-direction in {round(time.time() - now, 2)}s")
         now = time.time()
 
-    # Y-direction
-    if planes[1]:
-        here = n[1:, :, :-1]
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:-1, :, :-1], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[1:, :, :-1])
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[1:, :, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[1:, :, 1:])
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:-1, :, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[:-1, :, 1:])
-        testy = np.einsum("lmni, lmni -> lmn", n[:-1, :, :-1], here)
-        temp = np.array(np.where(testy < threshold)).transpose().astype(float)
-        temp[:, [0, 2]] = temp[:, [0, 2]] + 0.5
-        defect_indices = np.concatenate([defect_indices, temp])
-        logger.info(
-            "finish y-direction, with " + str(round(time.time() - now, 2)) + "s"
-        )
-        now = time.time()
+    # Wrap indices under periodic conditions
+    for i, periodic in enumerate(is_boundary_periodic):
+        if periodic:
+            defect_indices[:, i] %= n_origin.shape[i]
 
-    # Z-direction
-    if planes[2]:
-        here = n[1:, :-1]
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:-1, :-1], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[1:, :-1])
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[1:, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[1:, 1:])
-        if_parallel = np.sign(np.einsum("lmni, lmni -> lmn", n[:-1, 1:], here))
-        here = np.einsum("lmn, lmni -> lmni", if_parallel, n[:-1, 1:])
-        testz = np.einsum("lmni, lmni -> lmn", n[:-1, :-1], here)
-        temp = np.array(np.where(testz < threshold)).transpose().astype(float)
-        temp[:, :-1] = temp[:, :-1] + 0.5
-        defect_indices = np.concatenate([defect_indices, temp])
-        logger.info(
-            "finish z-direction, with " + str(round(time.time() - now, 2)) + "s"
-        )
-
-    # Wrap with the periodic boundary condition
-    for i, if_periodic in enumerate(is_boundary_periodic):
-        if if_periodic == True:
-            defect_indices[:, i] = defect_indices[:, i] % np.shape(n_origin)[i]
-    defect_indices, unique = np.unique(defect_indices, axis=0, return_index=True)
-
+    defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
     return defect_indices
 
 
@@ -441,57 +352,57 @@ def defect_neighbor_possible_get(
 
     return result
 
-@logging_and_warning_decorator()
-def draw_multiple_disclination_lines(
-    lines: List["DisclinationLine"],
-    is_new: bool = True,
-    fig_size: Tuple[int, int] = (1920, 1360),
-    bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-    is_wrap: bool = True,
-    is_smooth: bool = True,
-    color_input: Optional[Tuple[float, float, float]] = None,
-    tube_radius: float = 0.5,
-    tube_opacity: float = 1,
-    tube_specular: float = 1,
-    tube_specular_col: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-    tube_specular_pow: float = 11,
-    outline_corners: Optional[np.ndarray] = None,
-    outline_radius: float = 3,
-    logger=None
-):
+# @logging_and_warning_decorator()
+# def draw_multiple_disclination_lines(
+#     lines: List["DisclinationLine"],
+#     is_new: bool = True,
+#     fig_size: Tuple[int, int] = (1920, 1360),
+#     bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+#     is_wrap: bool = True,
+#     is_smooth: bool = True,
+#     color_input: Optional[Tuple[float, float, float]] = None,
+#     tube_radius: float = 0.5,
+#     tube_opacity: float = 1,
+#     tube_specular: float = 1,
+#     tube_specular_col: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+#     tube_specular_pow: float = 11,
+#     outline_corners: Optional[np.ndarray] = None,
+#     outline_radius: float = 3,
+#     logger=None
+# ):
     
-    from mayavi import mlab
-    from .general import blue_red_in_white_bg, sample_far
+#     from mayavi import mlab
+#     from .general import blue_red_in_white_bg, sample_far
     
-    if color_input is None:
-        color_map = blue_red_in_white_bg()
-        color_map_length = np.shape(color_map)[0] - 1
-        lines_color = color_map[ (sample_far(len(lines))*color_map_length).astype(int)  ]
-    else:
-        lines_color = [color_input for line in lines_color]
+#     if color_input is None:
+#         color_map = blue_red_in_white_bg()
+#         color_map_length = np.shape(color_map)[0] - 1
+#         lines_color = color_map[ (sample_far(len(lines))*color_map_length).astype(int)  ]
+#     else:
+#         lines_color = [color_input for line in lines_color]
 
-    if is_new:
-        mlab.figure(bgcolor=bgcolor, size=fig_size)
+#     if is_new:
+#         mlab.figure(bgcolor=bgcolor, size=fig_size)
 
-    for i, line in enumerate(lines):
-        line.figure_init(tube_color=tuple(lines_color[i]), 
-                         is_new=False, 
-                         is_wrap=is_wrap,
-                         is_smooth=is_smooth,
-                         tube_opacity=tube_opacity, 
-                         tube_radius=tube_radius)
-        line.figure_update(tube_spec=tube_specular, 
-                           tube_spec_col=tube_specular_col, 
-                           tube_spec_pow=tube_specular_pow)
+#     for i, line in enumerate(lines):
+#         line.figure_init(tube_color=tuple(lines_color[i]), 
+#                          is_new=False, 
+#                          is_wrap=is_wrap,
+#                          is_smooth=is_smooth,
+#                          tube_opacity=tube_opacity, 
+#                          tube_radius=tube_radius)
+#         line.figure_update(tube_spec=tube_specular, 
+#                            tube_spec_col=tube_specular_col, 
+#                            tube_spec_pow=tube_specular_pow)
         
         
-    if outline_corners is not None:
-        try:
-            from .field import draw_box_from_corners
-            draw_box_from_corners(outline_corners)
-        except:
-            logger.exception("Corner error is caught")
-            logger.recovery("Discarded outline")
+#     if outline_corners is not None:
+#         try:
+#             from .field import draw_box_from_corners
+#             draw_box_from_corners(outline_corners)
+#         except:
+#             logger.exception("Corner error is caught")
+#             logger.recovery("Discarded outline")
         
         
             
