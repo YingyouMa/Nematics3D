@@ -41,5 +41,5 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_size_periodic=128)
 
 defect_indices = Nematics3D.defect_detect(n, is_boundary_periodic=1)
 lines = Nematics3D.disclination.defect_classify_into_lines(defect_indices, box_size_periodic = (128, 128, 128))
-Nematics3D.draw_lines(lines)
+# Nematics3D.draw_lines(lines)
 # Nematics3D.example_visualize_defects(lines, is_wrap=False, min_length=100)
