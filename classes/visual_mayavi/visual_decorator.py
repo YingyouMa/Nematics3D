@@ -1,6 +1,9 @@
 def auto_properties(bindings: dict):
 
     def decorator(cls):
+        
+        cls._auto_properties = bindings
+        
         for name, path in bindings.items():
             attr_chain = path.split('.')  # 例如 ['actor', 'actor', 'property', 'color']
 
