@@ -1,11 +1,12 @@
 import numpy as np
-from typing import Optional, Tuple, Dict, Callable, Any
+from typing import Optional, Tuple
 
 from .smoothened_line import SmoothenedLine
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
-from ..datatypes import Vect3D, DefectIndex, DimensionPeriodicInput, as_dimension_info
+from ..datatypes import Vect3D, DefectIndex, DimensionPeriodicInput, as_dimension_info, boundary_periodic_size_to_flag
 from ..field import apply_linear_transform
+from .visual_mayavi.plot_tube import PlotTube
 
 
 class DisclinationLine:
@@ -28,7 +29,7 @@ class DisclinationLine:
         The geometrical meaning of these components is explained in the definition of `DefectIndex`
         in `datatype.py`.
 
-    _defect_coord : np.ndarray of shape (N_defects, 3)
+    _defect_coords : np.ndarray of shape (N_defects, 3)
         Real-space coordinates of the defect points, after applying transformation and offset.
 
     _box_size_periodic : DimensionPeriodic, np.ndarray of shape (3,)
@@ -42,7 +43,7 @@ class DisclinationLine:
         - 'cross': Cross-boundary loop (same after modulo) as the line crossing whole box
         - 'seg' : Open segment
 
-    _defect_coord_smooth : np.ndarray, optional
+    _defect_coords_smooth : np.ndarray, optional
         Smoothed version of the defect coordinates, if smoothing was applied.
 
     _figures : list of Mayavi figure handles
@@ -52,10 +53,11 @@ class DisclinationLine:
     def __init__(
         self,
         defect_indices: DefectIndex,
-        box_size_periodic: DimensionPeriodicInput,
+        box_size_periodic_index: DimensionPeriodicInput,
         is_sorted: bool = True,
-        offset: Optional[Vect3D] = None,
-        transform: Optional[np.ndarray] = None,
+        offset: Vect3D = np.array([0,0,0]),
+        transform: np.ndarray = np.eye(3),
+        name: Optional[str] = None,
     ):
         """
         Initialize a DisclinationLine object from a list of defect indices.
@@ -83,17 +85,20 @@ class DisclinationLine:
         offset : Vect3D, array_like of 3 floats, optional
             Global offset added to all coordinates after transformation.
             Useful for shifting lines in real space.
-            Default is None (no shift).
+            Default is (0, 0, 0) (no shift).
 
         transform : np.ndarray of shape (3, 3), optional
             Linear transformation matrix applied to the defect indices
             to convert from grid space to physical space (e.g., for anisotropic grids).
-            Default is None (identity transform).
+            Default is np.eye(3) (identity transform).
+
+        name : str, optional
+            The name of this line.
         """
         if is_sorted == False:
             defect_indices = sort_line_indices(defect_indices)
 
-        box_size_periodic = as_dimension_info(box_size_periodic)
+        box_size_periodic_index = as_dimension_info(box_size_periodic_index)
 
         if np.linalg.norm(defect_indices[0] - defect_indices[-1]) == 0:
             self._end2end_category = "loop"
@@ -102,10 +107,10 @@ class DisclinationLine:
             defect1 = defect_indices[0].copy()
             defect2 = defect_indices[-1].copy()
             defect1 = np.where(
-                box_size_periodic == np.inf, defect1, defect1 % box_size_periodic
+                box_size_periodic_index == np.inf, defect1, defect1 % box_size_periodic_index
             )
             defect2 = np.where(
-                box_size_periodic == np.inf, defect2, defect2 % box_size_periodic
+                box_size_periodic_index == np.inf, defect2, defect2 % box_size_periodic_index
             )
             if np.linalg.norm(defect1 - defect2) == 0:
                 self._end2end_category = "cross"
@@ -115,9 +120,14 @@ class DisclinationLine:
                 self._defect_indices = defect_indices
 
         self._defect_num = np.shape(self._defect_indices)[0]
-        self._box_size_periodic = box_size_periodic
+        self._box_size_periodic_index = box_size_periodic_index
 
         self.update_to_coord(grid_transform=transform, grid_offset=offset)
+
+        if name == None:
+            self._name = "line"
+        else:
+            self._name = name
 
     def update_to_coord(
         self,
@@ -127,13 +137,13 @@ class DisclinationLine:
 
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
-        self._defect_coord = apply_linear_transform(
+        self._defect_coords = apply_linear_transform(
             self._defect_indices,
             transform=self._grid_transform,
             offset=self._grid_offset,
         )
         self._box_size_periodic_coord = apply_linear_transform(
-            self._box_size_periodic,
+            self._box_size_periodic_index,
             transform=self._grid_transform,
             offset=self._grid_offset,
         )
@@ -173,7 +183,7 @@ class DisclinationLine:
         -------
         smoothened_coords : np.ndarray of shape (N_out, M)
             The coordinates of the smoothened line.
-            Also stored internally as `self._defect_coord_smooth`.
+            Also stored internally as `self._defect_coords_smooth`.
         """
         if self._end2end_category == "loop":
             smoothen_mode = "wrap"
@@ -181,34 +191,37 @@ class DisclinationLine:
             smoothen_mode = "interp"
 
         output = SmoothenedLine(
-            self._defect_coord,
+            self._defect_coords,
             window_ratio=window_ratio,
             window_length=window_length,
             order=order,
             N_out_ratio=N_out_ratio,
             mode=smoothen_mode,
-            is_keep_origin=False,
         )
 
-        self._defect_coord_smooth_obj = output
-        self._defect_coord_smooth = output._output
+        self._defect_coords_smooth_obj = output
+        self._defect_coords_smooth = output._output
 
         return output.output
 
-    def figure_init(
+    @logging_and_warning_decorator()
+    def visualize(
         self,
         is_wrap: bool = False,
         is_smooth: bool = True,
-        tube_radius: float = 0.5,
-        tube_opacity: float = 0.5,
-        tube_color: Tuple[float, float, float] = (0.5, 0.5, 0.5),
-        tube_sides: int = 6,
-        is_new: bool = True,
-        bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        fig_size: Tuple[int, int] = (1920, 1360),
+        radius: float = 0.5,
+        opacity: float = 0.5,
+        color: Tuple[float, float, float] = (0.5, 0.5, 0.5),
+        sides: int = 6,
+        specular: float = 1,
+        specular_color: Vect3D = (1.0, 1.0, 1.0),
+        specular_power: float = 11,
+        scalars: Optional[np.ndarray] = None,
+        name: Optional[str] = None,
+        logger=None
     ) -> None:
         """
-        Initialize a Mayavi 3D figure to visualize the defect line.
+        Visualize the defect line.
 
         Parameters
         ----------
@@ -220,174 +233,107 @@ class DisclinationLine:
             Whether to use the smoothed version of the defect line.
             Default is True.
 
-        tube_radius : float, optional
+        radius : float, optional
             Radius of the 3D tube for visualization.
-            Default is 0.5.
+            Default is 1.
 
-        tube_opacity : float, optional
+        opacity : float, optional
             Opacity of the tube. Range [0, 1].
-            Default is 0.5.
+            Default is 1.
 
-        tube_color : tuple of 3 floats, optional
+        color : tuple of 3 floats, optional
             RGB color of the tube, values in [0, 1].
-            Default is (0.5, 0.5, 0.5), which is medium gray.
+            Default is (1., 1., 1.), which is white.
 
-        tube_sides : int, optional
-            Number of polygonal sides used to draw the tube.
-            Default is 6.
+        scalars : np.ndarray, optional
+            Optional scalar values for each vertex.
+            (enables gradient coloring). If provided, overrides 'color'.
 
-        is_new : bool, optional
-            Whether to create a new Mayavi figure window.
-            Default is True.
-
-        bgcolor : tuple of 3 floats, optional
-            RGB color of the figure background.
-            Default is (1.0, 1.0, 1.0), which is white.
-
-        fig_size : tuple of 2 ints, optional
-            Size of the figure window in pixels.
-            Default is (1920, 1360).
+        name : str, optional
+            The name of this plotted line.
+            If not provides, use the line's name is directly applied.
         """
-        from mayavi import mlab
 
         if is_smooth:
-            if hasattr(self, "_defect_coord_smooth"):
-                line_coord = self._defect_coord_smooth
+            if hasattr(self, "_defect_coords_smooth"):
+                line_coords = self._defect_coords_smooth
             else:
-                print("the line has not been smoothened")
-                print("use original data instead")
-                line_coord = self._defect_coord
+                logger.warning(">>> The line has not been smoothened")
+                logger.warning(">>> Use original data instead")
+                line_coords = self._defect_coords
         else:
-            line_coord = self._defect_coord
+            line_coords = self._defect_coords
 
-        if is_new:
-            mlab.figure(bgcolor=bgcolor, size=fig_size)
+        if name == None:
+            name = self._name
 
         if not is_wrap:
-            figure = mlab.plot3d(
-                *(line_coord.T),
-                tube_radius=tube_radius,
-                opacity=tube_opacity,
-                color=tube_color,
-                tube_sides=tube_sides
+            line_plot = PlotTube(
+                line_coords,
+                color=color,
+                radius=radius,
+                opacity=opacity,
+                sides=sides,
+                specular=specular,
+                specular_color=specular_color,
+                specular_power=specular_power,
+                scalars=scalars,
+                name=name,
+                logger=logger
             )
-            figures = [figure]
+            lines_plot = [line_plot]
         else:
-
-            line_coord = np.where(
-                self._box_size_periodic_coord == np.inf,
-                line_coord,
-                line_coord % self._box_size_periodic_coord,
+            boundary_flag = boundary_periodic_size_to_flag(self._box_size_periodic_index)
+            line_coords_origin = apply_linear_transform(
+                line_coords,
+                transform=np.linalg.inv(self._grid_transform),
+                offset=-self._grid_offset
             )
-            diff = line_coord[1:] - line_coord[:-1]
+
+            line_coords_origin = np.where(
+                boundary_flag,
+                line_coords_origin % self._box_size_periodic_index,
+                line_coords_origin      
+            )
+            diff = line_coords_origin[1:] - line_coords_origin[:-1]
             diff = np.linalg.norm(diff, axis=-1)
             end_list = np.where(diff > 1)[0] + 1
-            end_list = np.concatenate([[0], end_list, [len(line_coord)]])
+            end_list = np.concatenate([[0], end_list, [len(line_coords_origin)]])
 
-            figures = []
+            line_coords = apply_linear_transform(
+                line_coords_origin,
+                transform=self._grid_transform,
+                offset=self._grid_offset
+            )
+
+            lines_plot = []
             for i in range(len(end_list) - 1):
-                points = line_coord[end_list[i] : end_list[i + 1]]
-                figure = mlab.plot3d(
-                    *(points.T),
-                    tube_radius=tube_radius,
-                    opacity=tube_opacity,
-                    color=tube_color,
-                    tube_sides=tube_sides
-                )
-                figures.append(figure)
+                line_sec_coords = line_coords[end_list[i] : end_list[i + 1]]
+                if scalars is not None:
+                    scalars_sec = scalars[end_list[i] : end_list[i + 1]]
+                else:
+                    scalars_sec = None
+                line_plot =PlotTube(
+                    line_sec_coords,
+                    color=color,
+                    radius=radius,
+                    opacity=opacity,
+                    sides=sides,
+                    specular=specular,
+                    specular_color=specular_color,
+                    specular_power=specular_power,
+                    scalars=scalars_sec,
+                    name=name,
+                    logger=logger
+            )
+                lines_plot.append(line_plot)
 
-        if not is_new:
-            figure.parent.parent.parent.parent.parent.scene.background = bgcolor
+        self._lines_plot = lines_plot
 
-        self._figures = figures
-
-    def generate_dict_figure_simplify(
-        self, idx: int
-    ) -> Dict[str, Tuple[Callable[[], Any], str]]:
-        """
-        Generate a dictionary for accessing and updating tube visualization parameters.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the figure object in the self._figures list.
-
-        Returns
-        -------
-        dict_figure_simplify : dict
-            Dictionary mapping visual attributes (e.g., 'tube_radius') to
-            (object_accessor_function, attribute_name) pairs.
-        """
-        dict_figure_simplify = {
-            "bgcolor": (
-                lambda: self._figures[idx].parent.parent.parent.parent.parent.scene,
-                "background",
-            ),
-            "tube_radius": (lambda: self._figures[idx].parent.parent.filter, "radius"),
-            "tube_opacity": (lambda: self._figures[idx].actor.property, "opacity"),
-            "tube_sides": (
-                lambda: self._figures[idx].parent.parent.filter,
-                "number_of_sides",
-            ),
-            "tube_color": (lambda: self._figures[idx].actor.property, "color"),
-            "tube_spec": (lambda: self._figures[idx].actor.property, "specular"),
-            "tube_spec_col": (
-                lambda: self._figures[idx].actor.property,
-                "specular_color",
-            ),
-            "tube_spec_pow": (
-                lambda: self._figures[idx].actor.property,
-                "specular_power",
-            ),
-        }
-        return dict_figure_simplify
-
-    def figure_check_parameter(self, *args):
-        """
-        Print the current values of specified visual attributes in the figure.
-
-        Parameters
-        ----------
-        *args : str
-            Names of visual parameters to inspect (e.g., 'tube_opacity', 'bgcolor').
-
-        verbose : bool, optional
-            Whether to print detailed information. Default is True.
-        """
-        for arg in args:
-            dict_figure_simplify = self.generate_generate_dict_figure_simplify(0)
-            temp = dict_figure_simplify.get(arg)
-            obj = temp[0]()
-            attr = temp[1]
-            print(arg + " : " + str(getattr(obj, attr)))
-
-    def figure_update(self, **kwargs):
-        """
-        Update specified visual attributes of the rendered tube(s).
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Keyword arguments of the form {attribute_name: new_value}, where
-            attribute_name can be one of:
-            - 'bgcolor'
-            - 'tube_radius'
-            - 'tube_opacity'
-            - 'tube_color'
-            - 'tube_sides'
-            - 'tube_spec'
-            - 'tube_spec_col'
-            - 'tube_spec_pow'
-        """
-        for attr in kwargs.keys():
-            for idx in range(len(self._figures)):
-                dict_figure_simplify = self.generate_dict_figure_simplify(idx)
-                obj = dict_figure_simplify.get(attr)[0]()
-                attr_final = dict_figure_simplify.get(attr)[1]
-                setattr(obj, attr_final, kwargs.get(attr))
+        return lines_plot
 
     # def update_norm(self):
-    #     self._norm = get_plane(self._defect_coord)
+    #     self._norm = get_plane(self._defect_coords)
     #     return self._norm
 
     # def update_center(self):
@@ -419,30 +365,30 @@ class DisclinationLine:
     # def update_geometry(self, is_smooth=True):
 
     #     if is_smooth:
-    #         if hasattr(self, '_defect_coord_smooth'):
-    #             if self._defect_coord_smooth_obj._N_out_ratio == 1:
-    #                 points = self._defect_coord_smooth
+    #         if hasattr(self, '_defect_coords_smooth'):
+    #             if self._defect_coords_smooth_obj._N_out_ratio == 1:
+    #                 points = self._defect_coords_smooth
     #             else:
     #                 print('There are more points in the smooth line')
     #                 print('Start to re-smooth it with N_out_ratio=1')
-    #                 print(f'window_length={self._defect_coord_smooth_obj._window_length}')
-    #                 print(f'order={self._defect_coord_smooth_obj._order}')
-    #                 print(f'mode={self._defect_coord_smooth_obj._mode}')
+    #                 print(f'window_length={self._defect_coords_smooth_obj._window_length}')
+    #                 print(f'order={self._defect_coords_smooth_obj._order}')
+    #                 print(f'mode={self._defect_coords_smooth_obj._mode}')
 
-    #                 points = SmoothenedLine(self._defect_coord,
-    #                                         window_length=self._defect_coord_smooth_obj._window_length,
-    #                                         order=self._defect_coord_smooth_obj._order,
+    #                 points = SmoothenedLine(self._defect_coords,
+    #                                         window_length=self._defect_coords_smooth_obj._window_length,
+    #                                         order=self._defect_coords_smooth_obj._order,
     #                                         N_out_ratio=1,
-    #                                         mode=self._defect_coord_smooth_obj._mode,
+    #                                         mode=self._defect_coords_smooth_obj._mode,
     #                                         is_keep_origin=False)._output
     #                 print('Done!')
 
     #         else:
     #             print('The line has not been smoothened')
     #             print('Use original data instead')
-    #             points = self._defect_coord
+    #             points = self._defect_coords
     #     else:
-    #         points = self._defect_coord
+    #         points = self._defect_coords
 
     #     is_periodic = self._end2end_category == 'loop'
 

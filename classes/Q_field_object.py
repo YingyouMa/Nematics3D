@@ -22,44 +22,6 @@ from ..disclination import defect_detect, defect_classify_into_lines
 
 
 class QFieldObject:
-    """
-    A data container and utility class for representing and manipulating a Q-tensor field in 3D space.
-
-    The object can be initialized in two mutually exclusive ways:
-    1. Provide `n` (director field), with optional `S` (scalar order parameter). 
-       The Q-tensor will be computed.
-    2. Provide `Q` directly. If both `Q` and `n` are provided, `Q` will be ignored with a warning.
-
-    Parameters
-    ----------
-    Q : QField, optional
-        A precomputed Q-tensor field of shape (..., 5) or (..., 3, 3).
-        Ignored if `n` is also provided.
-
-    S : SField, optional
-        Scalar order parameter field, shape (...,). Only used if `n` is provided.
-        If omitted, a constant value of 1 is assumed.
-
-    n : nField, optional
-        Director field of shape (..., 3). If provided, the Q-tensor is constructed from it.
-
-    box_size_periodic : DimensionPeriodic, optional
-        Simulation box size or periodicity indicator. Defaults to [∞, ∞, ∞].
-
-    origin : Vect3D, optional
-        Origin of the spatial grid. Defaults to (0, 0, 0).
-
-    space_index_ratio : DimensionInfo, optional
-        Ratio between physical space and index space. Defaults to 1.
-
-    logger : Logger, optional
-        A logger instance used to report warnings or debug information. If None, logging is disabled.
-
-    Raises
-    ------
-    NameError
-        If neither `Q` nor `n` is provided. At least one form of input is required.
-    """
 
     DEFAULT_SMOOTH_WINDOW_LENGTH = 61
     DEFAULT_MINIMUM_LINE_LENGTH = 75
@@ -71,8 +33,8 @@ class QFieldObject:
         S: SField = None,
         n: nField = None,
         box_size_periodic: DimensionPeriodicInput = np.inf,
-        grid_offset: Optional[Vect3D] = None,
-        grid_transform: Optional[np.ndarray] = None,
+        grid_offset: Vect3D = np.array([0,0,0]),
+        grid_transform: np.ndarray = np.eye(3),
         is_diag: bool = True,
         logger: Logger = None,
     ) -> None:
@@ -110,6 +72,8 @@ class QFieldObject:
         self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
 
+        self.figures = []
+
     @logging_and_warning_decorator()
     def update_diag(self, logger=None):
         self._S, self._n = diagonalizeQ(self._Q, logger=logger)
@@ -140,7 +104,7 @@ class QFieldObject:
         See the document of apply_linear_transform()
         """
 
-        if not hasattr(self, '_defect_indices'):
+        if not hasattr(self, "_defect_indices"):
             grid_shape = np.shape(self._Q)[:3]
             self._grid = generate_coordinate_grid(grid_shape, grid_shape)
 
@@ -150,7 +114,7 @@ class QFieldObject:
             self._grid, transform=self._grid_transform, offset=self._grid_offset
         )
 
-        if hasattr(self, '_defect_indices'):
+        if hasattr(self, "_defect_indices"):
             self._defect_grid = apply_linear_transform(
                 self._defect_indices,
                 transform=self._grid_transform,
@@ -160,68 +124,179 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def update_lines_classify(self, logger=None):
         self._lines = defect_classify_into_lines(
-            self._defect_indices, 
+            self._defect_indices,
             box_size_periodic=self._box_size_periodic,
             offset=self._grid_offset,
             transform=self._grid_transform,
-            logger=logger)
+            logger=logger,
+        )
         return self._lines
-    
+
+    @logging_and_warning_decorator()
     def update_lines_smoothen(
         self,
         window_ratio: Optional[int] = None,
-        window_length: int = DEFAULT_SMOOTH_WINDOW_LENGTH,
+        window_length: Optional[int] = None,
         order: int = 3,
         N_out_ratio: float = 3.0,
-        min_line_length: int = DEFAULT_MINIMUM_LINE_LENGTH
+        min_line_length: Optional[int] = None,
+        logger=None,
     ):
+        if window_length is None:
+            msg = "No data of window_length is input for smoothening lines. \n"
+            msg += f"Use the default value {self.DEFAULT_SMOOTH_WINDOW_LENGTH}"
+            logger.info(msg)
+            window_length = self.DEFAULT_SMOOTH_WINDOW_LENGTH
+        else:
+            logger.debug(f"window_length = {window_length}")
+
+        if min_line_length is None:
+            msg = "No data of minimum line length is input for lines to be smoothened. \n"
+            msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
+            logger.info(msg)
+            min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
+        else:
+            logger.debug(f"min_line_length = {min_line_length}")
+
         for line in self._lines:
             if line._defect_num >= min_line_length:
                 line.update_smoothen(
                     window_ratio=window_ratio,
                     window_length=window_length,
                     order=order,
-                    N_out_ratio=N_out_ratio
+                    N_out_ratio=N_out_ratio,
                 )
 
+    @logging_and_warning_decorator()
     def visualize_lines(
-            self,
-            is_new: bool = True,
-            fig_size: Tuple[int, int] = (1920, 1360),
-            bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-            is_wrap: bool = True,
-            is_smooth: bool = True,
-            color_input: Optional[Tuple[float, float, float]] = None,
-            tube_radius: float = 0.5,
-            tube_opacity: float = 1,
-            tube_specular: float = 1,
-            tube_specular_col: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-            tube_specular_pow: float = 11,
-            is_outline: bool = True,
-            outline_radius: float = 3
+        self,
+        min_line_length: Optional[int] = None,
+        is_new: bool = True,
+        fig_size: Tuple[int, int] = (1920, 1360),
+        bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        fgcolor: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        is_wrap: bool = True,
+        is_smooth: bool = True,
+        lines_color_input_all: Optional[np.ndarray] = None,
+        lines_scalars_name: Optional[str] = None,
+        radius: float = 0.5,
+        sides: int = 6,
+        opacity: float = 1,
+        specular: float = 1,
+        specular_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        specular_power: float = 11,
+        names_all: Optional[List[str]] = None,
+        is_outline: bool = True,
+        outline_radius: float = 3,
+        logger=None,
     ):
         
-        from ..disclination import draw_multiple_disclination_lines
+        specular_color = tuple(specular_color)
 
+        if min_line_length is None:
+            msg = "No data of minimum line length is input for lines to be plotted. \n"
+            msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
+            logger.info(msg)            
+            min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
+        else:
+            logger.debug(f"min_line_length = {min_line_length}")
 
-        draw_multiple_disclination_lines(
-            self._lines,
-            is_new=is_new,
-            fig_size=fig_size,
-            bgcolor=bgcolor,
-            is_wrap=is_wrap,
-            is_smooth=is_smooth,
-            color_input=color_input,
-            tube_radius=tube_radius,
-            tube_opacity=tube_opacity,
-            tube_specular=tube_specular,
-            tube_specular_col=tube_specular_col,
-            tube_specular_pow=tube_specular_pow,
+        self._lines_plot = [
+            line for line in self._lines if line._defect_num > min_line_length
+        ]
+        self._lines_plot = sorted(
+            self._lines_plot, key=lambda line: line._defect_num, reverse=True
         )
 
-        from ..field import draw_box
-        draw_box()
+        if lines_scalars_name is not None:
+            logger.info("Scalars of lines are input")
+            lines_scalars = [getattr(line, lines_scalars_name) for line in self._lines_plot]
+            lines_colors = [None for line in self._lines_plot]
+            if lines_color_input_all is not None:
+                logger.warning(
+                    ">>> scalars of lines are input. Their color_input will be ignored"
+                )
+        else:
+            lines_scalars = [None for line in self._lines_plot]
+            if lines_color_input_all is not None:
+                if np.shape(lines_color_input_all) == (3,):
+                    lines_colors = [
+                        tuple(lines_color_input_all) for line in self._lines_plot
+                    ]
+                elif np.shape(lines_color_input_all) == (len(self._lines_plot), 3):
+                    lines_colors = lines_color_input_all
+                else:
+                    raise ValueError(
+                        f"The shape of lines_color_input_all should either be (3,) or (len(self._lines_plot), 3), which is ({len(self._lines_plot)}, 3)"
+                    )
+            else:
+                logger.info("No color data is input. Use the default color map, trying to set those longest lines with distinct coloers")
+                from ..general import blue_red_in_white_bg, sample_far
+                color_map = blue_red_in_white_bg()
+                color_map_length = np.shape(color_map)[0] - 1
+                lines_colors = color_map[ 
+                    (sample_far(len(self._lines_plot))*color_map_length).astype(int)  
+                    ]
+                
+        if names_all is not None:
+            if len(names_all) != len(self._lines_plot):
+                logger.warning(f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(self._lines_plot)}.\n Use the default names instead.")
+        else:
+            names_all = [f"line{count}" for count in range(len(self._lines_plot))]
 
+        if is_new:       
+            from .visual_mayavi.plot_scene import PlotScene
+
+            figure = PlotScene(
+                size = fig_size,
+                bgcolor=bgcolor,
+                fgcolor=fgcolor
+            )
+            self.figures.append(figure)
+
+        for line, line_color, line_scalar, name in zip(self._lines_plot, lines_colors, lines_scalars, names_all):
+            line_visual = line.visualize(
+                is_wrap=is_wrap,
+                is_smooth=is_smooth,
+                radius=radius,
+                opacity=opacity,
+                color=line_color,
+                sides=sides,
+                specular=specular,
+                specular_color=specular_color,
+                specular_power=specular_power,
+                scalars=line_scalar,
+                name=name,
+                logger=logger
+            )
+
+            for item in line_visual:
+                figure.add_object(item, category="lines")
+            
+
+
+
+
+
+        
+
+        # draw_multiple_disclination_lines(
+        #     self._lines,
+        #     is_new=is_new,
+        #     fig_size=fig_size,
+        #     bgcolor=bgcolor,
+        #     is_wrap=is_wrap,
+        #     is_smooth=is_smooth,
+        #     color_input=color_input,
+        #     tube_radius=tube_radius,
+        #     tube_opacity=tube_opacity,
+        #     tube_specular=tube_specular,
+        #     tube_specular_col=tube_specular_col,
+        #     tube_specular_pow=tube_specular_pow,
+        # )
+
+        # from ..field import draw_box
+        # draw_box()
 
     def __call__(self) -> np.ndarray:
         return self._Q

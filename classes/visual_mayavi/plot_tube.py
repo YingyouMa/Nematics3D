@@ -72,21 +72,25 @@ class PlotTube:
         
         x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
 
-        if scalars != None:
+        if scalars is not None:
             logger.warning(">>> The scalars of tube is input")
             logger.warning(">>> The color of tube will be ignored")
-            plot_args = (x, y, z, scalars)
+            self.actor = mlab.plot3d(
+                x, y, z, scalars,
+                tube_radius=radius,
+                tube_sides=sides,
+                opacity=opacity,
+            )
         else:
-            plot_args = (x, y, z)
+            color = tuple(color)
+            self.actor = mlab.plot3d(
+                x, y, z,
+                color=color,
+                tube_radius=radius,
+                tube_sides=sides,
+                opacity=opacity,
+            )
         
-
-        self.actor = mlab.plot3d(
-            *plot_args,
-            color=color,
-            tube_radius=radius,
-            tube_sides=sides,
-            opacity=opacity,
-        )
 
         prop = self.actor.actor.property
         prop.specular = specular

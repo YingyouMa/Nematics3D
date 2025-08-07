@@ -16,7 +16,7 @@ class SmoothenedLine:
 
     Parameters
     ----------
-    line_coord : array-like of shape (N, M)
+    line_coord_input : array-like of shape (N, M)
         Coordinates of the original line to be smoothened.
         N is the number of points, and M is the dimension (usually 2 or 3).
 
@@ -42,10 +42,6 @@ class SmoothenedLine:
         Extension mode for the Savitzky-Golay filter.
         - "interp": no extension (default)
         - "wrap": wrap around edges (useful for closed loops)
-
-    is_keep_origin : bool, optional
-        If True, the original line will be stored in `self._input`.
-        Otherwise, `self._input` is set to None. Default is True.
 
     Attributes
     ----------
@@ -74,41 +70,51 @@ class SmoothenedLine:
         Filter boundary mode.
     """
 
-    @logging_and_warning_decorator()
+    
     def __init__(
         self,
-        line_coord: np.ndarray,
+        line_coord_input: np.ndarray,
         window_ratio: int = 3,
         window_length: Optional[int] = None,
         order: int = 3,
         N_out_ratio: float = 3.0,
         mode: Literal["interp", "wrap"] = "interp",
-        is_keep_origin: bool = True,
+        logger=None
     ):
         self._order = order
         self._N_out_ratio = N_out_ratio
         self._mode = mode
-        self._N_init = len(line_coord)
+        self._N_init = len(line_coord_input)
+        self._line_coord_input = line_coord_input
+        self._N_out_ratio = N_out_ratio
 
-        if window_length is None:
-            self._window_length = int(self._N_init / window_ratio / 2) * 2 + 1
+        self._window_length = window_length
+        self._window_ratio = window_ratio
+
+        self.apply_smoothen(logger=logger)
+
+    @logging_and_warning_decorator()
+    def apply_smoothen(self, logger=None):
+
+        if self._window_length is None:
+            self._window_length = int(self._N_init / self._window_ratio / 2) * 2 + 1
             self._window_ratio = self._N_init / self._window_length
         else:
-            self._window_length = window_length
+            if self._window_ratio is not None:
+                logger.warning(">>> Window_length is manual input. window_ratio would be ignored.")
+            self._window_length = self._window_length
             self._window_ratio = self._N_init / self._window_length
 
-        self._N_out = int(self._N_init * N_out_ratio)
-
-        self._input = line_coord if is_keep_origin else None
+        self._N_out = int(self._N_init * self._N_out_ratio)
 
         # Step 1: Apply Savitzky-Golay filter to smoothen the curve
-        line_length = np.shape(line_coord)[0]
+        line_length = self._N_init
         if self._window_length >= line_length:
             raise ValueError(
                 f"Filter window size {self._window_length} must be smaller than line length {line_length}"
             )
         line_points = savgol_filter(
-            line_coord, self._window_length, order, axis=0, mode=mode
+            self._line_coord_input, self._window_length, self._order, axis=0, mode=self._mode
         )
 
         # Step 2: Define spline parameter u

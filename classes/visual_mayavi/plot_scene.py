@@ -1,7 +1,7 @@
 from mayavi import mlab
 from typing import Any
 from collections import defaultdict
-from Nematics3D.logging_decoretor import logging_and_warning_decorator
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 
 class PlotScene:
     """
@@ -42,17 +42,17 @@ class PlotScene:
         if hasattr(obj, "name") and obj.name:  
             base_name = obj.name
         else:
-            base_name = category+"0"  # fallback: use category name
+            base_name = category+"_0"  # fallback: use category name
     
         # Step 2: Ensure uniqueness in this category
         existing_names = {getattr(o, "name") for o in self.objects[category]}
         new_name = base_name
         counter = 1
         while new_name in existing_names:
-            new_name = f"{base_name}{counter}"
-            counter += obj
+            new_name = f"{base_name}_{counter}"
+            counter += 1
         if counter != 1:
-            logger.warning(f">>> {base_name} already exists. Changed it into {base_name}{counter}")
+            logger.warning(f">>> {base_name} already exists. Changed it into {base_name}_{counter}")
     
         # Step 3: Assign the final name
         setattr(obj, "name", new_name)
