@@ -130,6 +130,12 @@ class QFieldObject:
             transform=self._grid_transform,
             logger=logger,
         )
+        self._lines = sorted(
+            self._lines, key=lambda line: line._defect_num, reverse=True
+        )
+        for i, line in enumerate(self._lines):
+            line._name = f"line{i}"
+
         return self._lines
 
     @logging_and_warning_decorator()
@@ -216,33 +222,30 @@ class QFieldObject:
         else:
             logger.debug(f"min_line_length = {min_line_length}")
 
-        self._lines_plot = [
+        lines_plot = [
             line for line in self._lines if line._defect_num > min_line_length
         ] 
-        self._lines_plot = sorted(
-            self._lines_plot, key=lambda line: line._defect_num, reverse=True
-        )
 
         if lines_scalars_name is not None:
             logger.info("Scalars of lines are input")
-            lines_scalars = [getattr(line, lines_scalars_name) for line in self._lines_plot]
-            lines_colors = [None for line in self._lines_plot]
+            lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
+            lines_colors = [None for line in lines_plot]
             if lines_color_input_all is not None:
                 logger.warning(
                     ">>> scalars of lines are input. Their color_input will be ignored"
                 )
         else:
-            lines_scalars = [None for line in self._lines_plot]
+            lines_scalars = [None for line in lines_plot]
             if lines_color_input_all is not None:
                 if np.shape(lines_color_input_all) == (3,):
                     lines_colors = [
-                        tuple(lines_color_input_all) for line in self._lines_plot
+                        tuple(lines_color_input_all) for line in lines_plot
                     ]
-                elif np.shape(lines_color_input_all) == (len(self._lines_plot), 3):
+                elif np.shape(lines_color_input_all) == (len(lines_plot), 3):
                     lines_colors = lines_color_input_all
                 else:
                     raise ValueError(
-                        f"The shape of lines_color_input_all should either be (3,) or (len(self._lines_plot), 3), which is ({len(self._lines_plot)}, 3)"
+                        f"The shape of lines_color_input_all should either be (3,) or (len(lines_plot), 3), which is ({len(lines_plot)}, 3)"
                     )
             else:
                 logger.info("No color data is input. Use the default color map, trying to set those longest lines with distinct coloers")
@@ -250,14 +253,14 @@ class QFieldObject:
                 color_map = blue_red_in_white_bg()
                 color_map_length = np.shape(color_map)[0] - 1
                 lines_colors = color_map[ 
-                    (sample_far(len(self._lines_plot))*color_map_length).astype(int)  
+                    (sample_far(len(lines_plot))*color_map_length).astype(int)  
                     ]
                 
         if names_all is not None:
-            if len(names_all) != len(self._lines_plot):
-                logger.warning(f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(self._lines_plot)}.\n Use the default names instead.")
+            if len(names_all) != len(lines_plot):
+                logger.warning(f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(lines_plot)}.\n Use the default names instead.")
         else:
-            names_all = [f"line{count}" for count in range(len(self._lines_plot))]
+            names_all = [line._name for line in lines_plot]
 
         if is_new:       
             from .visual_mayavi.plot_scene import PlotScene
@@ -269,7 +272,7 @@ class QFieldObject:
             )
             self.figures.append(figure)
 
-        for line, line_color, line_scalar, name in zip(self._lines_plot, lines_colors, lines_scalars, names_all):
+        for line, line_color, line_scalar, name in zip(lines_plot, lines_colors, lines_scalars, names_all):
             line_visual = line.visualize(
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
