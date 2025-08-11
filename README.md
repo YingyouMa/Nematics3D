@@ -48,10 +48,45 @@ A new environment specifically for ```Nematics3D```, or at least ```mayavi```, i
 ## Getting Started
 
 ### Q field
-The most basic physical value of nematics system is the tensor order parameter field $Q$. This is represented by ```QFieldObject``` in this package. Consider an object ```Q```, the digital value of each component of $Q$ could be extracted by ```Q()```. This is a ```np.ndarray``` with shape ```(Nx, Ny, Nz, 5)```. The first three dimensions represent the lattice grid of the 3D field, while the last one represent the 5 independent components of $Q$, $Q_{xx}$, $Q_{xy}$, $Q_{xz}$, $Q_{yy}$, $Q_{yz}$, seperately. Similarly, all space field variables in this package are ```np.ndarray``` with shape ```(Nx, Ny, Nz, ...)```. 
+The most basic physical value of nematics system is the **tensor order parameter field** $Q$. In this package, this field is represented by the class ```QFieldObject```, which serves as the core data structure for storing and manipulating $Q$ in 3D space.   
 
-There are two ways to initialize an object of ```QFieldObject```. The first way is to input the $Q$ field directly as
+Consider an object ```Q```. Calling ```Q()``` returns the numeric values of all components of $Q$ as a ```np.ndarray``` with shape ```(Nx, Ny, Nz, 5)```. The first three dimensions represent the lattice grid of the 3D field, while the last dimension stores the 5 independent components of $Q$: $Q_{xx}$, $Q_{xy}$, $Q_{xz}$, $Q_{yy}$, $Q_{yz}$, respectively. Similarly, all spatial fields in this package are represented as ```np.ndarray``` with shape ```(Nx, Ny, Nz, ...)```.
+
+There are two ways to initialize an object of ```QFieldObject```.   
+
+1. **Provide the $Q$ field directly**:
 ```python
-Q = Nematics3D.QFieldObject(Q=Q_data)
+Q = Nematics3D.QFieldObject(Q=Q_data, is_diag=True)
 ```
-The other way is to input the scalar order parameter field $S$ and director field $n$, leading to $Q=S(nn-\frac{I}{3})$:
+With the flag ```is_diag=True```, the initialization automatically derive the scalar order parameter field $S$ and director field $n$, represented by ```Q._S``` and ```Q._n```. They could also be calculated later by ```Q.update_diag()```. The input $Q$ data could either in the 5-component form ```(Nx, Ny, Nz, 5)``` or in tensorial structure ```(Nx, Ny, Nz, 9)```.    
+
+2. **Provide $S$ and $n$**, in which case $Q$ is constructed as $Q = S,(nn-\frac{I}{3})$:
+```python
+Q = Nematics3D.QFieldObject(S=S_data, n=n_data)
+```
+
+Another important argument for ```QFieldObject``` is the periodic-boundary-condition flag. For example, ```box_periodic_flag=(True, False, False)``` indicates that only in $x$-direction there is periodic. This setting is crucial for disclination analysis: if PBC is specified incorrectly, a disclination line crossing a periodic boundary would be identified as multiple independent segments.
+
+Finally, you may specify a transformation from lattice coordinates $g$ to real-space coordinates $r$ via $r = k g + b$, where $k$ is a linear transformation matrix (rotation/stretch) and $b$ is a translation vector. These information could be later input by ```Q.update_grid(grid_transform=k, grid_offset=b)```. The grid in the real space is stored in ```Q._grid```.
+
+### Defects detection and basic visualzation
+To identify all disclinations in the system, simply use
+```python
+Q.update_defects()
+```
+And they could be further classified into different smooth disclination lines via
+```python
+Q.update_lines_classify()
+Q.update_lines_smoothen()
+```
+All lines are stored in ```Q._lines```. Each of the line is the object of class ```DisclinationLine```. The detailed introduction of arguments of smoothening is in the document of ```DisclinationLine.update_smoothen()``` and ```QFieldObject.update_lines_smoothen()```.  The lines are sorted in descending order of length and named sequentially as ```line0```, ```line1```, and so on, according to their index ```i```.     
+
+The visualization of these disclination lines in $Q$ field could be achieved by ```Q.visualize_disclination_lines()```. One example is
+```python
+
+```
+
+ 
+
+
+
