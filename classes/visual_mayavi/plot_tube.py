@@ -1,6 +1,6 @@
 from mayavi import mlab
 import numpy as np
-from typing import Optional
+from typing import Optional, List
 
 from Nematics3D.datatypes import Vect3D
 from .visual_decorator import auto_properties
@@ -12,16 +12,15 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
     # These map directly to Mayavi actor attributes so you can write:
     #   lineObj.color = (1, 0, 0)   instead of    lineObj.actor.actor.property.color = (1, 0, 0)
     {
-        "color": "actor.actor.property.color",
-        "opacity": "actor.actor.property.opacity",
-        "radius": "actor.parent.parent.filter.radius",
-        "sides": "actor.parent.parent.filter.number_of_sides",
-        "specular": "actor.actor.property.specular",
-        "specular_color": "actor.actor.property.specular_color",
-        "specular_power": "actor.actor.property.specular_power",
-        "x": "actor.mlab_source.x",
-        "y": "actor.mlab_source.y",
-        "z": "actor.mlab_source.z",
+        "color": "actor.property.color",
+        "opacity": "actor.property.opacity",
+        "radius": "parent.parent.filter.radius",
+        "sides": "parent.parent.filter.number_of_sides",
+        "specular": "actor.property.specular",
+        "specular_color": "actor.property.specular_color",
+        "specular_power": "actor.property.specular_power",
+        "is_visible": "actor.visible",
+        "name": "name"
     }
 )
 class PlotTube:
@@ -41,15 +40,15 @@ class PlotTube:
     @logging_and_warning_decorator()
     def __init__(
         self,
-        coords: np.ndarray,
-        color: Vect3D = (0, 0, 0),
+        coords_all: np.ndarray,
+        color: Vect3D = (1, 1, 1),
         radius: float = 1,
         opacity: float = 1,
         sides: int = 6,
         specular: float = 1,
         specular_color: Vect3D = (1.0, 1.0, 1.0),
         specular_power: float = 11,
-        scalars: Optional[np.ndarray] = None,
+        scalars_all: List = [],
         name: Optional[str] = None,
         logger=None,
     ) -> None:
@@ -57,7 +56,7 @@ class PlotTube:
         Initialize and draw the tube.
 
         Args:
-            coords (np.ndarray): Nx3 array of 3D coordinates defining the tube path.
+            coords (np.ndarray): (num_sublines, N, 3) array of 3D coordinates defining the tube path.
             color (Vect3D): RGB color tuple in [0, 1]. Ignored if 'scalars' is provided.
             radius (float): Tube radius.
             opacity (float): Opacity in [0, 1].
@@ -70,50 +69,67 @@ class PlotTube:
             logger: Optional logger instance used for warnings.
         """
         
-        x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-
-        if scalars is not None:
-            logger.warning(">>> The scalars of tube is input")
-            logger.warning(">>> The color of tube will be ignored")
-            self.actor = mlab.plot3d(
-                x, y, z, scalars,
-                tube_radius=radius,
-                tube_sides=sides,
-                opacity=opacity,
-            )
+        
+        self.items = []
+        self.coords = coords_all
+        
+        num_sublines = len(coords_all)
+        if len(scalars_all)>0:
+            logger.debug(">>> The scalars of tube is input")
+            logger.debug(">>> The color of tube will be ignored")
         else:
-            color = tuple(color)
-            self.actor = mlab.plot3d(
-                x, y, z,
-                color=color,
-                tube_radius=radius,
-                tube_sides=sides,
-                opacity=opacity,
-            )
+            scalars_all = [None for i in range(num_sublines)]
         
+        length = 0
+        for coords, scalars in zip(coords_all, scalars_all):
+        
+            x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
+            length += len(x)
+            
+            if scalars is not None and len(scalars) != length:
+                msg = f">>> The length of this subline {length} does not match with scalars {len(scalars)}"
+                msg += ">>> Ignore scalars in the following"
+                logger.warning(msg)
 
-        prop = self.actor.actor.property
-        prop.specular = specular
-        prop.specular_color = specular_color
-        prop.specular_power = specular_power
+            if scalars is not None:
+                
+                item = mlab.plot3d(
+                    x, y, z, scalars,
+                    tube_radius=radius,
+                    tube_sides=sides,
+                    opacity=opacity,
+                )
+            else:
+                color = tuple(color)
+                item = mlab.plot3d(
+                    x, y, z,
+                    color=color,
+                    tube_radius=radius,
+                    tube_sides=sides,
+                    opacity=opacity,
+                )
+            
+    
+            prop = item.actor.property
+            prop.specular = specular
+            prop.specular_color = specular_color
+            prop.specular_power = specular_power
+            
+            self.items.append(item)
         
+        self.length = length
         self.name = name
 
-    def update_coords(self, coords: np.ndarray) -> None:
-        self.x, self.y, self.z = coords[:, 0], coords[:, 1], coords[:, 2]
 
     def hide(self):
-        self.actor.visible = False
+        self.is_visible = False
 
     def show(self):
-        self.actor.visible = True
+        self.is_visible = True
 
     def remove(self):
-        self.actor.remove()
-
-    @property
-    def coords(self) -> np.array:
-        return np.column_stack((self.x, self.y, self.z))
+        for item in self.items:
+            item.remove()
     
     @logging_and_warning_decorator()
     def log_properties(self, logger=None) -> None:
@@ -125,7 +141,6 @@ class PlotTube:
         """
         
         print_lines = []
-        print_lines.append(" ")
         print_lines.append("=== PlotTube Properties ===")
         
         for attr_name in self.__class__._auto_properties.keys():
@@ -137,8 +152,6 @@ class PlotTube:
             except Exception as e:
                 logger.warning(f"Could not retrieve '{attr_name}': {e}")
 
-        # Additional info about coordinates
-        print_lines.append(f"Number of points: {len(self.x)}")
         print_lines.append("===========================")
         
         logger.info("\n".join(print_lines))

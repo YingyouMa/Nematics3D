@@ -167,8 +167,22 @@ class QFieldObject:
                     N_out_ratio=N_out_ratio,
                 )
 
+    def update_corners(self):
+
+        from ..general import get_box_corners
+
+        Lx, Ly, Lz = np.shape(self._Q)[:3]
+        corners = get_box_corners(Lx, Ly, Lz)
+        corners = apply_linear_transform(
+            corners,
+            transform=self._grid_transform,
+            offset=self._grid_offset
+        )
+
+        self._corners = corners
+
     @logging_and_warning_decorator()
-    def visualize_lines(
+    def visualize_disclination_lines(
         self,
         min_line_length: Optional[int] = None,
         is_new: bool = True,
@@ -187,14 +201,15 @@ class QFieldObject:
         specular_power: float = 11,
         names_all: Optional[List[str]] = None,
         is_outline: bool = True,
-        outline_radius: float = 3,
+        outline_radius: float = 1,
+        outline_opacity: float = 1,
         logger=None,
     ):
         
         specular_color = tuple(specular_color)
 
         if min_line_length is None:
-            msg = "No data of minimum line length is input for lines to be plotted. \n"
+            msg = "No data of minimum line length is input for lines to be plotted. "
             msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
             logger.info(msg)            
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
@@ -203,7 +218,7 @@ class QFieldObject:
 
         self._lines_plot = [
             line for line in self._lines if line._defect_num > min_line_length
-        ]
+        ] 
         self._lines_plot = sorted(
             self._lines_plot, key=lambda line: line._defect_num, reverse=True
         )
@@ -269,34 +284,21 @@ class QFieldObject:
                 name=name,
                 logger=logger
             )
+            
+            figure.add_object(line_visual, category="lines")
 
-            for item in line_visual:
-                figure.add_object(item, category="lines")
+        if is_outline:
+            from .visual_mayavi.plot_extent import PlotExtent
+            if not hasattr(self, '_corners'):
+                self.update_corners()
+            extent = PlotExtent(
+                self._corners,
+                radius=outline_radius,
+                opacity=outline_opacity
+            )
+            figure.add_object(extent, category="extent")
             
 
-
-
-
-
-        
-
-        # draw_multiple_disclination_lines(
-        #     self._lines,
-        #     is_new=is_new,
-        #     fig_size=fig_size,
-        #     bgcolor=bgcolor,
-        #     is_wrap=is_wrap,
-        #     is_smooth=is_smooth,
-        #     color_input=color_input,
-        #     tube_radius=tube_radius,
-        #     tube_opacity=tube_opacity,
-        #     tube_specular=tube_specular,
-        #     tube_specular_col=tube_specular_col,
-        #     tube_specular_pow=tube_specular_pow,
-        # )
-
-        # from ..field import draw_box
-        # draw_box()
 
     def __call__(self) -> np.ndarray:
         return self._Q

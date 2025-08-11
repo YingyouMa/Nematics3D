@@ -80,7 +80,7 @@ class PlotScene:
     
     def remove_object(self, category: str, name: str) -> None:
         """Remove a specific object from a category."""
-        obj = self.find_objects(category, name)
+        obj = self.find_object(category, name)
         if obj != None:
             self.objects.get(category, []).remove(obj)
             obj.remove()
@@ -121,7 +121,7 @@ class PlotScene:
             
 
     @logging_and_warning_decorator()
-    def log_info(self, mode: str, logger=None) -> None:
+    def log_info(self, mode: str='all', logger=None) -> None:
         """
         Log scene parameters, category objects, or both.
     
@@ -146,14 +146,12 @@ class PlotScene:
         elif mode == "all":
             log_scene_params()
             for category, objs in self.objects.items():
-                lines.append(f"\n[Category: {category}]")
                 for obj in objs:
                     # Each object has its own print function
                     # We capture its printed text into logger
                     obj.log_properties(logger=logger)
     
         elif mode in self.objects:
-            lines.append(f"[Category: {mode}]")
             for obj in self.objects.get(mode, []):
                 obj.log_properties(logger=logger)
     

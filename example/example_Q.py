@@ -25,7 +25,7 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_size_periodic=128)
 Q.update_defects()
 Q.update_lines_classify()
 Q.update_lines_smoothen()
-Q.visualize_lines()
+Q.visualize_disclination_lines()
 
 
 

@@ -67,23 +67,23 @@ def diagonalizeQ(qtensor: QField, logger=None) -> Tuple[SField, nField]:
     Q: QField9 = as_QField9(qtensor)
 
     # Compute tensor invariants
-    logger.info("Computing tensor invariants (p, q, r).")
+    logger.debug("Computing tensor invariants (p, q, r).")
     start = time.time()
     p = 0.5 * np.einsum("...ab, ...ba -> ...", Q, Q)
     q = np.linalg.det(Q)
     r = 2 * np.sqrt(p / 3)
-    logger.info(f"Tensor invariants computed in {time.time() - start:.2f} seconds.")
+    logger.debug(f"Tensor invariants computed in {time.time() - start:.2f} seconds.")
 
     # Largest eigenvalue λ (before scaling)
-    logger.info("Computing largest eigenvalue λ_max.")
+    logger.debug("Computing largest eigenvalue λ_max.")
     start = time.time()
     cos_arg = 4 * q / r**3
     cos_arg = np.clip(cos_arg, -1.0, 1.0)  # ensure valid domain
     lambda_max = r * np.cos((1 / 3) * np.arccos(cos_arg))
-    logger.info(f"λ_max computed in {time.time() - start:.2f} seconds.")
+    logger.debug(f"λ_max computed in {time.time() - start:.2f} seconds.")
 
     # Director corresponding to λ_max
-    logger.info("Computing director field n.")
+    logger.debug("Computing director field n.")
     start = time.time()
     n_raw = np.array(
         [
@@ -95,7 +95,7 @@ def diagonalizeQ(qtensor: QField, logger=None) -> Tuple[SField, nField]:
     )
     n_unit = n_raw / np.linalg.norm(n_raw, axis=0)
     n: nField = np.moveaxis(n_unit, 0, -1)  # (..., 3)
-    logger.info(f"Director field computed in {time.time() - start:.2f} seconds.")
+    logger.debug(f"Director field computed in {time.time() - start:.2f} seconds.")
 
     # Scale eigenvalue to get S
     S: SField = 1.5 * lambda_max

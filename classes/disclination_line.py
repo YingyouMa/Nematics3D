@@ -210,8 +210,8 @@ class DisclinationLine:
         is_wrap: bool = False,
         is_smooth: bool = True,
         radius: float = 0.5,
-        opacity: float = 0.5,
-        color: Tuple[float, float, float] = (0.5, 0.5, 0.5),
+        opacity: float = 1,
+        color: Tuple[float, float, float] = (1, 1, 1),
         sides: int = 6,
         specular: float = 1,
         specular_color: Vect3D = (1.0, 1.0, 1.0),
@@ -267,9 +267,12 @@ class DisclinationLine:
         if name == None:
             name = self._name
 
+        line_coords_all = [line_coords]
+        scalars_all = [scalars] if scalars!=None else []
+
         if not is_wrap:
             line_plot = PlotTube(
-                line_coords,
+                line_coords_all,
                 color=color,
                 radius=radius,
                 opacity=opacity,
@@ -277,11 +280,10 @@ class DisclinationLine:
                 specular=specular,
                 specular_color=specular_color,
                 specular_power=specular_power,
-                scalars=scalars,
+                scalars_all=scalars_all,
                 name=name,
                 logger=logger
             )
-            lines_plot = [line_plot]
         else:
             boundary_flag = boundary_periodic_size_to_flag(self._box_size_periodic_index)
             line_coords_origin = apply_linear_transform(
@@ -306,31 +308,31 @@ class DisclinationLine:
                 offset=self._grid_offset
             )
 
-            lines_plot = []
+            coords_all = []
+            scalars_all = []
+
             for i in range(len(end_list) - 1):
-                line_sec_coords = line_coords[end_list[i] : end_list[i + 1]]
+                coords_all.append( line_coords[end_list[i] : end_list[i + 1]] )
                 if scalars is not None:
-                    scalars_sec = scalars[end_list[i] : end_list[i + 1]]
-                else:
-                    scalars_sec = None
-                line_plot =PlotTube(
-                    line_sec_coords,
-                    color=color,
-                    radius=radius,
-                    opacity=opacity,
-                    sides=sides,
-                    specular=specular,
-                    specular_color=specular_color,
-                    specular_power=specular_power,
-                    scalars=scalars_sec,
-                    name=name,
-                    logger=logger
-            )
-                lines_plot.append(line_plot)
+                    scalars_all.append( scalars[end_list[i] : end_list[i + 1]] )
 
-        self._lines_plot = lines_plot
+            line_plot = PlotTube(
+                coords_all,
+                color=color,
+                radius=radius,
+                opacity=opacity,
+                sides=sides,
+                specular=specular,
+                specular_color=specular_color,
+                specular_power=specular_power,
+                scalars_all=scalars_all,
+                name=name,
+                logger=logger
+        )
 
-        return lines_plot
+        self._line_plot = line_plot
+
+        return line_plot
 
     # def update_norm(self):
     #     self._norm = get_plane(self._defect_coords)

@@ -168,11 +168,13 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
                     indent_str = INDENT * indent_level
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     level_str = f"[{logging.getLevelName(level)}]"
-                    text = (
-                        f"{timestamp} - {level_str}\n{indent_str}{msg}\n"
-                        if show_ts
-                        else f"{level_str}\n{indent_str}{msg}\n"
-                    )
+                    
+                    indented_msg = "\n".join(f"{indent_str}{line}" for line in str(msg).splitlines())
+                
+                    if show_ts:
+                        text = f"{timestamp} - {level_str}\n{indented_msg}\n"
+                    else:
+                        text = f"{level_str}\n{indented_msg}\n"
 
                     mode = _current_log_mode.get()
                     fh = _current_file_handler.get()

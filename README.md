@@ -17,34 +17,19 @@ This provides the disclination analysis, including the detectation, topological 
 ### elastic.py
 This calculates the Frank deformation energy.
 
-### coarse.py
-This provides the coarse-graining $Q$ and $\rho$ field of my particle-based simulation of nematics.
-This is not necessary if you've already got your continuum $Q$ field.
-
-### lammps.py
-For my particle-based simulation of nematics, this reads the dump files of `LAMMPS`.
-This is not necessary if you've already got your continuum $Q$ field.
-
 ### defect2D.py
 Defect analysis for 2D nematics.
 
 ## Dependencies
 This package relies on fundamental scientific computing libraries. I personally use the following versions:
- - **Numpy**:       2.2.3
- - **SciPy**:       1.15.1
- - **matplotlib**:  3.10.0 
+ - **Numpy**:       2.3.2
+ - **SciPy**:       1.16.0
 
 For 3D visualization, it uses ```Mayavi```:
  - **mayavi**:      4.8.2
 
 Since I use the unpack operator in subscript notation, ```Python > 3.11``` is required. My personal setup:
  - **Python**:      3.12.9 
-
-In `coarse.py`, the output data of coarse-grained field is stored using package `h5py`. My personal setup:
- - **h5py**:        3.11.0
-
-In `lammps.py`, the dump files of lammps is read using package `pandas`. My personal setup:
- - **pandas**:      2.2.2
 
 ## Installation
 Currently, I manually place the package in a specific location and import it using a custom path.  

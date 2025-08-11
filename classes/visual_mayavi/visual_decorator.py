@@ -40,9 +40,9 @@ def auto_properties(bindings: dict):
             def make_getter(attrs):
                 def getter(self):
                     # 默认返回第一个对象的值
-                    if not self.lines:
+                    if not self.items:
                         return None
-                    target = self.lines[0]
+                    target = self.items[0]
                     for attr in attrs[:-1]:
                         target = getattr(target, attr)
                     return getattr(target, attrs[-1])
@@ -50,7 +50,7 @@ def auto_properties(bindings: dict):
 
             def make_setter(attrs):
                 def setter(self, value):
-                    for obj in self.lines:
+                    for obj in self.items:
                         target = obj
                         for attr in attrs[:-1]:
                             target = getattr(target, attr)
