@@ -3,7 +3,7 @@
 ## Creator Information
 Yingyou Ma, Brandeis, 2025  
 https://github.com/YingyouMa
-If you have any questions or suggestions, please contact:  yingyouma@brandeis.edu
+If you have any questions or suggestions, please contact:  yingyouma@outlook.com
 
 ## Introduction
 The basic analysis of 3D uniaxial nematics.
