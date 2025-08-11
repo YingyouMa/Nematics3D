@@ -9,8 +9,9 @@ from ..datatypes import (
     as_QField5,
     SField,
     nField,
-    DimensionPeriodicInput,
-    boundary_periodic_size_to_flag,
+    DimensionFlagInput,
+    as_dimension_info,
+    check_Sn
 )
 from ..field import (
     diagonalizeQ,
@@ -32,7 +33,7 @@ class QFieldObject:
         Q: QField = None,
         S: SField = None,
         n: nField = None,
-        box_size_periodic: DimensionPeriodicInput = np.inf,
+        box_periodic_flag: DimensionFlagInput = False,
         grid_offset: Vect3D = np.array([0,0,0]),
         grid_transform: np.ndarray = np.eye(3),
         is_diag: bool = True,
@@ -42,9 +43,11 @@ class QFieldObject:
         start = time.time()
         logger.debug("Start to initialize Q field")
         if n is not None:
+            n = check_Sn('n')
             self._n = n
             logger.debug("Initialize Q field with S and n")
             if S is not None:
+                S = check_Sn('Q')
                 self._S = S
             else:
                 logger.warning("No S input. Set to 1 everywhere.")
@@ -65,8 +68,14 @@ class QFieldObject:
             else:
                 raise NameError("No data is input")
 
-        self._box_size_periodic = box_size_periodic
-        self._box_periodic_flag = boundary_periodic_size_to_flag(box_size_periodic)
+        self._box_periodic_flag = as_dimension_info(box_periodic_flag)
+        self._box_size_periodic = np.zeros(3)
+        for i, flag in enumerate(self._box_periodic_flag):
+            if flag:
+                self._box_size_periodic[i] = np.shape(Q)[i] 
+            else:
+                self._box_size_periodic[i] = np.inf
+        
 
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
