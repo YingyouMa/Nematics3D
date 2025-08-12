@@ -14,12 +14,6 @@ This provides the numerical analysis of the $Q$ field, including diagonalization
 ### disclination.py
 This provides the disclination analysis, including the detectation, topological analysis, visualization and more.
 
-### elastic.py
-This calculates the Frank deformation energy.
-
-### defect2D.py
-Defect analysis for 2D nematics.
-
 ## Dependencies
 This package relies on fundamental scientific computing libraries. I personally use the following versions:
  - **Numpy**:       2.3.2
@@ -74,23 +68,40 @@ To identify all disclinations in the system, simply use
 ```python
 Q.update_defects()
 ```
-And they could be further classified into different smooth disclination lines via
+You can then group them into individual smooth disclination lines via:
 ```python
 Q.update_lines_classify()
 Q.update_lines_smoothen()
 ```
-All lines are stored in ```Q._lines```. Each of the line is the object of class ```DisclinationLine```. The detailed introduction of arguments of smoothening is in the document of ```DisclinationLine.update_smoothen()``` and ```QFieldObject.update_lines_smoothen()```.  The lines are sorted in descending order of length and named sequentially as ```line0```, ```line1```, and so on, according to their index ```i```.     
+All lines are stored in ```Q._lines```, where each entry is a ```DisclinationLine``` object. For the smoothing options and parameters, see the docstrings of ```DisclinationLine.update_smoothen()``` and ```QFieldObject.update_lines_smoothen()```.  Lines are sorted in descending order of length and named sequentially as ```line0```, ```line1```, and so on, according to their index ```i```.     
 
-The visualization of these disclination lines in $Q$ field could be achieved by ```Q.visualize_disclination_lines()```. One example is
+To visualize these disclination lines in $Q$ field, use ```Q.visualize_disclination_lines()```. One example is
 ```python
 Q.visualize_disclination_lines(min_line_length=20, lines_color_input_all=(1,0,0), radius=1)
 ```
-where  ```min_line_length``` represents the minimum length of disclinations to be plotted. This is set because tiny disclination loops are considered to be beyond coarse-grained resolution and the smoothening becomes meaningless. ```lines_color_input_all``` is the colors of each disclination line, described by RGB values in $[0,1]$. If this value is not set, the visualization will use the default colormap which tries to set those longest lines with distinct colors. ```radius``` is simply the radii of lines.  More arguments of this function could be found in the document.   
+* ```min_line_length``` ：the minimum length of disclinations to plot. This is set because tiny disclination loops are often below the coarse-grained resolution, making smoothing/visualization less meaningful.
+* ```lines_color_input_all``` RGB color(s) in $[0,1]$ for the lines. . If this value is not set, the visualization will use the default colormap which tries to set those longest lines with distinct colors.
+* ```radius```: tube radius used for rendering.
+* Additional arguments are documented in the function’s docstring.
 
-An example data of $S$ and $n$ field could be found in the directory ```example/data```.
+An example dataset of $S$ and $n$ field is provided under ```example/data```. The simplest code to visualized the smoothened disclination lines is
+```python
+n = np.load( 'data/n_example_global.npy')
+S = np.load( 'data/S_example_global.npy')
+
+Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True)
+
+Q.update_defects()
+Q.update_lines_classify()
+Q.update_lines_smoothen()
+Q.visualize_disclination_lines()
+```
+which produces
 <p align="center">
   <img src="example/figure/lines.png" width="720">
 </p>
+
+
 
 
 
