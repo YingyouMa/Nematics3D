@@ -131,6 +131,11 @@ Finally, the figure can be saved by
 Q.figures[0].save('AddressYouLike')
 ```
 
+### Logging function
+Before we proceed to more functions, it may be beneficial to introducde the logging function in this package. This is enabled by the decorator ```logging_and_warning_decorator``` in ```logging_decorator.py```.    
+
+There are several functions are docorated by this function, which controls where and how many logging functions are displayed
+
 
  
 
