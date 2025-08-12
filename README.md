@@ -107,8 +107,22 @@ For the system with periodic boundary conditions, the disclination lines might c
 </p>
 
 ### The structure of figures and post-plot modification
-The figures for visualization are managed into ```PlotScene``` class. This helps you to modify the figure after you plot them. 
-
+All pictures plotted with the object of ```QFieldObject``` are stored in ```Q.figures``` in the order of time. For example, the figure plotted in the last section is referred as ```Q.figures[0]```. The plotted items in the figure could be found in the directory ```Q.figures[0].objects['{item name}']```. In the current picture, these include ```Q.figures[0].objects['lines']``` and ```Q.figures[0].objects['extent']```, where each of them is list of the corresponding objects. You could directly modify them. Besides, ```Q.figures[0].fig``` represents the object itself in ```mayavi```. You could directly modify all of them even after you plot the figure. For example, with the following code
+```python
+Q.figures[0].fig.scene.background = (0.5, 0.5, 0.5)
+extent = Q.figures[0].objects['extent'][0]
+extent.opcacity = 0.5
+extent.radius = 0.3
+for line in Q.figures[0].objects['lines']:
+    line.specular_power = 20
+    line.specular_color = (1,0,0)
+    line.radius = 3
+    line.sides = 20
+```
+the figure changes into
+<p align="center">
+  <img src="example/figure/lines_modify.png" width="720">
+</p>
 
 
  
