@@ -37,6 +37,7 @@ class QFieldObject:
         grid_offset: Vect3D = np.array([0,0,0]),
         grid_transform: np.ndarray = np.eye(3),
         is_diag: bool = True,
+        is_new: bool = True,
         logger: Logger = None,
     ) -> None:
 
@@ -274,9 +275,10 @@ class QFieldObject:
         from .visual_mayavi.plot_scene import PlotScene
 
         figure = PlotScene(
-            size = fig_size,
+            is_new=is_new,
+            size=fig_size,
             bgcolor=bgcolor,
-            fgcolor=fgcolor
+            fgcolor=fgcolor,
         )
         self.figures.append(figure)
 
@@ -309,7 +311,8 @@ class QFieldObject:
             )
             figure.add_object(extent, category="extent")
             
-
+    def reset_figures(self):
+        self.figures = []
 
     def __call__(self) -> np.ndarray:
         return self._Q

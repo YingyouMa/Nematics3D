@@ -9,7 +9,7 @@ class PlotScene:
     sharing a single Mayavi figure as the drawing canvas.
     """
 
-    def __init__(self, size=(1920, 1360), bgcolor=(1, 1, 1), fgcolor=(0, 0, 0)):
+    def __init__(self, is_new=True, size=(1920, 1360), bgcolor=(1, 1, 1), fgcolor=(0, 0, 0), ):
         """
         Initialize the scene with a new Mayavi figure.
 
@@ -17,12 +17,17 @@ class PlotScene:
             size (tuple): Window size in pixels (width, height).
             bgcolor (tuple): Background color as RGB in [0, 1].
             fgcolor (tuple): Foreground color (axes, labels) as RGB in [0, 1].
+            is_new: If create a now scene.
+                If not, use the current scene and all other arguments are ignored.
         """
-        self.fig = mlab.figure(
-            size=size,
-            bgcolor=bgcolor,
-            fgcolor=fgcolor
-        )
+        if is_new:
+            self.fig = mlab.figure(
+                size=size,
+                bgcolor=bgcolor,
+                fgcolor=fgcolor
+            )
+        else:
+            self.fig = mlab.gcf()
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
