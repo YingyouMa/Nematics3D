@@ -124,6 +124,11 @@ the figure changes into
   <img src="example/figure/lines_modify.png" width="720">
 </p>
 
+Finally, the figure could be saved by 
+```python
+Q.figures[0].save('AddressYouLike')
+```
+
 
  
 
