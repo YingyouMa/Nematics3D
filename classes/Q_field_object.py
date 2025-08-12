@@ -43,11 +43,11 @@ class QFieldObject:
         start = time.time()
         logger.debug("Start to initialize Q field")
         if n is not None:
-            n = check_Sn('n')
+            n = check_Sn(n, 'n')
             self._n = n
             logger.debug("Initialize Q field with S and n")
             if S is not None:
-                S = check_Sn('Q')
+                S = check_Sn(S, 'S')
                 self._S = S
             else:
                 logger.warning("No S input. Set to 1 everywhere.")
@@ -72,7 +72,7 @@ class QFieldObject:
         self._box_size_periodic = np.zeros(3)
         for i, flag in enumerate(self._box_periodic_flag):
             if flag:
-                self._box_size_periodic[i] = np.shape(Q)[i] 
+                self._box_size_periodic[i] = np.shape(self._Q)[i] 
             else:
                 self._box_size_periodic[i] = np.inf
         
@@ -257,7 +257,7 @@ class QFieldObject:
                         f"The shape of lines_color_input_all should either be (3,) or (len(lines_plot), 3), which is ({len(lines_plot)}, 3)"
                     )
             else:
-                logger.info("No color data is input. Use the default color map, trying to set those longest lines with distinct coloers")
+                logger.info("No color data is input. Use the default color map, trying to set those longest lines with distinct colors")
                 from ..general import blue_red_in_white_bg, sample_far
                 color_map = blue_red_in_white_bg()
                 color_map_length = np.shape(color_map)[0] - 1
@@ -271,15 +271,14 @@ class QFieldObject:
         else:
             names_all = [line._name for line in lines_plot]
 
-        if is_new:       
-            from .visual_mayavi.plot_scene import PlotScene
+        from .visual_mayavi.plot_scene import PlotScene
 
-            figure = PlotScene(
-                size = fig_size,
-                bgcolor=bgcolor,
-                fgcolor=fgcolor
-            )
-            self.figures.append(figure)
+        figure = PlotScene(
+            size = fig_size,
+            bgcolor=bgcolor,
+            fgcolor=fgcolor
+        )
+        self.figures.append(figure)
 
         for line, line_color, line_scalar, name in zip(lines_plot, lines_colors, lines_scalars, names_all):
             line_visual = line.visualize(

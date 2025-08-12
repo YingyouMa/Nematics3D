@@ -20,7 +20,7 @@ L = 200
 n = np.load( 'data/n_example_global.npy')
 S = np.load( 'data/S_example_global.npy')
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_size_periodic=128)
+Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True)
 
 Q.update_defects()
 Q.update_lines_classify()

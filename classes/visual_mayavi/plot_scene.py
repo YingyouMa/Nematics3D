@@ -109,15 +109,18 @@ class PlotScene:
             if hasattr(obj, "hide"):
                 obj.hide()
     
-    def show_all(self) -> None:
+    def show_all(self):
         """Show all objects in all categories."""
         for category in list(self.objects.keys()):
             self.show_category(category)
     
-    def hide_all(self) -> None:
+    def hide_all(self):
         """Hide all objects in all categories."""
         for category in list(self.objects.keys()):
             self.hide_category(category)
+            
+    def save(self, address: str):
+        mlab.savefig(address, figure=self.fig)
             
 
     @logging_and_warning_decorator()
