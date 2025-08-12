@@ -83,8 +83,16 @@ All lines are stored in ```Q._lines```. Each of the line is the object of class 
 
 The visualization of these disclination lines in $Q$ field could be achieved by ```Q.visualize_disclination_lines()```. One example is
 ```python
-
+Q.visualize_disclination_lines(min_line_length=20, lines_color_input_all=(1,0,0), radius=1)
 ```
+where  ```min_line_length``` represents the minimum length of disclinations to be plotted. This is set because tiny disclination loops are considered to be beyond coarse-grained resolution and the smoothening becomes meaningless. ```lines_color_input_all``` is the colors of each disclination line, described by RGB values in $[0,1]$. If this value is not set, the visualization will use the default colormap which tries to set those longest lines with distinct colors. ```radius``` is simply the radii of lines.  More arguments of this function could be found in the document.   
+
+An example data of $S$ and $n$ field could be found in the directory ```example/data```.
+<p align="center">
+  <img src="example/figure/lines.png" width="720">
+</p>
+
+
 
  
 
