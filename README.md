@@ -101,7 +101,10 @@ which produces
   <img src="example/figure/lines.png" width="720">
 </p>
 
-
+For the system with periodic boundary conditions, the disclination lines might cross boundaries or even the entire box. To comprehend this phenomena, you could use modify the flag of wrapping lines as ```Q.visualize_disclination_lines(is_wrap=True)```:
+<p align="center">
+  <img src="example/figure/lines_nowrap.png" width="720">
+</p>
 
 
 
