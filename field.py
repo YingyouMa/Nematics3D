@@ -11,6 +11,7 @@ import numpy as np
 # from .general import *
 from .datatypes import (
     Vect3D,
+    as_Vect3D,
     QField,
     QField9,
     as_QField9,
@@ -210,23 +211,23 @@ def align_directors(n_reference: nField, n_target: nField) -> nField:
 
 
 def generate_coordinate_grid(
-    source_shape: Tuple[int, ...], target_shape: Tuple[int, ...]
+    shape_source: Tuple[int, ...], shape_target: Tuple[int, ...]
 ) -> np.ndarray:
     """
     Generate an N-dimensional coordinate grid over the source domain.
 
     Parameters
     ----------
-    source_shape : tuple of int
+    shape_source : tuple of int
         Shape of the original data in N dimensions.
 
-    target_shape : tuple of int
+    shape_target : tuple of int
         Desired shape of the resampled grid in N dimensions.
 
     Returns
     -------
     grid : np.ndarray
-        Grid of shape (*target_shape, N), where each entry is a vector
+        Grid of shape (*shape_target, N), where each entry is a vector
         of coordinates in the original index space.
 
     Raises
@@ -234,17 +235,17 @@ def generate_coordinate_grid(
     ValueError
         If shapes are inconsistent or invalid.
     """
-    ndim = len(source_shape)
-    if ndim != len(target_shape):
+    ndim = len(shape_source)
+    if ndim != len(shape_target):
         raise ValueError(
-            "source_shape and target_shape must have the same number of dimensions"
+            "shape_source and shape_target must have the same number of dimensions"
         )
 
-    axes = [np.linspace(0, s - 1, t) for s, t in zip(source_shape, target_shape)]
+    axes = [np.linspace(0, s - 1, t) for s, t in zip(shape_source, shape_target)]
     mesh = np.meshgrid(
         *axes, indexing="ij"
-    )  # List of N arrays, each shape (*target_shape)
-    grid = np.stack(mesh, axis=-1)  # Shape: (*target_shape, N)
+    )  # List of N arrays, each shape (*shape_target)
+    grid = np.stack(mesh, axis=-1)  # Shape: (*shape_target, N)
 
     return grid
 
@@ -351,7 +352,7 @@ def generate_mirror_point_periodic_boundary(
     from itertools import product
 
     box_size = as_dimension_info(box_size_periodic)
-    point = np.array(point)
+    point = as_Vect3D(point)
 
     point = np.where(box_size == np.inf, point, point % box_size)
 

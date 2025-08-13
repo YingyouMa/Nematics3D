@@ -2,7 +2,7 @@ from mayavi import mlab
 import numpy as np
 from typing import Optional, List
 
-from Nematics3D.datatypes import Vect3D
+from Nematics3D.datatypes import Vect3D, as_ColorRGB
 from .visual_decorator import auto_properties
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 
@@ -68,7 +68,8 @@ class PlotTube:
                 (enables gradient coloring). If provided, overrides 'color'.
             logger: Optional logger instance used for warnings.
         """
-
+        color = as_ColorRGB(color)
+        
         self.items = []
         self.coords = coords_all
 

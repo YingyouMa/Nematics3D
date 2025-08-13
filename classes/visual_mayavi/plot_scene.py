@@ -2,6 +2,7 @@ from mayavi import mlab
 from typing import Any
 from collections import defaultdict
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.datatypes import as_ColorRGB
 
 
 class PlotScene:
@@ -27,6 +28,8 @@ class PlotScene:
             is_new: If create a now scene.
                 If not, use the current scene and all other arguments are ignored.
         """
+        bgcolor = as_ColorRGB(bgcolor)
+        fgcolor = as_ColorRGB(fgcolor)
         if is_new:
             self.fig = mlab.figure(size=size, bgcolor=bgcolor, fgcolor=fgcolor)
         else:

@@ -5,6 +5,7 @@ from typing import Tuple, Optional, List
 from ..logging_decorator import logging_and_warning_decorator, Logger
 from ..datatypes import (
     Vect3D,
+    as_Vect3D,
     QField,
     as_QField5,
     SField,
@@ -37,9 +38,14 @@ class QFieldObject:
         grid_offset: Vect3D = np.array([0, 0, 0]),
         grid_transform: np.ndarray = np.eye(3),
         is_diag: bool = True,
-        is_new: bool = True,
         logger: Logger = None,
     ) -> None:
+        
+        grid_offset = as_Vect3D(grid_offset)
+        grid_transform = np.asarray(grid_transform, float)
+        shape = np.shape(grid_transform)
+        if shape[0]!=3 or shape[1]!=3:
+            raise ValueError(f"grid_transform must be in shape (3,3). Got {grid_transform} instead.")
 
         start = time.time()
         logger.debug("Start to initialize Q field")
@@ -205,8 +211,8 @@ class QFieldObject:
         min_line_length: Optional[int] = None,
         is_new: bool = True,
         fig_size: Tuple[int, int] = (1920, 1360),
-        bgcolor: Tuple[float, float, float] = (1.0, 1.0, 1.0),
-        fgcolor: Tuple[float, float, float] = (0.0, 0.0, 0.0),
+        bgcolor: Vect3D = (1.0, 1.0, 1.0),
+        fgcolor: Vect3D = (0.0, 0.0, 0.0),
         is_wrap: bool = True,
         is_smooth: bool = True,
         lines_color_input_all: Optional[np.ndarray] = None,
@@ -215,7 +221,7 @@ class QFieldObject:
         sides: int = 6,
         opacity: float = 1,
         specular: float = 1,
-        specular_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+        specular_color: Vect3D = (1.0, 1.0, 1.0),
         specular_power: float = 11,
         names_all: Optional[List[str]] = None,
         is_extent: bool = True,
@@ -223,8 +229,6 @@ class QFieldObject:
         extent_opacity: float = 1,
         logger=None,
     ):
-
-        specular_color = tuple(specular_color)
 
         if min_line_length is None:
             msg = "No data of minimum line length is input for lines to be plotted. "

@@ -4,6 +4,7 @@ from typing import List, Tuple
 
 from .visual_decorator import auto_properties
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.datatypes import Vect3D, as_ColorRGB
 
 
 @auto_properties(
@@ -32,7 +33,7 @@ class PlotExtent:
         corners: np.ndarray,
         radius: float = 1,
         sides: int = 6,
-        color: Tuple[float, float, float] = (0, 0, 0),
+        color: Vect3D = (0, 0, 0),
         opacity: float = 1,
     ):
         """
@@ -56,6 +57,7 @@ class PlotExtent:
         opacity : float in [0,1], optional
             The opacity of extent
         """
+        color = as_ColorRGB(color)
         self.corners = corners
         self.items = self.draw_box(
             corners, radius=radius, sides=sides, color=color, opacity=opacity
@@ -70,6 +72,7 @@ class PlotExtent:
         opacity: float = 1,
     ):
         """Draw the box edges and store the actors."""
+        color = as_ColorRGB(color)
         edges = [
             (0, 1),
             (0, 2),
