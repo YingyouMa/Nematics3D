@@ -11,7 +11,7 @@ from ..datatypes import (
     nField,
     DimensionFlagInput,
     as_dimension_info,
-    check_Sn
+    check_Sn,
 )
 from ..field import (
     diagonalizeQ,
@@ -34,7 +34,7 @@ class QFieldObject:
         S: SField = None,
         n: nField = None,
         box_periodic_flag: DimensionFlagInput = False,
-        grid_offset: Vect3D = np.array([0,0,0]),
+        grid_offset: Vect3D = np.array([0, 0, 0]),
         grid_transform: np.ndarray = np.eye(3),
         is_diag: bool = True,
         is_new: bool = True,
@@ -44,11 +44,11 @@ class QFieldObject:
         start = time.time()
         logger.debug("Start to initialize Q field")
         if n is not None:
-            n = check_Sn(n, 'n')
+            n = check_Sn(n, "n")
             self._n = n
             logger.debug("Initialize Q field with S and n")
             if S is not None:
-                S = check_Sn(S, 'S')
+                S = check_Sn(S, "S")
                 self._S = S
             else:
                 logger.warning("No S input. Set to 1 everywhere.")
@@ -73,12 +73,11 @@ class QFieldObject:
         self._box_size_periodic = np.zeros(3)
         for i, flag in enumerate(self._box_periodic_flag):
             if flag:
-                self._box_size_periodic[i] = np.shape(self._Q)[i] 
+                self._box_size_periodic[i] = np.shape(self._Q)[i]
             else:
                 self._box_size_periodic[i] = np.inf
-        
 
-        logger.debug('Start to transform lattice grid into real space')
+        logger.debug("Start to transform lattice grid into real space")
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
@@ -169,7 +168,9 @@ class QFieldObject:
             logger.debug(f"window_length = {window_length}")
 
         if min_line_length is None:
-            msg = "No data of minimum line length is input for lines to be smoothened. \n"
+            msg = (
+                "No data of minimum line length is input for lines to be smoothened. \n"
+            )
             msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
             logger.info(msg)
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
@@ -178,7 +179,7 @@ class QFieldObject:
 
         for line in self._lines:
             if line._defect_num >= min_line_length:
-                logger.debug(f'Start to smoothen {line._name}')
+                logger.debug(f"Start to smoothen {line._name}")
                 line.update_smoothen(
                     window_ratio=window_ratio,
                     window_length=window_length,
@@ -193,9 +194,7 @@ class QFieldObject:
         Lx, Ly, Lz = np.shape(self._Q)[:3]
         corners = get_box_corners(Lx, Ly, Lz)
         corners = apply_linear_transform(
-            corners,
-            transform=self._grid_transform,
-            offset=self._grid_offset
+            corners, transform=self._grid_transform, offset=self._grid_offset
         )
 
         self._corners = corners
@@ -224,20 +223,20 @@ class QFieldObject:
         extent_opacity: float = 1,
         logger=None,
     ):
-        
+
         specular_color = tuple(specular_color)
 
         if min_line_length is None:
             msg = "No data of minimum line length is input for lines to be plotted. "
             msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
-            logger.info(msg)            
+            logger.info(msg)
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
         else:
             logger.debug(f"min_line_length = {min_line_length}")
 
         lines_plot = [
             line for line in self._lines if line._defect_num > min_line_length
-        ] 
+        ]
 
         if lines_scalars_name is not None:
             logger.info("Scalars of lines are input")
@@ -251,9 +250,7 @@ class QFieldObject:
             lines_scalars = [None for line in lines_plot]
             if lines_color_input_all is not None:
                 if np.shape(lines_color_input_all) == (3,):
-                    lines_colors = [
-                        tuple(lines_color_input_all) for line in lines_plot
-                    ]
+                    lines_colors = [tuple(lines_color_input_all) for line in lines_plot]
                 elif np.shape(lines_color_input_all) == (len(lines_plot), 3):
                     lines_colors = lines_color_input_all
                 else:
@@ -261,17 +258,22 @@ class QFieldObject:
                         f"The shape of lines_color_input_all should either be (3,) or (len(lines_plot), 3), which is ({len(lines_plot)}, 3)"
                     )
             else:
-                logger.info("No color data is input. Use the default color map, trying to set those longest lines with distinct colors")
+                logger.info(
+                    "No color data is input. Use the default color map, trying to set those longest lines with distinct colors"
+                )
                 from ..general import blue_red_in_white_bg, sample_far
+
                 color_map = blue_red_in_white_bg()
                 color_map_length = np.shape(color_map)[0] - 1
-                lines_colors = color_map[ 
-                    (sample_far(len(lines_plot))*color_map_length).astype(int)  
-                    ]
-                
+                lines_colors = color_map[
+                    (sample_far(len(lines_plot)) * color_map_length).astype(int)
+                ]
+
         if names_all is not None:
             if len(names_all) != len(lines_plot):
-                logger.warning(f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(lines_plot)}.\n Use the default names instead.")
+                logger.warning(
+                    f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(lines_plot)}.\n Use the default names instead."
+                )
         else:
             names_all = [line._name for line in lines_plot]
 
@@ -285,8 +287,10 @@ class QFieldObject:
         )
         self.figures.append(figure)
 
-        logger.debug('Start to draw disclination lines')
-        for line, line_color, line_scalar, name in zip(lines_plot, lines_colors, lines_scalars, names_all):
+        logger.debug("Start to draw disclination lines")
+        for line, line_color, line_scalar, name in zip(
+            lines_plot, lines_colors, lines_scalars, names_all
+        ):
             line_visual = line.visualize(
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
@@ -299,22 +303,21 @@ class QFieldObject:
                 specular_power=specular_power,
                 scalars=line_scalar,
                 name=name,
-                logger=logger
+                logger=logger,
             )
-            
+
             figure.add_object(line_visual, category="lines")
 
         if is_extent:
             from .visual_mayavi.plot_extent import PlotExtent
-            if not hasattr(self, '_corners'):
+
+            if not hasattr(self, "_corners"):
                 self.update_corners()
             extent = PlotExtent(
-                self._corners,
-                radius=extent_radius,
-                opacity=extent_opacity
+                self._corners, radius=extent_radius, opacity=extent_opacity
             )
             figure.add_object(extent, category="extent")
-            
+
     def reset_figures(self):
         self.figures = []
 

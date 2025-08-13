@@ -4,7 +4,13 @@ from typing import Optional, Tuple
 from .smoothened_line import SmoothenedLine
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
-from ..datatypes import Vect3D, DefectIndex, DimensionPeriodicInput, as_dimension_info, boundary_periodic_size_to_flag
+from ..datatypes import (
+    Vect3D,
+    DefectIndex,
+    DimensionPeriodicInput,
+    as_dimension_info,
+    boundary_periodic_size_to_flag,
+)
 from ..field import apply_linear_transform
 from .visual_mayavi.plot_tube import PlotTube
 
@@ -55,7 +61,7 @@ class DisclinationLine:
         defect_indices: DefectIndex,
         box_size_periodic_index: DimensionPeriodicInput,
         is_sorted: bool = True,
-        offset: Vect3D = np.array([0,0,0]),
+        offset: Vect3D = np.array([0, 0, 0]),
         transform: np.ndarray = np.eye(3),
         name: Optional[str] = None,
     ):
@@ -107,10 +113,14 @@ class DisclinationLine:
             defect1 = defect_indices[0].copy()
             defect2 = defect_indices[-1].copy()
             defect1 = np.where(
-                box_size_periodic_index == np.inf, defect1, defect1 % box_size_periodic_index
+                box_size_periodic_index == np.inf,
+                defect1,
+                defect1 % box_size_periodic_index,
             )
             defect2 = np.where(
-                box_size_periodic_index == np.inf, defect2, defect2 % box_size_periodic_index
+                box_size_periodic_index == np.inf,
+                defect2,
+                defect2 % box_size_periodic_index,
             )
             if np.linalg.norm(defect1 - defect2) == 0:
                 self._end2end_category = "cross"
@@ -218,7 +228,7 @@ class DisclinationLine:
         specular_power: float = 11,
         scalars: Optional[np.ndarray] = None,
         name: Optional[str] = None,
-        logger=None
+        logger=None,
     ) -> None:
         """
         Visualize the defect line.
@@ -254,7 +264,7 @@ class DisclinationLine:
             If not provides, use the line's name is directly applied.
         """
 
-        logger.debug(f'Start to visualize {self._name}')
+        logger.debug(f"Start to visualize {self._name}")
 
         if is_smooth:
             if hasattr(self, "_defect_coords_smooth"):
@@ -270,7 +280,7 @@ class DisclinationLine:
             name = self._name
 
         line_coords_all = [line_coords]
-        scalars_all = [scalars] if scalars!=None else []
+        scalars_all = [scalars] if scalars != None else []
 
         if not is_wrap:
             line_plot = PlotTube(
@@ -284,20 +294,22 @@ class DisclinationLine:
                 specular_power=specular_power,
                 scalars_all=scalars_all,
                 name=name,
-                logger=logger
+                logger=logger,
             )
         else:
-            boundary_flag = boundary_periodic_size_to_flag(self._box_size_periodic_index)
+            boundary_flag = boundary_periodic_size_to_flag(
+                self._box_size_periodic_index
+            )
             line_coords_origin = apply_linear_transform(
                 line_coords,
                 transform=np.linalg.inv(self._grid_transform),
-                offset=-self._grid_offset
+                offset=-self._grid_offset,
             )
 
             line_coords_origin = np.where(
                 boundary_flag,
                 line_coords_origin % self._box_size_periodic_index,
-                line_coords_origin      
+                line_coords_origin,
             )
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
             diff = np.linalg.norm(diff, axis=-1)
@@ -307,16 +319,16 @@ class DisclinationLine:
             line_coords = apply_linear_transform(
                 line_coords_origin,
                 transform=self._grid_transform,
-                offset=self._grid_offset
+                offset=self._grid_offset,
             )
 
             coords_all = []
             scalars_all = []
 
             for i in range(len(end_list) - 1):
-                coords_all.append( line_coords[end_list[i] : end_list[i + 1]] )
+                coords_all.append(line_coords[end_list[i] : end_list[i + 1]])
                 if scalars is not None:
-                    scalars_all.append( scalars[end_list[i] : end_list[i + 1]] )
+                    scalars_all.append(scalars[end_list[i] : end_list[i + 1]])
 
             line_plot = PlotTube(
                 coords_all,
@@ -329,8 +341,8 @@ class DisclinationLine:
                 specular_power=specular_power,
                 scalars_all=scalars_all,
                 name=name,
-                logger=logger
-        )
+                logger=logger,
+            )
 
         self._line_plot = line_plot
 

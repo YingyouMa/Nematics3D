@@ -52,19 +52,15 @@ class PlotExtent:
         color : tuple of 3 floats, optional
             RGB color of the box edges, values in [0, 1].
             Default is black
-            
+
         opacity : float in [0,1], optional
             The opacity of extent
         """
         self.corners = corners
         self.items = self.draw_box(
-            corners,
-            radius=radius,
-            sides=sides,
-            color=color,
-            opacity=opacity
-            )
-    
+            corners, radius=radius, sides=sides, color=color, opacity=opacity
+        )
+
     @staticmethod
     def draw_box(
         corners: np.ndarray,
@@ -72,31 +68,38 @@ class PlotExtent:
         sides: int = 6,
         color: Tuple[float, float, float] = (0, 0, 0),
         opacity: float = 1,
-            ):
+    ):
         """Draw the box edges and store the actors."""
         edges = [
-            (0, 1), (0, 2), (0, 4),
-            (1, 3), (1, 5),
-            (2, 3), (2, 6),
+            (0, 1),
+            (0, 2),
+            (0, 4),
+            (1, 3),
+            (1, 5),
+            (2, 3),
+            (2, 6),
             (3, 7),
-            (4, 5), (4, 6),
+            (4, 5),
+            (4, 6),
             (5, 7),
             (6, 7),
         ]
         result = []
         for i, j in edges:
             p1, p2 = corners[i], corners[j]
-            coords = np.array([p1, (p1+p2)/2, p2])
-            x, y, z = coords[:,0], coords[:,1], coords[:,2]
+            coords = np.array([p1, (p1 + p2) / 2, p2])
+            x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
             actor = mlab.plot3d(
-                x, y, z,
+                x,
+                y,
+                z,
                 tube_radius=radius,
                 tube_sides=sides,
                 color=color,
-                opacity=opacity
+                opacity=opacity,
             )
             result.append(actor)
-            
+
         return result
 
     def hide(self):
@@ -108,7 +111,7 @@ class PlotExtent:
     def remove(self):
         for item in self.items:
             item.remove()
-            
+
     @logging_and_warning_decorator()
     def log_properties(self, logger=None) -> None:
         """
@@ -117,10 +120,10 @@ class PlotExtent:
         This will include all attributes defined in the @auto_properties mapping,
         as well as the number of points in the coordinates.
         """
-        
+
         print_lines = []
         print_lines.append("=== PlotTube Properties ===")
-        
+
         for attr_name in self.__class__._auto_properties.keys():
             if attr_name in {"x", "y", "z"}:
                 continue
@@ -131,5 +134,5 @@ class PlotExtent:
                 logger.warning(f"Could not retrieve '{attr_name}': {e}")
 
         print_lines.append("===========================")
-        
+
         logger.info("\n".join(print_lines))

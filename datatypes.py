@@ -196,10 +196,7 @@ GeneralField = np.ndarray
 nField = np.ndarray
 
 
-def check_Sn(
-    data, 
-    datatype: Literal["n", "S"], 
-    is_3d_strict: bool = True):
+def check_Sn(data, datatype: Literal["n", "S"], is_3d_strict: bool = True):
 
     data = np.asarray(data, dtype=np.float64)
     shape = np.shape(data)

@@ -95,14 +95,14 @@ def logging_and_warning_decorator(log_mode=None, show_timestamp=None, log_level=
 def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
     @functools.wraps(func)
     def inner(*args, **kwargs):
-        
+
         display_name = func.__name__
         if display_name == "__init__":
             if args and hasattr(args[0], "__class__"):
                 display_name = f"{args[0].__class__.__name__}.__init__"
             else:
                 display_name = "object.__init__"
-        
+
         effective_log_mode = kwargs.pop("log_mode", log_mode)
         effective_show_timestamp = kwargs.pop("show_timestamp", show_timestamp)
         effective_log_level = kwargs.pop("log_level", log_level)
@@ -176,9 +176,11 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
                     indent_str = INDENT * indent_level
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     level_str = f"[{logging.getLevelName(level)}]"
-                    
-                    indented_msg = "\n".join(f"{indent_str}{line}" for line in str(msg).splitlines())
-                
+
+                    indented_msg = "\n".join(
+                        f"{indent_str}{line}" for line in str(msg).splitlines()
+                    )
+
                     if show_ts:
                         text = f"{level_str} - {timestamp}\n{indented_msg}\n"
                     else:

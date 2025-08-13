@@ -20,7 +20,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
         "specular_color": "actor.property.specular_color",
         "specular_power": "actor.property.specular_power",
         "is_visible": "actor.visible",
-        "name": "name"
+        "name": "name",
     }
 )
 class PlotTube:
@@ -68,33 +68,35 @@ class PlotTube:
                 (enables gradient coloring). If provided, overrides 'color'.
             logger: Optional logger instance used for warnings.
         """
-        
-        
+
         self.items = []
         self.coords = coords_all
-        
+
         num_sublines = len(coords_all)
-        if len(scalars_all)>0:
+        if len(scalars_all) > 0:
             logger.debug(">>> The scalars of tube is input")
             logger.debug(">>> The color of tube will be ignored")
         else:
             scalars_all = [None for i in range(num_sublines)]
-        
+
         length = 0
         for coords, scalars in zip(coords_all, scalars_all):
-        
+
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
             length += len(x)
-            
+
             if scalars is not None and len(scalars) != length:
                 msg = f">>> The length of this subline {length} does not match with scalars {len(scalars)}"
                 msg += ">>> Ignore scalars in the following"
                 logger.warning(msg)
 
             if scalars is not None:
-                
+
                 item = mlab.plot3d(
-                    x, y, z, scalars,
+                    x,
+                    y,
+                    z,
+                    scalars,
                     tube_radius=radius,
                     tube_sides=sides,
                     opacity=opacity,
@@ -102,24 +104,24 @@ class PlotTube:
             else:
                 color = tuple(color)
                 item = mlab.plot3d(
-                    x, y, z,
+                    x,
+                    y,
+                    z,
                     color=color,
                     tube_radius=radius,
                     tube_sides=sides,
                     opacity=opacity,
                 )
-            
-    
+
             prop = item.actor.property
             prop.specular = specular
             prop.specular_color = specular_color
             prop.specular_power = specular_power
-            
+
             self.items.append(item)
-        
+
         self.length = length
         self.name = name
-
 
     def hide(self):
         self.is_visible = False
@@ -130,7 +132,7 @@ class PlotTube:
     def remove(self):
         for item in self.items:
             item.remove()
-    
+
     @logging_and_warning_decorator()
     def log_properties(self, logger=None) -> None:
         """
@@ -139,10 +141,10 @@ class PlotTube:
         This will include all attributes defined in the @auto_properties mapping,
         as well as the number of points in the coordinates.
         """
-        
+
         print_lines = []
         print_lines.append("=== PlotTube Properties ===")
-        
+
         for attr_name in self.__class__._auto_properties.keys():
             if attr_name in {"x", "y", "z"}:
                 continue
@@ -153,5 +155,5 @@ class PlotTube:
                 logger.warning(f"Could not retrieve '{attr_name}': {e}")
 
         print_lines.append("===========================")
-        
+
         logger.info("\n".join(print_lines))

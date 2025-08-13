@@ -231,7 +231,7 @@ def sample_far(num: int) -> np.ndarray:
 
 def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
     """
-    Return the 8 corner coordinates of a rectangular box 
+    Return the 8 corner coordinates of a rectangular box
     from (0, 0, 0) to (Lx, Ly, Lz).
 
     Parameters
@@ -247,18 +247,20 @@ def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
             (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (Lx, Ly, 0),
             (0, 0, Lz), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
     """
-    corners = np.array([
-        [0,   0,   0],
-        [Lx,  0,   0],
-        [0,  Ly,   0],
-        [Lx, Ly,   0],
-        [0,   0,  Lz],
-        [Lx,  0,  Lz],
-        [0,  Ly,  Lz],
-        [Lx, Ly,  Lz],
-    ], dtype=np.float64)
+    corners = np.array(
+        [
+            [0, 0, 0],
+            [Lx, 0, 0],
+            [0, Ly, 0],
+            [Lx, Ly, 0],
+            [0, 0, Lz],
+            [Lx, 0, Lz],
+            [0, Ly, Lz],
+            [Lx, Ly, Lz],
+        ],
+        dtype=np.float64,
+    )
     return corners
-
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):

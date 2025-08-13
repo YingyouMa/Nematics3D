@@ -70,7 +70,6 @@ class SmoothenedLine:
         Filter boundary mode.
     """
 
-    
     def __init__(
         self,
         line_coord_input: np.ndarray,
@@ -79,7 +78,7 @@ class SmoothenedLine:
         order: int = 3,
         N_out_ratio: float = 3.0,
         mode: Literal["interp", "wrap"] = "interp",
-        logger=None
+        logger=None,
     ):
         self._order = order
         self._N_out_ratio = N_out_ratio
@@ -101,7 +100,9 @@ class SmoothenedLine:
             self._window_ratio = self._N_init / self._window_length
         else:
             if self._window_ratio is not None:
-                logger.warning(">>> Window_length is manual input. window_ratio would be ignored.")
+                logger.warning(
+                    ">>> Window_length is manual input. window_ratio would be ignored."
+                )
             self._window_length = self._window_length
             self._window_ratio = self._N_init / self._window_length
 
@@ -114,7 +115,11 @@ class SmoothenedLine:
                 f"Filter window size {self._window_length} must be smaller than line length {line_length}"
             )
         line_points = savgol_filter(
-            self._line_coord_input, self._window_length, self._order, axis=0, mode=self._mode
+            self._line_coord_input,
+            self._window_length,
+            self._order,
+            axis=0,
+            mode=self._mode,
         )
 
         # Step 2: Define spline parameter u

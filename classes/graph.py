@@ -1,6 +1,7 @@
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Set
 
+
 class Graph:
     """
     A simple undirected graph implementation using adjacency sets,
@@ -13,7 +14,7 @@ class Graph:
         Initialize an empty undirected graph using a defaultdict of sets.
         """
         self.graph: Dict[Any, Set[Any]] = defaultdict(set)
-    
+
     def add_edge(self, u: Any, v: Any) -> None:
         """
         Add an undirected edge between nodes u and v.
@@ -27,7 +28,7 @@ class Graph:
         """
         self.graph[u].add(v)
         self.graph[v].add(u)
-    
+
     def remove_edge(self, u: Any, v: Any) -> None:
         """
         Remove an undirected edge between nodes u and v, if it exists.
@@ -41,7 +42,7 @@ class Graph:
         """
         self.graph[u].discard(v)
         self.graph[v].discard(u)
-    
+
     def find_start_node(self) -> Optional[Any]:
         """
         Find a valid starting node for Hierholzer's algorithm.
@@ -53,12 +54,16 @@ class Graph:
             Returns None if the graph has no edges.
         """
         # Prefer node with odd degree (for Eulerian path)
-        start_node = next((node for node in self.graph if len(self.graph[node]) % 2 == 1), None)
+        start_node = next(
+            (node for node in self.graph if len(self.graph[node]) % 2 == 1), None
+        )
         if start_node is None:
             # Fallback: find any node with at least one neighbor
-            start_node = next((node for node in self.graph if len(self.graph[node]) > 0), None)       
+            start_node = next(
+                (node for node in self.graph if len(self.graph[node]) > 0), None
+            )
         return start_node
-    
+
     def hierholzer_algorithm(self, start_node: Any) -> List[Any]:
         """
         Perform Hierholzer's algorithm from a starting node
@@ -75,7 +80,7 @@ class Graph:
             A list of nodes representing the Eulerian path segment.
         """
         path = [start_node]
-        
+
         while True:
             u = path[-1]
             if self.graph[u]:
@@ -86,7 +91,7 @@ class Graph:
                 break
 
         return path
-    
+
     def find_path(self) -> List[List[Any]]:
         """
         Decompose the graph into a collection of Eulerian path components.
@@ -103,7 +108,7 @@ class Graph:
             start_node = self.find_start_node()
             if start_node is None:
                 return paths
-            
+
             path = self.hierholzer_algorithm(start_node)
             paths.append(path)
 
