@@ -1,0 +1,184 @@
+[DEBUG] - 2025-08-12 21:19:04
+    Function `example_visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:04
+        Function `update_defects` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:04
+            Function `defect_detect` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:04
+            Threshold of the inner product between the first and last director is 0
+[INFO] - 2025-08-12 21:19:04
+            Start to defect defects
+[DEBUG] - 2025-08-12 21:19:04
+            Periodic boundary flags: [ True  True  True]
+[INFO] - 2025-08-12 21:19:05
+            Finished axis 0-direction in 0.28s
+[INFO] - 2025-08-12 21:19:05
+            Finished axis 1-direction in 0.19s
+[INFO] - 2025-08-12 21:19:05
+            Finished axis 2-direction in 0.19s
+[DEBUG] - 2025-08-12 21:19:05
+            Function `defect_detect` FINISHED in program `example_q.py`. Elapsed time: 0.685 seconds.
+[DEBUG] - 2025-08-12 21:19:05
+        Function `update_defects` FINISHED in program `example_q.py`. Elapsed time: 0.686 seconds.
+[DEBUG] - 2025-08-12 21:19:05
+        Function `update_lines_classify` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:05
+            Function `defect_classify_into_lines` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:05
+            box_size_periodic: [128. 128. 128.]
+[DEBUG] - 2025-08-12 21:19:05
+            Start to find neighboring defects
+[DEBUG] - 2025-08-12 21:19:06
+            Start to perform Hierholzer algorithm
+[DEBUG] - 2025-08-12 21:19:06
+            Done!
+[DEBUG] - 2025-08-12 21:19:06
+            Function `defect_classify_into_lines` FINISHED in program `example_q.py`. Elapsed time: 0.528 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Function `update_lines_classify` FINISHED in program `example_q.py`. Elapsed time: 0.528 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Function `update_lines_smoothen` STARTED in program `example_q.py`
+[INFO] - 2025-08-12 21:19:06
+        No data of window_length is input for smoothening lines. 
+        Use the default value 61
+[INFO] - 2025-08-12 21:19:06
+        No data of minimum line length is input for lines to be smoothened. 
+        Use the default value 75
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line0
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.007 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line1
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line2
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.001 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line3
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.001 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line4
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.001 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Start to smoothen line5
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Function `apply_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Function `update_lines_smoothen` FINISHED in program `example_q.py`. Elapsed time: 0.009 seconds.
+[DEBUG] - 2025-08-12 21:19:06
+        Function `visualize_disclination_lines` STARTED in program `example_q.py`
+[INFO] - 2025-08-12 21:19:06
+        No data of minimum line length is input for lines to be plotted. Use the default value 75
+[INFO] - 2025-08-12 21:19:06
+        No color data is input. Use the default color map, trying to set those longest lines with distinct colors
+[DEBUG] - 2025-08-12 21:19:06
+        Start to draw disclination lines
+[DEBUG] - 2025-08-12 21:19:06
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:06
+            Start to visualize line0
+[DEBUG] - 2025-08-12 21:19:06
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 0.987 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 0.991 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Start to visualize line1
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 0.043 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 0.044 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Start to visualize line2
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 0.017 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 0.017 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Start to visualize line3
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 0.043 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 0.043 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Start to visualize line4
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 0.016 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 0.016 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:07
+            Function `visualize` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:07
+            Start to visualize line5
+[DEBUG] - 2025-08-12 21:19:07
+                Function `PlotTube.__init__` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:08
+                Function `PlotTube.__init__` FINISHED in program `example_q.py`. Elapsed time: 1.548 seconds.
+[DEBUG] - 2025-08-12 21:19:08
+            Function `visualize` FINISHED in program `example_q.py`. Elapsed time: 1.548 seconds.
+[DEBUG] - 2025-08-12 21:19:08
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:08
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:09
+            Function `add_object` STARTED in program `example_q.py`
+[DEBUG] - 2025-08-12 21:19:09
+            Function `add_object` FINISHED in program `example_q.py`. Elapsed time: 0.000 seconds.
+[DEBUG] - 2025-08-12 21:19:09
+        Function `visualize_disclination_lines` FINISHED in program `example_q.py`. Elapsed time: 2.910 seconds.
+[DEBUG] - 2025-08-12 21:19:09
+    Function `example_visualize` FINISHED in program `example_q.py`. Elapsed time: 4.133 seconds.

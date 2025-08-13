@@ -95,6 +95,14 @@ def logging_and_warning_decorator(log_mode=None, show_timestamp=None, log_level=
 def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
     @functools.wraps(func)
     def inner(*args, **kwargs):
+        
+        display_name = func.__name__
+        if display_name == "__init__":
+            if args and hasattr(args[0], "__class__"):
+                display_name = f"{args[0].__class__.__name__}.__init__"
+            else:
+                display_name = "object.__init__"
+        
         effective_log_mode = kwargs.pop("log_mode", log_mode)
         effective_show_timestamp = kwargs.pop("show_timestamp", show_timestamp)
         effective_log_level = kwargs.pop("log_level", log_level)
@@ -143,7 +151,7 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
                     folder = _GLOBAL_DEFAULTS["log_folder"]
                     os.makedirs(folder, exist_ok=True)
                     filename = os.path.join(
-                        folder, f"{func.__name__}_{timestamp_str}.log"
+                        folder, f"{display_name}_{timestamp_str}.log"
                     )
                     file_handler = open(filename, mode="w", encoding="utf-8")
 
@@ -172,7 +180,7 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
                     indented_msg = "\n".join(f"{indent_str}{line}" for line in str(msg).splitlines())
                 
                     if show_ts:
-                        text = f"{timestamp} - {level_str}\n{indented_msg}\n"
+                        text = f"{level_str} - {timestamp}\n{indented_msg}\n"
                     else:
                         text = f"{level_str}\n{indented_msg}\n"
 
@@ -193,21 +201,21 @@ def _decorate(func, log_mode=None, show_timestamp=None, log_level=None):
         if safe_log != dummy_logger:
             safe_log(
                 logging.DEBUG,
-                f"Function `{func.__name__}` STARTED in program `{get_program_name()}`",
+                f"Function `{display_name}` STARTED in program `{get_program_name()}`",
             )
 
         try:
             result = func(*args, **kwargs)
             return result
         except Exception:
-            logger_obj.exception(f"Function `{func.__name__}` raised an exception")
+            logger_obj.exception(f"Function `{display_name}` raised an exception")
             raise
         finally:
             elapsed = time.time() - start_time
             if safe_log != dummy_logger:
                 safe_log(
                     logging.DEBUG,
-                    f"Function `{func.__name__}` FINISHED in program `{get_program_name()}`. "
+                    f"Function `{display_name}` FINISHED in program `{get_program_name()}`. "
                     f"Elapsed time: {elapsed:.3f} seconds.",
                 )
             if is_outermost:

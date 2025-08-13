@@ -23,11 +23,15 @@ S = np.load( 'data/S_example_global.npy')
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True)
 
-Q.update_defects(log_level=logging.DEBUG)
-Q.update_lines_classify(log_level=logging.DEBUG)
-Q.update_lines_smoothen(log_level=logging.DEBUG)
-Q.visualize_disclination_lines(log_level=logging.DEBUG)
-
+@Nematics3D.logging_and_warning_decorator
+def example_visualize(Q, logger=None):
+    Q.update_defects(logger=logger)
+    Q.update_lines_classify(logger=logger)
+    Q.update_lines_smoothen(logger=logger)
+    Q.visualize_disclination_lines(logger=logger)
+    
+# example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True)
+example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True, log_mode='file')
 
 
 
