@@ -3,6 +3,7 @@ import numpy as np
 from mayavi import mlab
 import re
 import glob
+import logging
 # import matplotlib.pyplot as plt
 
 import sys
@@ -22,10 +23,10 @@ S = np.load( 'data/S_example_global.npy')
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True)
 
-Q.update_defects()
-Q.update_lines_classify()
-Q.update_lines_smoothen()
-Q.visualize_disclination_lines()
+Q.update_defects(log_level=logging.DEBUG)
+Q.update_lines_classify(log_level=logging.DEBUG)
+Q.update_lines_smoothen(log_level=logging.DEBUG)
+Q.visualize_disclination_lines(log_level=logging.DEBUG)
 
 
 

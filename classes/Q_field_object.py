@@ -78,6 +78,7 @@ class QFieldObject:
                 self._box_size_periodic[i] = np.inf
         
 
+        logger.debug('Start to transform lattice grid into real space')
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
@@ -108,6 +109,7 @@ class QFieldObject:
         self,
         grid_transform: Optional[np.ndarray] = None,
         grid_offset: Optional[np.ndarray] = None,
+        logger=None,
     ):
         """
         Generate the coordinates grid in the real space from the lattice indices through linear transform.
@@ -176,6 +178,7 @@ class QFieldObject:
 
         for line in self._lines:
             if line._defect_num >= min_line_length:
+                logger.debug(f'Start to smoothen {line._name}')
                 line.update_smoothen(
                     window_ratio=window_ratio,
                     window_length=window_length,
@@ -216,9 +219,9 @@ class QFieldObject:
         specular_color: Tuple[float, float, float] = (1.0, 1.0, 1.0),
         specular_power: float = 11,
         names_all: Optional[List[str]] = None,
-        is_outline: bool = True,
-        outline_radius: float = 1,
-        outline_opacity: float = 1,
+        is_extent: bool = True,
+        extent_radius: float = 1,
+        extent_opacity: float = 1,
         logger=None,
     ):
         
@@ -282,6 +285,7 @@ class QFieldObject:
         )
         self.figures.append(figure)
 
+        logger.debug('Start to draw disclination lines')
         for line, line_color, line_scalar, name in zip(lines_plot, lines_colors, lines_scalars, names_all):
             line_visual = line.visualize(
                 is_wrap=is_wrap,
@@ -300,14 +304,14 @@ class QFieldObject:
             
             figure.add_object(line_visual, category="lines")
 
-        if is_outline:
+        if is_extent:
             from .visual_mayavi.plot_extent import PlotExtent
             if not hasattr(self, '_corners'):
                 self.update_corners()
             extent = PlotExtent(
                 self._corners,
-                radius=outline_radius,
-                opacity=outline_opacity
+                radius=extent_radius,
+                opacity=extent_opacity
             )
             figure.add_object(extent, category="extent")
             

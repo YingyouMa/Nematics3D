@@ -119,6 +119,8 @@ def defect_detect(
         The geometrical meaning of these components is explained in the definition of `DefectIndex`
         in `datatype.py`.
     """
+    
+    logger.debug(f'Threshold of the inner product between the first and last director is {threshold}')
 
     n_origin = check_Sn(n_origin, "n")
 
@@ -129,7 +131,6 @@ def defect_detect(
 
     logger.info("Start to defect defects")
     logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
-    logger.debug(f"Planes selected for detection: {planes}")
 
     n = add_periodic_boundary(n_origin, is_boundary_periodic)
     defect_indices = np.empty((0, 3), dtype=float)
@@ -230,10 +231,13 @@ def defect_classify_into_lines(
     from .general import make_hash_table, search_in_reservoir
 
     box_size_periodic = as_dimension_info(box_size_periodic)
+    logger.debug(f"box_size_periodic: {box_size_periodic}")
+    
     defect_indices_hash = make_hash_table(defect_indices)
 
     graph = Graph()
-
+    
+    logger.debug("Start to find neighboring defects")
     for idx1, defect in enumerate(defect_indices):
         neighbor = defect_neighbor_possible_get(
             defect, box_size_periodic=box_size_periodic
@@ -244,12 +248,14 @@ def defect_classify_into_lines(
         search = search[~np.isnan(search)].astype(int)
         for idx2 in search:
             graph.add_edge(idx1, idx2)
-
+    
+    logger.debug('Start to perform Hierholzer algorithm')
     paths = graph.find_path()
     paths = [
         unwrap_trajectory(defect_indices[path], box_size_periodic=box_size_periodic)
         for path in paths
     ]
+    logger.debug('Done!')
 
     lines = [
         DisclinationLine(path, box_size_periodic, offset=offset, transform=transform)

@@ -254,6 +254,8 @@ class DisclinationLine:
             If not provides, use the line's name is directly applied.
         """
 
+        logger.debug(f'Start to visualize {self._name}')
+
         if is_smooth:
             if hasattr(self, "_defect_coords_smooth"):
                 line_coords = self._defect_coords_smooth
