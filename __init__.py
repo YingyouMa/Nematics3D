@@ -10,6 +10,7 @@ from .classes.Q_field_object import QFieldObject
 from .classes.visual_mayavi.plot_tube import PlotTube
 from .classes.visual_mayavi.plot_scene import PlotScene
 from .classes.visual_mayavi.plot_extent import PlotExtent
+from .classes.visual_mayavi.plot_plane_grid import PlotPlaneGrid
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
 
