@@ -12,4 +12,4 @@ from .classes.visual_mayavi.plot_extent import PlotExtent
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
 
-__version__ = '0.0.0'
+__version__ = '0.1.0'
