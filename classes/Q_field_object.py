@@ -84,6 +84,8 @@ class QFieldObject:
                 self._box_size_periodic[i] = np.inf
 
         logger.debug("Start to transform lattice grid into real space")
+        grid_shape = np.shape(self._Q)[:3]
+        self._grid_origin = generate_coordinate_grid(grid_shape, grid_shape)
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
@@ -120,15 +122,10 @@ class QFieldObject:
         Generate the coordinates grid in the real space from the lattice indices through linear transform.
         See the document of apply_linear_transform()
         """
-
-        if not hasattr(self, "_defect_indices"):
-            grid_shape = np.shape(self._Q)[:3]
-            self._grid = generate_coordinate_grid(grid_shape, grid_shape)
-
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self._grid = apply_linear_transform(
-            self._grid, transform=self._grid_transform, offset=self._grid_offset
+            self._grid_origin, transform=self._grid_transform, offset=self._grid_offset
         )
 
         if hasattr(self, "_defect_indices"):
@@ -197,13 +194,39 @@ class QFieldObject:
 
         from ..general import get_box_corners
 
-        Lx, Ly, Lz = np.shape(self._Q)[:3]
+        Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1,1,1])
         corners = get_box_corners(Lx, Ly, Lz)
         corners = apply_linear_transform(
             corners, transform=self._grid_transform, offset=self._grid_offset
         )
 
         self._corners = corners
+
+        return corners
+
+    @logging_and_warning_decorator()
+    def update_integrator(self, logger=None):
+
+        from scipy.interpolate import RegularGridInterpolator
+
+        shape = np.shape(self._Q)[:3]
+        u = np.arange(shape[0])
+        v = np.arange(shape[1])
+        w = np.arange(shape[2])
+
+        self._interpolator = RegularGridInterpolator(
+                                (u, v, w),
+                                self._Q,
+                                method='linear',
+                                bounds_error=True
+                            )
+        return self._interpolator
+        
+    def inperpolate(self, points: np.ndarray):
+        if not hasattr(self, '_interpolator'):
+            self.update_integrator()
+        return self._interpolator(points)
+
 
     @logging_and_warning_decorator()
     def visualize_disclination_lines(
@@ -324,6 +347,7 @@ class QFieldObject:
 
     def reset_figures(self):
         self.figures = []
+
 
     def __call__(self) -> np.ndarray:
         return self._Q

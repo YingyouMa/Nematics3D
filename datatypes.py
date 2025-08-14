@@ -105,7 +105,7 @@ def as_Vect3D(input_data, is_norm=False):
         raise ValueError(f"For Vect3D, input_data must be a vector with 3 elements. Got {input_data} instead.")
 
     if is_norm:
-        input_data = input_data / np.sum(input_data**2)
+        input_data = input_data / np.linalg.norm(input_data)
 
     return input_data
 
@@ -387,7 +387,7 @@ def as_QField9(qtensor: QField) -> QField9:
 
     shape = qtensor.shape
 
-    if len(shape) == 4 and shape[-1] == 5:
+    if len(shape) >= 2 and shape[-1] == 5:
         # Convert from 5-component representation to full 3x3 tensor
         Q = np.zeros((*shape[:-1], 3, 3), dtype=qtensor.dtype)
         Q[..., 0, 0] = qtensor[..., 0]  # Q_xx
@@ -401,7 +401,7 @@ def as_QField9(qtensor: QField) -> QField9:
         Q[..., 2, 2] = -Q[..., 0, 0] - Q[..., 1, 1]  # Q_zz from traceless condition
         return Q
 
-    if len(shape) == 5 and shape[-2:] == (3, 3):
+    if len(shape) >= 3 and shape[-2:] == (3, 3):
         Q = qtensor
         return Q  # Already in QField9 form
 
@@ -447,7 +447,7 @@ def as_QField5(qtensor: QField) -> QField5:
 
     shape = qtensor.shape
 
-    if len(shape) == 5 and shape[-2:] == (3, 3):
+    if len(shape) >= 2 and shape[-2:] == (3, 3):
 
         Q5 = np.empty(shape[:-2] + (5,), dtype=qtensor.dtype)
 
@@ -459,7 +459,7 @@ def as_QField5(qtensor: QField) -> QField5:
 
         return Q5
 
-    if len(shape) == 4 and shape[-1] == 5:
+    if len(shape) >= 3 and shape[-1] == 5:
         Q5 = qtensor
         return Q5
 

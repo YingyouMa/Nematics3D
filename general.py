@@ -244,16 +244,16 @@ def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
     corners : list of tuple of float
         List of 8 corner coordinates in (x, y, z) form.
         Order is:
-            (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (Lx, Ly, 0),
-            (0, 0, Lz), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
+            (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (0, 0, Lz), 
+            (Lx, Ly, 0), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
     """
     corners = np.array(
         [
             [0, 0, 0],
             [Lx, 0, 0],
             [0, Ly, 0],
-            [Lx, Ly, 0],
             [0, 0, Lz],
+            [Lx, Ly, 0],
             [Lx, 0, Lz],
             [0, Ly, Lz],
             [Lx, Ly, Lz],

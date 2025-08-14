@@ -426,6 +426,74 @@ def unwrap_trajectory(
     return points_unwrap
 
 
+def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
+    """
+    Unfolds a cluster of points that may cross periodic boundaries into a single continuous region.
+
+    Parameters
+    ----------
+    points : (N, 3) ndarray
+        Coordinates of the point cluster.
+        Assumes coordinates are in the range [0, box_size) for periodic dimensions.
+                                              
+    box_size_periodic : float or array-like
+        Periodic box size for each dimension.
+        - Can be a scalar (same size in all periodic dimensions) or an array of shape (3,).
+        - If a dimension size is np.inf, it is treated as non-periodic.
+
+    Returns
+    -------
+    unfolded : (N, 3) ndarray
+        Coordinates of the cluster after unfolding so that all points lie in the same contiguous region.
+
+    Notes
+    -----
+    This function detects if points are separated across periodic boundaries and applies
+    minimal ±box_size translations to bring them together.
+    - A reference point (the first point) is chosen.
+    - For each point and each periodic dimension:
+        * If the distance to the reference point is greater than half the box size, 
+          the point is shifted by -box_size.
+        * If the distance is less than negative half the box size, 
+          the point is shifted by +box_size.
+    - Non-periodic dimensions (size = np.inf) are left unchanged.
+
+    Example
+    -------
+    >>> points = np.array([[0.1, 0.2, 0.9],
+    ...                    [0.15, 0.25, 0.05],  # Crosses z-boundary
+    ...                    [0.12, 0.22, 0.95]])
+    >>> box = np.array([1.0, 1.0, 1.0])
+    >>> unfold_cluster(points, box)
+    array([[0.1 , 0.2 , 0.9 ],
+           [0.15, 0.25, 1.05],
+           [0.12, 0.22, 0.95]])
+    """
+
+    points = np.asarray(points, dtype=float)
+    if np.all(box_size_periodic == np.inf):
+        return points
+    
+    box_size_periodic = as_dimension_info(box_size_periodic)
+    
+    unfolded = points.copy()
+    ref = points[0]
+
+    for i in range(len(points)):
+        for dim, size in enumerate(box_size_periodic):
+            if size != np.inf:
+                delta = points[i, dim] - ref[dim]
+                if delta > size / 2:
+                    unfolded[i, dim] -= size
+                elif delta < - size / 2:
+                    unfolded[i, dim] += size
+                        
+    return unfolded
+
+
+
+
+
 # @time_record
 # def interpolateQ(n, result_points, S=0, is_boundary_periodic=0):
 

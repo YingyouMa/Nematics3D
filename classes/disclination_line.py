@@ -195,13 +195,30 @@ class DisclinationLine:
             The coordinates of the smoothened line.
             Also stored internally as `self._defect_coords_smooth`.
         """
-        if self._end2end_category == "loop":
+        if self._end2end_category == "loop" or "cross":
             smoothen_mode = "wrap"
+            tail_length = 0
+            coords = self._defect_coords
+        elif self._end2end_category == "cross":
+            tail_length = 5
+            indices_origin = self._defect_indices
+            distance = indices_origin[-tail_length-1:-1] - indices_origin[:tail_length]
+            tail = indices_origin[:tail_length,]
+            
+            for i in range(3):
+                if np.isfinite(self._box_size_periodic_index[i]):
+                    num_cross = np.round(distance[:,i] / self._box_size_periodic_index[i])
+                    tail[:,i] += tail[:,i] + num_cross * self._box_size_periodic_coord[i]
+            
+            coords = self._defect_coords
+            coords = np.concatenate([coords, tail])
         else:
+            coords = self._defect_coords
             smoothen_mode = "interp"
-
+            tail_length = 0
+            
         output = SmoothenedLine(
-            self._defect_coords,
+            coords,
             window_ratio=window_ratio,
             window_length=window_length,
             order=order,
@@ -210,7 +227,7 @@ class DisclinationLine:
         )
 
         self._defect_coords_smooth_obj = output
-        self._defect_coords_smooth = output._output
+        self._defect_coords_smooth = output._output[:-tail_length-1]
 
         return output.output
 
