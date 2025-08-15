@@ -195,25 +195,33 @@ class DisclinationLine:
             The coordinates of the smoothened line.
             Also stored internally as `self._defect_coords_smooth`.
         """
-        if self._end2end_category == "loop" or "cross":
+        from ..field import unwrap_trajectory, shift_to_box
+        
+        coords = self._defect_coords.copy()
+        
+        if self._end2end_category == "loop":
             smoothen_mode = "wrap"
             tail_length = 0
-            coords = self._defect_coords
         elif self._end2end_category == "cross":
-            tail_length = 5
-            indices_origin = self._defect_indices
-            distance = indices_origin[-tail_length-1:-1] - indices_origin[:tail_length]
-            tail = indices_origin[:tail_length,]
+            tail_length = 50
+            indices_origin = self._defect_indices.copy()
+            #distance = indices_origin[-tail_length-1:-1] - indices_origin[:tail_length]
+            tail = indices_origin[:tail_length].copy()
+            head = indices_origin[-tail_length-1:]
+            indices = np.concatenate([head, indices_origin, tail])
             
-            for i in range(3):
-                if np.isfinite(self._box_size_periodic_index[i]):
-                    num_cross = np.round(distance[:,i] / self._box_size_periodic_index[i])
-                    tail[:,i] += tail[:,i] + num_cross * self._box_size_periodic_coord[i]
             
-            coords = self._defect_coords
-            coords = np.concatenate([coords, tail])
+            indices[:75] = unwrap_trajectory(indices[:75], box_size_periodic=self._box_size_periodic_index, is_reverse=True)
+            indices = unwrap_trajectory(indices, box_size_periodic=self._box_size_periodic_index, is_start_in_box=True)
+            
+            coords = apply_linear_transform(
+                indices,
+                transform=self._grid_transform,
+                offset=self._grid_offset,
+                )
+
+            smoothen_mode = "interp"
         else:
-            coords = self._defect_coords
             smoothen_mode = "interp"
             tail_length = 0
             
@@ -226,9 +234,12 @@ class DisclinationLine:
             mode=smoothen_mode,
         )
 
+        result = output._output[int(tail_length*N_out_ratio):int((-tail_length-1)*N_out_ratio)]
+        result = shift_to_box(result, self._box_size_periodic_index)
+        
         self._defect_coords_smooth_obj = output
-        self._defect_coords_smooth = output._output[:-tail_length-1]
-
+        self._defect_coords_smooth = result
+        
         return output.output
 
     @logging_and_warning_decorator()

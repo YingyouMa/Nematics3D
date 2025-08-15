@@ -18,7 +18,7 @@ L = 200
 
 # S, n = Nematics3D.diagonalizeQ(Q)
 
-index_max =  90
+index_max =  128
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 

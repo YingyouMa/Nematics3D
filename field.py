@@ -374,9 +374,43 @@ def generate_mirror_point_periodic_boundary(
     return mirror_points
 
 
+def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
+    """
+    Shift the entire trajectory so that the first point is inside the periodic box.
+
+    Parameters
+    ----------
+    points_unwrap : (N, 3) ndarray
+        Already unwrapped trajectory points.
+        
+    box_size_periodic : (3,) array-like
+        Box size in each dimension (np.inf for non-periodic).
+
+    Returns
+    -------
+    shifted_points : (N, 3) ndarray
+        Trajectory shifted so that the first point is inside [0, L) for periodic dimensions.
+    """
+    points_unwrap = np.asarray(points_unwrap, dtype=float)
+    L = box_size_periodic = as_dimension_info(box_size_periodic)
+
+    shifted = points_unwrap.copy()
+    for dim in range(3):
+        if np.isfinite(L[dim]):
+            # Wrap the starting point into [0, L)
+            shift_amount = -np.floor(shifted[ref_index, dim] / L[dim]) * L[dim]
+            shifted[:, dim] += shift_amount
+
+    return shifted
+
+
+
 def unwrap_trajectory(
     points: Union[np.ndarray, Sequence[Sequence[float]]],
     box_size_periodic: DimensionPeriodicInput = np.inf,
+    is_start_in_box=False,
+    ref_index=0,
+    is_reverse=False
 ):
     """
     Unwrap a trajectory of points across periodic boundaries to produce a geometrically continuous path.
@@ -403,25 +437,30 @@ def unwrap_trajectory(
     points_unwrap : np.ndarray of shape (N, 3)
         The unwrapped version of the input points, forming a continuous path.
     """
-
+    
     box_size_periodic = as_dimension_info(box_size_periodic)
-    points = np.array(points)
+    points = np.array(points, dtype=float)
+    
+    if is_reverse:
+        points = points[::-1]
+    
     deltas = np.diff(points, axis=0)
 
-    for i in range(3):
-        if box_size_periodic[i] != np.inf:
-            deltas[:, i] = np.where(
-                deltas[:, i] > box_size_periodic[i] // 2,
-                deltas[:, i] - box_size_periodic[i],
-                deltas[:, i],
-            )
-            deltas[:, i] = np.where(
-                deltas[:, i] < -box_size_periodic[i] // 2,
-                deltas[:, i] + box_size_periodic[i],
-                deltas[:, i],
-            )
+    mask_periodic = np.isfinite(box_size_periodic)
+    L = box_size_periodic
 
-    points_unwrap = np.concatenate([[points[0]], points[0] + np.cumsum(deltas, axis=0)])
+    # Apply minimum image convention with multi-box handling
+    deltas[:, mask_periodic] -= np.round(
+        deltas[:, mask_periodic] / L[mask_periodic]
+    ) * L[mask_periodic]
+
+    points_unwrap = np.vstack([points[0], points[0] + np.cumsum(deltas, axis=0)])
+    
+    if is_start_in_box:
+        points_unwrap = shift_to_box(points_unwrap, box_size_periodic, ref_index=ref_index)
+        
+    if is_reverse:
+        points_unwrap = points_unwrap[::-1]
 
     return points_unwrap
 
@@ -489,6 +528,7 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
                     unfolded[i, dim] += size
                         
     return unfolded
+
 
 
 
