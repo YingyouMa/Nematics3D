@@ -1,9 +1,9 @@
 import numpy as np
-from typing import Optional, Literal
+from typing import Optional, Literal, Callable
 
 from .plot_plane_grid import PlotPlaneGrid
 from Nematics3D.datatypes import Vect3D
-from Nematics3D.field import diagonalizeQ
+from Nematics3D.field import diagonalizeQ, n_color_immerse
 
 from tvtk.api import tvtk
 from mayavi import mlab
@@ -19,7 +19,7 @@ class PlotnPlane():
                  origin: Vect3D = (0,0,0),
                  axis1: Optional[Vect3D] = None,
                  corners_limit: Optional[np.ndarray] = None,
-                 colors: Optional[np.ndarray] = None,
+                 colors: Callable[nField, List[ColorRGB]] = n_color_immerse,
                  opacity: Optional[np.ndarray] = None,
                  length: float = 3.5,
                  logger=None,
