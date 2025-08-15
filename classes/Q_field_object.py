@@ -1,12 +1,13 @@
 import numpy as np
 import time
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union
 
 from ..logging_decorator import logging_and_warning_decorator, Logger
 from ..datatypes import (
     Vect3D,
     as_Vect3D,
-    QField,
+    QField5,
+    QField9,
     as_QField5,
     SField,
     nField,
@@ -31,7 +32,7 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def __init__(
         self,
-        Q: QField = None,
+        Q: Union[QField5, QField9] = None,
         S: SField = None,
         n: nField = None,
         box_periodic_flag: DimensionFlagInput = False,

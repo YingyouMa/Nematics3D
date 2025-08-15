@@ -28,9 +28,6 @@ Example usage:
 from typing import Union, Sequence, Literal, Tuple
 import numpy as np
 
-import logging
-from .logging_decorator import logging_and_warning_decorator
-
 # __all__ = [
 #     "NumericInput",
 #     "Vect3D",
@@ -301,10 +298,11 @@ GeneralField = np.ndarray
 
 # Director field (unit vector), shape: (Nx, Ny, Nz, 3)
 # Subtype of GeneralField
+# It may relax to shape (..., 3)
 nField = np.ndarray
 
 
-def check_Sn(data, datatype: Literal["n", "S"], is_3d_strict: bool = True):
+def check_Sn(data, datatype: Literal["n", "S"], is_3d_strict: bool = True, is_norm=True):
 
     data = np.asarray(data, dtype=np.float64)
     shape = np.shape(data)
@@ -318,7 +316,9 @@ def check_Sn(data, datatype: Literal["n", "S"], is_3d_strict: bool = True):
             raise ValueError(
                 f"Strict 3D director field must have shape (Nx, Ny, Nz, 3), got {shape}"
             )
-
+        if is_norm:
+            norms = np.linalg.norm(data, axis=-1, keepdims=True)
+            data = data / norms
     elif datatype == "S":
         if is_3d_strict and len(shape) != 3:
             raise ValueError(
@@ -347,12 +347,8 @@ QField5 = np.ndarray
 # Q[..., 0,0] = Q_xx, Q[..., 0,1] = Q_xy, Q[..., 1,0] = Q_xy, etc.
 QField9 = np.ndarray
 
-# QField is a generic Q-tensor field input, accepted as either 5- or 9-component form
-# Subtype of GeneralField
-QField = np.ndarray
 
-
-def as_QField9(qtensor: QField) -> QField9:
+def as_QField9(qtensor: Union[QField5, QField9]) -> QField9:
     #! strict3d
     """
     Convert a Q-tensor field into full 3×3 matrix form (QField9).
@@ -411,7 +407,7 @@ def as_QField9(qtensor: QField) -> QField9:
     )
 
 
-def as_QField5(qtensor: QField) -> QField5:
+def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
     """
     Convert a Q-tensor field into full 3×3 matrix form (QField9).
 

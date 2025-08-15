@@ -100,3 +100,5 @@ class PlotnPlane():
         g.actor.mapper.color_mode = 'default'
     
         return g
+    
+#    def __getattr__
