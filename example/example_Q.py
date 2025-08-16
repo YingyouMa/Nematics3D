@@ -37,7 +37,7 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 
 Q.update_defects()
 Q.update_lines_classify()
-Q.update_lines_smoothen()
+Q.update_lines_smoothen(window_length=31)
 Q.visualize_disclination_lines(is_wrap=True, lines_color_input_all=(0,0,0), extent_radius=0.05)
 
 # Q.update_defects()
@@ -61,7 +61,7 @@ Q.update_corners()
 interpolator = Q.update_integrator()
 # Nematics3D.PlotnPlane((1,1,1), 5, 200, Q._interpolator, corners_limit=Q._corners, origin=(64,64,64))
 # Nematics3D.PlotnPlane((1,0,0), 3, index_max, Q._interpolator, axis1=(0,1,0), corners_limit=Q._corners, origin=(0,index_max/2,index_max/2))
-test = Nematics3D.PlotnPlane((0,0,1), 3, 0.85*index_max, Q._interpolator, axis1=(1,0,0), corners_limit=Q._corners, origin=(index_max/2,index_max/2,0), length=3, opacity=0.5)
+test = Nematics3D.PlotnPlane((0,0,1), 3, 0.9*index_max, Q._interpolator, axis1=(1,0,0), corners_limit=Q._corners, origin=(index_max/2,index_max/2,0), length=3, opacity=0.5)
 g = test.items[0]
 
 

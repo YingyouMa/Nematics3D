@@ -3,12 +3,8 @@ from typing import Optional, Literal, Callable, List, Union
 
 from .plot_plane_grid import PlotPlaneGrid
 from Nematics3D.datatypes import Vect3D, nField, ColorRGB, as_ColorRGB
-from Nematics3D.field import diagonalizeQ, n_color_immerse
+from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import calc_colors, calc_opacity
-
-from tvtk.api import tvtk
-from mayavi import mlab
 
 class PlotnPlane():
     
@@ -18,6 +14,8 @@ class PlotnPlane():
                  space: float,
                  size: float,
                  QInterpolator,
+                 transform: np.ndarray = np.eye(3),
+                 offset: Vect3D = np.array([0, 0, 0]),
                  shape: Literal["circle", "rectangle"] = "rectangle",
                  origin: Vect3D = (0,0,0),
                  axis1: Optional[Vect3D] = None,
@@ -26,6 +24,8 @@ class PlotnPlane():
                  opacity: Union[Callable[nField, np.ndarray], float] = 1,
                  length: float = 3.5,
                  radius: float = 0.5,
+                 is_n_defect: bool = True,
+                 n_defect_opacity: float = 1,
                  logger=None,
                  ):
         
@@ -35,6 +35,8 @@ class PlotnPlane():
                 space,
                 size,
                 QInterpolator,
+                transform,
+                offset,
                 shape,
                 origin,
                 axis1,
@@ -43,6 +45,8 @@ class PlotnPlane():
                 opacity,
                 length,
                 radius,
+                is_n_defect,
+                n_defect_opacity,
                 logger=logger)
         
         
@@ -53,6 +57,8 @@ class PlotnPlane():
             space,
             size,
             QInterpolator,
+            transform,
+            offset,
             shape,
             origin,
             axis1,
@@ -61,6 +67,8 @@ class PlotnPlane():
             opacity,
             length,
             radius,
+            is_n_defect,
+            n_defect_opacity,
             logger=None):
         
         self.plane = PlotPlaneGrid(
@@ -76,7 +84,15 @@ class PlotnPlane():
                             )
         
         self.Q = QInterpolator(self.plane._grid)
-        self.S, self.n = diagonalizeQ(self.Q)
+        self.S, self.n = Q_diagonalize(self.Q)
+        
+        # if is_n_defect:
+        #     shape_all = np.shape(self.plane._grid_all)
+        #     grid_all_flatten = np.reshape(self.plane._grid_all, (-1,2))
+        #     Q_all = QInterpolator(grid_all_flatten)
+        #     _, n_all = Q_diagonalize(Q_all)
+        #     n_all = np.reshape(n_all, (1, *shape_all, 3))
+        #     defect_indices
         
         grid = self.plane._grid
         self.num_points = np.shape(grid)[0]
@@ -89,8 +105,8 @@ class PlotnPlane():
         
         if hasattr(self, 'items'):
             self.items[0].remove()
-        
-        self.items = [self.quiver_with_direct_colors(
+            
+        self.items = [n_visualize(
             grid[:,0],
             grid[:,1],
             grid[:,2],
@@ -99,7 +115,8 @@ class PlotnPlane():
             self.n[:,2],
             colors_out,
             opacity_out,
-            length=length
+            length=length,
+            radius=radius
             )]
         
         self.radius = radius
@@ -138,45 +155,6 @@ class PlotnPlane():
         else:
             opacity = data
         return opacity
-    
-    @staticmethod
-    def quiver_with_direct_colors(x, y, z, u, v, w, colors, opacity, length=3.5, radius=0.5, mode='cylinder'):
-        x = np.asarray(x).ravel()
-        y = np.asarray(y).ravel()
-        z = np.asarray(z).ravel()
-        u = np.asarray(u).ravel()
-        v = np.asarray(v).ravel()
-        w = np.asarray(w).ravel()
-    
-        # 点和向量
-        pts = np.c_[x, y, z]
-        vec = np.c_[u, v, w]
-    
-        # RGBA 转换
-        colors = np.asarray(colors)
-        colors = np.hstack([colors, opacity]) * 255
-        colors = colors.astype(np.uint8)
-    
-        # PolyData
-        poly = tvtk.PolyData(points=pts)
-        poly.point_data.vectors = vec
-        poly.point_data.vectors.name = 'vectors'
-        poly.point_data.scalars = colors
-        poly.point_data.scalars.name = 'rgba'
-    
-        # 管线
-        src = mlab.pipeline.add_dataset(poly)
-        g = mlab.pipeline.glyph(src, mode=mode, scale_factor=1)
-        g.glyph.scale_mode = 'data_scaling_off'  # 固定缩放，不随标量变化
-    
-        # 直接颜色模式
-        g.actor.mapper.scalar_visibility = True
-        g.actor.mapper.color_mode = 'direct_scalars'
-        
-        g.glyph.glyph_source.glyph_source.height = length
-        g.glyph.glyph_source.glyph_source.radius = radius
-    
-        return g
     
  
     @property
@@ -237,7 +215,7 @@ class PlotnPlane():
         for k, v in changes.items():
             setattr(self, k, v)
         
-        keys_rebuild = ['axis1', 'normal', 'origin', 'shape', 'space']
+        keys_rebuild = ['axis1', 'normal', 'origin', 'shape', 'space', 'size']
         
         for k in keys_rebuild:
             if k in changes:

@@ -88,15 +88,16 @@ class PlotPlaneGrid():
         grid = np.einsum('ai, ib -> ab', grid, axis_both)
 
         grid = grid - np.average(grid, axis=0) + origin
-        grid = self.select_grid_in_box(grid, corners_limit=corners_limit, logger=logger)
+        grid_select = self.select_grid_in_box(grid, corners_limit=corners_limit, logger=logger)
         
-        self._grid = grid
+        self._grid = grid_select
         self._axis1 = axis1
         self._normal = normal
         self._origin = origin
         self._shape = shape
         self._space1 = space1
         self._space2 = space2
+        self._grid_all = grid
 
     @staticmethod
     def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):

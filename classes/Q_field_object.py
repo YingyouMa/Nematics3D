@@ -16,12 +16,13 @@ from ..datatypes import (
     check_Sn,
 )
 from ..field import (
-    diagonalizeQ,
+    Q_diagonalize,
     getQ,
     generate_coordinate_grid,
     apply_linear_transform,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
+from .Interpolator import Interpolator
 
 
 class QFieldObject:
@@ -72,7 +73,7 @@ class QFieldObject:
                     f"Q field initialized in {time.time() - start:.2f} seconds."
                 )
                 if is_diag:
-                    self._S, self._n = diagonalizeQ(self._Q, logger=logger)
+                    self._S, self._n = Q_diagonalize(self._Q, logger=logger)
             else:
                 raise NameError("No data is input")
 
@@ -95,7 +96,7 @@ class QFieldObject:
 
     @logging_and_warning_decorator()
     def update_diag(self, logger=None):
-        self._S, self._n = diagonalizeQ(self._Q, logger=logger)
+        self._S, self._n = Q_diagonalize(self._Q, logger=logger)
 
     @logging_and_warning_decorator()
     def update_defects(self, threshold=0, logger=None):
@@ -206,7 +207,7 @@ class QFieldObject:
         return corners
 
     @logging_and_warning_decorator()
-    def update_integrator(self, logger=None):
+    def update_interpolator(self, logger=None):
 
         from scipy.interpolate import RegularGridInterpolator
 
@@ -215,18 +216,26 @@ class QFieldObject:
         v = np.arange(shape[1])
         w = np.arange(shape[2])
 
-        self._interpolator = RegularGridInterpolator(
+        interpolator = RegularGridInterpolator(
                                 (u, v, w),
                                 self._Q,
                                 method='linear',
                                 bounds_error=True
                             )
+        interpolator = Interpolator(
+            interpolator,
+            transform=self._transform,
+            offset=self._offset
+        )
+
+        self._interpolator = interpolator
+
         return self._interpolator
         
-    def inperpolate(self, points: np.ndarray):
+    def inperpolate(self, points: np.ndarray, is_index=False):
         if not hasattr(self, '_interpolator'):
-            self.update_integrator()
-        return self._interpolator(points)
+            self.update_interpolator()
+        return self._interpolator(points, is_index=is_index)
 
 
     @logging_and_warning_decorator()
