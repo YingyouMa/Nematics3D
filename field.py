@@ -133,8 +133,7 @@ def getQ(n: nField, S: SField = None, logger=None) -> QField9:
 
     n = check_Sn(n, "n", is_3d_strict=False)
 
-    Q = np.einsum("...i, ...j -> ...ij", n, n)
-    Q = Q - np.diag((1, 1, 1)) / 3
+    Q = np.einsum("...i, ...j -> ...ij", n, n) - np.eye(3) / 3
     if S is not None:
         S = check_Sn(S, "S", is_3d_strict=False)
         Q = np.einsum("..., ...ij -> ...ij", S, Q)
@@ -176,16 +175,15 @@ def add_periodic_boundary(
     """
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
 
-    if np.sum(is_boundary_periodic) != 0:
-        Nx, Ny, Nz = np.shape(data)[:3]  # Extract the first three dimensions
-        output = np.zeros(
-            (
-                Nx + is_boundary_periodic[0],
-                Ny + is_boundary_periodic[1],
-                Nz + is_boundary_periodic[2],
-                *(np.shape(data)[3:]),
-            )
-        )  # Preserve additional dimensions
+    if np.any(is_boundary_periodic):
+        Nx, Ny, Nz, *rest_shape = data.shape  # Extract the first three dimensions
+        output = np.empty(
+            (Nx + is_boundary_periodic[0],
+             Ny + is_boundary_periodic[1],
+             Nz + is_boundary_periodic[2],
+             *rest_shape),
+            dtype=data.dtype
+        )
         output[:Nx, :Ny, :Nz] = data  # Copy original data into the new array
 
         # Copy first slices to last.

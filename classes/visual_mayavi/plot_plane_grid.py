@@ -16,8 +16,8 @@ class PlotPlaneGrid():
     @logging_and_warning_decorator
     def __init__(self,
                  normal: Vect3D,
-                 num1: int,
-                 num2: int,
+                 space1: float,
+                 space2: float,
                  size: float,
                  shape: Literal["circle", "rectangle"] = "rectangle",
                  origin: Vect3D = (0,0,0),
@@ -29,8 +29,8 @@ class PlotPlaneGrid():
         self.update_grid(
             normal,
             shape,
-            num1,
-            num2,
+            space1,
+            space2,
             size,
             origin=origin,
             axis1=axis1,
@@ -50,8 +50,8 @@ class PlotPlaneGrid():
                  logger=None,                    
                  ):
         
-        space1 = int(space1)
-        space2 = int(space2)
+        space1 = float(space1)
+        space2 = float(space2)
         
         num1 = int(size/space1)
         num2 = int(size/space2)
@@ -95,8 +95,8 @@ class PlotPlaneGrid():
         self._normal = normal
         self._origin = origin
         self._shape = shape
-        self._num1 = num1
-        self._num2 = num2
+        self._space1 = space1
+        self._space2 = space2
 
     @staticmethod
     def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):
@@ -131,25 +131,3 @@ class PlotPlaneGrid():
             
         return grid
     
-
-    def add_Q(self, Q_values):
-        
-        Q_values = as_QField5(Q_values)
-        Q_values.reshape(-1, 5)
-
-        if np.shape(Q_values)[0] != np.shape(self._grid)[0]:
-            raise ValueError(f"Got {np.shape(Q_values)[0]} points of Q_values and {np.shape(self._grid)[0]} points of grids.")
-        
-        from Nematics.field import diagonalizeQ
-        self._Q = Q_values
-        self._S, self._n = diagonalizeQ(Q_values)
-        
-
-    def add_values(self, name, values):
-        
-        name = str(name)
-
-        if np.shape(values)[0] != np.shape(self._grid)[0]:
-            raise ValueError(f"Got {np.shape(values)[0]} points of values and {np.shape(self._grid)[0]} points of grids.")
-
-        setattr(self, name, values)

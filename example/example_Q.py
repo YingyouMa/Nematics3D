@@ -18,7 +18,7 @@ L = 200
 
 # S, n = Nematics3D.diagonalizeQ(Q)
 
-index_max =  50
+index_max =  80
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
@@ -38,7 +38,7 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 Q.update_defects()
 Q.update_lines_classify()
 Q.update_lines_smoothen()
-Q.visualize_disclination_lines(is_wrap=False)
+Q.visualize_disclination_lines(is_wrap=True, lines_color_input_all=(0,0,0), extent_radius=0.05)
 
 # Q.update_defects()
 # mlab.figure()
@@ -54,15 +54,15 @@ Nematics3D.PlotExtent(Q._corners)
 mlab.points3d(*(test._grid.T))
 '''
 Q.update_corners()
-extent = Nematics3D.PlotExtent(Q._corners)
+# extent = Nematics3D.PlotExtent(Q._corners, radius=0.02)
 # plane = Nematics3D.PlotPlaneGrid((1,1,1), 10, 10, index_max, corners_limit=Q._corners, origin=(index_max/2, index_max/2, index_max/2))
 # plane = Nematics3D.PlotPlaneGrid((1,0,0), 10, 10, 200, axis1=(0,1,0), corners_limit=Q._corners, origin=(64,64,64))
 # mlab.points3d(*(plane._grid.T))
 interpolator = Q.update_integrator()
 # Nematics3D.PlotnPlane((1,1,1), 5, 200, Q._interpolator, corners_limit=Q._corners, origin=(64,64,64))
 # Nematics3D.PlotnPlane((1,0,0), 3, index_max, Q._interpolator, axis1=(0,1,0), corners_limit=Q._corners, origin=(0,index_max/2,index_max/2))
-Nematics3D.PlotnPlane((0,0,1), 3, index_max-5, Q._interpolator, axis1=(1,0,0), corners_limit=Q._corners, origin=(index_max/2,index_max/2,0))
-
+test = Nematics3D.PlotnPlane((0,0,1), 3, 0.85*index_max, Q._interpolator, axis1=(1,0,0), corners_limit=Q._corners, origin=(index_max/2,index_max/2,0), length=3, opacity=0.5)
+g = test.items[0]
 
 
 

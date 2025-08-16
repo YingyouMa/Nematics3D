@@ -205,11 +205,9 @@ class DisclinationLine:
         elif self._end2end_category == "cross":
             tail_length = 50
             indices_origin = self._defect_indices.copy()
-            #distance = indices_origin[-tail_length-1:-1] - indices_origin[:tail_length]
             tail = indices_origin[:tail_length].copy()
             head = indices_origin[-tail_length-1:]
             indices = np.concatenate([head, indices_origin, tail])
-            
             
             indices[:75] = unwrap_trajectory(indices[:75], box_size_periodic=self._box_size_periodic_index, is_reverse=True)
             indices = unwrap_trajectory(indices, box_size_periodic=self._box_size_periodic_index, is_start_in_box=True)
@@ -302,10 +300,13 @@ class DisclinationLine:
                 logger.warning(">>> Use original data instead")
                 line_coords = self._defect_coords
         else:
-            line_coords = self._defect_coords
+            line_coords = self._defect_coords.copy()
 
         if name == None:
             name = self._name
+            
+        if self._end2end_category == "loop":
+            line_coords = np.concatenate((line_coords, [line_coords[0]]))
 
         line_coords_all = [line_coords]
         scalars_all = [scalars] if scalars != None else []
