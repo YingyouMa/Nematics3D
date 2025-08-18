@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from typing import Tuple, Optional, List, Union
+from typing import Tuple, Optional, List, Union, Callable, Literal
 
 from ..logging_decorator import logging_and_warning_decorator, Logger
 from ..datatypes import (
@@ -11,6 +11,7 @@ from ..datatypes import (
     as_QField5,
     SField,
     nField,
+    ColorRGB,
     DimensionFlagInput,
     as_dimension_info,
     check_Sn,
@@ -20,9 +21,12 @@ from ..field import (
     getQ,
     generate_coordinate_grid,
     apply_linear_transform,
+    n_color_immerse
 )
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
+from .visual_mayavi.plot_n_plane import PlotnPlane
+from .visual_mayavi.plot_scene import PlotScene
 
 
 class QFieldObject:
@@ -87,7 +91,7 @@ class QFieldObject:
 
         logger.debug("Start to transform lattice grid into real space")
         grid_shape = np.shape(self._Q)[:3]
-        self._grid_origin = generate_coordinate_grid(grid_shape, grid_shape)
+        self._grid_origin, _, _ = generate_coordinate_grid(grid_shape, grid_shape)
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
@@ -197,11 +201,12 @@ class QFieldObject:
         from ..general import get_box_corners
 
         Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1,1,1])
-        corners = get_box_corners(Lx, Ly, Lz)
+        corners_index = get_box_corners(Lx, Ly, Lz)
         corners = apply_linear_transform(
-            corners, transform=self._grid_transform, offset=self._grid_offset
+            corners_index, transform=self._grid_transform, offset=self._grid_offset
         )
 
+        self._corners_index = corners_index
         self._corners = corners
 
         return corners
@@ -224,8 +229,9 @@ class QFieldObject:
                             )
         interpolator = Interpolator(
             interpolator,
-            transform=self._transform,
-            offset=self._offset
+            np.array([v[-1], u[-1], w[-1]]),
+            transform=self._grid_transform,
+            offset=self._grid_offset
         )
 
         self._interpolator = interpolator
@@ -235,7 +241,7 @@ class QFieldObject:
     def inperpolate(self, points: np.ndarray, is_index=False):
         if not hasattr(self, '_interpolator'):
             self.update_interpolator()
-        return self._interpolator(points, is_index=is_index)
+        return self._interpolator.interpolate(points, is_index=is_index)
 
 
     @logging_and_warning_decorator()
@@ -314,15 +320,8 @@ class QFieldObject:
         else:
             names_all = [line._name for line in lines_plot]
 
-        from .visual_mayavi.plot_scene import PlotScene
 
-        figure = PlotScene(
-            is_new=is_new,
-            size=fig_size,
-            bgcolor=bgcolor,
-            fgcolor=fgcolor,
-        )
-        self.figures.append(figure)
+        figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
 
         logger.debug("Start to draw disclination lines")
         for line, line_color, line_scalar, name in zip(
@@ -346,17 +345,91 @@ class QFieldObject:
             figure.add_object(line_visual, category="lines")
 
         if is_extent:
-            from .visual_mayavi.plot_extent import PlotExtent
-
-            if not hasattr(self, "_corners"):
-                self.update_corners()
-            extent = PlotExtent(
-                self._corners, radius=extent_radius, opacity=extent_opacity
-            )
+            extent = self.add_extent(extent_radius, extent_opacity)
             figure.add_object(extent, category="extent")
 
+    @logging_and_warning_decorator()
+    def visualize_n_in_Q(
+            self,
+            normal: Vect3D,
+            space: float,
+            size: float,
+            is_new: bool = True,
+            fig_size: Tuple[int, int] = (1920, 1360),
+            bgcolor: Vect3D = (1.0, 1.0, 1.0),
+            fgcolor: Vect3D = (0.0, 0.0, 0.0),
+            shape: Literal["circle", "rectangle"] = "rectangle",
+            origin: Vect3D = (0,0,0),
+            axis1: Optional[Vect3D] = None,
+            colors: Union[Callable[nField,ColorRGB], ColorRGB] = n_color_immerse,
+            opacity: Union[Callable[nField, np.ndarray], float] = 1,
+            length: float = 3.5,
+            radius: float = 0.5,
+            is_n_defect: bool = True,
+            defect_opacity: float = 1,
+            is_extent: bool = True,
+            extent_radius: float = 1,
+            extent_opacity: float = 1,
+            logger=None,
+    ):
+        
+        figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
+
+        self.update_interpolator()
+        self.update_corners()
+
+        nPlane = PlotnPlane(
+            normal,
+            space,
+            size,
+            self._interpolator,
+            shape=shape,
+            origin=origin,
+            axis1=axis1,
+            corners_limit=self._corners,
+            colors=colors,
+            opacity=opacity,
+            length=length,
+            radius=radius,
+            is_n_defect=is_n_defect,
+            defect_opacity=defect_opacity,
+            grid_offset=self._grid_offset,
+            grid_transform=self._grid_transform,
+            logger=logger
+        )
+
+        figure.add_object(nPlane, category="nPlane")
+
+        if is_extent:
+            extent = self.add_extent(extent_radius, extent_opacity)
+            figure.add_object(extent, category="extent")
+
+    def add_scene(self, is_new, fig_size, bgcolor, fgcolor):
+        figure = PlotScene(
+            is_new=is_new,
+            size=fig_size,
+            bgcolor=bgcolor,
+            fgcolor=fgcolor,
+        )
+        if is_new or (not is_new and len(self.figures)==0):
+            self.figures.append(figure)
+
+        return figure
+
+    def add_extent(self, extent_radius, extent_opacity):
+        from .visual_mayavi.plot_extent import PlotExtent
+
+        if not hasattr(self, "_corners"):
+            self.update_corners()
+        extent = PlotExtent(
+            self._corners, radius=extent_radius, opacity=extent_opacity
+        )
+
+        return extent
+
+
     def reset_figures(self):
-        self.figures = []
+        nPlane = PlotnPlane
 
 
     def __call__(self) -> np.ndarray:

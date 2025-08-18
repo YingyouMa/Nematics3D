@@ -71,6 +71,7 @@ class PlotScene:
         setattr(obj, "name", new_name)
 
         # Step 4: Add to storage
+        print(category, new_name)
         self.objects[category].append(obj)
 
     @logging_and_warning_decorator

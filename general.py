@@ -312,6 +312,126 @@ def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=
             opacity = np.ones(num_points)
     return opacity
 
+def get_square_each(size, num, dim=2):
+    """
+    Generate the coordinates of a square's boundary
+
+    This function constructs a square boundary based on the given size and the number
+    of discrete points along each edge. The output contains the coordinates of these
+    points in 2D or 3D space, depending on the specified dimension.
+
+    The boundary always starts with [0,0,0] as the bottom-left corner and goes clockwisely.
+
+    If in 3D, the x-coordinates of the boundary is 0
+
+    Parameters
+    ----------
+    size : float
+           The length of one side of the square.
+
+    num : int
+          The number of points along each edge of the square. Must be greater than or equal to 2.
+
+    dim : int, optional
+          The dimension of the space in which the square is represented.
+          - If `dim=2` (default), the square is generated in 2D space.
+          - If `dim=3`, the square is generated in 3D space, with the x-coordinate set to 0.
+
+    Returns
+    -------
+    result : numpy.ndarray, (4*num-4, dim)
+             Array containing the coordinates of the points forming the boundary of the square.
+             The points are ordered in a clockwise manner starting from origin.
+
+    Notes
+    -----
+    - The traversal starts at (0,0) and goes right, up, left, then down.
+    - In 3D mode, the square lies in the YZ-plane with x=0.
+
+    Examples
+    --------
+    >>> get_square_each(2, 3, dim=3)
+        array([[0., 0., 0.],
+               [0., 1., 0.],
+               [0., 2., 0.],
+               [0., 2., 1.],
+               [0., 2., 2.],
+               [0., 1., 2.],
+               [0., 0., 2.],
+               [0., 0., 1.]])
+    """
+
+    corners = np.array([[0,0],[size,0],[size,size],[0,size]])
+
+    edges = []
+    for i in range(4):
+        p0, p1 = corners[i], corners[(i+1)%4]
+        edge = np.linspace(p0, p1, num-1, endpoint=False)  # 不要重复顶点
+        edges.append(edge)
+    coords = np.vstack(edges)
+
+    if dim == 3:
+        coords = np.hstack([np.zeros((coords.shape[0],1)), coords])
+
+    return coords
+
+def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
+    """
+    Generate the coordinates of multiple squares' boundaries in a specified dimension.
+
+    This function constructs boundaries for multiple squares based on given sizes,
+    numbers of points along edges, and positions of the bottom-left corner.
+    The resulting coordinates are combined into a single array.
+
+    Parameters
+    ----------
+    size_list : list or numpy.ndarray
+                List or array of side lengths for the squares.
+                Each element specifies the side length of one square.
+
+    num_list : list or numpy.ndarray
+               List or array of the number of points along each edge of the squares.
+               Each element corresponds to the respective square's `size_list`.
+
+    origin_list : list or numpy.ndarray, (N, 3), optional
+                  List or array specifying the origin for each square, as the positions of bottom-left corner.
+                  N is the number of origins
+                  Default is [[0, 0, 0]].
+
+    dim : int, optional
+          The dimension of the space in which the squares are represented.
+          - If `dim=2` , the squares are generated in 2D space.
+          - If `dim=3` (default), the squares are generated in 3D space, with the x-coordinates set to 0.
+
+    Returns
+    -------
+    result : numpy.ndarray, (total_points, dim)
+             Array containing the coordinates of the points forming the boundaries of all the squares.
+             Points from each square are ordered as returned by get_square_each().
+
+    Raises
+    ------
+    ValueError
+        If the lengths of `size_list`, `num_list`, and `origin_list` do not match.
+    """
+
+    if isinstance(size_list, int):
+        size_list = np.array([size_list])
+    if isinstance(num_list, int):
+        num_list = np.array([num_list])
+
+    if not len(size_list) == len(num_list) == np.shape(origin_list)[0]:
+        raise ValueError("length of size_list and num_list must be the same")
+
+    results = []
+    for size, num, origin in zip(size_list, num_list, origin_list):
+        temp = get_square_each(size, num, dim) + origin
+        results.append(temp)
+    result = np.vstack(results)
+
+    return result
+
+
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
 
@@ -327,117 +447,217 @@ def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=
 #     return np.where(condition_large * condition_small)
 
 
-# def get_square_each(size, num, dim=2):
-#     """
-#     Generate the coordinates of a square's boundary
+def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
+    """
+    Generate the coordinates of multiple squares' boundaries in a specified dimension.
 
-#     This function constructs a square boundary based on the given size and the number
-#     of discrete points along each edge. The output contains the coordinates of these
-#     points in 2D or 3D space, depending on the specified dimension.
+    This function constructs boundaries for multiple squares based on given sizes,
+    numbers of points along edges, and positions of the bottom-left corner.
+    The resulting coordinates are combined into a single array.
 
-#     The boundary always starts with [0,0,0] as the bottom-left corner and goes clockwisely.
+    Parameters
+    ----------
+    size_list : list or numpy.ndarray
+                List or array of side lengths for the squares.
+                Each element specifies the side length of one square.
 
-#     If in 3D, the x-coordinates of the boundary is 0
+    num_list : list or numpy.ndarray
+               List or array of the number of points along each edge of the squares.
+               Each element corresponds to the respective square's `size_list`.
 
-#     Parameters
-#     ----------
-#     size : float
-#            The length of one side of the square.
+    origin_list : list or numpy.ndarray, (N, 3), optional
+                  List or array specifying the origin for each square, as the positions of bottom-left corner.
+                  N is the number of origins
+                  Default is [[0, 0, 0]].
 
-#     num : int
-#           The number of points along each edge of the square. Must be greater than or equal to 2.
+    dim : int, optional
+          The dimension of the space in which the squares are represented.
+          - If `dim=2` , the squares are generated in 2D space.
+          - If `dim=3` (default), the squares are generated in 3D space, with the x-coordinates set to 0.
 
-#     dim : int, optional
-#           The dimension of the space in which the square is represented.
-#           - If `dim=2` (default), the square is generated in 2D space.
-#           - If `dim=3`, the square is generated in 3D space, with the x-coordinate set to 0.
+    Returns
+    -------
+    result : numpy.ndarray, (total_points, dim)
+             Array containing the coordinates of the points forming the boundaries of all the squares.
+             Points from each square are ordered as returned by get_square_each().
 
-#     Returns
-#     -------
-#     result : numpy.ndarray, (4*num-4, dim)
-#              Array containing the coordinates of the points forming the boundary of the square.
-#              The points are ordered in a clockwise manner starting from origin.
+    Raises
+    ------
+    NameError
+        If the lengths of `size_list`, `num_list`, and `origin_list` do not match.
 
-#     Dependencies
-#     ------------
-#     - NumPy: 1.26.4
-#     """
+    Dependencies
+    ------------
+    - NumPy: 1.26.4
+    """
 
-#     edge1 = [np.linspace(0, size, num), np.zeros(num)]
-#     edge2 = [np.zeros(num) + size, np.linspace(0, size, num)]
-#     edge3 = [np.linspace(size, 0, num), np.zeros(num) + size]
-#     edge4 = [np.zeros(num), np.linspace(size, 0, num)]
+    if isinstance(size_list, int):
+        size_list = np.array([size_list])
+    if isinstance(num_list, int):
+        num_list = np.array([num_list])
 
-#     line1 = np.concatenate([edge1[0][:-1], edge2[0][:-1], edge3[0][:-1], edge4[0][:-1]])
-#     line2 = np.concatenate([edge1[1][:-1], edge2[1][:-1], edge3[1][:-1], edge4[1][:-1]])
-#     result = np.vstack([line1, line2]).T
+    if not len(size_list) == len(num_list) == np.shape(origin_list)[0]:
+        raise NameError("length of size_list and num_list must be the same")
 
-#     if dim == 3:
-#         result = np.hstack([np.array([np.zeros(len(line1))]).T, result])
+    result = np.empty((0, 3))
 
-#     return result
+    for i in range(len(size_list)):
+        temp = get_square_each(size_list[i], num_list[i], dim)
+        temp = temp + np.broadcast_to(origin_list[i], np.shape(temp))
+        result = np.vstack((result, temp))
+
+    return result
 
 
-# def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
-#     """
-#     Generate the coordinates of multiple squares' boundaries in a specified dimension.
+def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):
+    """
+    Select points from a 3D grid that lie inside a rectangular box defined by four corner points.
 
-#     This function constructs boundaries for multiple squares based on given sizes,
-#     numbers of points along edges, and positions of the bottom-left corner.
-#     The resulting coordinates are combined into a single array.
+    Parameters
+    ----------
+    grid : np.ndarray of shape (N, 3)
+        Input set of 3D points.
+        
+    corners_limit : np.ndarray of shape (>=4, 3), optional
+        Defines the bounding box. The first row is taken as the origin corner, and
+        rows [1], [2], [3] define the three edges emanating from that corner.
+        If None, the function simply returns the input grid.
 
-#     Parameters
-#     ----------
-#     size_list : list or numpy.ndarray
-#                 List or array of side lengths for the squares.
-#                 Each element specifies the side length of one square.
+    Returns
+    -------
+    np.ndarray of shape (M, 3)
+        Subset of input grid points that lie within the box (M ≤ N).
 
-#     num_list : list or numpy.ndarray
-#                List or array of the number of points along each edge of the squares.
-#                Each element corresponds to the respective square's `size_list`.
+    Notes
+    -----
+    - The check is performed in the coordinate system defined by the box edges.
+    - A small tolerance (1e-9) is used to include points very close to the box faces.
+    - If no points are found inside, a warning is issued (if logger is provided).
+    """
+    if corners_limit is None:
+        return grid
+    elif np.shape(corners_limit)[1] != 3 or np.shape(corners_limit)[0] < 4:
+        raise ValueError(f"The shape of corners must be (>=4, 3). Got {np.shape(corners_limit)} instead.")
 
-#     origin_list : list or numpy.ndarray, (N, 3), optional
-#                   List or array specifying the origin for each square, as the positions of bottom-left corner.
-#                   N is the number of origins
-#                   Default is [[0, 0, 0]].
+    axes = [corners_limit[i] - corners_limit[0] for i in range(1, 4)]
+    lengths = [np.linalg.norm(axis) for axis in axes]
+    unit_axes = [axis / L for axis, L in zip(axes, lengths)]
 
-#     dim : int, optional
-#           The dimension of the space in which the squares are represented.
-#           - If `dim=2` , the squares are generated in 2D space.
-#           - If `dim=3` (default), the squares are generated in 3D space, with the x-coordinates set to 0.
+    rel = grid - corners_limit[0]
+    coords = np.stack([rel @ u for u in unit_axes], axis=1)
+    
+    tol = 1e-9
+    mask = np.all((coords >= -tol) & (coords <= np.array(lengths) + tol), axis=1)
 
-#     Returns
-#     -------
-#     result : numpy.ndarray, (total_points, dim)
-#              Array containing the coordinates of the points forming the boundaries of all the squares.
-#              Points from each square are ordered as returned by get_square_each().
+    grid = grid[mask]
+    if len(grid) == 0:
+        msg = "No grid found in this box with corners_limit:\n"
+        msg += f"{corners_limit}"
+        logger.warning(msg)
+        
+    return grid
 
-#     Raises
-#     ------
-#     NameError
-#         If the lengths of `size_list`, `num_list`, and `origin_list` do not match.
 
-#     Dependencies
-#     ------------
-#     - NumPy: 1.26.4
-#     """
+def split_points(points1: np.ndarray, points2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Split points in `points1` into two groups based on whether each row also appears in `points2`.
 
-#     if isinstance(size_list, int):
-#         size_list = np.array([size_list])
-#     if isinstance(num_list, int):
-#         num_list = np.array([num_list])
+    Description
+    -----------
+    Treat each row as one point in D-dimensional space (D can be any positive integer).
+    The function returns:
+      - `only_in_points1`: rows in `points1` that do NOT appear in `points2`
+      - `also_in_points2`: rows in `points1` that also appear in `points2`
+    Row equality uses exact value comparison on all columns.
 
-#     if not len(size_list) == len(num_list) == np.shape(origin_list)[0]:
-#         raise NameError("length of size_list and num_list must be the same")
+    Parameters
+    ----------
+    points1 : np.ndarray, shape (N, D) or (0, D)
+        The primary set of points to be split by membership.
+    points2 : np.ndarray, shape (M, D) or (0, D)
+        The reference set of points used for membership testing.
 
-#     result = np.empty((0, 3))
+    Returns
+    -------
+    only_in_points1 : np.ndarray, shape (K, D)
+        Points in `points1` but not in `points2`.
+    also_in_points2 : np.ndarray, shape (L, D)
+        Points in `points1` that also appear in `points2`.
+    Note that K + L may be <= N if `points1` contains duplicate rows (duplicates are preserved in output as present in set ops result).
 
-#     for i in range(len(size_list)):
-#         temp = get_square_each(size_list[i], num_list[i], dim)
-#         temp = temp + np.broadcast_to(origin_list[i], np.shape(temp))
-#         result = np.vstack((result, temp))
+    Raises
+    ------
+    ValueError
+        If inputs cannot be reshaped to 2D with the same number of columns, or dtypes are incompatible.
 
-#     return result
+    Notes
+    -----
+    - Works for arbitrary D (not just 3).
+    - Exact equality is used. For floating-point data, consider pre-rounding if your points come from
+      numerical computations with tiny differences (e.g., `np.round(points, decimals=9)`).
+    - This implementation uses a per-row “byte view” (np.void) to enable row-wise set operations efficiently.
+    - Empty arrays are fully supported as long as they have shape (0, D).
+
+    Examples
+    --------
+    >>> p1 = np.array([[0, 0], [1, 1], [2, 2]], dtype=int)
+    >>> p2 = np.array([[1, 1], [3, 3]], dtype=int)
+    >>> only, both = split_points_by_membership(p1, p2)
+    >>> only
+    array([[0, 0],
+           [2, 2]])
+    >>> both
+    array([[1, 1]])
+    """
+    # --- Normalize inputs to 2D arrays ---
+    a = np.asarray(points1)
+    b = np.asarray(points2)
+
+    if a.ndim == 1:
+        if a.size == 0:
+            raise ValueError("points1 is 1D empty; use shape (0, D) for empty point sets.")
+        a = a.reshape(-1, 1)
+    if b.ndim == 1:
+        if b.size == 0:
+            # allow empty, but must know D from points1
+            if a.ndim != 2:
+                raise ValueError("Cannot infer dimensionality for empty points2.")
+            b = np.empty((0, a.shape[1]), dtype=a.dtype)
+        else:
+            b = b.reshape(-1, 1)
+
+    if a.ndim != 2 or b.ndim != 2:
+        raise ValueError("Both inputs must be 2D arrays of shape (N, D) and (M, D).")
+
+    if a.shape[1] != b.shape[1]:
+        raise ValueError(f"Dimensionality mismatch: points1 has D={a.shape[1]}, points2 has D={b.shape[1]}.")
+
+    # If dtypes differ, try a common dtype cast (e.g., int vs. int64). This keeps behavior predictable.
+    common_dtype = np.result_type(a, b)
+    a = a.astype(common_dtype, copy=False)
+    b = b.astype(common_dtype, copy=False)
+
+    # Ensure C-contiguous before viewing rows as bytes
+    a_c = np.ascontiguousarray(a)
+    b_c = np.ascontiguousarray(b)
+
+    # --- Row-wise view via np.void (each row becomes one "scalar" for set ops) ---
+    rowsize = a_c.dtype.itemsize * a_c.shape[1]
+    a_view = a_c.view((np.void, rowsize)).reshape(-1)
+    b_view = b_c.view((np.void, rowsize)).reshape(-1)
+
+    # --- Set operations on rows ---
+    # rows in a but not in b
+    only_view = np.setdiff1d(a_view, b_view, assume_unique=False)
+    # rows common to both a and b (membership of a against b)
+    both_view = np.intersect1d(a_view, b_view, assume_unique=False)
+
+    # Map back to 2D arrays
+    only_in_points1 = only_view.view(common_dtype).reshape(-1, a_c.shape[1])
+    also_in_points2 = both_view.view(common_dtype).reshape(-1, a_c.shape[1])
+
+    return only_in_points1, also_in_points2
+
 
 
 # def get_plane(points):

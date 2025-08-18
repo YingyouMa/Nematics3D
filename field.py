@@ -27,7 +27,7 @@ from .logging_decorator import logging_and_warning_decorator
 
 
 @logging_and_warning_decorator()
-def diagonalizeQ(qtensor: Union[QField5, QField9], logger=None) -> Tuple[SField, nField]:
+def Q_diagonalize(qtensor: Union[QField5, QField9], logger=None) -> Tuple[SField, nField]:
     """
     Analytically diagonalize a Q-tensor field to obtain the scalar order parameter (S) 
     and the director field (n).
@@ -246,8 +246,18 @@ def generate_coordinate_grid(
         *axes, indexing="ij"
     )  # List of N arrays, each shape (*shape_target)
     grid = np.stack(mesh, axis=-1)  # Shape: (*shape_target, N)
+    
+    axes_int = [np.arange(t) for t in shape_target]
+    mesh_int = np.meshgrid(*axes_int, indexing="ij")
+    grid_int = np.stack(mesh_int, axis=-1)
+    grid_int = np.asarray(grid_int)
+    
+    steps = np.array([
+        (s - 1) / (t - 1) if t > 1 else 0.0
+        for s, t in zip(shape_source, shape_target)
+    ], dtype=float)
 
-    return grid
+    return grid, grid_int, steps
 
 
 def apply_linear_transform(
@@ -280,6 +290,7 @@ def apply_linear_transform(
     ValueError
         If transform or offset shapes are invalid.
     """
+    points = np.asarray(points)
     ndim = points.shape[-1]
 
     if transform is not None:
@@ -613,7 +624,43 @@ def n_color_immerse(n: nField) -> List[Tuple]:
 
     return colors
 
+def n_visualize(points, n, colors=(1,1,1), opacity=1, length=3.5, radius=0.5, mode='cylinder'):
+    
+    from mayavi import mlab
+    from tvtk.api import tvtk
+    
+    pts = np.asarray(points)
+    pts = np.reshape(pts, (-1,3))
+    vec = np.asarray(n)
+    vec = np.reshape(vec, (-1,3))
+    num_points = np.shape(pts)[0]
 
+    from .general import calc_colors, calc_opacity
+    colors = np.asarray(calc_colors(colors, num_points))
+    opacity = calc_opacity(opacity, num_points)[:, None]
+    colors = np.hstack([colors, opacity]) * 255
+    colors = colors.astype(np.uint8)
+    
+    # PolyData
+    poly = tvtk.PolyData(points=pts)
+    poly.point_data.vectors = vec
+    poly.point_data.vectors.name = 'vectors'
+    poly.point_data.scalars = colors
+    poly.point_data.scalars.name = 'rgba'
+
+    # 管线
+    src = mlab.pipeline.add_dataset(poly)
+    g = mlab.pipeline.glyph(src, mode=mode, scale_factor=1)
+    g.glyph.scale_mode = 'data_scaling_off'  # 固定缩放，不随标量变化
+
+    # 直接颜色模式
+    g.actor.mapper.scalar_visibility = True
+    g.actor.mapper.color_mode = 'direct_scalars'
+    
+    g.glyph.glyph_source.glyph_source.height = length
+    g.glyph.glyph_source.glyph_source.radius = radius
+
+    return g
 
 # @time_record
 # def interpolateQ(n, result_points, S=0, is_boundary_periodic=0):

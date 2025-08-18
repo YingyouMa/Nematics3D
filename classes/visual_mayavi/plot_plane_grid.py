@@ -7,9 +7,8 @@ from Nematics3D.datatypes import (
     as_Vect3D,
     as_QField5
 )
-from Nematics3D.field import (
-    generate_coordinate_grid
-)
+from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
+from Nematics3D.general import select_grid_in_box
 
 class PlotPlaneGrid():
 
@@ -23,6 +22,8 @@ class PlotPlaneGrid():
                  origin: Vect3D = (0,0,0),
                  axis1: Optional[Vect3D] = None,
                  corners_limit: Optional[np.ndarray] = None,
+                 grid_offset: Vect3D = np.array([0, 0, 0]),
+                 grid_transform: np.ndarray = np.eye(3),
                  logger=None,
                  ):
         
@@ -35,6 +36,8 @@ class PlotPlaneGrid():
             origin=origin,
             axis1=axis1,
             corners_limit=corners_limit,
+            grid_offset=grid_offset,
+            grid_transform=grid_transform,
             logger=logger
         )
 
@@ -47,6 +50,8 @@ class PlotPlaneGrid():
                  origin: Vect3D = (0,0,0),
                  axis1: Optional[Vect3D] = None,
                  corners_limit: Optional[np.ndarray] = None,
+                 grid_offset: Vect3D = np.array([0, 0, 0]),
+                 grid_transform: np.ndarray = np.eye(3),
                  logger=None,                    
                  ):
         
@@ -55,6 +60,9 @@ class PlotPlaneGrid():
         
         num1 = int(size/space1)
         num2 = int(size/space2)
+        
+        # space1 = (size-1)/(num1-1)
+        # space1 = (size-1)/(num2-1)
         
         origin = as_Vect3D(origin)
 
@@ -83,52 +91,31 @@ class PlotPlaneGrid():
         source_shape = (size, size)
         target_shape = (num1, num2)
 
-        grid = generate_coordinate_grid(source_shape, target_shape)
+        grid, grid_int, spaces = generate_coordinate_grid(source_shape, target_shape)
+        grid_int = np.reshape(grid_int, (-1,2))
         grid = np.reshape(grid, (-1,2))
         grid = np.einsum('ai, ib -> ab', grid, axis_both)
 
-        grid = grid - np.average(grid, axis=0) + origin
-        grid_select = self.select_grid_in_box(grid, corners_limit=corners_limit, logger=logger)
+        offset = - np.average(grid, axis=0) + origin
+        grid = grid + offset
+        grid = apply_linear_transform(
+            grid, transform=grid_transform, offset=grid_offset
+        )
+        
+        grid_select = select_grid_in_box(grid, corners_limit=corners_limit, logger=logger)
         
         self._grid = grid_select
         self._axis1 = axis1
         self._normal = normal
         self._origin = origin
         self._shape = shape
-        self._space1 = space1
-        self._space2 = space2
-        self._grid_all = grid
-
-    @staticmethod
-    def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):
-        if corners_limit is None:
-            return grid
-        else:
-            box_axis1 = corners_limit[1] - corners_limit[0]
-            box_axis2 = corners_limit[2] - corners_limit[0]
-            box_axis3 = corners_limit[3] - corners_limit[0]
-            
-        L1, L2, L3 = np.linalg.norm(box_axis1), np.linalg.norm(box_axis2), np.linalg.norm(box_axis3)
-        u1, u2, u3 = box_axis1 / L1, box_axis2 / L2, box_axis3 / L3
-
-        rel = grid - corners_limit[0]
-        x = rel @ u1
-        y = rel @ u2
-        z = rel @ u3
+        self._space1 = spaces[0]
+        self._space2 = spaces[1]
+        self._grid_all = np.reshape(grid, (*target_shape, 3))
+        self._offset = offset
+        self._grid_int = grid_int
+        self._grid_transform = grid_transform
+        self._grid_offset = grid_offset
         
-        tol = 1e-9
-        mask = (
-            (x >= -tol) & (x <= L1 + tol) &
-            (y >= -tol) & (y <= L2 + tol) &
-            (z >= -tol) & (z <= L3 + tol)
-        )
 
-        grid = grid[mask]
-        if len(grid) == 0:
-            msg = "No grid found in this box with corners_limit:\n"
-            msg += f"{corners_limit}"
-            logger.warning(msg)
-            print(grid)
-            
-        return grid
     
