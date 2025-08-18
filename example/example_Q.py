@@ -34,12 +34,15 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 # # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True)
 # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True, log_mode='none')
 
-trans = 7.5
+trans = 0
 Q.update_defects()
 Q.update_lines_classify()
-Q.update_lines_smoothen(min_line_length=50, window_length=40)
-Q.visualize_disclination_lines(is_wrap=True, lines_color_input_all=(0,0,0), extent_radius=0.05, min_line_length=50, radius=0.2)
-Q.visualize_n_in_Q((1,1,1), 1.5, 100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
+Q.update_lines_smoothen(min_line_length=30, window_length=21)
+Q.visualize_disclination_lines(is_wrap=True, lines_color_input_all=(0,0,0), extent_radius=0.05, min_line_length=30, radius=0.2)
+# Q.visualize_n_in_Q((1,1,1), 1.5, 100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
+Q.visualize_n_in_Q((1,0,0), 1.5, index_max, axis1=(0,1,0), origin=(0,index_max/2,index_max/2), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
+Q.visualize_n_in_Q((0,1,0), 1.5, index_max, axis1=(0,0,1), origin=(index_max/2,0,index_max/2), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
+Q.visualize_n_in_Q((0,0,1), 1.5, index_max, axis1=(1,0,0), origin=(index_max/2,index_max/2,0), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
 
 
 # Q.update_defects()

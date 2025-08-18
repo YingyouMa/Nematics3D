@@ -131,7 +131,7 @@ class PlotnPlane():
         self.items.append(output[0])
         self.n.append(output[1])
         
-        if is_n_defect:
+        if is_n_defect and len(defect_vicinity) > 0:
             output = self.n_visualize_each(defect_vicinity, self.defect_opacity_func, length, radius)
             self.items.append(output[0])
             self.n.append(output[1])
@@ -203,7 +203,8 @@ class PlotnPlane():
     @length.setter
     def length(self, value: float):
         self.items[0].glyph.glyph_source.glyph_source.height = float(value)
-        self.items[1].glyph.glyph_source.glyph_source.height = float(value)
+        if len(self.items) > 1:
+            self.items[1].glyph.glyph_source.glyph_source.height = float(value)
         
     @property
     def radius(self):
@@ -212,7 +213,8 @@ class PlotnPlane():
     @radius.setter
     def radius(self, value: float):
         self.items[0].glyph.glyph_source.glyph_source.radius = float(value)
-        self.items[1].glyph.glyph_source.glyph_source.radius = float(value)
+        if len(self.items) > 1:
+            self.items[1].glyph.glyph_source.glyph_source.radius = float(value)
         
     @property
     def opacity_bulk(self):
@@ -234,31 +236,41 @@ class PlotnPlane():
     @property
     def opacity_defect(self):
         if self.is_n_defect:
-            rgba = self.items[1].parent.parent.data.point_data.scalars
-            return np.array(rgba)[:,3] / 255
+            if len(self.items) > 1:
+                rgba = self.items[1].parent.parent.data.point_data.scalars
+                return np.array(rgba)[:,3] / 255
+            else:
+                  raise ValueError("There are no directors around defects")
         else:
-            raise ValueError("There are no isolated directors around defects")
+            raise ValueError("Directors around defects are not plotted seperately")
     
     @opacity_defect.setter
     def opacity_defect(self, data):
         if self.is_n_defect:
-            self.opacity_func = self.opacity_check(data)
-            rgba = self.items[1].parent.parent.data.point_data.scalars
-            num_points = len(rgba)
-            opacity_out = self.defect_opacity_func(self.n[1]) * 255
-            rgba = np.array(rgba)
-            rgba[:,3] = opacity_out
-            for i in range(num_points):
-                self.items[1].parent.parent.data.point_data.scalars[i] = rgba[i]
-            self.items[1].parent.parent.data.point_data.scalars.modified()
+            if len(self.items) > 1:
+                self.opacity_func = self.opacity_check(data)
+                rgba = self.items[1].parent.parent.data.point_data.scalars
+                num_points = len(rgba)
+                opacity_out = self.defect_opacity_func(self.n[1]) * 255
+                rgba = np.array(rgba)
+                rgba[:,3] = opacity_out
+                for i in range(num_points):
+                    self.items[1].parent.parent.data.point_data.scalars[i] = rgba[i]
+                self.items[1].parent.parent.data.point_data.scalars.modified()
+            else:
+                raise ValueError("There are no directors around defects")
         else:
             raise ValueError("There are no isolated directors around defects")
         
     @property
     def colors(self):
         rgba0 = self.items[0].parent.parent.data.point_data.scalars
-        rgba1 = self.items[1].parent.parent.data.point_data.scalars
-        return [ np.array(rgba0)[:,:3] / 255, np.array(rgba1)[:,:3]]
+        result = []
+        result.append(np.array(rgba0)[:,:3] / 255)
+        if len(self.items) > 1:
+            rgba1 = self.items[1].parent.parent.data.point_data.scalars
+            result.append(np.array(rgba1)[:,:3] / 255)
+        return result
     
     @colors.setter
     def colors(self, data):
@@ -276,7 +288,7 @@ class PlotnPlane():
             
         set_color(0)
         
-        if self.is_n_defect:
+        if self.is_n_defect and len(self.items>0):
             set_color(1)
         
     @logging_and_warning_decorator    

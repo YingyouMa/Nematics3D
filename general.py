@@ -508,7 +508,7 @@ def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
 
     return result
 
-
+@logging_and_warning_decorator()
 def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):
     """
     Select points from a 3D grid that lie inside a rectangular box defined by four corner points.
@@ -534,7 +534,10 @@ def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = N
     - A small tolerance (1e-9) is used to include points very close to the box faces.
     - If no points are found inside, a warning is issued (if logger is provided).
     """
-    if corners_limit is None:
+    
+    grid = np.asarray(grid)
+    
+    if corners_limit is None or len(grid) == 0:
         return grid
     elif np.shape(corners_limit)[1] != 3 or np.shape(corners_limit)[0] < 4:
         raise ValueError(f"The shape of corners must be (>=4, 3). Got {np.shape(corners_limit)} instead.")
