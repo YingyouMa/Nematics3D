@@ -224,7 +224,7 @@ class PlotnPlane():
         self.opacity_func = self.opacity_check(data)
         rgba = self.items[0].parent.parent.data.point_data.scalars
         num_points = len(rgba)
-        opacity_out = self.opacity_func(self.n_bulk) * 255
+        opacity_out = self.opacity_func(self.n[0]) * 255
         rgba = np.array(rgba)
         rgba[:,3] = opacity_out
         for i in range(num_points):
@@ -245,7 +245,7 @@ class PlotnPlane():
             self.opacity_func = self.opacity_check(data)
             rgba = self.items[1].parent.parent.data.point_data.scalars
             num_points = len(rgba)
-            opacity_out = self.defect_opacity_func(self.n_defect) * 255
+            opacity_out = self.defect_opacity_func(self.n[1]) * 255
             rgba = np.array(rgba)
             rgba[:,3] = opacity_out
             for i in range(num_points):
@@ -261,7 +261,7 @@ class PlotnPlane():
         return [ np.array(rgba0)[:,:3] / 255, np.array(rgba1)[:,:3]]
     
     @colors.setter
-    def color(self, data):
+    def colors(self, data):
         self.colors_func = self.colors_check(data)
         
         def set_color(index):

@@ -413,6 +413,8 @@ class QFieldObject:
         )
         if is_new or (not is_new and len(self.figures)==0):
             self.figures.append(figure)
+        else:
+            figure = self.figures[-1]
 
         return figure
 
@@ -429,7 +431,7 @@ class QFieldObject:
 
 
     def reset_figures(self):
-        nPlane = PlotnPlane
+        self.figures = []
 
 
     def __call__(self) -> np.ndarray:

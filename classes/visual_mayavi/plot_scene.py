@@ -1,8 +1,10 @@
+import numpy as np
 from mayavi import mlab
 from typing import Any
 from collections import defaultdict
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_ColorRGB
+from .scene_wrapper import SceneWrapper
 
 
 class PlotScene:
@@ -17,6 +19,7 @@ class PlotScene:
         size=(1920, 1360),
         bgcolor=(1, 1, 1),
         fgcolor=(0, 0, 0),
+        name='None'
     ):
         """
         Initialize the scene with a new Mayavi figure.
@@ -31,12 +34,15 @@ class PlotScene:
         bgcolor = as_ColorRGB(bgcolor)
         fgcolor = as_ColorRGB(fgcolor)
         if is_new:
-            self.fig = mlab.figure(size=size, bgcolor=bgcolor, fgcolor=fgcolor)
+            self._fig = mlab.figure(size=size, bgcolor=bgcolor, fgcolor=fgcolor)
         else:
-            self.fig = mlab.gcf()
+            self._fig = mlab.gcf()
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
+        
+        self.name = name
+        self.scene = SceneWrapper(self._fig.scene)
 
     @logging_and_warning_decorator
     def add_object(self, obj: Any, category: str = "default", logger=None) -> None:
@@ -71,7 +77,6 @@ class PlotScene:
         setattr(obj, "name", new_name)
 
         # Step 4: Add to storage
-        print(category, new_name)
         self.objects[category].append(obj)
 
     @logging_and_warning_decorator
@@ -134,7 +139,7 @@ class PlotScene:
             self.hide_category(category)
 
     def save(self, address: str):
-        mlab.savefig(address, figure=self.fig)
+        mlab.savefig(address, figure=self._fig)
 
     @logging_and_warning_decorator()
     def log_info(self, mode: str = "all", logger=None) -> None:
@@ -151,9 +156,9 @@ class PlotScene:
 
         def log_scene_params():
             lines.append("=== Scene Parameters ===")
-            lines.append(f"Size: {self.fig.scene.get_size()}")
-            lines.append(f"Background color: {self.fig.scene.background}")
-            lines.append(f"Foreground color: {self.fig.scene.foreground}")
+            lines.append(f"Size: {self._fig.scene.get_size()}")
+            lines.append(f"Background color: {self._fig.scene.background}")
+            lines.append(f"Foreground color: {self._fig.scene.foreground}")
             lines.append("========================")
 
         if mode == "scene":
@@ -178,3 +183,4 @@ class PlotScene:
             return
 
         logger.info("\n".join(lines))
+        
