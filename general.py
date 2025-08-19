@@ -245,7 +245,7 @@ def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
     corners : list of tuple of float
         List of 8 corner coordinates in (x, y, z) form.
         Order is:
-            (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (0, 0, Lz), 
+            (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (0, 0, Lz),
             (Lx, Ly, 0), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
     """
     corners = np.array(
@@ -263,54 +263,6 @@ def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
     )
     return corners
 
-@logging_and_warning_decorator()
-def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
-    if colors is None:
-        colors = np.ones((num_points, 3))
-    elif callable(colors):
-        colors = colors(data)
-    elif isinstance(colors, (list, tuple, np.ndarray)):
-        colors = np.asarray(colors)
-        if np.size(colors) == 3:
-            colors = as_ColorRGB(colors)
-            colors = [colors for i in range(num_points)]
-        else:
-            if np.shape(colors) != (num_points, 3):
-                msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
-                msg += "In the following, set directors to be white."
-                logger.warning(msg)
-                colors = [(1,1,1) for i in range(num_points)]
-            else:
-                colors = [(color) for color in colors]
-    return colors
-            
-@logging_and_warning_decorator()
-def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
-    if opacity is None:
-        opacity = np.ones(num_points)
-    elif isinstance(opacity, (int, float)):
-        if opacity>1 or opacity<0:
-            msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-        else:
-            opacity = np.zeros(num_points) + opacity
-    elif callable(opacity):
-        opacity = opacity(data)
-    else:
-        opacity = np.asarray(opacity)
-        if np.max(opacity)>1 or np.min(opacity)<0:
-            msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-        elif len(opacity) != num_points:
-            msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-    return opacity
 
 def get_square_each(size, num, dim=2):
     """
@@ -361,19 +313,20 @@ def get_square_each(size, num, dim=2):
                [0., 0., 1.]])
     """
 
-    corners = np.array([[0,0],[size,0],[size,size],[0,size]])
+    corners = np.array([[0, 0], [size, 0], [size, size], [0, size]])
 
     edges = []
     for i in range(4):
-        p0, p1 = corners[i], corners[(i+1)%4]
-        edge = np.linspace(p0, p1, num-1, endpoint=False)  # 不要重复顶点
+        p0, p1 = corners[i], corners[(i + 1) % 4]
+        edge = np.linspace(p0, p1, num - 1, endpoint=False)  # 不要重复顶点
         edges.append(edge)
     coords = np.vstack(edges)
 
     if dim == 3:
-        coords = np.hstack([np.zeros((coords.shape[0],1)), coords])
+        coords = np.hstack([np.zeros((coords.shape[0], 1)), coords])
 
     return coords
+
 
 def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
     """
@@ -432,84 +385,10 @@ def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
     return result
 
 
-# def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
-#     from scipy.spatial.distance import cdist
-
-#     if np.array(x).ndim == 1:
-#         x = [x]
-
-#     epsilon = np.nextafter(0, 1)
-#     dist = cdist(x, reservoir)
-
-#     condition_small = dist >= dist_small + strict[0] * epsilon
-#     condition_large = dist <= dist_large - strict[0] * epsilon
-
-#     return np.where(condition_large * condition_small)
-
-
-def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
-    """
-    Generate the coordinates of multiple squares' boundaries in a specified dimension.
-
-    This function constructs boundaries for multiple squares based on given sizes,
-    numbers of points along edges, and positions of the bottom-left corner.
-    The resulting coordinates are combined into a single array.
-
-    Parameters
-    ----------
-    size_list : list or numpy.ndarray
-                List or array of side lengths for the squares.
-                Each element specifies the side length of one square.
-
-    num_list : list or numpy.ndarray
-               List or array of the number of points along each edge of the squares.
-               Each element corresponds to the respective square's `size_list`.
-
-    origin_list : list or numpy.ndarray, (N, 3), optional
-                  List or array specifying the origin for each square, as the positions of bottom-left corner.
-                  N is the number of origins
-                  Default is [[0, 0, 0]].
-
-    dim : int, optional
-          The dimension of the space in which the squares are represented.
-          - If `dim=2` , the squares are generated in 2D space.
-          - If `dim=3` (default), the squares are generated in 3D space, with the x-coordinates set to 0.
-
-    Returns
-    -------
-    result : numpy.ndarray, (total_points, dim)
-             Array containing the coordinates of the points forming the boundaries of all the squares.
-             Points from each square are ordered as returned by get_square_each().
-
-    Raises
-    ------
-    NameError
-        If the lengths of `size_list`, `num_list`, and `origin_list` do not match.
-
-    Dependencies
-    ------------
-    - NumPy: 1.26.4
-    """
-
-    if isinstance(size_list, int):
-        size_list = np.array([size_list])
-    if isinstance(num_list, int):
-        num_list = np.array([num_list])
-
-    if not len(size_list) == len(num_list) == np.shape(origin_list)[0]:
-        raise NameError("length of size_list and num_list must be the same")
-
-    result = np.empty((0, 3))
-
-    for i in range(len(size_list)):
-        temp = get_square_each(size_list[i], num_list[i], dim)
-        temp = temp + np.broadcast_to(origin_list[i], np.shape(temp))
-        result = np.vstack((result, temp))
-
-    return result
-
 @logging_and_warning_decorator()
-def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None):
+def select_grid_in_box(
+    grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None
+):
     """
     Select points from a 3D grid that lie inside a rectangular box defined by four corner points.
 
@@ -517,7 +396,7 @@ def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = N
     ----------
     grid : np.ndarray of shape (N, 3)
         Input set of 3D points.
-        
+
     corners_limit : np.ndarray of shape (>=4, 3), optional
         Defines the bounding box. The first row is taken as the origin corner, and
         rows [1], [2], [3] define the three edges emanating from that corner.
@@ -534,13 +413,15 @@ def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = N
     - A small tolerance (1e-9) is used to include points very close to the box faces.
     - If no points are found inside, a warning is issued (if logger is provided).
     """
-    
+
     grid = np.asarray(grid)
-    
+
     if corners_limit is None or len(grid) == 0:
         return grid
     elif np.shape(corners_limit)[1] != 3 or np.shape(corners_limit)[0] < 4:
-        raise ValueError(f"The shape of corners must be (>=4, 3). Got {np.shape(corners_limit)} instead.")
+        raise ValueError(
+            f"The shape of corners must be (>=4, 3). Got {np.shape(corners_limit)} instead."
+        )
 
     axes = [corners_limit[i] - corners_limit[0] for i in range(1, 4)]
     lengths = [np.linalg.norm(axis) for axis in axes]
@@ -548,7 +429,7 @@ def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = N
 
     rel = grid - corners_limit[0]
     coords = np.stack([rel @ u for u in unit_axes], axis=1)
-    
+
     tol = 1e-9
     mask = np.all((coords >= -tol) & (coords <= np.array(lengths) + tol), axis=1)
 
@@ -557,11 +438,13 @@ def select_grid_in_box(grid: np.ndarray, corners_limit: Optional[np.ndarray] = N
         msg = "No grid found in this box with corners_limit:\n"
         msg += f"{corners_limit}"
         logger.warning(msg)
-        
+
     return grid
 
 
-def split_points(points1: np.ndarray, points2: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def split_points(
+    points1: np.ndarray, points2: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Split points in `points1` into two groups based on whether each row also appears in `points2`.
 
@@ -618,7 +501,9 @@ def split_points(points1: np.ndarray, points2: np.ndarray) -> Tuple[np.ndarray, 
 
     if a.ndim == 1:
         if a.size == 0:
-            raise ValueError("points1 is 1D empty; use shape (0, D) for empty point sets.")
+            raise ValueError(
+                "points1 is 1D empty; use shape (0, D) for empty point sets."
+            )
         a = a.reshape(-1, 1)
     if b.ndim == 1:
         if b.size == 0:
@@ -633,7 +518,9 @@ def split_points(points1: np.ndarray, points2: np.ndarray) -> Tuple[np.ndarray, 
         raise ValueError("Both inputs must be 2D arrays of shape (N, D) and (M, D).")
 
     if a.shape[1] != b.shape[1]:
-        raise ValueError(f"Dimensionality mismatch: points1 has D={a.shape[1]}, points2 has D={b.shape[1]}.")
+        raise ValueError(
+            f"Dimensionality mismatch: points1 has D={a.shape[1]}, points2 has D={b.shape[1]}."
+        )
 
     # If dtypes differ, try a common dtype cast (e.g., int vs. int64). This keeps behavior predictable.
     common_dtype = np.result_type(a, b)
@@ -661,6 +548,71 @@ def split_points(points1: np.ndarray, points2: np.ndarray) -> Tuple[np.ndarray, 
 
     return only_in_points1, also_in_points2
 
+
+
+# def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
+#     from scipy.spatial.distance import cdist
+
+#     if np.array(x).ndim == 1:
+#         x = [x]
+
+#     epsilon = np.nextafter(0, 1)
+#     dist = cdist(x, reservoir)
+
+#     condition_small = dist >= dist_small + strict[0] * epsilon
+#     condition_large = dist <= dist_large - strict[0] * epsilon
+
+#     return np.where(condition_large * condition_small)
+
+# @logging_and_warning_decorator()
+# def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
+#     if colors is None:
+#         colors = np.ones((num_points, 3))
+#     elif callable(colors):
+#         colors = colors(data)
+#     elif isinstance(colors, (list, tuple, np.ndarray)):
+#         colors = np.asarray(colors)
+#         if np.size(colors) == 3:
+#             colors = as_ColorRGB(colors)
+#             colors = [colors for i in range(num_points)]
+#         else:
+#             if np.shape(colors) != (num_points, 3):
+#                 msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
+#                 msg += "In the following, set directors to be white."
+#                 logger.warning(msg)
+#                 colors = [(1, 1, 1) for i in range(num_points)]
+#             else:
+#                 colors = [(color) for color in colors]
+#     return colors
+
+
+# @logging_and_warning_decorator()
+# def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
+#     if opacity is None:
+#         opacity = np.ones(num_points)
+#     elif isinstance(opacity, (int, float)):
+#         if opacity > 1 or opacity < 0:
+#             msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#         else:
+#             opacity = np.zeros(num_points) + opacity
+#     elif callable(opacity):
+#         opacity = opacity(data)
+#     else:
+#         opacity = np.asarray(opacity)
+#         if np.max(opacity) > 1 or np.min(opacity) < 0:
+#             msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#         elif len(opacity) != num_points:
+#             msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#     return opacity
 
 
 # def get_plane(points):

@@ -27,6 +27,7 @@ Example usage:
 
 from typing import Union, Sequence, Literal, Tuple
 import numpy as np
+from number import numbers
 
 # __all__ = [
 #     "NumericInput",
@@ -49,23 +50,26 @@ import numpy as np
 #     "as_QField9",
 # ]
 
-# NumericInput is a flexible type that accepts:
-# - a scalar (int or float)
-# - a sequence (list or tuple) of numeric values
-# - a NumPy array of numeric values
-# This allows functions to accept user-friendly inputs, which are typically converted
-# internally to standardized array formats.
-NumericInput = Union[int, float, Sequence[Union[int, float]], np.ndarray]
+# Number includes int, float, np.interger, np.floating and so on.
+# Notably, Number includes np.inf
+Number = numbers.Real
 
+def as_Number(input_data, name='input data'):
+    
+    if not isinstance(input_data, numbers.Real):
+        raise TypeError(f"{name} must be a number")
+        
+    return input_data
 
-# Vect3D is simply 3D vector with three elements
-Vect3D = Union[Sequence[Union[int, float]], np.ndarray]
+# Vect(d) is simply vector in d-dimensions
+def Vect(d):
+    return Union[Sequence[Union[int, float]], np.ndarray]
 
-def as_Vect3D(input_data, is_norm=False):
+def as_Vect(input_data, dim=3, name='input data', is_norm=False):
     """
-    Convert the given input into a 3D NumPy vector, with optional normalization.
+    Convert the given input into a dim-D NumPy vector, with optional normalization.
 
-    This function ensures that the input is interpreted as a NumPy array with shape (3,).
+    This function ensures that the input is interpreted as a NumPy array with shape (dim,).
     If `is_norm` is True, the vector will be normalized according to the sum of the squares
     of its components. The normalization is done in-place after the shape check.
 
@@ -73,8 +77,8 @@ def as_Vect3D(input_data, is_norm=False):
     ----------
     input_data : array-like
         The input vector to be converted. Can be a list, tuple, or NumPy array.
-        Must contain exactly 3 elements representing the x, y, z components.
-        
+        Must contain exactly dim elements.
+
     is_norm : bool, optional
         If True, normalize the vector so that its magnitude (based on sum of squares)
         becomes 1. Defaults to False.
@@ -82,7 +86,7 @@ def as_Vect3D(input_data, is_norm=False):
     Returns
     -------
     numpy.ndarray
-        A NumPy array of shape (3,) representing the (optionally normalized) vector.
+        A NumPy array of shape (dim,) representing the (optionally normalized) vector.
 
     Raises
     ------
@@ -97,17 +101,47 @@ def as_Vect3D(input_data, is_norm=False):
     >>> as_Vect3D((3, 4, 0), is_norm=True)
     array([0.6, 0.8, 0.0])
     """
-    input_data = np.asarray(input_data)
-    if input_data.shape != (3,):
-        raise ValueError(f"For Vect3D, input_data must be a vector with 3 elements. Got {input_data} instead.")
+    
+    if (
+       not isinstance(input_data, (tuple, list, np.ndarray))
+       or len(input_data) != dim     
+       or any(isinstance(x, numbers.Real) for x in input_data)
+            ):
+        raise ValueError(
+            f"{name} must be a vector with {dim} numbers. Got {input_data} instead."
+        )
+    else:
+        input_data = np.asarray(input_data)
 
     if is_norm:
         input_data = input_data / np.linalg.norm(input_data)
 
     return input_data
 
+# Tensor(shape) is simply matrix with given shape
+def Tensor(shape):
+    return Union[Sequence[Union[int, float]], np.ndarray]
+
+
+def as_Tensor(input_data, shape, name='input data'):
+  
+    if (
+       not isinstance(input_data, (tuple, list, np.ndarray))
+       or np.shape((input_data)) != shape     
+       ):
+        raise ValueError(
+            f"{name} must be a matrix with shape {shape}. Got {input_data} instead."
+        )
+    else:
+        input_data = np.asarray(input_data)
+
+    return input_data
+
+
+
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
+
 
 def as_ColorRGB(input_data, is_norm=False, norm_order=2):
     """
@@ -123,12 +157,12 @@ def as_ColorRGB(input_data, is_norm=False, norm_order=2):
         A sequence of 3 numeric values representing the Red, Green, and Blue
         components of the color. Each value should be in the range [0, 1].
         Accepts list, tuple, or NumPy array.
-        
+
     is_norm : bool, optional
         Whether to normalize the RGB vector. If True, each component is divided
         by the sum of its components raised to the power of `norm_order`.
         Defaults to False.
-        
+
     norm_order : int or float, optional
         The exponent to which each component is raised before summing in the
         normalization step. For example:
@@ -156,18 +190,30 @@ def as_ColorRGB(input_data, is_norm=False, norm_order=2):
     >>> as_ColorRGB([0.2, 0.5, 0.8], is_norm=True, norm_order=2)
     (0.19245008972987526, 0.480, 0.7698001794597505)
     """
-    input_data = np.asarray(input_data, float)
-    if len(input_data) != 3:
-        raise ValueError(f"For ColorRGB, input_data must be a vector with 3 elements. Got {input_data} instead.")
-    if np.max(input_data)>1 or np.min(input_data)<0:
-        raise ValueError(f"For ColorRGB, each element should be in [0,1]. Got {input_data} instead.")
+    
+    if (
+       not isinstance(input_data, (tuple, list, np.ndarray))
+       or len(input_data) != 3     
+       or any(isinstance(x, numbers.Real) for x in input_data)
+            ):
+        raise ValueError(
+            f"For ColorRGB, input_data must be a vector with 3 numbers. Got {input_data} instead."
+        )
         
+    input_data = np.asarray(input_data)
+        
+    if np.max(input_data) > 1 or np.min(input_data) < 0:
+        raise ValueError(
+            f"For ColorRGB, each number should be in [0,1]. Got {input_data} instead."
+        )
+
     if is_norm:
         if np.sum(input_data) < 1e-3:
-            return (0,0,0)
+            return (0, 0, 0)
         input_data = input_data / np.sum(input_data**norm_order)
-        
+
     return tuple(input_data)
+
 
 # -------------------------
 # Dimension info types
@@ -302,7 +348,9 @@ GeneralField = np.ndarray
 nField = np.ndarray
 
 
-def check_Sn(data, datatype: Literal["n", "S"], is_3d_strict: bool = True, is_norm=True):
+def check_Sn(
+    data, datatype: Literal["n", "S"], is_3d_strict: bool = True, is_norm=True
+):
 
     data = np.asarray(data, dtype=np.float64)
     shape = np.shape(data)

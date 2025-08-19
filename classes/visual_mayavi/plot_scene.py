@@ -19,7 +19,7 @@ class PlotScene:
         size=(1920, 1360),
         bgcolor=(1, 1, 1),
         fgcolor=(0, 0, 0),
-        name='None'
+        name="None",
     ):
         """
         Initialize the scene with a new Mayavi figure.
@@ -40,7 +40,7 @@ class PlotScene:
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
-        
+
         self.name = name
         self.scene = SceneWrapper(self._fig.scene)
 
@@ -183,4 +183,3 @@ class PlotScene:
             return
 
         logger.info("\n".join(lines))
-        

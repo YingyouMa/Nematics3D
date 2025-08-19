@@ -4,8 +4,10 @@ from typing import Tuple, Optional, List, Union, Callable, Literal
 
 from ..logging_decorator import logging_and_warning_decorator, Logger
 from ..datatypes import (
-    Vect3D,
-    as_Vect3D,
+    Vect,
+    as_Vect,
+    Tensor,
+    as_Tensor,
     QField5,
     QField9,
     as_QField5,
@@ -21,12 +23,13 @@ from ..field import (
     getQ,
     generate_coordinate_grid,
     apply_linear_transform,
-    n_color_immerse
+    n_color_immerse,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene
+from .visual_mayavi.PlotOpts import OptsExtent, OptsPlane, OptsnPlane, OptsScene
 
 
 class QFieldObject:
@@ -41,17 +44,16 @@ class QFieldObject:
         S: SField = None,
         n: nField = None,
         box_periodic_flag: DimensionFlagInput = False,
-        grid_offset: Vect3D = np.array([0, 0, 0]),
-        grid_transform: np.ndarray = np.eye(3),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         is_diag: bool = True,
         logger: Logger = None,
     ) -> None:
-        
-        grid_offset = as_Vect3D(grid_offset)
-        grid_transform = np.asarray(grid_transform, float)
-        shape = np.shape(grid_transform)
-        if shape[0]!=3 or shape[1]!=3:
-            raise ValueError(f"grid_transform must be in shape (3,3). Got {grid_transform} instead.")
+
+        self.grid_offset = as_Vect(self.radius, name='grid_offset')
+        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
+        self._grid_transform = grid_transform
+        self._grid_offset = grid_offset
 
         start = time.time()
         logger.debug("Start to initialize Q field")
@@ -92,8 +94,6 @@ class QFieldObject:
         logger.debug("Start to transform lattice grid into real space")
         grid_shape = np.shape(self._Q)[:3]
         self._grid_origin, _, _ = generate_coordinate_grid(grid_shape, grid_shape)
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
 
         self.figures = []
@@ -200,7 +200,7 @@ class QFieldObject:
 
         from ..general import get_box_corners
 
-        Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1,1,1])
+        Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1, 1, 1])
         corners_index = get_box_corners(Lx, Ly, Lz)
         corners = apply_linear_transform(
             corners_index, transform=self._grid_transform, offset=self._grid_offset
@@ -222,27 +222,23 @@ class QFieldObject:
         w = np.arange(shape[2])
 
         interpolator = RegularGridInterpolator(
-                                (u, v, w),
-                                self._Q,
-                                method='linear',
-                                bounds_error=True
-                            )
+            (u, v, w), self._Q, method="linear", bounds_error=True
+        )
         interpolator = Interpolator(
             interpolator,
             np.array([v[-1], u[-1], w[-1]]),
             transform=self._grid_transform,
-            offset=self._grid_offset
+            offset=self._grid_offset,
         )
 
         self._interpolator = interpolator
 
         return self._interpolator
-        
+
     def inperpolate(self, points: np.ndarray, is_index=False):
-        if not hasattr(self, '_interpolator'):
+        if not hasattr(self, "_interpolator"):
             self.update_interpolator()
         return self._interpolator.interpolate(points, is_index=is_index)
-
 
     @logging_and_warning_decorator()
     def visualize_disclination_lines(
@@ -320,7 +316,6 @@ class QFieldObject:
         else:
             names_all = [line._name for line in lines_plot]
 
-
         figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
 
         logger.debug("Start to draw disclination lines")
@@ -350,29 +345,29 @@ class QFieldObject:
 
     @logging_and_warning_decorator()
     def visualize_n_in_Q(
-            self,
-            normal: Vect3D,
-            space: float,
-            size: float,
-            is_new: bool = True,
-            fig_size: Tuple[int, int] = (1920, 1360),
-            bgcolor: Vect3D = (1.0, 1.0, 1.0),
-            fgcolor: Vect3D = (0.0, 0.0, 0.0),
-            shape: Literal["circle", "rectangle"] = "rectangle",
-            origin: Vect3D = (0,0,0),
-            axis1: Optional[Vect3D] = None,
-            colors: Union[Callable[nField,ColorRGB], ColorRGB] = n_color_immerse,
-            opacity: Union[Callable[nField, np.ndarray], float] = 1,
-            length: float = 3.5,
-            radius: float = 0.5,
-            is_n_defect: bool = True,
-            defect_opacity: float = 1,
-            is_extent: bool = True,
-            extent_radius: float = 1,
-            extent_opacity: float = 1,
-            logger=None,
+        self,
+        normal: Vect3D,
+        space: float,
+        size: float,
+        is_new: bool = True,
+        fig_size: Tuple[int, int] = (1920, 1360),
+        bgcolor: Vect3D = (1.0, 1.0, 1.0),
+        fgcolor: Vect3D = (0.0, 0.0, 0.0),
+        shape: Literal["circle", "rectangle"] = "rectangle",
+        origin: Vect3D = (0, 0, 0),
+        axis1: Optional[Vect3D] = None,
+        colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse,
+        opacity: Union[Callable[nField, np.ndarray], float] = 1,
+        length: float = 3.5,
+        radius: float = 0.5,
+        is_n_defect: bool = True,
+        defect_opacity: float = 1,
+        is_extent: bool = True,
+        extent_radius: float = 1,
+        extent_opacity: float = 1,
+        logger=None,
     ):
-        
+
         figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
 
         self.update_interpolator()
@@ -395,7 +390,7 @@ class QFieldObject:
             defect_opacity=defect_opacity,
             grid_offset=self._grid_offset,
             grid_transform=self._grid_transform,
-            logger=logger
+            logger=logger,
         )
 
         figure.add_object(nPlane, category="nPlane")
@@ -411,7 +406,7 @@ class QFieldObject:
             bgcolor=bgcolor,
             fgcolor=fgcolor,
         )
-        if is_new or (not is_new and len(self.figures)==0):
+        if is_new or (not is_new and len(self.figures) == 0):
             self.figures.append(figure)
         else:
             figure = self.figures[-1]
@@ -423,16 +418,12 @@ class QFieldObject:
 
         if not hasattr(self, "_corners"):
             self.update_corners()
-        extent = PlotExtent(
-            self._corners, radius=extent_radius, opacity=extent_opacity
-        )
+        extent = PlotExtent(self._corners, radius=extent_radius, opacity=extent_opacity)
 
         return extent
 
-
     def reset_figures(self):
         self.figures = []
-
 
     def __call__(self) -> np.ndarray:
         return self._Q

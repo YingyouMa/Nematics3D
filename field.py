@@ -27,13 +27,15 @@ from .logging_decorator import logging_and_warning_decorator
 
 
 @logging_and_warning_decorator()
-def Q_diagonalize(qtensor: Union[QField5, QField9], logger=None) -> Tuple[SField, nField]:
+def Q_diagonalize(
+    qtensor: Union[QField5, QField9], logger=None
+) -> Tuple[SField, nField]:
     """
-    Analytically diagonalize a Q-tensor field to obtain the scalar order parameter (S) 
+    Analytically diagonalize a Q-tensor field to obtain the scalar order parameter (S)
     and the director field (n).
 
-    This implementation uses tensor invariants to compute the largest eigenvalue 
-    and corresponding eigenvector without calling `np.linalg.eigh` on each grid point, 
+    This implementation uses tensor invariants to compute the largest eigenvalue
+    and corresponding eigenvector without calling `np.linalg.eigh` on each grid point,
     which is significantly faster for large 3D fields.
 
     Parameters
@@ -50,7 +52,7 @@ def Q_diagonalize(qtensor: Union[QField5, QField9], logger=None) -> Tuple[SField
     -------
     S : SField
         Scalar order parameter, shape (...,). Defined as 1.5 × λ_max.
-        
+
     n : nField
         Director field (unit vector), shape (..., 3).
 
@@ -63,7 +65,7 @@ def Q_diagonalize(qtensor: Union[QField5, QField9], logger=None) -> Tuple[SField
     ------
     TypeError
         If `qtensor` is not a float-type NumPy array.
-        
+
     ValueError
         If `qtensor` shape is not a valid QField5 or QField9.
     """
@@ -178,11 +180,13 @@ def add_periodic_boundary(
     if np.any(is_boundary_periodic):
         Nx, Ny, Nz, *rest_shape = data.shape  # Extract the first three dimensions
         output = np.empty(
-            (Nx + is_boundary_periodic[0],
-             Ny + is_boundary_periodic[1],
-             Nz + is_boundary_periodic[2],
-             *rest_shape),
-            dtype=data.dtype
+            (
+                Nx + is_boundary_periodic[0],
+                Ny + is_boundary_periodic[1],
+                Nz + is_boundary_periodic[2],
+                *rest_shape,
+            ),
+            dtype=data.dtype,
         )
         output[:Nx, :Ny, :Nz] = data  # Copy original data into the new array
 
@@ -246,16 +250,19 @@ def generate_coordinate_grid(
         *axes, indexing="ij"
     )  # List of N arrays, each shape (*shape_target)
     grid = np.stack(mesh, axis=-1)  # Shape: (*shape_target, N)
-    
+
     axes_int = [np.arange(t) for t in shape_target]
     mesh_int = np.meshgrid(*axes_int, indexing="ij")
     grid_int = np.stack(mesh_int, axis=-1)
     grid_int = np.asarray(grid_int)
-    
-    steps = np.array([
-        (s - 1) / (t - 1) if t > 1 else 0.0
-        for s, t in zip(shape_source, shape_target)
-    ], dtype=float)
+
+    steps = np.array(
+        [
+            (s - 1) / (t - 1) if t > 1 else 0.0
+            for s, t in zip(shape_source, shape_target)
+        ],
+        dtype=float,
+    )
 
     return grid, grid_int, steps
 
@@ -393,7 +400,7 @@ def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
     ----------
     points_unwrap : (N, 3) ndarray
         Already unwrapped trajectory points.
-        
+
     box_size_periodic : (3,) array-like
         Box size in each dimension (np.inf for non-periodic).
 
@@ -415,13 +422,12 @@ def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
     return shifted
 
 
-
 def unwrap_trajectory(
     points: Union[np.ndarray, Sequence[Sequence[float]]],
     box_size_periodic: DimensionPeriodicInput = np.inf,
     is_start_in_box=False,
     ref_index=0,
-    is_reverse=False
+    is_reverse=False,
 ):
     """
     Unwrap a trajectory of points across periodic boundaries to produce a geometrically continuous path.
@@ -448,28 +454,30 @@ def unwrap_trajectory(
     points_unwrap : np.ndarray of shape (N, 3)
         The unwrapped version of the input points, forming a continuous path.
     """
-    
+
     box_size_periodic = as_dimension_info(box_size_periodic)
     points = np.array(points, dtype=float)
-    
+
     if is_reverse:
         points = points[::-1]
-    
+
     deltas = np.diff(points, axis=0)
 
     mask_periodic = np.isfinite(box_size_periodic)
     L = box_size_periodic
 
     # Apply minimum image convention with multi-box handling
-    deltas[:, mask_periodic] -= np.round(
-        deltas[:, mask_periodic] / L[mask_periodic]
-    ) * L[mask_periodic]
+    deltas[:, mask_periodic] -= (
+        np.round(deltas[:, mask_periodic] / L[mask_periodic]) * L[mask_periodic]
+    )
 
     points_unwrap = np.vstack([points[0], points[0] + np.cumsum(deltas, axis=0)])
-    
+
     if is_start_in_box:
-        points_unwrap = shift_to_box(points_unwrap, box_size_periodic, ref_index=ref_index)
-        
+        points_unwrap = shift_to_box(
+            points_unwrap, box_size_periodic, ref_index=ref_index
+        )
+
     if is_reverse:
         points_unwrap = points_unwrap[::-1]
 
@@ -485,7 +493,7 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
     points : (N, 3) ndarray
         Coordinates of the point cluster.
         Assumes coordinates are in the range [0, box_size) for periodic dimensions.
-                                              
+
     box_size_periodic : float or array-like
         Periodic box size for each dimension.
         - Can be a scalar (same size in all periodic dimensions) or an array of shape (3,).
@@ -502,9 +510,9 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
     minimal ±box_size translations to bring them together.
     - A reference point (the first point) is chosen.
     - For each point and each periodic dimension:
-        * If the distance to the reference point is greater than half the box size, 
+        * If the distance to the reference point is greater than half the box size,
           the point is shifted by -box_size.
-        * If the distance is less than negative half the box size, 
+        * If the distance is less than negative half the box size,
           the point is shifted by +box_size.
     - Non-periodic dimensions (size = np.inf) are left unchanged.
 
@@ -523,9 +531,9 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
     points = np.asarray(points, dtype=float)
     if np.all(box_size_periodic == np.inf):
         return points
-    
+
     box_size_periodic = as_dimension_info(box_size_periodic)
-    
+
     unfolded = points.copy()
     ref = points[0]
 
@@ -535,9 +543,9 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
                 delta = points[i, dim] - ref[dim]
                 if delta > size / 2:
                     unfolded[i, dim] -= size
-                elif delta < - size / 2:
+                elif delta < -size / 2:
                     unfolded[i, dim] += size
-                        
+
     return unfolded
 
 
@@ -547,15 +555,15 @@ def n_color_immerse(n: nField) -> List[Tuple]:
 
     This function encodes the orientation of a unit director vector `n`
     into RGB color values using a nonlinear polynomial mapping followed by
-    a fixed linear transformation and scaling. The colormap is an immersion 
+    a fixed linear transformation and scaling. The colormap is an immersion
     from RP^2 to R^3. This ensures that similar orientatioin of n refer to
     similar colors but different orientations might refer to the same color.
-    
-    The colormap is modified from boy's surface. 
 
-    The color is specifically desined to be distince on white background, 
+    The colormap is modified from boy's surface.
+
+    The color is specifically desined to be distince on white background,
     and to get x, y, z direction closed to red, blue and green colors.
-    
+
     x: [0.90535893, 0.22874911, 0.22062688]
     y: [0.05416607, 0.27934554, 0.48937438]
     z: [0.30416607, 0.90434554, 0.22687438]
@@ -563,7 +571,7 @@ def n_color_immerse(n: nField) -> List[Tuple]:
     Parameters
     ----------
     n : array_like, shape (..., 3)
-        Nematic director field. 
+        Nematic director field.
         Can be of arbitrary leading dimensions.
 
     Returns
@@ -606,61 +614,68 @@ def n_color_immerse(n: nField) -> List[Tuple]:
     RGB[..., 1] = RGB[..., 1] * 7 / 8
     RGB[..., 2] = RGB[..., 2] / 8
 
-    M = np.array([
-        [ 1.01667, -0.3,     -0.48333],
-        [-1.01667, -1.5,     -1.31667],
-        [-0.18333,  0.3,      1.31667]
-    ])
-    
+    M = np.array(
+        [
+            [1.01667, -0.3, -0.48333],
+            [-1.01667, -1.5, -1.31667],
+            [-0.18333, 0.3, 1.31667],
+        ]
+    )
+
     result = np.einsum("...i, ji -> ...j", RGB, M)
-    
+
     scales = np.array([2.1, 4.2, 2.0])
     offsets = np.array([0.45, 0.51, 0.23])
     result = result / scales + offsets
-    
+
     colors = []
     for color in result:
         colors.append(tuple(color))
 
     return colors
 
-def n_visualize(points, n, colors=(1,1,1), opacity=1, length=3.5, radius=0.5, mode='cylinder'):
-    
+
+def n_visualize(
+    points, n, colors=(1, 1, 1), opacity=1, length=3.5, radius=0.5, mode="cylinder"
+):
+
     from mayavi import mlab
     from tvtk.api import tvtk
-    
+
     pts = np.asarray(points)
-    pts = np.reshape(pts, (-1,3))
+    pts = np.reshape(pts, (-1, 3))
     vec = np.asarray(n)
-    vec = np.reshape(vec, (-1,3))
+    vec = np.reshape(vec, (-1, 3))
     num_points = np.shape(pts)[0]
 
     from .general import calc_colors, calc_opacity
+
     colors = np.asarray(calc_colors(colors, num_points))
     opacity = calc_opacity(opacity, num_points)[:, None]
     colors = np.hstack([colors, opacity]) * 255
     colors = colors.astype(np.uint8)
-    
+
     # PolyData
     poly = tvtk.PolyData(points=pts)
     poly.point_data.vectors = vec
-    poly.point_data.vectors.name = 'vectors'
+    poly.point_data.vectors.name = "vectors"
     poly.point_data.scalars = colors
-    poly.point_data.scalars.name = 'rgba'
+    poly.point_data.scalars.name = "rgba"
 
     # 管线
     src = mlab.pipeline.add_dataset(poly)
     g = mlab.pipeline.glyph(src, mode=mode, scale_factor=1)
-    g.glyph.scale_mode = 'data_scaling_off'  # 固定缩放，不随标量变化
+    g.glyph.scale_mode = "data_scaling_off"  # 固定缩放，不随标量变化
 
     # 直接颜色模式
     g.actor.mapper.scalar_visibility = True
-    g.actor.mapper.color_mode = 'direct_scalars'
-    
+    g.actor.mapper.color_mode = "direct_scalars"
+
     g.glyph.glyph_source.glyph_source.height = length
     g.glyph.glyph_source.glyph_source.radius = radius
 
     return g
+
 
 # @time_record
 # def interpolateQ(n, result_points, S=0, is_boundary_periodic=0):

@@ -359,36 +359,37 @@ def defect_neighbor_possible_get(
 
     return result
 
+
 def defect_vicinity_grid(defect_indices, num_shell=2):
     """
     Generate square-shell neighborhoods around lattice-aligned defect points.
 
-    This function constructs integer grid coordinates forming square shells 
-    (with odd side lengths 1, 3, 5, ... up to `2*num_shell-1`) around defect 
-    positions that lie close to integer lattice planes in x, y, or z. 
-    For each such defect, the neighborhood points are generated on the 
+    This function constructs integer grid coordinates forming square shells
+    (with odd side lengths 1, 3, 5, ... up to `2*num_shell-1`) around defect
+    positions that lie close to integer lattice planes in x, y, or z.
+    For each such defect, the neighborhood points are generated on the
     plane perpendicular to the corresponding axis.
 
     Parameters
     ----------
     defect_indices : ndarray of shape (N, 3)
         Array of defect positions in 3D (floating-point coordinates).
-        
+
     num_shell : int, default=2
-        Number of square shells around each defect. 
+        Number of square shells around each defect.
         The side lengths of the shells will be 1, 3, 5, ..., (2*num_shell-1).
 
     Returns
     -------
     result : ndarray of shape (N, 4*num_shell**2, 3), dtype=int
-        Integer lattice coordinates of neighborhood points for each defect. 
+        Integer lattice coordinates of neighborhood points for each defect.
         Defects not aligned to a lattice plane remain filled with zeros.
 
     Notes
     -----
-    - The function separates defects into three groups depending on whether 
+    - The function separates defects into three groups depending on whether
       their x, y, or z coordinate is closest to an integer (within tolerance).
-    - For each group, square neighborhoods are constructed on the 
+    - For each group, square neighborhoods are constructed on the
       corresponding orthogonal plane.
     - The neighborhood size grows quadratically with `num_shell`.
 
@@ -404,16 +405,16 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     if defect_indices.size == 0:
         return np.empty((0, 3), dtype=int)
 
-    square_size_list = np.arange(1, 2*num_shell+1, 2)
-    square_num_list  = square_size_list + 1
+    square_size_list = np.arange(1, 2 * num_shell + 1, 2)
+    square_num_list = square_size_list + 1
 
-    square_origin_list = np.arange(-0.5, -num_shell-0.5, -1)
-    square_origin_list = np.broadcast_to(square_origin_list, (2,num_shell)).T
-    square_origin_list = np.hstack([ np.zeros((num_shell, 1)), square_origin_list ])
+    square_origin_list = np.arange(-0.5, -num_shell - 0.5, -1)
+    square_origin_list = np.broadcast_to(square_origin_list, (2, num_shell)).T
+    square_origin_list = np.hstack([np.zeros((num_shell, 1)), square_origin_list])
 
     length = 4 * num_shell**2
 
-    result = np.zeros( (np.shape(defect_indices)[0], length, 3) )
+    result = np.zeros((np.shape(defect_indices)[0], length, 3))
 
     indexx = np.isclose(defect_indices[:, 0], np.round(defect_indices[:, 0]))
     indexy = np.isclose(defect_indices[:, 1], np.round(defect_indices[:, 1]))
@@ -424,20 +425,29 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     defectz = defect_indices[indexz]
 
     from .general import get_square
-    squarex = get_square(square_size_list, square_num_list, origin_list=square_origin_list , dim=3)
+
+    squarex = get_square(
+        square_size_list, square_num_list, origin_list=square_origin_list, dim=3
+    )
     squarey = squarex.copy()
     squarey[:, [0, 1]] = squarey[:, [1, 0]]
     squarez = squarex.copy()
     squarez[:, [0, 1]] = squarez[:, [1, 0]]
     squarez[:, [1, 2]] = squarez[:, [2, 1]]
 
-    defectx = np.repeat(defectx, length, axis=0).reshape(np.shape(defectx)[0],length,3)
-    defecty = np.repeat(defecty, length, axis=0).reshape(np.shape(defecty)[0],length,3)
-    defectz = np.repeat(defectz, length, axis=0).reshape(np.shape(defectz)[0],length,3)
+    defectx = np.repeat(defectx, length, axis=0).reshape(
+        np.shape(defectx)[0], length, 3
+    )
+    defecty = np.repeat(defecty, length, axis=0).reshape(
+        np.shape(defecty)[0], length, 3
+    )
+    defectz = np.repeat(defectz, length, axis=0).reshape(
+        np.shape(defectz)[0], length, 3
+    )
 
-    defectx =  defectx + np.broadcast_to(squarex, (np.shape(defectx)[0], length,3))
-    defecty =  defecty + np.broadcast_to(squarey, (np.shape(defecty)[0], length,3))
-    defectz =  defectz + np.broadcast_to(squarez, (np.shape(defectz)[0], length,3))
+    defectx = defectx + np.broadcast_to(squarex, (np.shape(defectx)[0], length, 3))
+    defecty = defecty + np.broadcast_to(squarey, (np.shape(defecty)[0], length, 3))
+    defectz = defectz + np.broadcast_to(squarez, (np.shape(defectz)[0], length, 3))
 
     result[indexx] = defectx
     result[indexy] = defecty
@@ -548,8 +558,6 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
 #         line = line[:-1]
 
 #     return line_new
-
-
 
 
 # def defect_rotation(defect_indices, n,

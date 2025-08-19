@@ -196,9 +196,9 @@ class DisclinationLine:
             Also stored internally as `self._defect_coords_smooth`.
         """
         from ..field import unwrap_trajectory, shift_to_box
-        
+
         coords = self._defect_coords.copy()
-        
+
         if self._end2end_category == "loop":
             smoothen_mode = "wrap"
             tail_length = 0
@@ -206,23 +206,31 @@ class DisclinationLine:
             tail_length = 50
             indices_origin = self._defect_indices.copy()
             tail = indices_origin[:tail_length].copy()
-            head = indices_origin[-tail_length-1:]
+            head = indices_origin[-tail_length - 1 :]
             indices = np.concatenate([head, indices_origin, tail])
-            
-            indices[:75] = unwrap_trajectory(indices[:75], box_size_periodic=self._box_size_periodic_index, is_reverse=True)
-            indices = unwrap_trajectory(indices, box_size_periodic=self._box_size_periodic_index, is_start_in_box=True)
-            
+
+            indices[:75] = unwrap_trajectory(
+                indices[:75],
+                box_size_periodic=self._box_size_periodic_index,
+                is_reverse=True,
+            )
+            indices = unwrap_trajectory(
+                indices,
+                box_size_periodic=self._box_size_periodic_index,
+                is_start_in_box=True,
+            )
+
             coords = apply_linear_transform(
                 indices,
                 transform=self._grid_transform,
                 offset=self._grid_offset,
-                )
+            )
 
             smoothen_mode = "interp"
         else:
             smoothen_mode = "interp"
             tail_length = 0
-            
+
         output = SmoothenedLine(
             coords,
             window_ratio=window_ratio,
@@ -232,12 +240,14 @@ class DisclinationLine:
             mode=smoothen_mode,
         )
 
-        result = output._output[int(tail_length*N_out_ratio):int((-tail_length-1)*N_out_ratio)]
+        result = output._output[
+            int(tail_length * N_out_ratio) : int((-tail_length - 1) * N_out_ratio)
+        ]
         result = shift_to_box(result, self._box_size_periodic_index)
-        
+
         self._defect_coords_smooth_obj = output
         self._defect_coords_smooth = result
-        
+
         return output.output
 
     @logging_and_warning_decorator()
@@ -304,7 +314,7 @@ class DisclinationLine:
 
         if name == None:
             name = self._name
-            
+
         if self._end2end_category == "loop":
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
 

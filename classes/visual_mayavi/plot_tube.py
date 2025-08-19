@@ -69,7 +69,7 @@ class PlotTube:
             logger: Optional logger instance used for warnings.
         """
         color = as_ColorRGB(color)
-        
+
         self.items = []
         self.coords = coords_all
 

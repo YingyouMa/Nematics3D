@@ -1,65 +1,95 @@
 from dataclasses import dataclass
-from typing import Tuple, Optional, Union, Literal, Callable, Sequence
+from typing import Tuple, Optional, Union, Literal, Callable
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator
 
-from Nematics3D.datatypes import ColorRGB, Vect3D, nField
+from Nematics3D.datatypes import ColorRGB,as_ColorRGB, Vect, as_Vect, Tensor, as_Tensor, Number, as_Number, nField
+from Nematics3D.field import n_color_immerse
+
 
 # --- Scene Options ---
 @dataclass
-class SceneOpts:
-    fig_size: Tuple[float, int] = (1920, 1360)
-    bgcolor: Vect3D = (1.0, 1.0, 1.0)
-    fgcolor: Vect3D = (0.0, 0.0, 0.0)
+class OptsScene:
+    fig_size: Tuple[float, float] = (1920, 1360)
+    bgcolor: ColorRGB = (1.0, 1.0, 1.0)
+    fgcolor: ColorRGB = (0.0, 0.0, 0.0)
+
+    def __post_init__(self):
+        self.fig_size = as_Vect(self.fig_size, dim=2)
+        self.bgcolor = as_ColorRGB(self.bgcolor)
+        self.bgcolor = as_ColorRGB(self.bgcolor)
+        
+        
+# --- Plane Options ---
+@dataclass
+class OptsPlane:
+    normal: Vect(3)
+    spacing: Number
+    size: Number
+    shape: Literal["circle", "rectangle"] = "rectangle"
+    origin: Vect(3) = (0, 0, 0)
+    axis1: Optional[Vect(3)] = None
+    corners_limit: Optional[np.ndarray] = None
+    colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
+    opacity: Union[Callable[nField, np.ndarray], float] = 1
+    length: Number = 3.5
+    radius: Number = 0.5
+    is_n_defect: bool = True
+    defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
+    grid_offset: Vect(3) = np.array([0, 0, 0])
+    grid_transform: Tensor((3,3)) = np.eye(3)
 
     def __post_init__(self):
         
-        if not (isinstance(self.fig_size, Sequence) and len(self.fig_size) == 2):
-            raise TypeError("fig_size must be a tuple of 2 ints")
+        self.normal = as_Vect(self.normal, name='normal')
+        self.spacing = as_Number(self.space, name='spacing')
+        self.size = as_Number(self.size, name='size')
+        
+        if self.shape not in ("circle", "rectangle"):
+            raise ValueError("Shape of a plane must be 'circle' or 'rectangle'")
+        
+        self.origin = as_Vect(self.origin, name='origin')
+        if self.axis1 is not None:
+            self.axis1 = as_Vect(self.axis1, name='axis1')
             
-        if not all(isinstance(x, (int, np.integer)) for x in self.fig_size):
-            raise TypeError("fig_size values must be integers")
-        for name, val in [("bgcolor", self.bgcolor), ("fgcolor", self.fgcolor)]:
-            if not (isinstance(val, tuple) and len(val) == 3):
-                raise TypeError(f"{name} must be a 3-tuple")
-            if not all(isinstance(c, (float, int)) for c in val):
-                raise TypeError(f"{name} values must be float or int")
-            if not all(0.0 <= c <= 1.0 for c in val):
-                raise ValueError(f"{name} values must be in [0,1]")
+        self.corners_limit = as_Tensor(self.corners_limit, (8,3), name='box corners')
+        
+        if not isinstance(self.is_n_defect, bool):
+            raise TypeError("is_n_defect must be a boolean value.")
+            
+        self.grid_offset = as_Vect(self.radius, name='grid_offset')
+        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
 
-# --- Plane Options ---
+
+# --- nPlane Options ---
 @dataclass
-class PlaneOpts:
-    shape: Literal["circle", "rectangle"] = "rectangle"
-    origin: Vect3D = (0,0,0)
-    axis1: Optional[Vect3D] = None
-    colors: Union[Callable[[nField], ColorRGB], ColorRGB] = (0.5, 0.5, 0.5)
-    opacity: Union[Callable[[nField], np.ndarray], float] = 1.0
-    length: float = 3.5
-    radius: float = 0.5
+class OptsnPlane:
+    QInterpolator: RegularGridInterpolator
+    colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
+    opacity: Union[Callable[nField, np.ndarray], float] = 1
+    length: Number = 3.5
+    radius: Number = 0.5
     is_n_defect: bool = True
-    defect_opacity: float = 1.0
+    defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
 
     def __post_init__(self):
-        if self.shape not in ("circle", "rectangle"):
-            raise ValueError("shape must be 'circle' or 'rectangle'")
-        if not isinstance(self.length, (float, int)):
-            raise TypeError("length must be float")
-        if not isinstance(self.radius, (float, int)):
-            raise TypeError("radius must be float")
-        if not (0 <= self.defect_opacity <= 1):
-            raise ValueError("defect_opacity must be in [0,1]")
+    
+        self.length = as_Number(self.length, name='length')
+        self.radius = as_Number(self.radius, name='radius')
+        
+        if not isinstance(self.is_n_defect, bool):
+            raise TypeError("is_n_defect must be a boolean value.")
+
 
 # --- Extent Options ---
 @dataclass
-class ExtentOpts:
-    enabled: bool = True
-    radius: float = 1.0
-    opacity: float = 1.0
+class OptsExtent:
+    is_extent: bool = True
+    radius: Number = 1.0
+    opacity: Number = 1.0
 
     def __post_init__(self):
-        if not isinstance(self.enabled, bool):
+        if not isinstance(self.is_extent, bool):
             raise TypeError("enabled must be a bool")
-        if not isinstance(self.radius, (float, int)):
-            raise TypeError("radius must be float")
-        if not (0 <= self.opacity <= 1):
-            raise ValueError("opacity must be in [0,1]")
+        self.radius = as_Number(self.radius, name='radius of extent tubes')
+        self.opacity = as_Number(self.opacity, name='opacity of extent tubes')
