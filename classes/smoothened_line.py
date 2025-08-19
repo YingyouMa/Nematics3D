@@ -6,25 +6,7 @@ from dataclasses import dataclass
 
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import Number, as_Number
-
-@dataclass
-class SmoothenConfig:
-    window_ratio: Number = 3                    
-    window_length: Optional[Number] = None       
-    order: Number = 3                                
-    N_out_ratio: Number = 3.0                      
-    mode: Literal["interp", "wrap"] = "interp"  
-
-    def __post_init__(self):
-
-        self.window_ratio = as_Number(self.window_ratio, name="window_ratio of smoothening")
-        if self.window_length is not None:
-            self.window_length = as_Number(self.window_ratio, name="window_ratio of smoothening")
-        self.order = as_Number(self.order, name="smoothing order")
-        self.N_out_ratio = as_Number(self.N_out_ratio, name="ratio between # points of output and input in smoothening")
-
-        if self.mode not in ("interp", "wrap"):
-            raise ValueError("smoothing mode must be interp or wrap")
+from .opts import OptsSmoothen
 
 class SmoothenedLine:
     """
@@ -93,51 +75,57 @@ class SmoothenedLine:
     def __init__(
         self,
         line_coord_input: np.ndarray,
-        config: SmoothenConfig = SmoothenConfig(),
+        opts: OptsSmoothen = OptsSmoothen(),
         logger=None,
     ):
         
         self._line_coord_input = line_coord_input
-        self._config = config
+        self.opts = opts
 
         self.apply_smoothen(logger=logger)
 
     @logging_and_warning_decorator()
     def apply_smoothen(self, logger=None):
 
-        if self._config.window_length is None:
-            self._config.window_length = int(self._config.N_init / self._config.window_ratio / 2) * 2 + 1
-            self._config.window_ratio = self._config.N_init / self._config.window_length
+        if len(self._line_coord_input) < self.opts.min_line_length:
+            self._is_smoothened = False
+            logger.warning(f"{self.opts.name} is not smoothened, because its length {self._line_coord_input} is shorter than the minum length {self.opts.min_line_length}.")
+            self._output = self._line_coord_input
         else:
-            if self._config.window_ratio is not None:
-                logger.warning(
-                    ">>> Window_length is manual input. window_ratio would be ignored."
+
+            if self.opts.window_length is None:
+                self.opts.window_length = int(self.opts.N_init / self.opts.window_ratio / 2) * 2 + 1
+                self.opts.window_ratio = self.opts.N_init / self.opts.window_length
+            else:
+                if self.opts.window_ratio is not None:
+                    logger.warning(
+                        ">>> Window_length is manual input. window_ratio would be ignored."
+                    )
+                self.opts.window_length = self.opts.window_length
+                self.opts.window_ratio = self.opts.N_init / self.opts.window_length
+
+            self.opts.N_out = int(self.opts.N_init * self.opts.N_out_ratio)
+
+            # Step 1: Apply Savitzky-Golay filter to smoothen the curve
+            line_length = self.opts.N_init
+            if self.opts.window_length >= line_length:
+                raise ValueError(
+                    f"Filter window size {self.opts.window_length} must be smaller than line length {line_length}"
                 )
-            self._config.window_length = self._config.window_length
-            self._config.window_ratio = self._config.N_init / self._config.window_length
-
-        self._config.N_out = int(self._config.N_init * self._config.N_out_ratio)
-
-        # Step 1: Apply Savitzky-Golay filter to smoothen the curve
-        line_length = self._config.N_init
-        if self._config.window_length >= line_length:
-            raise ValueError(
-                f"Filter window size {self._config.window_length} must be smaller than line length {line_length}"
+            line_points = savgol_filter(
+                self._line_coord_input,
+                self.opts.window_length,
+                self.opts.order,
+                axis=0,
+                mode=self.opts.mode,
             )
-        line_points = savgol_filter(
-            self._line_coord_input,
-            self._config.window_length,
-            self._config.order,
-            axis=0,
-            mode=self._config.mode,
-        )
 
-        # Step 2: Define spline parameter u
-        uspline = np.arange(self._config.N_init) / self._config.N_init
+            # Step 2: Define spline parameter u
+            uspline = np.arange(self.opts.N_init) / self.opts.N_init
 
-        # Step 3: Fit and evaluate spline
-        tck = splprep(line_points.T, u=uspline, s=0)[0]
-        self._output = np.array(splev(np.linspace(0, 1, self._config.N_out), tck)).T
+            # Step 3: Fit and evaluate spline
+            tck = splprep(line_points.T, u=uspline, s=0)[0]
+            self._output = np.array(splev(np.linspace(0, 1, self.opts.N_out), tck)).T
 
     @logging_and_warning_decorator()
     def print_parameters(self, logger=None) -> None:
@@ -146,15 +134,25 @@ class SmoothenedLine:
         These information could be automatically saved into a log file.
         See the documentation of logging_and_warning_decorator()
         """
-        logger.info(f"filter order: {self._config.order}")
-        logger.info(f"filter mode: {self._config.mode}")
-        logger.info(f"ratio between output and input: {self._config.N_out_ratio}")
-        logger.info(f"length of output: {self._config.N_out}")
-        logger.info(f"length of input: {self._config.N_init}")
-        logger.info(f"window length: {self._config.window_length}")
-        logger.info(f"input/window ratio: {self._config.window_ratio}")
+        if self._is_smoothened:
+            logger.info(f"name: {self.opts.name}")
+            logger.info(f"filter order: {self.opts.order}")
+            logger.info(f"filter mode: {self.opts.mode}")
+            logger.info(f"ratio between output and input: {self.opts.N_out_ratio}")
+            logger.info(f"length of output: {self.opts.N_out}")
+            logger.info(f"length of input: {self.opts.N_init}")
+            logger.info(f"window length: {self.opts.window_length}")
+            logger.info(f"input/window ratio: {self.opts.window_ratio}")
+        else:
+            logger.info(f"{self.opts.name} is not smoothened, because its length {self._line_coord_input} is shorter than the minum length {self.opts.min_line_length}.")
+
 
     @property
     def output(self) -> np.ndarray:
         """Get the smoothened output line."""
         return self._output
+    
+    @property
+    def input(self) -> np.ndarray:
+        """Get the input data of line"""
+        return self._line_coord_input

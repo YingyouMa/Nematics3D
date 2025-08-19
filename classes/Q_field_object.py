@@ -50,10 +50,8 @@ class QFieldObject:
         logger: Logger = None,
     ) -> None:
 
-        self.grid_offset = as_Vect(self.radius, name='grid_offset')
-        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
+        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
 
         start = time.time()
         logger.debug("Start to initialize Q field")
@@ -120,16 +118,16 @@ class QFieldObject:
 
     def update_grid(
         self,
-        grid_transform: Optional[np.ndarray] = None,
-        grid_offset: Optional[np.ndarray] = None,
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         logger=None,
     ):
         """
         Generate the coordinates grid in the real space from the lattice indices through linear transform.
         See the document of apply_linear_transform()
         """
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
+        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
         self._grid = apply_linear_transform(
             self._grid_origin, transform=self._grid_transform, offset=self._grid_offset
         )

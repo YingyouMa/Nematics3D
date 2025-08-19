@@ -7,6 +7,26 @@ from Nematics3D.datatypes import ColorRGB,as_ColorRGB, Vect, as_Vect, Tensor, as
 from Nematics3D.field import n_color_immerse
 
 
+@dataclass
+class OptsSmoothen:
+    window_ratio: Number = 3                    
+    window_length: Optional[Number] = None       
+    order: Number = 3                                
+    N_out_ratio: Number = 3.0                      
+    mode: Literal["interp", "wrap"] = "interp"  
+
+    def __post_init__(self):
+
+        self.window_ratio = as_Number(self.window_ratio, name="window_ratio of smoothening")
+        if self.window_length is not None:
+            self.window_length = as_Number(self.window_ratio, name="window_ratio of smoothening")
+        self.order = as_Number(self.order, name="smoothing order")
+        self.N_out_ratio = as_Number(self.N_out_ratio, name="ratio between # points of output and input in smoothening")
+
+        if self.mode not in ("interp", "wrap"):
+            raise ValueError("smoothing mode must be interp or wrap")
+
+
 # --- Scene Options ---
 @dataclass
 class OptsScene:

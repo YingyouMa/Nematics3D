@@ -5,7 +5,10 @@ from .smoothened_line import SmoothenedLine
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
-    Vect3D,
+    Vect,
+    as_Vect,
+    Tensor,
+    as_Tensor,
     DefectIndex,
     DimensionPeriodicInput,
     as_dimension_info,
@@ -61,8 +64,8 @@ class DisclinationLine:
         defect_indices: DefectIndex,
         box_size_periodic_index: DimensionPeriodicInput,
         is_sorted: bool = True,
-        offset: Vect3D = np.array([0, 0, 0]),
-        transform: np.ndarray = np.eye(3),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         name: Optional[str] = None,
     ):
         """
@@ -88,12 +91,12 @@ class DisclinationLine:
             If False, the constructor will reorder them using a greedy sorting algorithm.
             Default is True.
 
-        offset : Vect3D, array_like of 3 floats, optional
+        grid_offset : Vect3D, array_like of 3 floats, optional
             Global offset added to all coordinates after transformation.
             Useful for shifting lines in real space.
             Default is (0, 0, 0) (no shift).
 
-        transform : np.ndarray of shape (3, 3), optional
+        grid_transform : np.ndarray of shape (3, 3), optional
             Linear transformation matrix applied to the defect indices
             to convert from grid space to physical space (e.g., for anisotropic grids).
             Default is np.eye(3) (identity transform).
@@ -132,7 +135,11 @@ class DisclinationLine:
         self._defect_num = np.shape(self._defect_indices)[0]
         self._box_size_periodic_index = box_size_periodic_index
 
-        self.update_to_coord(grid_transform=transform, grid_offset=offset)
+        self.grid_offset = as_Vect(self.radius, name='grid_offset')
+        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
+        self._grid_transform = grid_transform
+        self._grid_offset = grid_offset
+        self.update_to_coord(grid_transform=grid_transform, grid_offset=grid_offset)
 
         if name == None:
             self._name = "line"
@@ -141,8 +148,8 @@ class DisclinationLine:
 
     def update_to_coord(
         self,
-        grid_transform: Optional[np.ndarray] = None,
-        grid_offset: Optional[np.ndarray] = None,
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
     ):
 
         self._grid_transform = grid_transform
