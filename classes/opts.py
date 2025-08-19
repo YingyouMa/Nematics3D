@@ -13,9 +13,14 @@ class OptsSmoothen:
     window_length: Optional[Number] = None       
     order: Number = 3                                
     N_out_ratio: Number = 3.0                      
-    mode: Literal["interp", "wrap"] = "interp"  
+    mode: Literal["interp", "wrap"] = "interp"
+    min_line_length: int = 61
+    name: str = 'None'
 
     def __post_init__(self):
+        
+        if not isinstance(self.min_line_length, int):
+            raise TypeError("The minimum line length to be smoothened must be integer")
 
         self.window_ratio = as_Number(self.window_ratio, name="window_ratio of smoothening")
         if self.window_length is not None:
@@ -113,3 +118,42 @@ class OptsExtent:
             raise TypeError("enabled must be a bool")
         self.radius = as_Number(self.radius, name='radius of extent tubes')
         self.opacity = as_Number(self.opacity, name='opacity of extent tubes')
+        
+# --- Tube Options ---
+@dataclass
+class OptsTube:
+    scalars_all: np.ndarray
+    is_wrap: bool = False
+    is_smooth: bool = True
+    radius: Number = 0.5
+    opacity: Number = 1
+    color: ColorRGB = (1, 1, 1)
+    sides: Number = 6
+    specular: Number = 1
+    specular_color: ColorRGB = (1.0, 1.0, 1.0)
+    specular_power: Number = 11,
+    scalars: Optional[np.ndarray] = None,
+    name: str = 'None'
+    
+    def __post__init__(self):
+        
+        if not isinstance(self.is_wrap, bool):
+            raise TypeError("is_wrap must be a boolean value.")
+            
+        if not isinstance(self.is_smooth, bool):
+            raise TypeError("is_smooth must be a boolean value.")
+            
+        self.radius = as_Number(self.radius, name='radius of tube')
+        self.opacity = as_Number(self.opacity, name='opacity of tube')
+        self.color = as_ColorRGB(self.color, name='color of tube')
+        self.sides = as_Number(self.sides, name='number of sides of tube')
+        self.specular = as_Number(self.specular, name='Strength of the tube specular highlight')
+        self.specular_color = as_ColorRGB(self.specular_color, name='Color of the tube specular highlight')
+        self.specular_power = as_Number(self.specular_power, name='Shininess of the tube specular highlight')
+        
+        if not isinstance(self.name, str):
+            raise TypeError("The name of the tube must be str")
+        
+        
+        
+        

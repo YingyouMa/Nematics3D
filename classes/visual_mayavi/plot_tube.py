@@ -1,28 +1,10 @@
 from mayavi import mlab
 import numpy as np
-from typing import Optional, List
 
-from Nematics3D.datatypes import Vect3D, as_ColorRGB
-from .visual_decorator import auto_properties
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from ..opts import OptsTube
 
 
-@auto_properties(
-    # Dynamically create property getters/setters for common visualization attributes.
-    # These map directly to Mayavi actor attributes so you can write:
-    #   lineObj.color = (1, 0, 0)   instead of    lineObj.actor.actor.property.color = (1, 0, 0)
-    {
-        "color": "actor.property.color",
-        "opacity": "actor.property.opacity",
-        "radius": "parent.parent.filter.radius",
-        "sides": "parent.parent.filter.number_of_sides",
-        "specular": "actor.property.specular",
-        "specular_color": "actor.property.specular_color",
-        "specular_power": "actor.property.specular_power",
-        "is_visible": "actor.visible",
-        "name": "name",
-    }
-)
 class PlotTube:
     """
     A utility class to create and manage a 3D tube-like curve in Mayavi.
@@ -41,15 +23,7 @@ class PlotTube:
     def __init__(
         self,
         coords_all: np.ndarray,
-        color: Vect3D = (1, 1, 1),
-        radius: float = 1,
-        opacity: float = 1,
-        sides: int = 6,
-        specular: float = 1,
-        specular_color: Vect3D = (1.0, 1.0, 1.0),
-        specular_power: float = 11,
-        scalars_all: List = [],
-        name: Optional[str] = None,
+        opts = OptsTube(),
         logger=None,
     ) -> None:
         """
@@ -68,13 +42,13 @@ class PlotTube:
                 (enables gradient coloring). If provided, overrides 'color'.
             logger: Optional logger instance used for warnings.
         """
-        color = as_ColorRGB(color)
 
         self.items = []
         self.coords = coords_all
+        self.opts = opts
 
         num_sublines = len(coords_all)
-        if len(scalars_all) > 0:
+        if len(self.opts.scalars_all) > 0:
             logger.debug(">>> The scalars of tube is input")
             logger.debug(">>> The color of tube will be ignored")
         else:
@@ -98,31 +72,27 @@ class PlotTube:
                     y,
                     z,
                     scalars,
-                    tube_radius=radius,
-                    tube_sides=sides,
-                    opacity=opacity,
+                    tube_radius=self.opts.radius,
+                    tube_sides=self.opts.sides,
+                    opacity=self.opts.opacity,
                 )
             else:
-                color = tuple(color)
                 item = mlab.plot3d(
                     x,
                     y,
                     z,
-                    color=color,
-                    tube_radius=radius,
-                    tube_sides=sides,
-                    opacity=opacity,
+                    color=self.opts.color,
+                    tube_radius=self.opts.radius,
+                    tube_sides=self.opts.sides,
+                    opacity=self.opts.opacity,
                 )
 
             prop = item.actor.property
-            prop.specular = specular
-            prop.specular_color = specular_color
-            prop.specular_power = specular_power
+            prop.specular = self.opts.specular
+            prop.specular_color = self.opts.specular_color
+            prop.specular_power = self.opts.specular_power
 
             self.items.append(item)
-
-        self.length = length
-        self.name = name
 
     def hide(self):
         self.is_visible = False
@@ -134,27 +104,27 @@ class PlotTube:
         for item in self.items:
             item.remove()
 
-    @logging_and_warning_decorator()
-    def log_properties(self, logger=None) -> None:
-        """
-        Log all current tube properties using logger.info().
+    # @logging_and_warning_decorator()
+    # def log_properties(self, logger=None) -> None:
+    #     """
+    #     Log all current tube properties using logger.info().
 
-        This will include all attributes defined in the @auto_properties mapping,
-        as well as the number of points in the coordinates.
-        """
+    #     This will include all attributes defined in the @auto_properties mapping,
+    #     as well as the number of points in the coordinates.
+    #     """
 
-        print_lines = []
-        print_lines.append("=== PlotTube Properties ===")
+    #     print_lines = []
+    #     print_lines.append("=== PlotTube Properties ===")
 
-        for attr_name in self.__class__._auto_properties.keys():
-            if attr_name in {"x", "y", "z"}:
-                continue
-            try:
-                value = getattr(self, attr_name)
-                print_lines.append(f"{attr_name}: {value}")
-            except Exception as e:
-                logger.warning(f"Could not retrieve '{attr_name}': {e}")
+    #     for attr_name in self.__class__._auto_properties.keys():
+    #         if attr_name in {"x", "y", "z"}:
+    #             continue
+    #         try:
+    #             value = getattr(self, attr_name)
+    #             print_lines.append(f"{attr_name}: {value}")
+    #         except Exception as e:
+    #             logger.warning(f"Could not retrieve '{attr_name}': {e}")
 
-        print_lines.append("===========================")
+    #     print_lines.append("===========================")
 
-        logger.info("\n".join(print_lines))
+    #     logger.info("\n".join(print_lines))

@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Optional, Tuple
+from dataclasses import replace
 
-from .smoothened_line import SmoothenedLine
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
@@ -16,6 +16,7 @@ from ..datatypes import (
 )
 from ..field import apply_linear_transform
 from .visual_mayavi.plot_tube import PlotTube
+from .opts import OptsSmoothen, OptsTube
 
 
 class DisclinationLine:
@@ -79,7 +80,7 @@ class DisclinationLine:
             The geometrical meaning of these components is explained in the definition of `DefectIndex`
             in `datatype.py`.
 
-        box_size_periodic : DimensionPeriodic,
+        box_size_periodic_index : DimensionPeriodic,
             array_like of 3 ints or a single int
             Grid size in each dimension, used to infer periodicity.
             If a single float `x` is provided, it is interpreted as (x, x, x).
@@ -135,10 +136,9 @@ class DisclinationLine:
         self._defect_num = np.shape(self._defect_indices)[0]
         self._box_size_periodic_index = box_size_periodic_index
 
-        self.grid_offset = as_Vect(self.radius, name='grid_offset')
-        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
+        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+
         self.update_to_coord(grid_transform=grid_transform, grid_offset=grid_offset)
 
         if name == None:
@@ -152,6 +152,8 @@ class DisclinationLine:
         grid_transform: Tensor((3,3)) = np.eye(3),
     ):
 
+        self.grid_offset = as_Vect(self.radius, name='grid_offset')
+        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
         self._grid_transform = grid_transform
         self._grid_offset = grid_offset
         self._defect_coords = apply_linear_transform(
@@ -167,10 +169,7 @@ class DisclinationLine:
 
     def update_smoothen(
         self,
-        window_ratio: Optional[int] = None,
-        window_length: int = 21,
-        order: int = 3,
-        N_out_ratio: float = 3.0,
+        opts: OptsSmoothen = OptsSmoothen(),
     ) -> np.ndarray:
         """
         Smoothen the defect line using Savitzky-Golay filtering and cubic spline interpolation.
@@ -203,6 +202,7 @@ class DisclinationLine:
             Also stored internally as `self._defect_coords_smooth`.
         """
         from ..field import unwrap_trajectory, shift_to_box
+        from .smoothened_line import SmoothenedLine
 
         coords = self._defect_coords.copy()
 
@@ -237,18 +237,15 @@ class DisclinationLine:
         else:
             smoothen_mode = "interp"
             tail_length = 0
-
+        
+        new_opts = replace(opts, mode=smoothen_mode)
         output = SmoothenedLine(
             coords,
-            window_ratio=window_ratio,
-            window_length=window_length,
-            order=order,
-            N_out_ratio=N_out_ratio,
-            mode=smoothen_mode,
+            opts = new_opts
         )
 
         result = output._output[
-            int(tail_length * N_out_ratio) : int((-tail_length - 1) * N_out_ratio)
+            int(tail_length * output.opts.N_out_ratio) : int((-tail_length - 1) * output.opts.N_out_ratio)
         ]
         result = shift_to_box(result, self._box_size_periodic_index)
 
@@ -260,17 +257,8 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def visualize(
         self,
-        is_wrap: bool = False,
-        is_smooth: bool = True,
-        radius: float = 0.5,
-        opacity: float = 1,
-        color: Tuple[float, float, float] = (1, 1, 1),
-        sides: int = 6,
-        specular: float = 1,
-        specular_color: Vect3D = (1.0, 1.0, 1.0),
-        specular_power: float = 11,
-        scalars: Optional[np.ndarray] = None,
-        name: Optional[str] = None,
+        is_wrap: bool = True,
+        opts = OptsTube(),
         logger=None,
     ) -> None:
         """
@@ -307,9 +295,10 @@ class DisclinationLine:
             If not provides, use the line's name is directly applied.
         """
 
-        logger.debug(f"Start to visualize {self._name}")
+        self.opts = OptsTube
+        logger.debug(f"Start to visualize {self.opts.name}")
 
-        if is_smooth:
+        if self.opts.is_smooth:
             if hasattr(self, "_defect_coords_smooth"):
                 line_coords = self._defect_coords_smooth
             else:
@@ -320,26 +309,18 @@ class DisclinationLine:
             line_coords = self._defect_coords.copy()
 
         if name == None:
-            name = self._name
+            name = self.opts.name
 
         if self._end2end_category == "loop":
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
 
         line_coords_all = [line_coords]
-        scalars_all = [scalars] if scalars != None else []
+        scalars_all = [self.opts.scalars] if self.opts.scalars != None else []
 
         if not is_wrap:
             line_plot = PlotTube(
                 line_coords_all,
-                color=color,
-                radius=radius,
-                opacity=opacity,
-                sides=sides,
-                specular=specular,
-                specular_color=specular_color,
-                specular_power=specular_power,
-                scalars_all=scalars_all,
-                name=name,
+                opts=opts,
                 logger=logger,
             )
         else:
@@ -373,20 +354,13 @@ class DisclinationLine:
 
             for i in range(len(end_list) - 1):
                 coords_all.append(line_coords[end_list[i] : end_list[i + 1]])
-                if scalars is not None:
-                    scalars_all.append(scalars[end_list[i] : end_list[i + 1]])
+                if self.opts.scalars is not None:
+                    scalars_all.append(self.opts.scalars[end_list[i] : end_list[i + 1]])
 
+            new_opts = replace(opts, scalars_all)
             line_plot = PlotTube(
                 coords_all,
-                color=color,
-                radius=radius,
-                opacity=opacity,
-                sides=sides,
-                specular=specular,
-                specular_color=specular_color,
-                specular_power=specular_power,
-                scalars_all=scalars_all,
-                name=name,
+                opts=new_opts,
                 logger=logger,
             )
 

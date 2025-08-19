@@ -9,7 +9,7 @@ from typing import Union, Sequence, Optional, List, Tuple
 # ----------------------------------------------------------
 
 from .datatypes import (
-    Vect3D,
+    Vect,
     nField,
     DimensionPeriodicInput,
     DimensionFlagInput,
@@ -175,7 +175,7 @@ def defect_detect(
 def defect_classify_into_lines(
     defect_indices: DefectIndex,
     box_size_periodic: DimensionFlagInput = np.inf,
-    offset: Optional[Vect3D] = None,
+    offset: Optional[Vect(3)] = None,
     transform: Optional[np.ndarray] = None,
     logger=None,
 ) -> List["DisclinationLine"]:
@@ -207,7 +207,7 @@ def defect_classify_into_lines(
         Use `np.inf` for non-periodic directions.
         Example: [128, 128, np.inf] indicates periodicity in x and y only.
 
-    offset : Vect3D, array_like of 3 floats, optional
+    offset : Vect(3), array_like of 3 floats, optional
         Global offset added to all coordinates after transformation.
         Useful for shifting lines in real space.
         Default is None (no shift).

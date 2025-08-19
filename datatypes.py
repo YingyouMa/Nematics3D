@@ -27,7 +27,7 @@ Example usage:
 
 from typing import Union, Sequence, Literal, Tuple
 import numpy as np
-from number import numbers
+import numbers
 
 # __all__ = [
 #     "NumericInput",
@@ -53,6 +53,10 @@ from number import numbers
 # Number includes int, float, np.interger, np.floating and so on.
 # Notably, Number includes np.inf
 Number = numbers.Real
+
+# - scalar → broadcasted to all 3 dimensions
+# - list/tuple/array of 3 values → used directly
+NumericInput = Union[Number, Sequence[Number]]
 
 def as_Number(input_data, name='input data'):
     

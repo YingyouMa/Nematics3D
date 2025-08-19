@@ -3,6 +3,7 @@ from .disclination import *
 
 # from .elastic import *
 # from .coarse import *
+from .classes.opts import *
 from .classes.smoothened_line import SmoothenedLine
 from .classes.disclination_line import DisclinationLine
 from .classes.graph import Graph

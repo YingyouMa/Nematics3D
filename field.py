@@ -10,8 +10,8 @@ import numpy as np
 
 # from .general import *
 from .datatypes import (
-    Vect3D,
-    as_Vect3D,
+    Vect,
+    as_Vect,
     QField5,
     QField9,
     as_QField9,
@@ -316,7 +316,7 @@ def apply_linear_transform(
 
 
 def generate_mirror_point_periodic_boundary(
-    point: Vect3D,
+    point: Vect(3),
     box_size_periodic: DimensionPeriodicInput = np.inf,
     is_self: bool = True,
 ):
@@ -335,7 +335,7 @@ def generate_mirror_point_periodic_boundary(
 
     Parameters
     ----------
-    point : Vect3D
+    point : Vect(3)
         array-like of shape (3,)
         The coordinate index of the point to be mirrored. Can include negative or
         out-of-bound values near the edge.
@@ -370,7 +370,7 @@ def generate_mirror_point_periodic_boundary(
     from itertools import product
 
     box_size = as_dimension_info(box_size_periodic)
-    point = as_Vect3D(point)
+    point = as_Vect(3)(point)
 
     point = np.where(box_size == np.inf, point, point % box_size)
 
