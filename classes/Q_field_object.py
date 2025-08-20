@@ -18,6 +18,7 @@ from ..datatypes import (
     DimensionFlagInput,
     as_dimension_info,
     check_Sn,
+    check_bool_flags
 )
 from ..field import (
     Q_diagonalize,
@@ -164,6 +165,11 @@ class QFieldObject:
         logger=None,
     ):
 
+        if opts.window_length is not None:
+            logger.warning(
+                f">>> Window_length is manual input as {opts.window_length}. window_ratio would be ignored."
+            )
+
         for line in self._lines:
             if line._defect_num >= opts.min_line_length:
                 logger.debug(f"Start to smoothen {line._name}")
@@ -217,18 +223,17 @@ class QFieldObject:
     def visualize_disclination_lines(
         self,
         is_new: bool = True,
-        min_line_length: Optional[int] = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
+        is_extent: bool = True,
+        min_line_length: Optional[int] = None,
         lines_scalars_name: Optional[str] = None,
         opts_scene = OptsScene(),
         opts_tube = OptsTube(color=None),
         opts_extent = OptsExtent(),
         logger=None,
     ):
-
-        if not isinstance(self.is_smooth, bool):
-            raise TypeError("is_smooth must be a boolean value.")
+        check_bool_flags(locals())
 
         if min_line_length is None:
             msg = "No data of minimum line length is input for lines to be plotted. "
@@ -250,6 +255,8 @@ class QFieldObject:
                 logger.warning(
                     ">>> scalars of lines are input. Their color_input will be ignored"
                 )
+        else:
+            lines_scalars = [None for line in lines_plot]
 
         if opts_tube.color is None:
             from ..general import blue_red_in_white_bg, sample_far
@@ -268,19 +275,19 @@ class QFieldObject:
         for line, line_color, line_scalar in zip(
             lines_plot, lines_colors, lines_scalars
         ):
-            replace(opts_tube, name=line._name)
+            opts_tube = replace(opts_tube, name=line._name, color=tuple(line_color))
             line_visual = line.visualize(
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
                 scalars=line_scalar,
-                opts=opts_tube
+                opts=opts_tube,
                 logger=logger,
             )
 
             figure.add_object(line_visual, category="lines")
 
         if is_extent:
-            extent = self.add_extent(extent_radius, extent_opacity)
+            extent = self.add_extent(opts_extent)
             figure.add_object(extent, category="extent")
 
     @logging_and_warning_decorator()
@@ -351,12 +358,14 @@ class QFieldObject:
 
         return figure
 
-    def add_extent(self, extent_radius, extent_opacity):
+    def add_extent(self, opts=OptsExtent()):
         from .visual_mayavi.plot_extent import PlotExtent
 
         if not hasattr(self, "_corners"):
             self.update_corners()
-        extent = PlotExtent(self._corners, radius=extent_radius, opacity=extent_opacity)
+
+        opts = replace(opts, corners=self._corners)
+        extent = PlotExtent(opts=opts)
 
         return extent
 

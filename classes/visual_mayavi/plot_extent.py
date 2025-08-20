@@ -1,9 +1,8 @@
 from mayavi import mlab
 import numpy as np
-from typing import List, Tuple
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import Vect, as_Vect, ColorRGB, as_ColorRGB
+from ..opts import OptsExtent
 
 class PlotExtent:
     """
@@ -13,11 +12,7 @@ class PlotExtent:
 
     def __init__(
         self,
-        corners: np.ndarray,
-        radius: float = 1,
-        sides: int = 6,
-        color: ColorRGB = (0, 0, 0),
-        opacity: float = 1,
+        opts=OptsExtent()
     ):
         """
         Create an Extent object and draw it in the Mayavi scene.
@@ -40,22 +35,14 @@ class PlotExtent:
         opacity : float in [0,1], optional
             The opacity of extent
         """
-        color = as_ColorRGB(color)
-        self.corners = corners
-        self.items = self.draw_box(
-            corners, radius=radius, sides=sides, color=color, opacity=opacity
-        )
+        self.opts = opts
+        if self.opts.corners is None:
+            raise ValueError("The array \'corners\', which stores the positions of the 8 points, are not inputted (the value is None)")
+        self.items = self.draw_box()
 
-    @staticmethod
-    def draw_box(
-        corners: np.ndarray,
-        radius: float = 0.05,
-        sides: int = 6,
-        color: ColorRGB = (0, 0, 0),
-        opacity: float = 1,
-    ):
+    def draw_box(self):
         """Draw the box edges and store the actors."""
-        color = as_ColorRGB(color)
+        corners = self.opts.corners
         edges = [
             (0, 1),
             (0, 2),
@@ -79,10 +66,10 @@ class PlotExtent:
                 x,
                 y,
                 z,
-                tube_radius=radius,
-                tube_sides=sides,
-                color=color,
-                opacity=opacity,
+                tube_radius=self.opts.radius,
+                tube_sides=self.opts.sides,
+                color=self.opts.color,
+                opacity=self.opts.opacity,
             )
             result.append(actor)
 
@@ -98,27 +85,27 @@ class PlotExtent:
         for item in self.items:
             item.remove()
 
-    @logging_and_warning_decorator()
-    def log_properties(self, logger=None) -> None:
-        """
-        Log all current tube properties using logger.info().
+    # @logging_and_warning_decorator()
+    # def log_properties(self, logger=None) -> None:
+    #     """
+    #     Log all current tube properties using logger.info().
 
-        This will include all attributes defined in the @auto_properties mapping,
-        as well as the number of points in the coordinates.
-        """
+    #     This will include all attributes defined in the @auto_properties mapping,
+    #     as well as the number of points in the coordinates.
+    #     """
 
-        print_lines = []
-        print_lines.append("=== PlotTube Properties ===")
+    #     print_lines = []
+    #     print_lines.append("=== PlotTube Properties ===")
 
-        for attr_name in self.__class__._auto_properties.keys():
-            if attr_name in {"x", "y", "z"}:
-                continue
-            try:
-                value = getattr(self, attr_name)
-                print_lines.append(f"{attr_name}: {value}")
-            except Exception as e:
-                logger.warning(f"Could not retrieve '{attr_name}': {e}")
+    #     for attr_name in self.__class__._auto_properties.keys():
+    #         if attr_name in {"x", "y", "z"}:
+    #             continue
+    #         try:
+    #             value = getattr(self, attr_name)
+    #             print_lines.append(f"{attr_name}: {value}")
+    #         except Exception as e:
+    #             logger.warning(f"Could not retrieve '{attr_name}': {e}")
 
-        print_lines.append("===========================")
+    #     print_lines.append("===========================")
 
-        logger.info("\n".join(print_lines))
+    #     logger.info("\n".join(print_lines))

@@ -36,12 +36,13 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 
 Q.update_defects()
 Q.update_lines_classify()
-opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=30, window_length=21)
+opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=50, window_length=41)
 Q.update_lines_smoothen(opts=opts_smoothen)
+Q.visualize_disclination_lines()
 
 # for line in Q._lines:
 #     if line._defect_num > 30:
-#         line.visualize(is_wrap=True, scalars=line._defect_coords_smooth[:,0])
+#         line.visualize(is_wrap=True)
 
 # trans = 0
 # Q.update_defects()

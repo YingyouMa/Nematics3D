@@ -255,9 +255,9 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def visualize(
         self,
+        is_wrap: bool = True,
         is_smooth: bool = True,
         scalars: Optional[np.ndarray] = None,
-        is_wrap: bool = True,
         opts = OptsTube(),
         logger=None,
     ) -> None:
@@ -313,7 +313,8 @@ class DisclinationLine:
 
         if self._end2end_category == "loop":
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
-            scalars = np.concatenate((scalars, [scalars[0]]))
+            if scalars is not None:
+                scalars = np.concatenate((scalars, [scalars[0]]))
 
         line_coords_all = [line_coords]
         scalars_all = [scalars] if scalars is not None else []
@@ -358,6 +359,8 @@ class DisclinationLine:
                 coords_all.append(line_coords[end_list[i] : end_list[i + 1]])
                 if scalars is not None:
                     scalars_all.append(scalars[end_list[i] : end_list[i + 1]])
+                else:
+                    scalars_all.append(None)
 
             line_plot = PlotTube(
                 coords_all,

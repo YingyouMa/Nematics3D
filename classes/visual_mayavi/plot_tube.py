@@ -52,7 +52,7 @@ class PlotTube:
         self.scalars_all = scalars_all
         
         if self.opts.color is None:
-            replace(self.opts, color=(1,1,1))
+            self.opts = replace(self.opts, color=(1,1,1))
 
         num_sublines = len(self.coords_all)
         if self.scalars_all is not None:
@@ -60,9 +60,10 @@ class PlotTube:
             logger.debug(">>> The color of tube will be ignored")
         else:
             self.scalars_all = [None for i in range(num_sublines)]
+            
 
         for coords, scalars in zip(self.coords_all, self.scalars_all):
-
+        
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
 
             if scalars is not None and len(scalars) != len(x):

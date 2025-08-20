@@ -40,14 +40,16 @@ class OptsScene:
     bgcolor: ColorRGB = (1.0, 1.0, 1.0)
     fgcolor: ColorRGB = (0.0, 0.0, 0.0)
     name: str = "None"
-    azimuth: Number = 0
-    elevation: Number = 0
+    azimuth: Number = 45
+    elevation: Number = 54.735610317245346
     roll: Number = 0
     distance: Optional[Number] = None
     focal_point: Optional[Vect(3)] = None
+    name: Optional[str] = 'None'
 
     def __post_init__(self):
         self.fig_size = as_Vect(self.fig_size, dim=2)
+        self.fig_size = tuple(self.fig_size)
         self.bgcolor = as_ColorRGB(self.bgcolor)
         self.bgcolor = as_ColorRGB(self.bgcolor)
         
@@ -63,6 +65,9 @@ class OptsScene:
             
         if self.focal_point is not None:
             self.focal_point = as_Number(self.focal_point, name="The focal point of scene camera")
+
+        if not isinstance(self.name, str):
+            raise TypeError("The name of the tube must be str")
         
         
 # --- Plane Options ---
@@ -129,22 +134,26 @@ class OptsnPlane:
 # --- Extent Options ---
 @dataclass
 class OptsExtent:
-    is_extent: bool = True
+    corners: Optional[np.ndarray] = None
     radius: Number = 1.0
+    sides: Number = 6
     opacity: Number = 1.0
+    color: ColorRGB = (0,0,0)
 
     def __post_init__(self):
-        if not isinstance(self.is_extent, bool):
-            raise TypeError("enabled must be a bool")
+        if self.corners is not None:
+            self.corners = as_Tensor(self.corners, (8,3), name="The array \'corners\' storing the positions of the 8 points.")
         self.radius = as_Number(self.radius, name='radius of extent tubes')
+        self.sides = as_Number(self.sides, name='sides number of extent tubes')
         self.opacity = as_Number(self.opacity, name='opacity of extent tubes')
+        self.color = as_ColorRGB(self.color)
         
 # --- Tube Options ---
 @dataclass
 class OptsTube:
     radius: Number = 0.5
     opacity: Number = 1
-    color: Optional[ColorRGB] = None
+    color: ColorRGB = (1.0, 1.0, 1.0)
     sides: Number = 6
     specular: Number = 1
     specular_color: ColorRGB = (1.0, 1.0, 1.0)
@@ -155,13 +164,10 @@ class OptsTube:
             
         self.radius = as_Number(self.radius, name='radius of tube')
         self.opacity = as_Number(self.opacity, name='opacity of tube')
-        
-        if self.color is not None:
-            self.color = as_ColorRGB(self.color, name='color of tube')
-            
+        self.color = as_ColorRGB(self.color)
         self.sides = as_Number(self.sides, name='number of sides of tube')
         self.specular = as_Number(self.specular, name='Strength of the tube specular highlight')
-        self.specular_color = as_ColorRGB(self.specular_color, name='Color of the tube specular highlight')
+        self.specular_color = as_ColorRGB(self.specular_color)
         self.specular_power = as_Number(self.specular_power, name='Shininess of the tube specular highlight')
         
         if not isinstance(self.name, str):

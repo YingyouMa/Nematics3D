@@ -541,3 +541,9 @@ def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
 #     grid points (3, 4, 7), (3, 4, 8), (3, 5, 7), and (3, 5, 8)
 #   This defines a 2×2 loop over which the director field forms a closed path.
 DefectIndex = np.ndarray
+
+
+def check_bool_flags(d: dict, prefix: str = "is_"):
+    for name, value in d.items():
+        if name.startswith(prefix) and not isinstance(value, bool):
+            raise TypeError(f"{name} must be a bool, got {type(value)}")

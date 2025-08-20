@@ -98,10 +98,10 @@ class SmoothenedLine:
                 self.opts.window_length = int(self._N_init / self.opts.window_ratio / 2) * 2 + 1
                 self.opts.window_ratio = self._N_init / self.opts.window_length
             else:
-                if self.opts.window_ratio is not None:
-                    logger.info(
-                        f"Window_length is manual input as {self.opts.window_length}. window_ratio would be ignored."
-                    )
+                # if self.opts.window_ratio is not None:
+                #     logger.debug(
+                #         f"Window_length is manual input as {self.opts.window_length}. window_ratio would be ignored."
+                #     )
                 self.opts.window_length = self.opts.window_length
                 self.opts.window_ratio = self._N_init / self.opts.window_length
 

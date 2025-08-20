@@ -47,9 +47,13 @@ class PlotScene:
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
         
-        if self.name is not None and opts.name is not None:
-            logger.warning("The figure already has its name {self.name}. Now it is re-named as {opts.name}")
+        if opts.name is not None:
+            if hasattr(self, 'name') and self.name is not None:
+                logger.warning("The figure already has its name {self.name}. Now it is re-named as {opts.name}")
             self.name = opts.name
+        if opts.name is None:
+            if not hasattr(self, 'name'):
+                self.name = opts.name
             
         self.scene._set_angles(
             opts.azimuth,
@@ -72,8 +76,8 @@ class PlotScene:
             self.objects[category] = []
 
         # Step 1: Determine the base name
-        if hasattr(obj, "name") and obj.name:
-            base_name = obj.name
+        if hasattr(obj.opts, "name"):
+            base_name = obj.opts.name
         else:
             base_name = category + "_0"  # fallback: use category name
 

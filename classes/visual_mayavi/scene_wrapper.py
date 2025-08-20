@@ -52,7 +52,10 @@ class SceneWrapper:
         view_dir = view_dir / np.linalg.norm(view_dir)
         up_candidate = np.array([0, 0, 1])
         up_proj = up_candidate - np.dot(up_candidate, view_dir) * view_dir
-        up = up_proj / np.linalg.norm(up_proj)
+        if np.linalg.norm(up_proj) != 0:
+            up = up_proj / np.linalg.norm(up_proj)
+        else:
+            up = np.array([0, 0, 1])
 
         if abs(r) > 1e-8:
             k = view_dir
