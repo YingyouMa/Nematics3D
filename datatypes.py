@@ -61,7 +61,7 @@ NumericInput = Union[Number, Sequence[Number]]
 def as_Number(input_data, name='input data'):
     
     if not isinstance(input_data, numbers.Real):
-        raise TypeError(f"{name} must be a number")
+        raise TypeError(f"{name} must be a number. Got {input_data} instead.")
         
     return input_data
 
@@ -109,7 +109,7 @@ def as_Vect(input_data, dim=3, name='input data', is_norm=False):
     if (
        not isinstance(input_data, (tuple, list, np.ndarray))
        or len(input_data) != dim     
-       or any(isinstance(x, numbers.Real) for x in input_data)
+       or not any(isinstance(x, numbers.Real) for x in input_data)
             ):
         raise ValueError(
             f"{name} must be a vector with {dim} numbers. Got {input_data} instead."
@@ -198,7 +198,7 @@ def as_ColorRGB(input_data, is_norm=False, norm_order=2):
     if (
        not isinstance(input_data, (tuple, list, np.ndarray))
        or len(input_data) != 3     
-       or any(isinstance(x, numbers.Real) for x in input_data)
+       or not any(isinstance(x, numbers.Real) for x in input_data)
             ):
         raise ValueError(
             f"For ColorRGB, input_data must be a vector with 3 numbers. Got {input_data} instead."

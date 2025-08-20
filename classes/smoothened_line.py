@@ -81,6 +81,7 @@ class SmoothenedLine:
         
         self._line_coord_input = line_coord_input
         self.opts = opts
+        self._N_init = len(self._line_coord_input)
 
         self.apply_smoothen(logger=logger)
 
@@ -94,20 +95,20 @@ class SmoothenedLine:
         else:
 
             if self.opts.window_length is None:
-                self.opts.window_length = int(self.opts.N_init / self.opts.window_ratio / 2) * 2 + 1
-                self.opts.window_ratio = self.opts.N_init / self.opts.window_length
+                self.opts.window_length = int(self._N_init / self.opts.window_ratio / 2) * 2 + 1
+                self.opts.window_ratio = self._N_init / self.opts.window_length
             else:
                 if self.opts.window_ratio is not None:
-                    logger.warning(
-                        ">>> Window_length is manual input. window_ratio would be ignored."
+                    logger.info(
+                        f"Window_length is manual input as {self.opts.window_length}. window_ratio would be ignored."
                     )
                 self.opts.window_length = self.opts.window_length
-                self.opts.window_ratio = self.opts.N_init / self.opts.window_length
+                self.opts.window_ratio = self._N_init / self.opts.window_length
 
-            self.opts.N_out = int(self.opts.N_init * self.opts.N_out_ratio)
+            self.opts.N_out = int(self._N_init * self.opts.N_out_ratio)
 
             # Step 1: Apply Savitzky-Golay filter to smoothen the curve
-            line_length = self.opts.N_init
+            line_length = self._N_init
             if self.opts.window_length >= line_length:
                 raise ValueError(
                     f"Filter window size {self.opts.window_length} must be smaller than line length {line_length}"
@@ -121,7 +122,7 @@ class SmoothenedLine:
             )
 
             # Step 2: Define spline parameter u
-            uspline = np.arange(self.opts.N_init) / self.opts.N_init
+            uspline = np.arange(self._N_init) / self._N_init
 
             # Step 3: Fit and evaluate spline
             tck = splprep(line_points.T, u=uspline, s=0)[0]
@@ -140,7 +141,7 @@ class SmoothenedLine:
             logger.info(f"filter mode: {self.opts.mode}")
             logger.info(f"ratio between output and input: {self.opts.N_out_ratio}")
             logger.info(f"length of output: {self.opts.N_out}")
-            logger.info(f"length of input: {self.opts.N_init}")
+            logger.info(f"length of input: {self._N_init}")
             logger.info(f"window length: {self.opts.window_length}")
             logger.info(f"input/window ratio: {self.opts.window_ratio}")
         else:

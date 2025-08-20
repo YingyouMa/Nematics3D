@@ -370,7 +370,7 @@ def generate_mirror_point_periodic_boundary(
     from itertools import product
 
     box_size = as_dimension_info(box_size_periodic)
-    point = as_Vect(3)(point)
+    point = as_Vect(point, name="The position of point which needs to find mirror image")
 
     point = np.where(box_size == np.inf, point, point % box_size)
 

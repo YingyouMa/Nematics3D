@@ -1,6 +1,7 @@
 import numpy as np
 import time
 from typing import Tuple, Optional, List, Union, Callable, Literal
+from dataclasses import replace
 
 from ..logging_decorator import logging_and_warning_decorator, Logger
 from ..datatypes import (
@@ -29,7 +30,7 @@ from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene
-from .visual_mayavi.PlotOpts import OptsExtent, OptsPlane, OptsnPlane, OptsScene
+from .opts import OptsExtent, OptsPlane, OptsnPlane, OptsScene, OptsSmoothen, OptsTube
 
 
 class QFieldObject:
@@ -144,8 +145,8 @@ class QFieldObject:
         self._lines = defect_classify_into_lines(
             self._defect_indices,
             box_size_periodic=self._box_size_periodic,
-            offset=self._grid_offset,
-            transform=self._grid_transform,
+            grid_offset=self._grid_offset,
+            grid_transform=self._grid_transform,
             logger=logger,
         )
         self._lines = sorted(
@@ -159,40 +160,14 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def update_lines_smoothen(
         self,
-        window_ratio: Optional[int] = None,
-        window_length: Optional[int] = None,
-        order: int = 3,
-        N_out_ratio: float = 3.0,
-        min_line_length: Optional[int] = None,
+        opts=OptsSmoothen(),
         logger=None,
     ):
-        if window_length is None:
-            msg = "No data of window_length is input for smoothening lines. \n"
-            msg += f"Use the default value {self.DEFAULT_SMOOTH_WINDOW_LENGTH}"
-            logger.info(msg)
-            window_length = self.DEFAULT_SMOOTH_WINDOW_LENGTH
-        else:
-            logger.debug(f"window_length = {window_length}")
-
-        if min_line_length is None:
-            msg = (
-                "No data of minimum line length is input for lines to be smoothened. \n"
-            )
-            msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
-            logger.info(msg)
-            min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
-        else:
-            logger.debug(f"min_line_length = {min_line_length}")
 
         for line in self._lines:
-            if line._defect_num >= min_line_length:
+            if line._defect_num >= opts.min_line_length:
                 logger.debug(f"Start to smoothen {line._name}")
-                line.update_smoothen(
-                    window_ratio=window_ratio,
-                    window_length=window_length,
-                    order=order,
-                    N_out_ratio=N_out_ratio,
-                )
+                line.update_smoothen(opts=opts)
 
     def update_corners(self):
 
@@ -225,8 +200,8 @@ class QFieldObject:
         interpolator = Interpolator(
             interpolator,
             np.array([v[-1], u[-1], w[-1]]),
-            transform=self._grid_transform,
-            offset=self._grid_offset,
+            grid_transform=self._grid_transform,
+            grid_offset=self._grid_offset,
         )
 
         self._interpolator = interpolator
@@ -241,27 +216,19 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def visualize_disclination_lines(
         self,
-        min_line_length: Optional[int] = None,
         is_new: bool = True,
-        fig_size: Tuple[int, int] = (1920, 1360),
-        bgcolor: Vect3D = (1.0, 1.0, 1.0),
-        fgcolor: Vect3D = (0.0, 0.0, 0.0),
+        min_line_length: Optional[int] = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
-        lines_color_input_all: Optional[np.ndarray] = None,
         lines_scalars_name: Optional[str] = None,
-        radius: float = 0.5,
-        sides: int = 6,
-        opacity: float = 1,
-        specular: float = 1,
-        specular_color: Vect3D = (1.0, 1.0, 1.0),
-        specular_power: float = 11,
-        names_all: Optional[List[str]] = None,
-        is_extent: bool = True,
-        extent_radius: float = 1,
-        extent_opacity: float = 1,
+        opts_scene = OptsScene(),
+        opts_tube = OptsTube(color=None),
+        opts_extent = OptsExtent(),
         logger=None,
     ):
+
+        if not isinstance(self.is_smooth, bool):
+            raise TypeError("is_smooth must be a boolean value.")
 
         if min_line_length is None:
             msg = "No data of minimum line length is input for lines to be plotted. "
@@ -279,59 +246,34 @@ class QFieldObject:
             logger.info("Scalars of lines are input")
             lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
             lines_colors = [None for line in lines_plot]
-            if lines_color_input_all is not None:
+            if opts_tube.color is not None:
                 logger.warning(
                     ">>> scalars of lines are input. Their color_input will be ignored"
                 )
+
+        if opts_tube.color is None:
+            from ..general import blue_red_in_white_bg, sample_far
+
+            color_map = blue_red_in_white_bg()
+            color_map_length = np.shape(color_map)[0] - 1
+            lines_colors = color_map[
+                (sample_far(len(lines_plot)) * color_map_length).astype(int)
+            ]
         else:
-            lines_scalars = [None for line in lines_plot]
-            if lines_color_input_all is not None:
-                if np.shape(lines_color_input_all) == (3,):
-                    lines_colors = [tuple(lines_color_input_all) for line in lines_plot]
-                elif np.shape(lines_color_input_all) == (len(lines_plot), 3):
-                    lines_colors = lines_color_input_all
-                else:
-                    raise ValueError(
-                        f"The shape of lines_color_input_all should either be (3,) or (len(lines_plot), 3), which is ({len(lines_plot)}, 3)"
-                    )
-            else:
-                logger.info(
-                    "No color data is input. Use the default color map, trying to set those longest lines with distinct colors"
-                )
-                from ..general import blue_red_in_white_bg, sample_far
+            lines_colors = [opts_tube.color for line in lines_plot]
 
-                color_map = blue_red_in_white_bg()
-                color_map_length = np.shape(color_map)[0] - 1
-                lines_colors = color_map[
-                    (sample_far(len(lines_plot)) * color_map_length).astype(int)
-                ]
-
-        if names_all is not None:
-            if len(names_all) != len(lines_plot):
-                logger.warning(
-                    f"The length of names_all {len(names_all)} does not match the total numbers of lines to be plotted: {len(lines_plot)}.\n Use the default names instead."
-                )
-        else:
-            names_all = [line._name for line in lines_plot]
-
-        figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
+        figure = self.add_scene(is_new, opts=opts_scene)
 
         logger.debug("Start to draw disclination lines")
-        for line, line_color, line_scalar, name in zip(
-            lines_plot, lines_colors, lines_scalars, names_all
+        for line, line_color, line_scalar in zip(
+            lines_plot, lines_colors, lines_scalars
         ):
+            replace(opts_tube, name=line._name)
             line_visual = line.visualize(
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
-                radius=radius,
-                opacity=opacity,
-                color=line_color,
-                sides=sides,
-                specular=specular,
-                specular_color=specular_color,
-                specular_power=specular_power,
                 scalars=line_scalar,
-                name=name,
+                opts=opts_tube
                 logger=logger,
             )
 
@@ -344,16 +286,16 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def visualize_n_in_Q(
         self,
-        normal: Vect3D,
+        normal: Vect(3),
         space: float,
         size: float,
         is_new: bool = True,
         fig_size: Tuple[int, int] = (1920, 1360),
-        bgcolor: Vect3D = (1.0, 1.0, 1.0),
-        fgcolor: Vect3D = (0.0, 0.0, 0.0),
+        bgcolor: ColorRGB = (1.0, 1.0, 1.0),
+        fgcolor: ColorRGB = (0.0, 0.0, 0.0),
         shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: Vect3D = (0, 0, 0),
-        axis1: Optional[Vect3D] = None,
+        origin: ColorRGB = (0, 0, 0),
+        axis1: Optional[ColorRGB] = None,
         colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse,
         opacity: Union[Callable[nField, np.ndarray], float] = 1,
         length: float = 3.5,
@@ -397,12 +339,10 @@ class QFieldObject:
             extent = self.add_extent(extent_radius, extent_opacity)
             figure.add_object(extent, category="extent")
 
-    def add_scene(self, is_new, fig_size, bgcolor, fgcolor):
+    def add_scene(self, is_new=True, opts=OptsScene):
         figure = PlotScene(
             is_new=is_new,
-            size=fig_size,
-            bgcolor=bgcolor,
-            fgcolor=fgcolor,
+            opts=opts
         )
         if is_new or (not is_new and len(self.figures) == 0):
             self.figures.append(figure)

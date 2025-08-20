@@ -1,5 +1,7 @@
 from mayavi import mlab
 import numpy as np
+from typing import Optional
+from dataclasses import replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import OptsTube
@@ -23,6 +25,7 @@ class PlotTube:
     def __init__(
         self,
         coords_all: np.ndarray,
+        scalars_all: Optional[np.ndarray] = None,
         opts = OptsTube(),
         logger=None,
     ) -> None:
@@ -44,26 +47,29 @@ class PlotTube:
         """
 
         self.items = []
-        self.coords = coords_all
+        self.coords_all = coords_all
         self.opts = opts
+        self.scalars_all = scalars_all
+        
+        if self.opts.color is None:
+            replace(self.opts, color=(1,1,1))
 
-        num_sublines = len(coords_all)
-        if len(self.opts.scalars_all) > 0:
+        num_sublines = len(self.coords_all)
+        if self.scalars_all is not None:
             logger.debug(">>> The scalars of tube is input")
             logger.debug(">>> The color of tube will be ignored")
         else:
-            scalars_all = [None for i in range(num_sublines)]
+            self.scalars_all = [None for i in range(num_sublines)]
 
-        length = 0
-        for coords, scalars in zip(coords_all, scalars_all):
+        for coords, scalars in zip(self.coords_all, self.scalars_all):
 
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-            length += len(x)
 
-            if scalars is not None and len(scalars) != length:
-                msg = f">>> The length of this subline {length} does not match with scalars {len(scalars)}"
+            if scalars is not None and len(scalars) != len(x):
+                msg = f">>> The length of this subline {len(x)} does not match with scalars {len(scalars)}.\n"
                 msg += ">>> Ignore scalars in the following"
                 logger.warning(msg)
+                scalars = None
 
             if scalars is not None:
 

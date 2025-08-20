@@ -1,10 +1,11 @@
 import numpy as np
 from mayavi import mlab
-from typing import Any
 from collections import defaultdict
+
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_ColorRGB
 from .scene_wrapper import SceneWrapper
+from ..opts import OptsScene
 
 
 class PlotScene:
@@ -12,14 +13,13 @@ class PlotScene:
     A scene manager that holds and manages multiple Mayavi plot objects,
     sharing a single Mayavi figure as the drawing canvas.
     """
-
+    
+    @logging_and_warning_decorator
     def __init__(
         self,
-        is_new=True,
-        size=(1920, 1360),
-        bgcolor=(1, 1, 1),
-        fgcolor=(0, 0, 0),
-        name="None",
+        is_new: bool = True,
+        opts = OptsScene(),
+        logger=None
     ):
         """
         Initialize the scene with a new Mayavi figure.
@@ -31,21 +31,37 @@ class PlotScene:
             is_new: If create a now scene.
                 If not, use the current scene and all other arguments are ignored.
         """
-        bgcolor = as_ColorRGB(bgcolor)
-        fgcolor = as_ColorRGB(fgcolor)
         if is_new:
+            size = opts.fig_size
+            bgcolor = opts.bgcolor
+            fgcolor = opts.fgcolor
             self._fig = mlab.figure(size=size, bgcolor=bgcolor, fgcolor=fgcolor)
+            self.scene = SceneWrapper(self._fig.scene)
         else:
             self._fig = mlab.gcf()
+            self.scene = SceneWrapper(self._fig.scene)
+            self.scene.background = opts.bgcolor
+            self.scene.foreground = opts.fgcolor
+            self.add_object(self.scene, 'scene')
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
-
-        self.name = name
-        self.scene = SceneWrapper(self._fig.scene)
+        
+        if self.name is not None and opts.name is not None:
+            logger.warning("The figure already has its name {self.name}. Now it is re-named as {opts.name}")
+            self.name = opts.name
+            
+        self.scene._set_angles(
+            opts.azimuth,
+            opts.elevation,
+            opts.roll, 
+            opts.distance, 
+            opts.focal_point)
+        
+        
 
     @logging_and_warning_decorator
-    def add_object(self, obj: Any, category: str = "default", logger=None) -> None:
+    def add_object(self, obj, category: str = "default", logger=None) -> None:
         """
         Add a plot object to a category in the scene.
         Ensures the object has a unique 'name' within the category.
@@ -80,7 +96,7 @@ class PlotScene:
         self.objects[category].append(obj)
 
     @logging_and_warning_decorator
-    def find_object(self, category: str, name: str, logger=None) -> Any:
+    def find_object(self, category: str, name: str, logger=None):
         """
         Find an object in a category by its name.
 

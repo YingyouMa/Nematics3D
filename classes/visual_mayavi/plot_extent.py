@@ -2,26 +2,9 @@ from mayavi import mlab
 import numpy as np
 from typing import List, Tuple
 
-from .visual_decorator import auto_properties
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import Vect3D, as_ColorRGB
+from ..opts import Vect, as_Vect, ColorRGB, as_ColorRGB
 
-
-@auto_properties(
-    # Dynamically create property getters/setters for common visualization attributes.
-    # These map directly to Mayavi actor attributes so you can write:
-    #   lineObj.color = (1, 0, 0)   instead of    lineObj.actor.actor.property.color = (1, 0, 0)
-    {
-        "color": "actor.property.color",
-        "opacity": "actor.property.opacity",
-        "radius": "parent.parent.filter.radius",
-        "sides": "parent.parent.filter.number_of_sides",
-        "specular": "actor.property.specular",
-        "specular_color": "actor.property.specular_color",
-        "specular_power": "actor.property.specular_power",
-        "is_visible": "actor.visible",
-    }
-)
 class PlotExtent:
     """
     Represents a 3D rectangular box (wireframe) in Mayavi,
@@ -33,7 +16,7 @@ class PlotExtent:
         corners: np.ndarray,
         radius: float = 1,
         sides: int = 6,
-        color: Vect3D = (0, 0, 0),
+        color: ColorRGB = (0, 0, 0),
         opacity: float = 1,
     ):
         """
@@ -68,7 +51,7 @@ class PlotExtent:
         corners: np.ndarray,
         radius: float = 0.05,
         sides: int = 6,
-        color: Tuple[float, float, float] = (0, 0, 0),
+        color: ColorRGB = (0, 0, 0),
         opacity: float = 1,
     ):
         """Draw the box edges and store the actors."""

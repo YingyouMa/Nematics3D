@@ -28,6 +28,13 @@ class SceneWrapper:
         return az, el, roll, dist, focal
 
     def _set_angles(self, az, el, roll, dist, focal):
+        
+        if dist is None:
+            dist = self.distance
+            
+        if focal is None:
+            focal = self.focal_point
+        
         az = np.radians(az)
         el = np.radians(el)
         r = np.radians(roll)
@@ -57,11 +64,11 @@ class SceneWrapper:
 
 
     @property
-    def azimuthal(self):
+    def azimuth(self):
         return self._get_angles()[0]
 
-    @azimuthal.setter
-    def azimuthal(self, value):
+    @azimuth.setter
+    def azimuth(self, value):
         _, el, roll, dist, focal = self._get_angles()
         self._set_angles(value, el, roll, dist, focal)
 

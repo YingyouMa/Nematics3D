@@ -1,6 +1,6 @@
 import numpy as np
 
-from Nematics3D.datatypes import Vect3D, as_Vect3D
+from Nematics3D.datatypes import Vect, as_Vect, Tensor, as_Tensor
 from Nematics3D.field import apply_linear_transform
 
 
@@ -10,16 +10,14 @@ class Interpolator:
         self,
         interpolator,
         grid_max,
-        transform: np.ndarray = np.eye(3),
-        offset: Vect3D = np.array([0, 0, 0]),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
     ):
 
-        offset = as_Vect3D(offset)
 
         self._interpolator = interpolator
-        self._transform = transform
-        self._offset = offset
-        self._grid_max = grid_max
+        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
 
     def interpolate(self, points: np.ndarray, is_index=False):
 

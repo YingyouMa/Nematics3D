@@ -2,7 +2,7 @@ import numpy as np
 from typing import Optional, Literal, Callable, List, Union
 
 from .plot_plane_grid import PlotPlaneGrid
-from Nematics3D.datatypes import Vect3D, nField, ColorRGB, as_ColorRGB
+from Nematics3D.datatypes import Vect, as_Vect, nField, ColorRGB, as_ColorRGB, Tensor, as_Tensor
 from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, split_points
@@ -14,13 +14,13 @@ class PlotnPlane:
     @logging_and_warning_decorator
     def __init__(
         self,
-        normal: Vect3D,
+        normal: Vect(3),
         space: float,
         size: float,
         QInterpolator,
         shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: Vect3D = (0, 0, 0),
-        axis1: Optional[Vect3D] = None,
+        origin: Vect(3) = (0, 0, 0),
+        axis1: Optional[Vect(3)] = None,
         corners_limit: Optional[np.ndarray] = None,
         colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse,
         opacity: Union[Callable[nField, np.ndarray], float] = 1,
@@ -28,8 +28,8 @@ class PlotnPlane:
         radius: float = 0.5,
         is_n_defect: bool = True,
         defect_opacity: float = 1,
-        grid_offset: Vect3D = np.array([0, 0, 0]),
-        grid_transform: np.ndarray = np.eye(3),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         logger=None,
     ):
 
@@ -161,8 +161,8 @@ class PlotnPlane:
         self.corners_limit = corners_limit
         self.is_n_defect = is_n_defect
         self.defect_opacity = defect_opacity
-        self.grid_offset = grid_offset
-        self.grid_transform = grid_transform
+        self.grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self.grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
 
     def n_visualize_each(self, data, opacity_func, length, radius):
 

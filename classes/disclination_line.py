@@ -152,10 +152,8 @@ class DisclinationLine:
         grid_transform: Tensor((3,3)) = np.eye(3),
     ):
 
-        self.grid_offset = as_Vect(self.radius, name='grid_offset')
-        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
+        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
+        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
         self._defect_coords = apply_linear_transform(
             self._defect_indices,
             transform=self._grid_transform,
@@ -257,6 +255,8 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def visualize(
         self,
+        is_smooth: bool = True,
+        scalars: Optional[np.ndarray] = None,
         is_wrap: bool = True,
         opts = OptsTube(),
         logger=None,
@@ -295,10 +295,13 @@ class DisclinationLine:
             If not provides, use the line's name is directly applied.
         """
 
-        self.opts = OptsTube
-        logger.debug(f"Start to visualize {self.opts.name}")
+        if not isinstance(is_smooth, bool):
+            raise TypeError(f"is_smooth must be a boolean value. Got {is_smooth} instead.")
 
-        if self.opts.is_smooth:
+        self.opts = opts
+        logger.debug(f"Start to visualize line: {self.opts.name}")
+
+        if is_smooth:
             if hasattr(self, "_defect_coords_smooth"):
                 line_coords = self._defect_coords_smooth
             else:
@@ -308,18 +311,17 @@ class DisclinationLine:
         else:
             line_coords = self._defect_coords.copy()
 
-        if name == None:
-            name = self.opts.name
-
         if self._end2end_category == "loop":
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
+            scalars = np.concatenate((scalars, [scalars[0]]))
 
         line_coords_all = [line_coords]
-        scalars_all = [self.opts.scalars] if self.opts.scalars != None else []
+        scalars_all = [scalars] if scalars is not None else []
 
         if not is_wrap:
             line_plot = PlotTube(
                 line_coords_all,
+                scalars_all=scalars_all,
                 opts=opts,
                 logger=logger,
             )
@@ -354,13 +356,13 @@ class DisclinationLine:
 
             for i in range(len(end_list) - 1):
                 coords_all.append(line_coords[end_list[i] : end_list[i + 1]])
-                if self.opts.scalars is not None:
-                    scalars_all.append(self.opts.scalars[end_list[i] : end_list[i + 1]])
+                if scalars is not None:
+                    scalars_all.append(scalars[end_list[i] : end_list[i + 1]])
 
-            new_opts = replace(opts, scalars_all)
             line_plot = PlotTube(
                 coords_all,
-                opts=new_opts,
+                scalars_all=scalars_all,
+                opts=opts,
                 logger=logger,
             )
 

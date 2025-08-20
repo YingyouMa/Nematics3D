@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple, Optional, Union, Literal, Callable
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
@@ -24,7 +24,7 @@ class OptsSmoothen:
 
         self.window_ratio = as_Number(self.window_ratio, name="window_ratio of smoothening")
         if self.window_length is not None:
-            self.window_length = as_Number(self.window_ratio, name="window_ratio of smoothening")
+            self.window_length = as_Number(self.window_length, name="window_ratio of smoothening")
         self.order = as_Number(self.order, name="smoothing order")
         self.N_out_ratio = as_Number(self.N_out_ratio, name="ratio between # points of output and input in smoothening")
 
@@ -35,14 +35,34 @@ class OptsSmoothen:
 # --- Scene Options ---
 @dataclass
 class OptsScene:
+    is_new: bool = True
     fig_size: Tuple[float, float] = (1920, 1360)
     bgcolor: ColorRGB = (1.0, 1.0, 1.0)
     fgcolor: ColorRGB = (0.0, 0.0, 0.0)
+    name: str = "None"
+    azimuth: Number = 0
+    elevation: Number = 0
+    roll: Number = 0
+    distance: Optional[Number] = None
+    focal_point: Optional[Vect(3)] = None
 
     def __post_init__(self):
         self.fig_size = as_Vect(self.fig_size, dim=2)
         self.bgcolor = as_ColorRGB(self.bgcolor)
         self.bgcolor = as_ColorRGB(self.bgcolor)
+        
+        if not isinstance(self.name, str):
+            raise TypeError(f"The name of scene must be str. Got {self.name} instead.")
+            
+        self.azimuth = as_Number(self.azimuth, name="Azimuth of position of scene camera")
+        self.elevation = as_Number(self.elevation, name="Elevation of position of scene camera")
+        self.roll = as_Number(self.roll, name="Roll of position of scene camera")
+        
+        if self.distance is not None:
+            self.distance = as_Number(self.distance, name="Distance of scene camera from focal point")
+            
+        if self.focal_point is not None:
+            self.focal_point = as_Number(self.focal_point, name="The focal point of scene camera")
         
         
 # --- Plane Options ---
@@ -61,8 +81,8 @@ class OptsPlane:
     radius: Number = 0.5
     is_n_defect: bool = True
     defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
-    grid_offset: Vect(3) = np.array([0, 0, 0])
-    grid_transform: Tensor((3,3)) = np.eye(3)
+    grid_offset: Vect(3) = field(default_factory=lambda: np.array([0, 0, 0]))
+    grid_transform: Tensor((3,3)) = field(default_factory=lambda: np.eye(3))
 
     def __post_init__(self):
         
@@ -122,30 +142,23 @@ class OptsExtent:
 # --- Tube Options ---
 @dataclass
 class OptsTube:
-    scalars_all: np.ndarray
-    is_wrap: bool = False
-    is_smooth: bool = True
     radius: Number = 0.5
     opacity: Number = 1
-    color: ColorRGB = (1, 1, 1)
+    color: Optional[ColorRGB] = None
     sides: Number = 6
     specular: Number = 1
     specular_color: ColorRGB = (1.0, 1.0, 1.0)
-    specular_power: Number = 11,
-    scalars: Optional[np.ndarray] = None,
+    specular_power: Number = 11
     name: str = 'None'
     
     def __post__init__(self):
-        
-        if not isinstance(self.is_wrap, bool):
-            raise TypeError("is_wrap must be a boolean value.")
-            
-        if not isinstance(self.is_smooth, bool):
-            raise TypeError("is_smooth must be a boolean value.")
             
         self.radius = as_Number(self.radius, name='radius of tube')
         self.opacity = as_Number(self.opacity, name='opacity of tube')
-        self.color = as_ColorRGB(self.color, name='color of tube')
+        
+        if self.color is not None:
+            self.color = as_ColorRGB(self.color, name='color of tube')
+            
         self.sides = as_Number(self.sides, name='number of sides of tube')
         self.specular = as_Number(self.specular, name='Strength of the tube specular highlight')
         self.specular_color = as_ColorRGB(self.specular_color, name='Color of the tube specular highlight')

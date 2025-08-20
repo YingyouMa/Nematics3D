@@ -18,7 +18,7 @@ L = 200
 
 # S, n = Nematics3D.diagonalizeQ(Q)
 
-index_max =  60
+index_max =  128
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
@@ -38,8 +38,10 @@ Q.update_defects()
 Q.update_lines_classify()
 opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=30, window_length=21)
 Q.update_lines_smoothen(opts=opts_smoothen)
-opts_tube = Nematics3D.OptsTube(is_wrap=True)
-Q._lines[0].visualize(opts=opts_tube)
+
+# for line in Q._lines:
+#     if line._defect_num > 30:
+#         line.visualize(is_wrap=True, scalars=line._defect_coords_smooth[:,0])
 
 # trans = 0
 # Q.update_defects()

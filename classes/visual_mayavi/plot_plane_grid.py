@@ -2,7 +2,7 @@ import numpy as np
 from typing import Tuple, Optional, List, Literal
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator, Logger
-from Nematics3D.datatypes import Vect3D, as_Vect3D, as_QField5
+from Nematics3D.datatypes import Vect, as_Vect, as_QField5, Tensor, as_Tensor
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
 
@@ -12,16 +12,16 @@ class PlotPlaneGrid:
     @logging_and_warning_decorator
     def __init__(
         self,
-        normal: Vect3D,
+        normal: Vect(3),
         space1: float,
         space2: float,
         size: float,
         shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: Vect3D = (0, 0, 0),
-        axis1: Optional[Vect3D] = None,
+        origin: Vect(3) = (0, 0, 0),
+        axis1: Optional[Vect(3)] = None,
         corners_limit: Optional[np.ndarray] = None,
-        grid_offset: Vect3D = np.array([0, 0, 0]),
-        grid_transform: np.ndarray = np.eye(3),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         logger=None,
     ):
 
@@ -41,16 +41,16 @@ class PlotPlaneGrid:
 
     def update_grid(
         self,
-        normal: Vect3D,
+        normal: Vect(3),
         shape: Literal["circle", "rectangle"],
         space1: float,
         space2: float,
         size: float,
-        origin: Vect3D = (0, 0, 0),
-        axis1: Optional[Vect3D] = None,
+        origin: Vect(3) = (0, 0, 0),
+        axis1: Optional[Vect(3)] = None,
         corners_limit: Optional[np.ndarray] = None,
-        grid_offset: Vect3D = np.array([0, 0, 0]),
-        grid_transform: np.ndarray = np.eye(3),
+        grid_offset: Vect(3) = np.array([0, 0, 0]),
+        grid_transform: Tensor((3,3)) = np.eye(3),
         logger=None,
     ):
 
@@ -63,7 +63,7 @@ class PlotPlaneGrid:
         # space1 = (size-1)/(num1-1)
         # space1 = (size-1)/(num2-1)
 
-        origin = as_Vect3D(origin)
+        origin = as_Vect(origin)
 
         if shape not in ["circle", "rectangle"]:
             msg = f">>> Input shape must either be 'circle' or 'rectangle'. Got {shape} instead.\n"
@@ -71,10 +71,10 @@ class PlotPlaneGrid:
             shape = "rectangle"
             logger.warning(msg)
 
-        normal = as_Vect3D(normal, is_norm=True)
+        normal = as_Vect(normal, is_norm=True)
 
         if axis1 is not None:
-            axis1 = as_Vect3D(axis1, is_norm=True)
+            axis1 = as_Vect(axis1, is_norm=True)
             if normal @ axis1 != 0:
                 msg = "normal must be perpendicular to axis1.\n"
                 msg += "Discard the component aligned with normal along axis1 in the following."

@@ -175,8 +175,8 @@ def defect_detect(
 def defect_classify_into_lines(
     defect_indices: DefectIndex,
     box_size_periodic: DimensionFlagInput = np.inf,
-    offset: Optional[Vect(3)] = None,
-    transform: Optional[np.ndarray] = None,
+    grid_offset: Optional[Vect(3)] = None,
+    grid_transform: Optional[np.ndarray] = None,
     logger=None,
 ) -> List["DisclinationLine"]:
     """
@@ -260,7 +260,7 @@ def defect_classify_into_lines(
     logger.debug("Done!")
 
     lines = [
-        DisclinationLine(path, box_size_periodic, offset=offset, transform=transform)
+        DisclinationLine(path, box_size_periodic, grid_offset=grid_offset, grid_transform=grid_transform)
         for path in paths
     ]
 
