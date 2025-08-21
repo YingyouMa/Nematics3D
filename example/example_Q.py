@@ -24,6 +24,31 @@ S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 
+Q.update_defects()
+Q.update_lines_classify()
+Q.update_lines_smoothen()
+Q.visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
+
+Q.update_lines_smoothen(min_line_length=30, window_length=21)
+Q.visualize_disclination_lines(is_wrap=True)
+extent = Q.figures[1].objects['extent'][0]
+extent.opts_opacity = 0.5
+extent.opts_radius = 0.2
+extent.opts_color = [1,0,0]
+scene = Q.figures[1].scene
+scene.azimuth = 90
+scene.elevation = 30
+scene.roll = 30
+scene.bgcolor = [0.5,0.5,0.5]
+for line in Q.figures[1].objects['lines']:
+    line.opts_specular_power = 20
+    line.opts_specular_color = (1,0,0)
+    line.opts_radius = 3
+    line.opts_sides = 20
+
+
+
+
 # @Nematics3D.logging_and_warning_decorator
 # def example_visualize(Q, logger=None):
 #     Q.update_defects(logger=logger)
@@ -34,11 +59,13 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 # # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True)
 # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True, log_mode='none')
 
-Q.update_defects()
-Q.update_lines_classify()
-opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=50, window_length=41)
-Q.update_lines_smoothen(opts=opts_smoothen)
-Q.visualize_disclination_lines(is_wrap=False)
+# Q.update_defects()
+# Q.update_lines_classify()
+# opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=50, window_length=41)
+# Q.update_lines_smoothen(opts=opts_smoothen)
+# Q.update_lines_smoothen(smoothen_min_line_length=50, smoothen_window_length=41)
+# Q.update_lines_smoothen()
+# Q.visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
 
 # for line in Q._lines:
 #     if line._defect_num > 50:

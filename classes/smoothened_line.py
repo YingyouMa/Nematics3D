@@ -79,54 +79,59 @@ class SmoothenedLine:
         logger=None,
     ):
         
-        self._line_coord_input = line_coord_input
-        self.opts = opts
-        self._N_init = len(self._line_coord_input)
+        self._data_coord = line_coord_input
+        self._calc_N_init = len(self._data_coord)
+
+        for k, v in vars(opts).items():
+            if k == "name":
+                setattr(self, "name", v)
+            else:
+                setattr(self, f"_opts_{k}", v)
 
         self.apply_smoothen(logger=logger)
 
     @logging_and_warning_decorator()
     def apply_smoothen(self, logger=None):
 
-        if len(self._line_coord_input) < self.opts.min_line_length:
+        if len(self._data_coord) < self._opts_min_line_length:
             self._is_smoothened = False
-            logger.warning(f"{self.opts.name} is not smoothened, because its length {self._line_coord_input} is shorter than the minum length {self.opts.min_line_length}.")
-            self._output = self._line_coord_input
+            logger.warning(f"{self.name} is not smoothened, because its length {self._data_coord} is shorter than the minum length {self._opts_min_line_length}.")
+            self._output = self._data_coord
         else:
 
-            if self.opts.window_length is None:
-                self.opts.window_length = int(self._N_init / self.opts.window_ratio / 2) * 2 + 1
-                self.opts.window_ratio = self._N_init / self.opts.window_length
+            if self._opts_window_length is None:
+                self._opts_window_length = int(self._calc_N_init / self._opts_window_ratio / 2) * 2 + 1
+                self._opts_window_ratio = self._calc_N_init / self._opts_window_length
             else:
-                # if self.opts.window_ratio is not None:
+                # if self._opts_window_ratio is not None:
                 #     logger.debug(
-                #         f"Window_length is manual input as {self.opts.window_length}. window_ratio would be ignored."
+                #         f"Window_length is manual input as {self._opts_window_length}. window_ratio would be ignored."
                 #     )
-                self.opts.window_length = self.opts.window_length
-                self.opts.window_ratio = self._N_init / self.opts.window_length
+                self._opts_window_length = self._opts_window_length
+                self._opts_window_ratio = self._calc_N_init / self._opts_window_length
 
-            self.opts.N_out = int(self._N_init * self.opts.N_out_ratio)
+            self._calc_N_out = int(self._calc_N_init * self._opts_N_out_ratio)
 
             # Step 1: Apply Savitzky-Golay filter to smoothen the curve
-            line_length = self._N_init
-            if self.opts.window_length >= line_length:
+            line_length = self._calc_N_init
+            if self._opts_window_length >= line_length:
                 raise ValueError(
-                    f"Filter window size {self.opts.window_length} must be smaller than line length {line_length}"
+                    f"Filter window size {self._opts_window_length} must be smaller than line length {line_length}"
                 )
             line_points = savgol_filter(
-                self._line_coord_input,
-                self.opts.window_length,
-                self.opts.order,
+                self._data_coord,
+                self._opts_window_length,
+                self._opts_order,
                 axis=0,
-                mode=self.opts.mode,
+                mode=self._opts_mode,
             )
 
             # Step 2: Define spline parameter u
-            uspline = np.arange(self._N_init) / self._N_init
+            uspline = np.arange(self._calc_N_init) / self._calc_N_init
 
             # Step 3: Fit and evaluate spline
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            self._output = np.array(splev(np.linspace(0, 1, self.opts.N_out), tck)).T
+            self._output = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
 
     @logging_and_warning_decorator()
     def print_parameters(self, logger=None) -> None:
@@ -136,16 +141,16 @@ class SmoothenedLine:
         See the documentation of logging_and_warning_decorator()
         """
         if self._is_smoothened:
-            logger.info(f"name: {self.opts.name}")
-            logger.info(f"filter order: {self.opts.order}")
-            logger.info(f"filter mode: {self.opts.mode}")
-            logger.info(f"ratio between output and input: {self.opts.N_out_ratio}")
-            logger.info(f"length of output: {self.opts.N_out}")
-            logger.info(f"length of input: {self._N_init}")
-            logger.info(f"window length: {self.opts.window_length}")
-            logger.info(f"input/window ratio: {self.opts.window_ratio}")
+            logger.info(f"name: {self.name}")
+            logger.info(f"filter order: {self._opts_order}")
+            logger.info(f"filter mode: {self._opts_mode}")
+            logger.info(f"ratio between output and input: {self._opts_N_out_ratio}")
+            logger.info(f"length of output: {self._calc_N_out}")
+            logger.info(f"length of input: {self._calc_N_init}")
+            logger.info(f"window length: {self._opts_window_length}")
+            logger.info(f"input/window ratio: {self._opts_window_ratio}")
         else:
-            logger.info(f"{self.opts.name} is not smoothened, because its length {self._line_coord_input} is shorter than the minum length {self.opts.min_line_length}.")
+            logger.info(f"{self.name} is not smoothened, because its length {self._data_coord} is shorter than the minum length {self._opts_min_line_length}.")
 
 
     @property
@@ -156,4 +161,4 @@ class SmoothenedLine:
     @property
     def input(self) -> np.ndarray:
         """Get the input data of line"""
-        return self._line_coord_input
+        return self._data_coord

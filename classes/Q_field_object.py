@@ -32,7 +32,7 @@ from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene
 from .visual_mayavi.plot_extent import PlotExtent
-from .opts import OptsExtent, OptsPlaneGrid, OptsnPlane, OptsScene, OptsSmoothen, OptsTube
+from .opts import OptsExtent, OptsPlaneGrid, OptsnPlane, OptsScene, OptsSmoothen, OptsTube, merge_opts
 from ..general import get_box_corners
 
 
@@ -174,7 +174,10 @@ class QFieldObject:
         self,
         opts=OptsSmoothen(),
         logger=None,
+        **kwargs,
     ):
+        
+        opts = merge_opts(opts, kwargs, prefix='smoothen_')
 
         if opts.window_length is not None:
             logger.warning(
@@ -228,9 +231,14 @@ class QFieldObject:
         opts_tube = OptsTube(color=None),
         opts_extent = OptsExtent(),
         logger=None,
+        **kwargs
     ):
 
         opts_extent.corners = self._corners
+
+        opts_scene = merge_opts(opts_scene, kwargs, prefix="scene_")
+        opts_tube = merge_opts(opts_tube, kwargs, prefix="tube_")
+        opts_extent = merge_opts(opts_extent, kwargs, prefix="extent_")
 
         check_bool_flags(locals())
 

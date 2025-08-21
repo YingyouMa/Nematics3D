@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass, replace
 from typing import Tuple, Optional, Union, Literal, Callable
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
@@ -10,11 +10,11 @@ from Nematics3D.field import n_color_immerse
 @dataclass()
 class OptsSmoothen:
     window_ratio: Number = 3                    
-    window_length: Optional[Number] = None       
+    window_length: Optional[Number] = 41       
     order: Number = 3                                
     N_out_ratio: Number = 3.0                      
     mode: Literal["interp", "wrap"] = "interp"
-    min_line_length: int = 61
+    min_line_length: int = 50
     name: str = 'None'
 
     __descriptions__ = {
@@ -196,22 +196,25 @@ class OptsExtent:
     sides: Number = 6
     opacity: Number = 1.0
     color: ColorRGB = (0, 0, 0)
+    name: str = "None"
 
     __descriptions__ = {
-        "corners": "bounding box corners (8×3 array)",
-        "radius":  "radius of extent tubes",
-        "sides":   "sides number of extent tubes",
-        "opacity": "opacity of extent tubes",
-        "color":   "RGB color of extent tubes",
+        "corners":  "bounding box corners (8×3 array)",
+        "radius":   "radius of extent tubes",
+        "sides":    "sides number of extent tubes",
+        "opacity":  "opacity of extent tubes",
+        "color":    "RGB color of extent tubes",
+        "name":     "name of extent"
     }
 
     _validators = {
-        "corners": lambda self, v: None if v is None
+        "corners":  lambda self, v: None if v is None
                                    else as_Tensor(v, (8, 3), name=self.__descriptions__["corners"]),
-        "radius":  lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
-        "sides":   lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
-        "opacity": lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
-        "color":   lambda self, v: as_ColorRGB(v, name=self.__descriptions__["color"]),
+        "radius":   lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "sides":    lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
+        "opacity":  lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
+        "color":    lambda self, v: as_ColorRGB(v, name=self.__descriptions__["color"]),
+        "name":     lambda self, v: as_str(v, name=self.__descriptions__["name"])
     }
 
     def __setattr__(self, key, value):
@@ -258,7 +261,89 @@ class OptsTube:
             value = self._validators[key](self, value)
         object.__setattr__(self, key, value)
         
-        
-        
-        
-        
+
+def merge_opts(opts, kwargs, prefix=""):
+    """
+    Update a dataclass instance `opts` with values from `kwargs` whose
+    keys start with a given prefix. The prefix is removed before matching
+    the remaining part of the key to a field name in the dataclass.
+
+    Parameters
+    ----------
+    opts : dataclass instance
+        The target dataclass object to be updated.
+    kwargs : dict
+        A dictionary of keyword arguments that may contain keys with the
+        specified prefix. Matching keys will be consumed (removed) from
+        this dictionary.
+    prefix : str, optional
+        The prefix used to identify relevant keys in `kwargs`. Defaults to "".
+
+    Returns
+    -------
+    dataclass instance
+        A new dataclass object with updated field values.
+
+    Raises
+    ------
+    TypeError
+        If `opts` is not a dataclass instance.
+
+    Example
+    -------
+    >>> @dataclass
+    ... class LineOpts:
+    ...     color: str = "blue"
+    ...     width: int = 1
+    ...
+    >>> opts = LineOpts()
+    >>> kwargs = {"line_color": "red", "line_width": 2, "alpha": 0.5}
+    >>> merge_opts(opts, kwargs, prefix="line_")
+    LineOpts(color='red', width=2)
+    >>> kwargs
+    {'alpha': 0.5}
+    """
+    if not is_dataclass(opts):
+        raise TypeError("opts must be a dataclass instance")
+
+    # Collect dataclass field names
+    field_names = {f.name for f in fields(opts)}
+
+    updates = {}
+    for key, val in list(kwargs.items()):
+        if key.startswith(prefix):
+            name = key[len(prefix):]  # strip prefix
+            if name in field_names:
+                updates[name] = val
+                kwargs.pop(key)  # consume the key
+
+    return replace(opts, **updates)
+
+
+def auto_opts_tubes(bindings: dict):
+
+    def decorator(cls):
+        for name, path in bindings.items():
+            attrs = path.split(".")  # e.g. ["actor", "property", "diffuse_color"]
+            key = name[len("opts_"):]  # 去掉 "opts_" 前缀，映射到 _internal.xxx
+
+            def getter(self, _key=key):
+                return getattr(self._internal, _key)
+
+            def setter(self, value, _attrs=attrs, _key=key):
+                # 1. 存到 _internal，会触发校验
+                setattr(self._internal, _key, value)
+
+                processed = getattr(self._internal, _key)
+
+                for item in self.items:
+                    target = item
+                    for attr in _attrs[:-1]:
+                        target = getattr(target, attr)
+                    setattr(target, _attrs[-1], processed)
+
+            setattr(cls, name, property(getter, setter))
+
+        return cls
+
+    return decorator

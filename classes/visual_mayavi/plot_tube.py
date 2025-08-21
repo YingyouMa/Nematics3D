@@ -4,10 +4,9 @@ from typing import Optional
 from dataclasses import replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import OptsTube
-from .visual_decorator import auto_properties
+from ..opts import OptsTube, auto_opts_tubes
 
-@auto_properties(
+@auto_opts_tubes(
     {
         "opts_color": "actor.property.diffuse_color",
         "opts_opacity": "actor.property.opacity",
@@ -17,7 +16,6 @@ from .visual_decorator import auto_properties
         "opts_specular_color": "actor.property.specular_color",
         "opts_specular_power": "actor.property.specular_power",
         "opts_is_visible": "actor.visible",
-        "opts_name": "name",
     }
 )
 class PlotTube:
@@ -60,22 +58,22 @@ class PlotTube:
         """
 
         self.items = []
-        self.coords_all = coords_all
-        self.opts = opts
-        self.scalars_all = scalars_all
+        self._data_coords_all = coords_all
+        self._data_scalars_all = scalars_all
+        self._internal = opts
         
-        if self.opts.color is None:
+        if opts.color is None:
             logger.warning("The color input of tube is None. Changed it into (1,1,1).")
-            self.opts.color = (1,1,1)
+            opts.color = (1,1,1)
 
-        num_sublines = len(self.coords_all)
-        if self.scalars_all is not None:
+        num_sublines = len(self._data_coords_all)
+        if self._data_scalars_all is not None:
             logger.debug(">>> The scalars of tube is input")
             logger.debug(">>> The color of tube will be ignored")
         else:
-            self.scalars_all = [None for i in range(num_sublines)]
+            self._data_scalars_all = [None for i in range(num_sublines)]
             
-        for coords, scalars in zip(self.coords_all, self.scalars_all):
+        for coords, scalars in zip(self._data_coords_all, self._data_scalars_all):
         
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
 
@@ -92,37 +90,39 @@ class PlotTube:
                     y,
                     z,
                     scalars,
-                    tube_radius=self.opts.radius,
-                    tube_sides=self.opts.sides,
-                    opacity=self.opts.opacity,
+                    tube_radius=opts.radius,
+                    tube_sides=opts.sides,
+                    opacity=opts.opacity,
                 )
             else:
                 item = mlab.plot3d(
                     x,
                     y,
                     z,
-                    color=self.opts.color,
-                    tube_radius=self.opts.radius,
-                    tube_sides=self.opts.sides,
-                    opacity=self.opts.opacity,
+                    color=opts.color,
+                    tube_radius=opts.radius,
+                    tube_sides=opts.sides,
+                    opacity=opts.opacity,
                 )
                 
 
             prop = item.actor.property
-            prop.specular = self.opts.specular
-            prop.specular_color = self.opts.specular_color
-            prop.specular_power = self.opts.specular_power
+            prop.specular = opts.specular
+            prop.specular_color = opts.specular_color
+            prop.specular_power = opts.specular_power
             
             self.items.append(item)
             
+            self.name = opts.name
+            
 
-    def hide(self):
+    def act_hide(self):
         self.is_visible = False
 
-    def show(self):
+    def act_show(self):
         self.is_visible = True
 
-    def remove(self):
+    def act_remove(self):
         for item in self.items:
             item.remove()
 

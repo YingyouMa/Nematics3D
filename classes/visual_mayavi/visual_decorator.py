@@ -1,36 +1,39 @@
-def auto_properties(bindings: dict):
-    def decorator(cls):
-        cls._auto_properties = bindings
+# def auto_properties(bindings: dict):
+#     def decorator(cls):
+#         cls._auto_properties = bindings
 
-        for name, path in bindings.items():
-            attr_chain = path.split(".")
+#         for name, path in bindings.items():
+#             attr_chain = path.split(".")
 
-            def make_getter(attrs):
-                def getter(self):
-                    # 默认返回第一个对象的值
-                    if not self.items:
-                        return None
-                    target = self.items[0]
-                    for attr in attrs[:-1]:
-                        target = getattr(target, attr)
-                    return getattr(target, attrs[-1])
+#             def make_getter(attrs):
+#                 def getter(self):
+#                     # 默认返回第一个对象的值
+#                     if not self.items:
+#                         return None
+#                     target = self.items[0]
+#                     for attr in attrs[:-1]:
+#                         target = getattr(target, attr)
+#                     return getattr(target, attrs[-1])
 
-                return getter
+#                 return getter
 
-            def make_setter(attrs):
-                def setter(self, value):
-                    for obj in self.items:
-                        target = obj
-                        for attr in attrs[:-1]:
-                            target = getattr(target, attr)
-                        setattr(target, attrs[-1], value)
+#             def make_setter(attrs):
+#                 def setter(self, value):
+#                     for obj in self.items:
+#                         target = obj
+#                         for attr in attrs[:-1]:
+#                             target = getattr(target, attr)
+#                         setattr(target, attrs[-1], value)
 
-                return setter
+#                 return setter
 
-            setattr(
-                cls, name, property(make_getter(attr_chain), make_setter(attr_chain))
-            )
+#             setattr(
+#                 cls, name, property(make_getter(attr_chain), make_setter(attr_chain))
+#             )
 
-        return cls
+#         return cls
 
-    return decorator
+#     return decorator
+
+
+

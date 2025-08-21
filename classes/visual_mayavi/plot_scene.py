@@ -75,8 +75,8 @@ class PlotScene:
             self.objects[category] = []
 
         # Step 1: Determine the base name
-        if hasattr(obj.opts, "name"):
-            base_name = obj.opts.name
+        if hasattr(obj, "name"):
+            base_name = obj.name
         else:
             base_name = category + "_0"  # fallback: use category name
 

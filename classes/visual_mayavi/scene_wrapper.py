@@ -110,3 +110,19 @@ class SceneWrapper:
     def focal_point(self, value):
         az, el, roll, dist, _ = self._get_angles()
         self._set_angles(az, el, roll, dist, value)
+        
+    @property
+    def bgcolor(self):
+        return self._scene.background
+
+    @bgcolor.setter
+    def bgcolor(self, value):
+        self._scene.background = tuple(value)
+        
+    @property
+    def fgcolor(self):
+        return self._scene.foreground
+
+    @fgcolor.setter
+    def fgcolor(self, value):
+        self._scene.foreground = tuple(value)

@@ -243,7 +243,7 @@ class DisclinationLine:
         )
 
         result = output._output[
-            int(tail_length * output.opts.N_out_ratio) : int((-tail_length - 1) * output.opts.N_out_ratio)
+            int(tail_length * output._opts_N_out_ratio) : int((-tail_length - 1) * output._opts_N_out_ratio)
         ]
         result = shift_to_box(result, self._box_size_periodic_index)
 
@@ -319,7 +319,7 @@ class DisclinationLine:
         line_coords_all = [line_coords]
 
         if not is_wrap:
-            scalars_all = [scalars]
+            scalars_all = [scalars]     
             line_plot = PlotTube(
                 line_coords_all,
                 scalars_all=scalars_all,

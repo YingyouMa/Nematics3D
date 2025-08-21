@@ -1,9 +1,22 @@
 from mayavi import mlab
 import numpy as np
+from dataclasses import fields
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import OptsExtent
+from ..opts import OptsExtent, auto_opts_tubes
 
+@auto_opts_tubes(
+    {
+        "opts_color": "actor.property.diffuse_color",
+        "opts_opacity": "actor.property.opacity",
+        "opts_radius": "parent.parent.filter.radius",
+        "opts_sides": "parent.parent.filter.number_of_sides",
+        "opts_specular": "actor.property.specular",
+        "opts_specular_color": "actor.property.specular_color",
+        "opts_specular_power": "actor.property.specular_power",
+        "opts_is_visible": "actor.visible",
+    }
+)
 class PlotExtent:
     """
     Represents a 3D rectangular box (wireframe) in Mayavi,
@@ -35,14 +48,26 @@ class PlotExtent:
         opacity : float in [0,1], optional
             The opacity of extent
         """
-        self.opts = opts
-        if self.opts.corners is None:
+        if opts.corners is None:
             raise ValueError("The array \'corners\', which stores the positions of the 8 points, are not inputted (the value is None)")
-        self.items = self.draw_box()
+        self._data_corners = opts.corners
+        self.items = self.draw_box(opts)
+        
+        self._internal = opts
+        
+    # @property
+    # def opts_color(self):
+    #     return self._internal.color
 
-    def draw_box(self):
+    # @opts_color.setter
+    # def opts_color(self, value):
+    #     self._internal.color = value
+    #     for item in self.items:
+    #         item.actor.property.diffuse_color = self._internal.color
+
+    def draw_box(self, opts):
         """Draw the box edges and store the actors."""
-        corners = self.opts.corners
+        corners = self._data_corners
         edges = [
             (0, 1),
             (0, 2),
@@ -66,10 +91,10 @@ class PlotExtent:
                 x,
                 y,
                 z,
-                tube_radius=self.opts.radius,
-                tube_sides=self.opts.sides,
-                color=self.opts.color,
-                opacity=self.opts.opacity,
+                tube_radius=opts.radius,
+                tube_sides=opts.sides,
+                color=opts.color,
+                opacity=opts.opacity,
             )
             result.append(actor)
 
