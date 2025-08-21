@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple, Optional, List, Literal
 
-from Nematics3D.logging_decorator import logging_and_warning_decorator, Logger
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Vect, as_Vect, as_QField5, Tensor, as_Tensor
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
@@ -13,8 +13,8 @@ class PlotPlaneGrid:
     def __init__(
         self,
         normal: Vect(3),
-        space1: float,
-        space2: float,
+        spacing1: float,
+        spacing2: float,
         size: float,
         shape: Literal["circle", "rectangle"] = "rectangle",
         origin: Vect(3) = (0, 0, 0),

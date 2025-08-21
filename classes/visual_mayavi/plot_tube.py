@@ -5,8 +5,21 @@ from dataclasses import replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import OptsTube
+from .visual_decorator import auto_properties
 
-
+@auto_properties(
+    {
+        "opts_color": "actor.property.diffuse_color",
+        "opts_opacity": "actor.property.opacity",
+        "opts_radius": "parent.parent.filter.radius",
+        "opts_sides": "parent.parent.filter.number_of_sides",
+        "opts_specular": "actor.property.specular",
+        "opts_specular_color": "actor.property.specular_color",
+        "opts_specular_power": "actor.property.specular_power",
+        "opts_is_visible": "actor.visible",
+        "opts_name": "name",
+    }
+)
 class PlotTube:
     """
     A utility class to create and manage a 3D tube-like curve in Mayavi.
@@ -52,7 +65,8 @@ class PlotTube:
         self.scalars_all = scalars_all
         
         if self.opts.color is None:
-            self.opts = replace(self.opts, color=(1,1,1))
+            logger.warning("The color input of tube is None. Changed it into (1,1,1).")
+            self.opts.color = (1,1,1)
 
         num_sublines = len(self.coords_all)
         if self.scalars_all is not None:
@@ -61,7 +75,6 @@ class PlotTube:
         else:
             self.scalars_all = [None for i in range(num_sublines)]
             
-
         for coords, scalars in zip(self.coords_all, self.scalars_all):
         
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
@@ -93,13 +106,15 @@ class PlotTube:
                     tube_sides=self.opts.sides,
                     opacity=self.opts.opacity,
                 )
+                
 
             prop = item.actor.property
             prop.specular = self.opts.specular
             prop.specular_color = self.opts.specular_color
             prop.specular_power = self.opts.specular_power
-
+            
             self.items.append(item)
+            
 
     def hide(self):
         self.is_visible = False

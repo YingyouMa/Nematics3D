@@ -3,11 +3,11 @@ from typing import Tuple, Optional, Union, Literal, Callable
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from Nematics3D.datatypes import ColorRGB,as_ColorRGB, Vect, as_Vect, Tensor, as_Tensor, Number, as_Number, nField
+from Nematics3D.datatypes import ColorRGB,as_ColorRGB, Vect, as_Vect, Tensor, as_Tensor, Number, as_Number, nField, as_str
 from Nematics3D.field import n_color_immerse
 
 
-@dataclass
+@dataclass()
 class OptsSmoothen:
     window_ratio: Number = 3                    
     window_length: Optional[Number] = None       
@@ -17,23 +17,44 @@ class OptsSmoothen:
     min_line_length: int = 61
     name: str = 'None'
 
-    def __post_init__(self):
-        
-        if not isinstance(self.min_line_length, int):
-            raise TypeError("The minimum line length to be smoothened must be integer")
+    __descriptions__ = {
+        "window_ratio":    "window ratio for smoothening",
+        "window_length":   "explicit window length for smoothening",
+        "order":           "smoothing polynomial order",
+        "N_out_ratio":     "ratio between output and input #points in smoothening",
+        "mode":            "smoothing mode (interp or wrap)",
+        "min_line_length": "minimum line length to be smoothened",
+        "name":            "name identifier of smoothen options",
+    }
 
-        self.window_ratio = as_Number(self.window_ratio, name="window_ratio of smoothening")
-        if self.window_length is not None:
-            self.window_length = as_Number(self.window_length, name="window_ratio of smoothening")
-        self.order = as_Number(self.order, name="smoothing order")
-        self.N_out_ratio = as_Number(self.N_out_ratio, name="ratio between # points of output and input in smoothening")
+    _validators = {
+        "window_ratio":    lambda self, v: as_Number(v, name=self.__descriptions__["window_ratio"]),
+        "window_length":   lambda self, v: None if v is None else as_Number(v, name=self.__descriptions__["window_length"]),
+        "order":           lambda self, v: as_Number(v, name=self.__descriptions__["order"]),
+        "N_out_ratio":     lambda self, v: as_Number(v, name=self.__descriptions__["N_out_ratio"]),
+        "mode":            lambda self, v: (
+                                 v if v in ("interp", "wrap")
+                                 else (_ for _ in ()).throw(
+                                     ValueError(f"{self.__descriptions__['mode']} must be 'interp' or 'wrap', got {v!r}")
+                                 )
+                             ),
+        "min_line_length": lambda self, v: (
+                                 v if isinstance(v, int)
+                                 else (_ for _ in ()).throw(
+                                     TypeError(f"{self.__descriptions__['min_line_length']} must be int, got {type(v)}")
+                                 )
+                             ),
+        "name":            lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+    }
 
-        if self.mode not in ("interp", "wrap"):
-            raise ValueError("smoothing mode must be interp or wrap")
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 # --- Scene Options ---
-@dataclass
+@dataclass(slots=True)
 class OptsScene:
     is_new: bool = True
     fig_size: Tuple[float, float] = (1920, 1360)
@@ -47,72 +68,90 @@ class OptsScene:
     focal_point: Optional[Vect(3)] = None
     name: Optional[str] = 'None'
 
-    def __post_init__(self):
-        self.fig_size = as_Vect(self.fig_size, dim=2)
-        self.fig_size = tuple(self.fig_size)
-        self.bgcolor = as_ColorRGB(self.bgcolor)
-        self.bgcolor = as_ColorRGB(self.bgcolor)
-        
-        if not isinstance(self.name, str):
-            raise TypeError(f"The name of scene must be str. Got {self.name} instead.")
-            
-        self.azimuth = as_Number(self.azimuth, name="Azimuth of position of scene camera")
-        self.elevation = as_Number(self.elevation, name="Elevation of position of scene camera")
-        self.roll = as_Number(self.roll, name="Roll of position of scene camera")
-        
-        if self.distance is not None:
-            self.distance = as_Number(self.distance, name="Distance of scene camera from focal point")
-            
-        if self.focal_point is not None:
-            self.focal_point = as_Number(self.focal_point, name="The focal point of scene camera")
+    __descriptions__ = {
+        "is_new":      "whether to create a new scene",
+        "fig_size":    "size of figure window (width, height)",
+        "bgcolor":     "background color (RGB)",
+        "fgcolor":     "foreground color (RGB)",
+        "name":        "name identifier of scene",
+        "azimuth":     "azimuth angle of camera",
+        "elevation":   "elevation angle of camera",
+        "roll":        "roll angle of camera",
+        "distance":    "distance of camera from focal point",
+        "focal_point": "3D focal point of camera",
+    }
 
-        if not isinstance(self.name, str):
-            raise TypeError("The name of the tube must be str")
+    _validators = {
+        "fig_size":    lambda self, v: tuple(as_Vect(v, dim=2, name=self.__descriptions__["fig_size"])),
+        "bgcolor":     lambda self, v: as_ColorRGB(v, name=self.__descriptions__["bgcolor"]),
+        "fgcolor":     lambda self, v: as_ColorRGB(v, name=self.__descriptions__["fgcolor"]),
+        "name":        lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+        "azimuth":     lambda self, v: as_Number(v, name=self.__descriptions__["azimuth"]),
+        "elevation":   lambda self, v: as_Number(v, name=self.__descriptions__["elevation"]),
+        "roll":        lambda self, v: as_Number(v, name=self.__descriptions__["roll"]),
+        "distance":    lambda self, v: None if v is None else as_Number(v, name=self.__descriptions__["distance"]),
+        "focal_point": lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["focal_point"]),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
         
         
 # --- Plane Options ---
-@dataclass
-class OptsPlane:
+@dataclass(slots=True)
+class OptsPlaneGrid:
     normal: Vect(3)
-    spacing: Number
+    spacing1: Number
+    spacing2: Number
     size: Number
     shape: Literal["circle", "rectangle"] = "rectangle"
     origin: Vect(3) = (0, 0, 0)
     axis1: Optional[Vect(3)] = None
     corners_limit: Optional[np.ndarray] = None
-    colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
-    opacity: Union[Callable[nField, np.ndarray], float] = 1
-    length: Number = 3.5
-    radius: Number = 0.5
-    is_n_defect: bool = True
-    defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
-    grid_offset: Vect(3) = field(default_factory=lambda: np.array([0, 0, 0]))
+    grid_offset: Vect(3) = (0,0,0)
     grid_transform: Tensor((3,3)) = field(default_factory=lambda: np.eye(3))
+    
+    __descriptions__ = {
+        "normal":           "normal of plane",
+        "spacing1":         "grid spacing along axis1",
+        "spacing2":         "grid spacing along axis2",
+        "size":             "size of plane",
+        "origin":           "origin of plane",
+        "axis1":            "first in-plane axis",
+        "corners_limit":    "bounding box corners (8×3 array)",
+        "grid_offset":      "translation offset of grid",
+        "grid_transform":   "grid transform matrix (3×3)",
+        "shape":            "plane shape (circle or rectangle)",
+    }
 
-    def __post_init__(self):
-        
-        self.normal = as_Vect(self.normal, name='normal')
-        self.spacing = as_Number(self.space, name='spacing')
-        self.size = as_Number(self.size, name='size')
-        
-        if self.shape not in ("circle", "rectangle"):
-            raise ValueError("Shape of a plane must be 'circle' or 'rectangle'")
-        
-        self.origin = as_Vect(self.origin, name='origin')
-        if self.axis1 is not None:
-            self.axis1 = as_Vect(self.axis1, name='axis1')
-            
-        self.corners_limit = as_Tensor(self.corners_limit, (8,3), name='box corners')
-        
-        if not isinstance(self.is_n_defect, bool):
-            raise TypeError("is_n_defect must be a boolean value.")
-            
-        self.grid_offset = as_Vect(self.radius, name='grid_offset')
-        self.grid_transform = as_Tensor(self.grid_transform, (3,3), name="grid_transform")
+    _validators = {
+        "normal":        lambda self, v: as_Vect(v, name=self.__descriptions__["normal"]),
+        "origin":        lambda self, v: as_Vect(v, name=self.__descriptions__["origin"]),
+        "grid_offset":   lambda self, v: as_Vect(v, name=self.__descriptions__["grid_offset"]),
+        "axis1":         lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["axis1"]),
+        "spacing1":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing1"]),
+        "spacing2":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing2"]),
+        "size":          lambda self, v: as_Number(v, name=self.__descriptions__["size"]),
+        "grid_transform":lambda self, v: as_Tensor(v, (3,3), name=self.__descriptions__["grid_transform"]),
+        "corners_limit": lambda self, v: None if v is None else as_Tensor(v, (8,3), name=self.__descriptions__["corners_limit"]),
+        "shape":         lambda self, v: (
+                             v if v in ("circle", "rectangle") else
+                             (_ for _ in ()).throw(ValueError(
+                                 f"Invalid {self.__descriptions__['shape']}: {v!r}. "
+                                 f"Allowed values: 'circle', 'rectangle'"))
+                         ),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 # --- nPlane Options ---
-@dataclass
+@dataclass(slots=True)
 class OptsnPlane:
     QInterpolator: RegularGridInterpolator
     colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
@@ -121,35 +160,67 @@ class OptsnPlane:
     radius: Number = 0.5
     is_n_defect: bool = True
     defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
-
-    def __post_init__(self):
     
-        self.length = as_Number(self.length, name='length')
-        self.radius = as_Number(self.radius, name='radius')
-        
-        if not isinstance(self.is_n_defect, bool):
-            raise TypeError("is_n_defect must be a boolean value.")
+    __descriptions__ = {
+        "QInterpolator":   "3D interpolator for Q-field values",
+        "colors":          "RGB color or callable mapping n-field → RGB",
+        "opacity":         "opacity value or callable mapping n-field → array",
+        "length":          "length of directors in plane visualization",
+        "radius":          "radius of directors in plane visualization",
+        "is_n_defect":     "flag whether to highlight n around defects",
+        "defect_opacity":  "opacity value or callable mapping n-field → array for defects",
+    }
+
+    _validators = {
+        "length":         lambda self, v: as_Number(v, name=self.__descriptions__["length"]),
+        "radius":         lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "is_n_defect":    lambda self, v: (
+                              v if isinstance(v, bool)
+                              else (_ for _ in ()).throw(
+                                  TypeError(f"{self.__descriptions__['is_n_defect']} must be a boolean, got {v}")
+                              )
+                          ),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 # --- Extent Options ---
-@dataclass
+@dataclass(slots=True)
 class OptsExtent:
     corners: Optional[np.ndarray] = None
     radius: Number = 1.0
     sides: Number = 6
     opacity: Number = 1.0
-    color: ColorRGB = (0,0,0)
+    color: ColorRGB = (0, 0, 0)
 
-    def __post_init__(self):
-        if self.corners is not None:
-            self.corners = as_Tensor(self.corners, (8,3), name="The array \'corners\' storing the positions of the 8 points.")
-        self.radius = as_Number(self.radius, name='radius of extent tubes')
-        self.sides = as_Number(self.sides, name='sides number of extent tubes')
-        self.opacity = as_Number(self.opacity, name='opacity of extent tubes')
-        self.color = as_ColorRGB(self.color)
+    __descriptions__ = {
+        "corners": "bounding box corners (8×3 array)",
+        "radius":  "radius of extent tubes",
+        "sides":   "sides number of extent tubes",
+        "opacity": "opacity of extent tubes",
+        "color":   "RGB color of extent tubes",
+    }
+
+    _validators = {
+        "corners": lambda self, v: None if v is None
+                                   else as_Tensor(v, (8, 3), name=self.__descriptions__["corners"]),
+        "radius":  lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "sides":   lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
+        "opacity": lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
+        "color":   lambda self, v: as_ColorRGB(v, name=self.__descriptions__["color"]),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
         
 # --- Tube Options ---
-@dataclass
+@dataclass(slots=True)
 class OptsTube:
     radius: Number = 0.5
     opacity: Number = 1
@@ -160,18 +231,33 @@ class OptsTube:
     specular_power: Number = 11
     name: str = 'None'
     
-    def __post__init__(self):
-            
-        self.radius = as_Number(self.radius, name='radius of tube')
-        self.opacity = as_Number(self.opacity, name='opacity of tube')
-        self.color = as_ColorRGB(self.color)
-        self.sides = as_Number(self.sides, name='number of sides of tube')
-        self.specular = as_Number(self.specular, name='Strength of the tube specular highlight')
-        self.specular_color = as_ColorRGB(self.specular_color)
-        self.specular_power = as_Number(self.specular_power, name='Shininess of the tube specular highlight')
+    __descriptions__ = {
+        "radius":          "radius of tube",
+        "opacity":         "opacity of tube",
+        "color":           "RGB color of tube surface",
+        "sides":           "number of sides of tube",
+        "specular":        "strength of specular highlight",
+        "specular_color":  "RGB color of specular highlight",
+        "specular_power":  "shininess of specular highlight",
+        "name":            "name identifier of tube",
+    }
+    
+    _validators = {
+        "radius":         lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "opacity":        lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
+        "color":          lambda self, v: None if v is None else as_ColorRGB(v, name=self.__descriptions__["color"]),
+        "sides":          lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
+        "specular":       lambda self, v: as_Number(v, name=self.__descriptions__["specular"]),
+        "specular_color": lambda self, v: as_ColorRGB(v, name=self.__descriptions__["specular_color"]),
+        "specular_power": lambda self, v: as_Number(v, name=self.__descriptions__["specular_power"]),
+        "name":           lambda self, v: as_str(v, name=self.__descriptions__["name"])
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
         
-        if not isinstance(self.name, str):
-            raise TypeError("The name of the tube must be str")
         
         
         

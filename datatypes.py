@@ -29,6 +29,8 @@ from typing import Union, Sequence, Literal, Tuple
 import numpy as np
 import numbers
 
+from Nematics3D.logging_decorator import logging_and_warning_decorator
+
 # __all__ = [
 #     "NumericInput",
 #     "Vect3D",
@@ -147,7 +149,7 @@ def as_Tensor(input_data, shape, name='input data'):
 ColorRGB = Tuple[float, float, float]
 
 
-def as_ColorRGB(input_data, is_norm=False, norm_order=2):
+def as_ColorRGB(input_data, name='input data', is_norm=False, norm_order=2):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -201,14 +203,14 @@ def as_ColorRGB(input_data, is_norm=False, norm_order=2):
        or not any(isinstance(x, numbers.Real) for x in input_data)
             ):
         raise ValueError(
-            f"For ColorRGB, input_data must be a vector with 3 numbers. Got {input_data} instead."
+            f"{name} is ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
         )
         
     input_data = np.asarray(input_data)
         
     if np.max(input_data) > 1 or np.min(input_data) < 0:
         raise ValueError(
-            f"For ColorRGB, each number should be in [0,1]. Got {input_data} instead."
+            f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
         )
 
     if is_norm:
@@ -217,6 +219,20 @@ def as_ColorRGB(input_data, is_norm=False, norm_order=2):
         input_data = input_data / np.sum(input_data**norm_order)
 
     return tuple(input_data)
+
+@logging_and_warning_decorator
+def as_str(input_data, name='input_data', replace='None', logger=None):
+    
+    if not isinstance(input_data, str):
+        if replace is not None:
+            msg = f'>>> {name} should be str. Got {input_data} instead. \n'
+            msg += f'>>> Changed it into {replace} in the following.'
+            logger.warning(f"f{name} should be str. Got ")
+            input_data = replace
+        else:
+            raise TypeError(f'{name} should be str. Got {input_data} instead. \n')
+            
+    return input_data
 
 
 # -------------------------

@@ -38,11 +38,11 @@ Q.update_defects()
 Q.update_lines_classify()
 opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=50, window_length=41)
 Q.update_lines_smoothen(opts=opts_smoothen)
-Q.visualize_disclination_lines()
+Q.visualize_disclination_lines(is_wrap=False)
 
 # for line in Q._lines:
-#     if line._defect_num > 30:
-#         line.visualize(is_wrap=True)
+#     if line._defect_num > 50:
+#         line.visualize(is_wrap=False, opts=Nematics3D.OptsTube(color=(1,0,0)))
 
 # trans = 0
 # Q.update_defects()

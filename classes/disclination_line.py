@@ -317,9 +317,9 @@ class DisclinationLine:
                 scalars = np.concatenate((scalars, [scalars[0]]))
 
         line_coords_all = [line_coords]
-        scalars_all = [scalars] if scalars is not None else []
 
         if not is_wrap:
+            scalars_all = [scalars]
             line_plot = PlotTube(
                 line_coords_all,
                 scalars_all=scalars_all,

@@ -31,7 +31,9 @@ from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene
-from .opts import OptsExtent, OptsPlane, OptsnPlane, OptsScene, OptsSmoothen, OptsTube
+from .visual_mayavi.plot_extent import PlotExtent
+from .opts import OptsExtent, OptsPlaneGrid, OptsnPlane, OptsScene, OptsSmoothen, OptsTube
+from ..general import get_box_corners
 
 
 class QFieldObject:
@@ -97,6 +99,15 @@ class QFieldObject:
         self.update_grid(grid_transform=grid_transform, grid_offset=grid_offset)
 
         self.figures = []
+
+        Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1, 1, 1])
+        corners_index = get_box_corners(Lx, Ly, Lz)
+        corners = apply_linear_transform(
+            corners_index, transform=self._grid_transform, offset=self._grid_offset
+        )
+
+        self._corners_index = corners_index
+        self._corners = corners
 
     @logging_and_warning_decorator()
     def update_diag(self, logger=None):
@@ -175,21 +186,6 @@ class QFieldObject:
                 logger.debug(f"Start to smoothen {line._name}")
                 line.update_smoothen(opts=opts)
 
-    def update_corners(self):
-
-        from ..general import get_box_corners
-
-        Lx, Ly, Lz = np.shape(self._Q)[:3] - np.array([1, 1, 1])
-        corners_index = get_box_corners(Lx, Ly, Lz)
-        corners = apply_linear_transform(
-            corners_index, transform=self._grid_transform, offset=self._grid_offset
-        )
-
-        self._corners_index = corners_index
-        self._corners = corners
-
-        return corners
-
     @logging_and_warning_decorator()
     def update_interpolator(self, logger=None):
 
@@ -233,6 +229,9 @@ class QFieldObject:
         opts_extent = OptsExtent(),
         logger=None,
     ):
+
+        opts_extent.corners = self._corners
+
         check_bool_flags(locals())
 
         if min_line_length is None:
@@ -275,7 +274,7 @@ class QFieldObject:
         for line, line_color, line_scalar in zip(
             lines_plot, lines_colors, lines_scalars
         ):
-            opts_tube = replace(opts_tube, name=line._name, color=tuple(line_color))
+            opts_tube = replace(opts_tube, name=line._name, color=line_color)
             line_visual = line.visualize(
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
@@ -287,7 +286,7 @@ class QFieldObject:
             figure.add_object(line_visual, category="lines")
 
         if is_extent:
-            extent = self.add_extent(opts_extent)
+            extent = PlotExtent(opts_extent)
             figure.add_object(extent, category="extent")
 
     @logging_and_warning_decorator()
@@ -318,7 +317,6 @@ class QFieldObject:
         figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
 
         self.update_interpolator()
-        self.update_corners()
 
         nPlane = PlotnPlane(
             normal,
@@ -357,17 +355,6 @@ class QFieldObject:
             figure = self.figures[-1]
 
         return figure
-
-    def add_extent(self, opts=OptsExtent()):
-        from .visual_mayavi.plot_extent import PlotExtent
-
-        if not hasattr(self, "_corners"):
-            self.update_corners()
-
-        opts = replace(opts, corners=self._corners)
-        extent = PlotExtent(opts=opts)
-
-        return extent
 
     def reset_figures(self):
         self.figures = []

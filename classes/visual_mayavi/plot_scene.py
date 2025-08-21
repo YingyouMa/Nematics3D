@@ -42,7 +42,6 @@ class PlotScene:
             self.scene = SceneWrapper(self._fig.scene)
             self.scene.background = opts.bgcolor
             self.scene.foreground = opts.fgcolor
-            self.add_object(self.scene, 'scene')
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
