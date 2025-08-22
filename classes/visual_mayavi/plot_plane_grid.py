@@ -10,23 +10,25 @@ from ..opts import OptsPlaneGrid, merge_opts
 class PlotPlaneGrid:
 
     @logging_and_warning_decorator
-    def __init__(
-        self,
-        opts = OptsPlaneGrid(),
-        logger=None,
-        **kwargs
-    ):
-        
-        for name, value in {"normal": opts.normal, "spacing1": opts.spacing1, "spacing2": opts.spacing2, "size": opts.size}.items():
+    def __init__(self, opts=OptsPlaneGrid(), logger=None, **kwargs):
+
+        for name, value in {
+            "normal": opts.normal,
+            "spacing1": opts.spacing1,
+            "spacing2": opts.spacing2,
+            "size": opts.size,
+        }.items():
             if value is None:
-                raise ValueError(f"Missing required variable {name} to generate plane_grid")
-        
+                raise ValueError(
+                    f"Missing required variable {name} to generate plane_grid"
+                )
+
         opts = merge_opts(opts, kwargs)
-        
+
         self._opts_all = opts
 
         self.act_commit(
-            opts = self._opts_all,
+            opts=self._opts_all,
             logger=logger,
         )
 
@@ -35,9 +37,9 @@ class PlotPlaneGrid:
         logger=None,
         **kwargs,
     ):
-        
+
         self._opts_all = merge_opts(self._opts_all, kwargs)
-        
+
         for key, value in asdict(self._opts_all).items():
             setattr(self, f"opts_{key}", value)
 
@@ -85,7 +87,7 @@ class PlotPlaneGrid:
         grid = apply_linear_transform(
             grid, transform=grid_transform, offset=grid_offset
         )
-            
+
         if corners_limit is not None:
             grid_select = select_grid_in_box(
                 grid, corners_limit=corners_limit, logger=logger
@@ -99,4 +101,3 @@ class PlotPlaneGrid:
         self._calc_offset_real = offset
         self.opts_axis1 = axis1
         self._opts_all.axis1 = axis1
-        

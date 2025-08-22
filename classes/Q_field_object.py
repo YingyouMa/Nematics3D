@@ -18,7 +18,7 @@ from ..datatypes import (
     DimensionFlagInput,
     as_dimension_info,
     check_Sn,
-    check_bool_flags
+    check_bool_flags,
 )
 from ..field import (
     Q_diagonalize,
@@ -32,7 +32,15 @@ from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene
 from .visual_mayavi.plot_extent import PlotExtent
-from .opts import OptsExtent, OptsPlaneGrid, OptsnPlane, OptsScene, OptsSmoothen, OptsTube, merge_opts
+from .opts import (
+    OptsExtent,
+    OptsPlaneGrid,
+    OptsnPlane,
+    OptsScene,
+    OptsSmoothen,
+    OptsTube,
+    merge_opts,
+)
 from ..general import get_box_corners
 
 
@@ -49,13 +57,13 @@ class QFieldObject:
         n: nField = None,
         box_periodic_flag: DimensionFlagInput = False,
         grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        grid_transform: Tensor((3, 3)) = np.eye(3),
         is_diag: bool = True,
         logger: Logger = None,
     ) -> None:
 
-        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
-        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
+        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
 
         start = time.time()
         logger.debug("Start to initialize Q field")
@@ -132,15 +140,15 @@ class QFieldObject:
     def update_grid(
         self,
         grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        grid_transform: Tensor((3, 3)) = np.eye(3),
         logger=None,
     ):
         """
         Generate the coordinates grid in the real space from the lattice indices through linear transform.
         See the document of apply_linear_transform()
         """
-        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
-        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
+        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
         self._grid = apply_linear_transform(
             self._grid_origin, transform=self._grid_transform, offset=self._grid_offset
         )
@@ -176,8 +184,8 @@ class QFieldObject:
         logger=None,
         **kwargs,
     ):
-        
-        opts = merge_opts(opts, kwargs, prefix='smoothen_')
+
+        opts = merge_opts(opts, kwargs, prefix="smoothen_")
 
         if opts.window_length is not None:
             logger.warning(
@@ -227,11 +235,11 @@ class QFieldObject:
         is_extent: bool = True,
         min_line_length: Optional[int] = None,
         lines_scalars_name: Optional[str] = None,
-        opts_scene = OptsScene(),
-        opts_tube = OptsTube(color=None),
-        opts_extent = OptsExtent(),
+        opts_scene=OptsScene(),
+        opts_tube=OptsTube(color=None),
+        opts_extent=OptsExtent(),
         logger=None,
-        **kwargs
+        **kwargs,
     ):
 
         opts_extent.corners = self._corners
@@ -248,8 +256,10 @@ class QFieldObject:
             logger.info(msg)
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
 
-        if is_smooth and hasattr(self._lines[0], '_defect_coords_smooth_obj'):
-            _min_len_length_smooth = self._lines[0]._defect_coords_smooth_obj._opts_min_line_length
+        if is_smooth and hasattr(self._lines[0], "_defect_coords_smooth_obj"):
+            _min_len_length_smooth = self._lines[
+                0
+            ]._defect_coords_smooth_obj._opts_min_line_length
             if _min_len_length_smooth > min_line_length:
                 msg = f">>> The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
                 msg += f">>> Use the larger value {_min_len_length_smooth} instead."
@@ -313,14 +323,14 @@ class QFieldObject:
         plane_size: Optional[Number] = None,
         is_new: bool = True,
         is_extent: bool = True,
-        opts_grid = OptsPlaneGrid(),
-        opts_nPlane = OptsnPlane(),
-        opts_extent = OptsExtent(),
-        opts_scene = OptsScene(),
+        opts_grid=OptsPlaneGrid(),
+        opts_nPlane=OptsnPlane(),
+        opts_extent=OptsExtent(),
+        opts_scene=OptsScene(),
         logger=None,
-        **kwargs
+        **kwargs,
     ):
-        
+
         opts_extent.corners = self._corners
         opts_grid.corners_limit = self._corners
 
@@ -329,14 +339,13 @@ class QFieldObject:
         opts_extent = merge_opts(opts_extent, kwargs, prefix="extent_")
         opts_scene = merge_opts(opts_scene, kwargs, prefix="scene_")
 
-        if not hasattr(self, '_interpolator'):
+        if not hasattr(self, "_interpolator"):
             self.update_interpolator()
 
         opts_grid.normal = plane_normal
         opts_grid.spacing1 = plane_spacing
         opts_grid.spacing2 = plane_spacing
         opts_grid.size = plane_size
-
 
         check_bool_flags(locals())
 
@@ -356,10 +365,7 @@ class QFieldObject:
             figure.add_object(extent, category="extent")
 
     def add_scene(self, is_new=True, opts=OptsScene):
-        figure = PlotScene(
-            is_new=is_new,
-            opts=opts
-        )
+        figure = PlotScene(is_new=is_new, opts=opts)
         if is_new or (not is_new and len(self.figures) == 0):
             self.figures.append(figure)
         else:

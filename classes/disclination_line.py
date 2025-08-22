@@ -66,7 +66,7 @@ class DisclinationLine:
         box_size_periodic_index: DimensionPeriodicInput,
         is_sorted: bool = True,
         grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        grid_transform: Tensor((3, 3)) = np.eye(3),
         name: Optional[str] = None,
     ):
         """
@@ -136,8 +136,8 @@ class DisclinationLine:
         self._defect_num = np.shape(self._defect_indices)[0]
         self._box_size_periodic_index = box_size_periodic_index
 
-        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
-        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
+        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
 
         self.update_to_coord(grid_transform=grid_transform, grid_offset=grid_offset)
 
@@ -149,11 +149,11 @@ class DisclinationLine:
     def update_to_coord(
         self,
         grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        grid_transform: Tensor((3, 3)) = np.eye(3),
     ):
 
-        self._grid_offset = as_Vect(grid_offset, name='grid_offset')
-        self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
+        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
         self._defect_coords = apply_linear_transform(
             self._defect_indices,
             transform=self._grid_transform,
@@ -235,15 +235,14 @@ class DisclinationLine:
         else:
             smoothen_mode = "interp"
             tail_length = 0
-        
+
         new_opts = replace(opts, mode=smoothen_mode)
-        output = SmoothenedLine(
-            coords,
-            opts = new_opts
-        )
+        output = SmoothenedLine(coords, opts=new_opts)
 
         result = output._entities[0][
-            int(tail_length * output._opts_N_out_ratio) : int((-tail_length - 1) * output._opts_N_out_ratio)
+            int(tail_length * output._opts_N_out_ratio) : int(
+                (-tail_length - 1) * output._opts_N_out_ratio
+            )
         ]
         result = shift_to_box(result, self._box_size_periodic_index)
 
@@ -258,7 +257,7 @@ class DisclinationLine:
         is_wrap: bool = True,
         is_smooth: bool = True,
         scalars: Optional[np.ndarray] = None,
-        opts = OptsTube(),
+        opts=OptsTube(),
         logger=None,
     ) -> None:
         """
@@ -296,7 +295,9 @@ class DisclinationLine:
         """
 
         if not isinstance(is_smooth, bool):
-            raise TypeError(f"is_smooth must be a boolean value. Got {is_smooth} instead.")
+            raise TypeError(
+                f"is_smooth must be a boolean value. Got {is_smooth} instead."
+            )
 
         self.opts = opts
         logger.debug(f"Start to visualize line: {self.opts.name}")
@@ -319,7 +320,7 @@ class DisclinationLine:
         line_coords_all = [line_coords]
 
         if not is_wrap:
-            scalars_all = [scalars]     
+            scalars_all = [scalars]
             line_plot = PlotTube(
                 line_coords_all,
                 scalars_all=scalars_all,

@@ -3,8 +3,16 @@ from typing import Optional, Literal, Callable, List, Union
 from scipy.interpolate import RegularGridInterpolator
 
 from .plot_plane_grid import PlotPlaneGrid
-from ..opts import OptsPlaneGrid, OptsnPlane ,merge_opts
-from Nematics3D.datatypes import Vect, as_Vect, nField, ColorRGB, as_ColorRGB, Tensor, as_Tensor
+from ..opts import OptsPlaneGrid, OptsnPlane, merge_opts
+from Nematics3D.datatypes import (
+    Vect,
+    as_Vect,
+    nField,
+    ColorRGB,
+    as_ColorRGB,
+    Tensor,
+    as_Tensor,
+)
 from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, split_points
@@ -17,48 +25,59 @@ class PlotnPlane:
     def __init__(
         self,
         QInterpolator: Optional[RegularGridInterpolator] = None,
-        opts_grid = OptsPlaneGrid(),
-        opts_nPlane = OptsnPlane(),
+        opts_grid=OptsPlaneGrid(),
+        opts_nPlane=OptsnPlane(),
         logger=None,
-        **kwargs
+        **kwargs,
     ):
-        
-        for name, value in {"normal": opts_grid.normal, "spacing1": opts_grid.spacing1, "spacing2": opts_grid.spacing2, "size": opts_grid.size}.items():
+
+        for name, value in {
+            "normal": opts_grid.normal,
+            "spacing1": opts_grid.spacing1,
+            "spacing2": opts_grid.spacing2,
+            "size": opts_grid.size,
+        }.items():
             if value is None:
-                raise ValueError(f"Missing required variable {name} to generate plane_grid")
-                
+                raise ValueError(
+                    f"Missing required variable {name} to generate plane_grid"
+                )
+
         if QInterpolator is None:
-            raise ValueError("Missing required variable QInterpolator to generate nPlane")
+            raise ValueError(
+                "Missing required variable QInterpolator to generate nPlane"
+            )
 
         opts_grid = merge_opts(opts_grid, kwargs, prefix="plane__")
         opts_nPlane = merge_opts(opts_nPlane, kwargs, prefix="n_")
-        
+
         self._opts_all_nPlane = opts_nPlane
         self._raw_QInterpolator = QInterpolator
 
         self.make_figure(
-            opts_grid = opts_grid,
-            opts_nPlane = opts_nPlane,
+            opts_grid=opts_grid,
+            opts_nPlane=opts_nPlane,
             logger=logger,
         )
 
     @logging_and_warning_decorator
     def make_figure(
         self,
-        opts_grid = OptsPlaneGrid(),
-        opts_nPlane = OptsnPlane(),
+        opts_grid=OptsPlaneGrid(),
+        opts_nPlane=OptsnPlane(),
         logger=None,
     ):
-        
+
         self._opts_all = opts_nPlane
-        
-        self._entities_plane = [PlotPlaneGrid(
-            opts = opts_grid,
-            logger=logger,
-        )]
-        
+
+        self._entities_plane = [
+            PlotPlaneGrid(
+                opts=opts_grid,
+                logger=logger,
+            )
+        ]
+
         plane_grid = self._entities_plane[0]
-        
+
         QInterpolator = self._raw_QInterpolator
         is_n_defect = opts_nPlane.is_n_defect
         corners_limit = plane_grid.opts_corners_limit
@@ -71,9 +90,12 @@ class PlotnPlane:
         if is_n_defect:
 
             axis_both = np.array(
-                [plane_grid.opts_axis1, np.cross(plane_grid.opts_normal, plane_grid.opts_axis1)]
+                [
+                    plane_grid.opts_axis1,
+                    np.cross(plane_grid.opts_normal, plane_grid.opts_axis1),
+                ]
             )
-            
+
             grid_all = self._entities_plane[0]._entities_grid_all[0]
             shape_all = np.shape(grid_all)[:2]
             grid_all_flatten = np.reshape(grid_all, (-1, 3))
@@ -98,7 +120,8 @@ class PlotnPlane:
             defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
 
             bulk = (
-                np.einsum("ai, ib -> ab", bulk_index, axis_both) * plane_grid.opts_spacing1
+                np.einsum("ai, ib -> ab", bulk_index, axis_both)
+                * plane_grid.opts_spacing1
                 + plane_grid._calc_offset_real
             )
             bulk = select_grid_in_box(bulk, corners_limit)
@@ -119,7 +142,9 @@ class PlotnPlane:
 
         self._entities = []
         self._calc_n = []
-        output = self._helper_n_visualize_each(bulk, self._calc_opacity_func, length, radius)
+        output = self._helper_n_visualize_each(
+            bulk, self._calc_opacity_func, length, radius
+        )
         self._entities.append(output[0])
         self._calc_n.append(output[1])
 
@@ -297,8 +322,8 @@ class PlotnPlane:
         for k in keys_rebuild:
             if k in changes:
                 self.make_figure(
-                    opts_grid = self._entities_plane[0]._opts_all,
-                    opts_plane = self._opts_all,
+                    opts_grid=self._entities_plane[0]._opts_all,
+                    opts_plane=self._opts_all,
                     logger=logger,
                 )
                 return

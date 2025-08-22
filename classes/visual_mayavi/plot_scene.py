@@ -13,14 +13,9 @@ class PlotScene:
     A scene manager that holds and manages multiple Mayavi plot objects,
     sharing a single Mayavi figure as the drawing canvas.
     """
-    
+
     @logging_and_warning_decorator
-    def __init__(
-        self,
-        is_new: bool = True,
-        opts = OptsScene(),
-        logger=None
-    ):
+    def __init__(self, is_new: bool = True, opts=OptsScene(), logger=None):
         """
         Initialize the scene with a new Mayavi figure.
 
@@ -45,23 +40,20 @@ class PlotScene:
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
-        
+
         if opts.name is not None:
-            if hasattr(self, 'name') and self.name is not None:
-                logger.warning("The figure already has its name {self.name}. Now it is re-named as {opts.name}")
+            if hasattr(self, "name") and self.name is not None:
+                logger.warning(
+                    "The figure already has its name {self.name}. Now it is re-named as {opts.name}"
+                )
             self.name = opts.name
         if opts.name is None:
-            if not hasattr(self, 'name'):
+            if not hasattr(self, "name"):
                 self.name = opts.name
-            
+
         self.scene._set_angles(
-            opts.azimuth,
-            opts.elevation,
-            opts.roll, 
-            opts.distance, 
-            opts.focal_point)
-        
-        
+            opts.azimuth, opts.elevation, opts.roll, opts.distance, opts.focal_point
+        )
 
     @logging_and_warning_decorator
     def add_object(self, obj, category: str = "default", logger=None) -> None:

@@ -49,11 +49,11 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 
 Q.update_defects()
 Q.update_lines_classify()
-Q.update_lines_smoothen(window_length=21)
+Q.update_lines_smoothen(window_length=16)
 Q.visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=30, radius=0.2)
     
-trans = 7
-spacing = 2
+trans = 7.5
+spacing = 2.5
 Q.visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100, 
                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=False, is_extent=False)

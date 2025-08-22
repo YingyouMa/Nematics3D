@@ -260,7 +260,12 @@ def defect_classify_into_lines(
     logger.debug("Done!")
 
     lines = [
-        DisclinationLine(path, box_size_periodic, grid_offset=grid_offset, grid_transform=grid_transform)
+        DisclinationLine(
+            path,
+            box_size_periodic,
+            grid_offset=grid_offset,
+            grid_transform=grid_transform,
+        )
         for path in paths
     ]
 

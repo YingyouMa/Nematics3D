@@ -60,18 +60,21 @@ Number = numbers.Real
 # - list/tuple/array of 3 values → used directly
 NumericInput = Union[Number, Sequence[Number]]
 
-def as_Number(input_data, name='input data'):
-    
+
+def as_Number(input_data, name="input data"):
+
     if not isinstance(input_data, numbers.Real):
         raise TypeError(f"{name} must be a number. Got {input_data} instead.")
-        
+
     return input_data
+
 
 # Vect(d) is simply vector in d-dimensions
 def Vect(d):
     return Union[Sequence[Union[int, float]], np.ndarray]
 
-def as_Vect(input_data, dim=3, name='input data', is_norm=False):
+
+def as_Vect(input_data, dim=3, name="input data", is_norm=False):
     """
     Convert the given input into a dim-D NumPy vector, with optional normalization.
 
@@ -107,12 +110,12 @@ def as_Vect(input_data, dim=3, name='input data', is_norm=False):
     >>> as_Vect3D((3, 4, 0), is_norm=True)
     array([0.6, 0.8, 0.0])
     """
-    
+
     if (
-       not isinstance(input_data, (tuple, list, np.ndarray))
-       or len(input_data) != dim     
-       or not any(isinstance(x, numbers.Real) for x in input_data)
-            ):
+        not isinstance(input_data, (tuple, list, np.ndarray))
+        or len(input_data) != dim
+        or not any(isinstance(x, numbers.Real) for x in input_data)
+    ):
         raise ValueError(
             f"{name} must be a vector with {dim} numbers. Got {input_data} instead."
         )
@@ -124,17 +127,18 @@ def as_Vect(input_data, dim=3, name='input data', is_norm=False):
 
     return input_data
 
+
 # Tensor(shape) is simply matrix with given shape
 def Tensor(shape):
     return Union[Sequence[Union[int, float]], np.ndarray]
 
 
-def as_Tensor(input_data, shape, name='input data'):
-  
+def as_Tensor(input_data, shape, name="input data"):
+
     if (
-       not isinstance(input_data, (tuple, list, np.ndarray))
-       or np.shape((input_data)) != shape     
-       ):
+        not isinstance(input_data, (tuple, list, np.ndarray))
+        or np.shape((input_data)) != shape
+    ):
         raise ValueError(
             f"{name} must be a matrix with shape {shape}. Got {input_data} instead."
         )
@@ -144,12 +148,11 @@ def as_Tensor(input_data, shape, name='input data'):
     return input_data
 
 
-
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
 
 
-def as_ColorRGB(input_data, name='input data', is_norm=False, norm_order=2):
+def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -196,18 +199,18 @@ def as_ColorRGB(input_data, name='input data', is_norm=False, norm_order=2):
     >>> as_ColorRGB([0.2, 0.5, 0.8], is_norm=True, norm_order=2)
     (0.19245008972987526, 0.480, 0.7698001794597505)
     """
-    
+
     if (
-       not isinstance(input_data, (tuple, list, np.ndarray))
-       or len(input_data) != 3     
-       or not any(isinstance(x, numbers.Real) for x in input_data)
-            ):
+        not isinstance(input_data, (tuple, list, np.ndarray))
+        or len(input_data) != 3
+        or not any(isinstance(x, numbers.Real) for x in input_data)
+    ):
         raise ValueError(
             f"{name} is ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
         )
-        
+
     input_data = np.asarray(input_data)
-        
+
     if np.max(input_data) > 1 or np.min(input_data) < 0:
         raise ValueError(
             f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
@@ -220,18 +223,19 @@ def as_ColorRGB(input_data, name='input data', is_norm=False, norm_order=2):
 
     return tuple(input_data)
 
+
 @logging_and_warning_decorator
-def as_str(input_data, name='input_data', replace='None', logger=None):
-    
+def as_str(input_data, name="input_data", replace="None", logger=None):
+
     if not isinstance(input_data, str):
         if replace is not None:
-            msg = f'>>> {name} should be str. Got {input_data} instead. \n'
-            msg += f'>>> Changed it into {replace} in the following.'
+            msg = f">>> {name} should be str. Got {input_data} instead. \n"
+            msg += f">>> Changed it into {replace} in the following."
             logger.warning(f"f{name} should be str. Got ")
             input_data = replace
         else:
-            raise TypeError(f'{name} should be str. Got {input_data} instead. \n')
-            
+            raise TypeError(f"{name} should be str. Got {input_data} instead. \n")
+
     return input_data
 
 

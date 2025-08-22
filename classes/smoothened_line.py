@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..logging_decorator import logging_and_warning_decorator
 from .opts import OptsSmoothen, merge_opts
 
+
 class SmoothenedLine:
     """
     Apply smoothing and spline interpolation to a polyline (sequence of 3D/ND coordinates).
@@ -63,11 +64,11 @@ class SmoothenedLine:
         line_coord_input: np.ndarray,
         opts: OptsSmoothen = OptsSmoothen(),
         logger=None,
-        **kwargs
+        **kwargs,
     ):
-        
-        opts = merge_opts(opts, kwargs, prefix='')
-        
+
+        opts = merge_opts(opts, kwargs, prefix="")
+
         self._data_coord = line_coord_input
         self._calc_N_init = len(self._data_coord)
 
@@ -84,14 +85,18 @@ class SmoothenedLine:
 
         if len(self._data_coord) < self._opts_min_line_length:
             self._state_is_smoothened = False
-            logger.warning(f"{self.name} is not smoothened, because its length {self._data_coord} is shorter than the minum length {self._opts_min_line_length}.")
+            logger.warning(
+                f"{self.name} is not smoothened, because its length {self._data_coord} is shorter than the minum length {self._opts_min_line_length}."
+            )
             self._entities = [self._data_coord]
         else:
 
             self._state_is_smoothened = True
 
             if self._opts_window_length is None:
-                self._opts_window_length = int(self._calc_N_init / self._opts_window_ratio / 2) * 2 + 1
+                self._opts_window_length = (
+                    int(self._calc_N_init / self._opts_window_ratio / 2) * 2 + 1
+                )
                 self._opts_window_ratio = self._calc_N_init / self._opts_window_length
             else:
                 # if self._opts_window_ratio is not None:
@@ -122,7 +127,9 @@ class SmoothenedLine:
 
             # Step 3: Fit and evaluate spline
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            self._entities = [np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T]
+            self._entities = [
+                np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
+            ]
 
     @logging_and_warning_decorator()
     def log_parameters(self, is_return: bool = False, logger=None) -> None:
@@ -130,7 +137,7 @@ class SmoothenedLine:
         Log internal filter and output parameters for inspection.
 
         This is the standard logging interface used in this library, which
-        can be redirected to console or to a file depending on the logger 
+        can be redirected to console or to a file depending on the logger
         configuration and the behavior of ``logging_and_warning_decorator``.
 
         All attributes listed in ``__descriptions__`` are included,
@@ -163,20 +170,17 @@ class SmoothenedLine:
         if is_return:
             return msg
         else:
-            logger.info(msg) 
-        
+            logger.info(msg)
 
     def __str__(self) -> str:
         header = f"<{self.__class__.__name__} object>"
         return header + "\n" + self.log_parameters(is_return=True)
 
-
-
     @property
     def output(self) -> np.ndarray:
         """Get the smoothened output line."""
         return self._entities[0]
-    
+
     @property
     def input(self) -> np.ndarray:
         """Get the input data of line"""

@@ -28,13 +28,13 @@ class SceneWrapper:
         return az, el, roll, dist, focal
 
     def _set_angles(self, az, el, roll, dist, focal):
-        
+
         if dist is None:
             dist = self.distance
-            
+
         if focal is None:
             focal = self.focal_point
-        
+
         az = np.radians(az)
         el = np.radians(el)
         r = np.radians(roll)
@@ -64,7 +64,6 @@ class SceneWrapper:
 
         self._cam.view_up = up.tolist()
         self._cam.compute_view_plane_normal()
-
 
     @property
     def azimuth(self):
@@ -110,7 +109,7 @@ class SceneWrapper:
     def focal_point(self, value):
         az, el, roll, dist, _ = self._get_angles()
         self._set_angles(az, el, roll, dist, value)
-        
+
     @property
     def bgcolor(self):
         return self._scene.background
@@ -118,7 +117,7 @@ class SceneWrapper:
     @bgcolor.setter
     def bgcolor(self, value):
         self._scene.background = tuple(value)
-        
+
     @property
     def fgcolor(self):
         return self._scene.foreground

@@ -6,6 +6,7 @@ from dataclasses import replace
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import OptsTube, auto_opts_tubes
 
+
 @auto_opts_tubes(
     {
         "opts_color": "actor.property.diffuse_color",
@@ -37,7 +38,7 @@ class PlotTube:
         self,
         coords_all: np.ndarray,
         scalars_all: Optional[np.ndarray] = None,
-        opts = OptsTube(),
+        opts=OptsTube(),
         logger=None,
     ) -> None:
         """
@@ -61,10 +62,10 @@ class PlotTube:
         self._data_coords_all = coords_all
         self._data_scalars_all = scalars_all
         self._internal_opts = opts
-        
+
         if opts.color is None:
             logger.warning("The color input of tube is None. Changed it into (1,1,1).")
-            opts.color = (1,1,1)
+            opts.color = (1, 1, 1)
 
         num_sublines = len(self._data_coords_all)
         if self._data_scalars_all is not None:
@@ -72,9 +73,9 @@ class PlotTube:
             logger.debug(">>> The color of tube will be ignored")
         else:
             self._data_scalars_all = [None for i in range(num_sublines)]
-            
+
         for coords, scalars in zip(self._data_coords_all, self._data_scalars_all):
-        
+
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
 
             if scalars is not None and len(scalars) != len(x):
@@ -104,17 +105,15 @@ class PlotTube:
                     tube_sides=opts.sides,
                     opacity=opts.opacity,
                 )
-                
 
             prop = item.actor.property
             prop.specular = opts.specular
             prop.specular_color = opts.specular_color
             prop.specular_power = opts.specular_power
-            
+
             self._items.append(item)
-            
+
             self.name = opts.name
-            
 
     def act_hide(self):
         self._state_is_visible = False

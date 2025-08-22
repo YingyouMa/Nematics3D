@@ -5,6 +5,7 @@ from dataclasses import fields
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import OptsExtent, auto_opts_tubes
 
+
 @auto_opts_tubes(
     {
         "opts_color": "actor.property.diffuse_color",
@@ -23,10 +24,7 @@ class PlotExtent:
     allowing unified control over its appearance and lifecycle.
     """
 
-    def __init__(
-        self,
-        opts=OptsExtent()
-    ):
+    def __init__(self, opts=OptsExtent()):
         """
         Create an Extent object and draw it in the Mayavi scene.
 
@@ -49,12 +47,14 @@ class PlotExtent:
             The opacity of extent
         """
         if opts.corners is None:
-            raise ValueError("The array \'corners\', which stores the positions of the 8 points, are not inputted (the value is None)")
+            raise ValueError(
+                "The array 'corners', which stores the positions of the 8 points, are not inputted (the value is None)"
+            )
         self._data_corners = opts.corners
         self._items = self.draw_box(opts)
-        
+
         self._internal = opts
-        
+
     # @property
     # def opts_color(self):
     #     return self._internal.color

@@ -548,6 +548,7 @@ def split_points(
 
     return only_in_points1, also_in_points2
 
+
 @logging_and_warning_decorator()
 def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
     if colors is None:
@@ -597,7 +598,6 @@ def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=
             logger.warning(msg)
             opacity = np.ones(num_points)
     return opacity
-
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
