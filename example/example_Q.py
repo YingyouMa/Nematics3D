@@ -30,7 +30,7 @@ Q.update_lines_smoothen()
 Q.visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
 
 Q.update_lines_smoothen(min_line_length=30, window_length=21)
-Q.visualize_disclination_lines(is_wrap=True)
+Q.visualize_disclination_lines(is_wrap=True, min_line_length=10)
 extent = Q.figures[1].objects['extent'][0]
 extent.opts_opacity = 0.5
 extent.opts_radius = 0.2

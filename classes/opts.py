@@ -336,7 +336,7 @@ def auto_opts_tubes(bindings: dict):
 
                 processed = getattr(self._internal, _key)
 
-                for item in self.items:
+                for item in self._items:
                     target = item
                     for attr in _attrs[:-1]:
                         target = getattr(target, attr)

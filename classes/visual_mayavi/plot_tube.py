@@ -15,7 +15,7 @@ from ..opts import OptsTube, auto_opts_tubes
         "opts_specular": "actor.property.specular",
         "opts_specular_color": "actor.property.specular_color",
         "opts_specular_power": "actor.property.specular_power",
-        "opts_is_visible": "actor.visible",
+        "_state_is_visible": "actor.visible",
     }
 )
 class PlotTube:
@@ -57,7 +57,7 @@ class PlotTube:
             logger: Optional logger instance used for warnings.
         """
 
-        self.items = []
+        self._items = []
         self._data_coords_all = coords_all
         self._data_scalars_all = scalars_all
         self._internal = opts
@@ -111,19 +111,19 @@ class PlotTube:
             prop.specular_color = opts.specular_color
             prop.specular_power = opts.specular_power
             
-            self.items.append(item)
+            self._items.append(item)
             
             self.name = opts.name
             
 
     def act_hide(self):
-        self.is_visible = False
+        self._state_is_visible = False
 
     def act_show(self):
-        self.is_visible = True
+        self._state_is_visible = True
 
     def act_remove(self):
-        for item in self.items:
+        for item in self._items:
             item.remove()
 
     # @logging_and_warning_decorator()

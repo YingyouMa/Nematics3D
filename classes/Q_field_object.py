@@ -243,12 +243,20 @@ class QFieldObject:
         check_bool_flags(locals())
 
         if min_line_length is None:
-            msg = "No data of minimum line length is input for lines to be plotted. "
+            msg = "No minimum line length has been provided for the plotted lines. "
             msg += f"Use the default value {self.DEFAULT_MINIMUM_LINE_LENGTH}"
             logger.info(msg)
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
-        else:
-            logger.debug(f"min_line_length = {min_line_length}")
+
+        if is_smooth and hasattr(self._lines[0], '_defect_coords_smooth_obj'):
+            _min_len_length_smooth = self._lines[0]._defect_coords_smooth_obj._opts_min_line_length
+            if _min_len_length_smooth > min_line_length:
+                msg = f">>> The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
+                msg += f">>> Use the larger value {_min_len_length_smooth} instead."
+                min_line_length = _min_len_length_smooth
+                logger.warning(msg)
+
+        logger.debug(f"min_line_length = {min_line_length}")
 
         lines_plot = [
             line for line in self._lines if line._defect_num > min_line_length

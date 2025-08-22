@@ -14,7 +14,7 @@ from ..opts import OptsExtent, auto_opts_tubes
         "opts_specular": "actor.property.specular",
         "opts_specular_color": "actor.property.specular_color",
         "opts_specular_power": "actor.property.specular_power",
-        "opts_is_visible": "actor.visible",
+        "_state__state_is_visible": "actor.visible",
     }
 )
 class PlotExtent:
@@ -51,7 +51,7 @@ class PlotExtent:
         if opts.corners is None:
             raise ValueError("The array \'corners\', which stores the positions of the 8 points, are not inputted (the value is None)")
         self._data_corners = opts.corners
-        self.items = self.draw_box(opts)
+        self._items = self.draw_box(opts)
         
         self._internal = opts
         
@@ -62,7 +62,7 @@ class PlotExtent:
     # @opts_color.setter
     # def opts_color(self, value):
     #     self._internal.color = value
-    #     for item in self.items:
+    #     for item in self._items:
     #         item.actor.property.diffuse_color = self._internal.color
 
     def draw_box(self, opts):
@@ -101,13 +101,13 @@ class PlotExtent:
         return result
 
     def hide(self):
-        self.is_visible = False
+        self._state_is_visible = False
 
     def show(self):
-        self.is_visible = True
+        self._state_is_visible = True
 
     def remove(self):
-        for item in self.items:
+        for item in self._items:
             item.remove()
 
     # @logging_and_warning_decorator()
