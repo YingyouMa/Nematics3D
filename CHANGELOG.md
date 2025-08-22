@@ -11,16 +11,16 @@
 ### Changed
  - Changed ```Vect3D``` into ```Vect(3)```. The new semantic alias could be used to verify vectors beyond 3D, for example, ```fig_size```.   
  - Re-organized the attribute names of some classes. Now they follow the prefix conventions as below:
-| Prefix       | Meaning                                                                 | Example Usage                                                      |
-|--------------|-------------------------------------------------------------------------|--------------------------------------------------------------------|
-| `opts_`      | **User-configurable options** — parameters that users are expected to set or modify. | `opts_color`, `opts_radius` |
-| `_opts_`     | **Internal options** — derived or managed internally, not meant to be modified directly. | `_opts_window_length` |
-| `_calc_`     | **Computed values** — attributes calculated from other properties (read-only). | `_calc_N_init` |
-| `_data_`     | **Raw or generated data** — input or generated arrays stored by the object. | `_data_coord` |
-| `_act_`      | **Action helpers** — operations or methods to control behavior (e.g., hide/show). | `_act_hide` |
-| `_state_`    | **Boolean state flags** — indicates current state of the object. | `_state_is_smoothened` |
-| `_label_`    | **Lifecycle/creation labels** — tags assigned when the object is created, e.g. whether processed or its origin. | `_label_source`, `_label_processed` |
-| `_internal` | **Implementation details** — internal workspace, not intended for external use. | `_internal_opts` |
+| Prefix              | Meaning                                                                 | Example Usage                  |
+|---------------------|-------------------------------------------------------------------------|--------------------------------|
+| `opts_`             | User-configurable options — parameters that users are expected to set or modify. | `opts_color`, `opts_radius` |
+| `_opts_`            | Internal options — derived or managed internally, not meant to be modified directly. | `_opts_window_length` |
+| `_calc_`            | Computed values — attributes calculated from other properties (read-only). | `_calc_N_init`, `_calc_N_out` |
+| `_data_`            | Raw or generated data — input or generated arrays stored by the object. | `_data_coord` |
+| `_act_`             | Action helpers — operations or methods to control behavior (e.g., hide/show). | `_act_hide`, `_act_toggle` |
+| `_state_`           | Boolean state flags — indicates current state of the object. | `_state_is_smoothened` |
+| `_label_`           | Lifecycle/creation labels — tags assigned when the object is created, e.g. whether processed or its origin. | `_label_source`, `_label_processed` |
+| `_private` / `_internal` | Implementation details — internal workspace, not intended for external use. | `_internal_cache` |
 
 ## [0.1.5]
 ### Added
