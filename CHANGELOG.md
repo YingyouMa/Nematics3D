@@ -22,7 +22,11 @@
    - `act_`:  
      (Function) Action helpers (methods or attributes used to control behaviors such as hiding).  
    - `_state_`:  
-     Boolean flags indicating object state (e.g., whether smoothing has been applied).  
+     Boolean flags indicating object state (e.g., whether smoothing has been applied).
+   - `_entities_`:  
+     Generated entities produced by the object (e.g., smoothed curve points, box edges, or visualization actors).    
+     The plural form is used consistently because some classes may produce multiple outputs.   
+     All entities are stored in lists for consistency. If a class produces only a single output, it can be accessed as `self._entities_xxx[0]`.  
    - `_label_`:  
      Tags or markers assigned when the object is created (e.g., whether processed, source of data).
    - `log_`:  
