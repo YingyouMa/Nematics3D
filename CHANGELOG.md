@@ -11,14 +11,24 @@
 ### Changed
  - Changed ```Vect3D``` into ```Vect(3)```. The new semantic alias could be used to verify vectors beyond 3D, for example, ```fig_size```.   
  - Re-organized the attribute names of some classes. Now they follow the prefix conventions as below:  
-   - `opts_`:      User-configurable options (parameters that users are expected to modify).
-   - `_opts_`:     Internal options (parameters derived or managed internally, not meant to be modified directly).
-   - `_calc_`:     Computed values (attributes calculated from other properties, read-only).
-   - `_data_`:     Raw or generated data stored by the object (should not be modified directly).
-   - `_act_`:      Action helpers (methods or attributes used to control behaviors such as hiding).
-   - `_state_`:    Boolean flags indicating object state (e.g., whether smoothing has been applied).
-   - `_label_`:    Tags or markers assigned when the object is created (e.g., whether processed, source of data).
-   - `_internal_`: Internal implementation details or temporary workspaces (do not touch).
+   - `opts_`:  
+     User-configurable options (parameters that users are expected to modify).  
+   - `_opts_`:  
+     Internal options (parameters derived or managed internally, not meant to be modified directly).  
+   - `_calc_`:  
+     Computed values (attributes calculated from other properties, read-only).  
+   - `_data_`:  
+     Raw or generated data stored by the object (should not be modified directly).  
+   - `act_`:  
+     (Function) Action helpers (methods or attributes used to control behaviors such as hiding).  
+   - `_state_`:  
+     Boolean flags indicating object state (e.g., whether smoothing has been applied).  
+   - `_label_`:  
+     Tags or markers assigned when the object is created (e.g., whether processed, source of data).
+   - `log_`:  
+     (Function) To pring or generate log files of some information. 
+   - `_internal_`:  
+     Internal implementation details or temporary workspaces (do not touch).
 
 ## [0.1.5]
 ### Added
