@@ -237,7 +237,7 @@ class QFieldObject:
         opts_extent.corners = self._corners
 
         opts_scene = merge_opts(opts_scene, kwargs, prefix="scene_")
-        opts_tube = merge_opts(opts_tube, kwargs, prefix="tube_")
+        opts_tube = merge_opts(opts_tube, kwargs, prefix="line_")
         opts_extent = merge_opts(opts_extent, kwargs, prefix="extent_")
 
         check_bool_flags(locals())
@@ -331,7 +331,6 @@ class QFieldObject:
 
         if not hasattr(self, '_interpolator'):
             self.update_interpolator()
-        opts_nPlane.QInterpolator = self._interpolator
 
         opts_grid.normal = plane_normal
         opts_grid.spacing1 = plane_spacing
@@ -344,6 +343,7 @@ class QFieldObject:
         figure = self.add_scene(is_new, opts=opts_scene)
 
         nPlane = PlotnPlane(
+            QInterpolator=self._interpolator,
             opts_grid=opts_grid,
             opts_nPlane=opts_nPlane,
             logger=logger,

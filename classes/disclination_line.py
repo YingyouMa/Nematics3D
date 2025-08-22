@@ -242,7 +242,7 @@ class DisclinationLine:
             opts = new_opts
         )
 
-        result = output._output[
+        result = output._entities[0][
             int(tail_length * output._opts_N_out_ratio) : int((-tail_length - 1) * output._opts_N_out_ratio)
         ]
         result = shift_to_box(result, self._box_size_periodic_index)

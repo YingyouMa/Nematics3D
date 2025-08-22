@@ -1,4 +1,5 @@
 import numpy as np
+from dataclasses import asdict
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
@@ -22,28 +23,34 @@ class PlotPlaneGrid:
         
         opts = merge_opts(opts, kwargs)
         
-        self._internal_opts = opts
+        self._opts_all = opts
 
-        self.commit(
-            opts = self._internal_opts,
+        self.act_commit(
+            opts = self._opts_all,
             logger=logger,
         )
-        
-        for key, value in vars(self._internal_opts).items():
-            setattr(self, f"opts_{key}", value)
 
-    def commit(
+    def act_commit(
         self,
         logger=None,
         **kwargs,
     ):
+        
+        self._opts_all = merge_opts(self._opts_all, kwargs)
+        
+        for key, value in asdict(self._opts_all).items():
+            setattr(self, f"opts_{key}", value)
 
-        space1 = opts.spacing1
-        space2 = opts.spacing2
-        size = opts.size
-        origin = opts.origin
-        normal = opts.normal
-        axis1 = opts.axis1
+        space1 = self._opts_all.spacing1
+        space2 = self._opts_all.spacing2
+        size = self._opts_all.size
+        origin = self._opts_all.origin
+        normal = self._opts_all.normal
+        axis1 = self._opts_all.axis1
+        corners_limit = self._opts_all.corners_limit
+        grid_transform = self._opts_all.grid_transform
+        grid_offset = self._opts_all.grid_offset
+        shape = self._opts_all.shape
 
         num1 = int(size / space1)
         num2 = int(size / space2)
@@ -76,27 +83,20 @@ class PlotPlaneGrid:
         offset = -np.average(grid, axis=0) + origin
         grid = grid + offset
         grid = apply_linear_transform(
-            grid, transform=opts.grid_transform, offset=opts.grid_offset
+            grid, transform=grid_transform, offset=grid_offset
         )
             
-        if opts.corners_limit is not None:
+        if corners_limit is not None:
             grid_select = select_grid_in_box(
-                grid, corners_limit=opts.corners_limit, logger=logger
+                grid, corners_limit=corners_limit, logger=logger
             )
         else:
             grid_select = grid
 
-        self._grid = grid_select
-        self._axis1 = axis1
-        self._normal = normal
-        self._origin = opts.origin
-        self._shape = opts.shape
-        self._size = opts.size
-        self._spacing1 = spaces[0]
-        self._spacing2 = spaces[1]
-        self._grid_all = np.reshape(grid, (*target_shape, 3))
-        self._offset = offset
-        self._grid_int = grid_int
-        self._grid_transform = opts.grid_transform
-        self._grid_offset = opts.grid_offset
-        self._corners_limit = opts.corners_limit
+        self._entities_grid = [grid_select]
+        self._entities_grid_all = [np.reshape(grid, (*target_shape, 3))]
+        self._entities_grid_int = [grid_int]
+        self._calc_offset_real = offset
+        self.opts_axis1 = axis1
+        self._opts_all.axis1 = axis1
+        

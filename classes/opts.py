@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field, fields, is_dataclass, replace
 from typing import Tuple, Optional, Union, Literal, Callable
 import numpy as np
-from scipy.interpolate import RegularGridInterpolator
 
 from Nematics3D.datatypes import ColorRGB,as_ColorRGB, Vect, as_Vect, Tensor, as_Tensor, Number, as_Number, nField, as_str
 from Nematics3D.field import n_color_immerse
@@ -153,7 +152,6 @@ class OptsPlaneGrid:
 # --- nPlane Options ---
 @dataclass(slots=True)
 class OptsnPlane:
-    QInterpolator: Optional[RegularGridInterpolator] = None,
     colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
     opacity: Union[Callable[nField, np.ndarray], float] = 1
     length: Number = 3.5
@@ -162,7 +160,6 @@ class OptsnPlane:
     defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
     
     __descriptions__ = {
-        "QInterpolator":   "3D interpolator for Q-field values",
         "colors":          "RGB color or callable mapping n-field → RGB",
         "opacity":         "opacity value or callable mapping n-field → array",
         "length":          "length of directors in plane visualization",
