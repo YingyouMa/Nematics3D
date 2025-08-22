@@ -127,10 +127,10 @@ class OptsPlaneGrid:
     }
 
     _validators = {
-        "normal":        lambda self, v: as_Vect(v, name=self.__descriptions__["normal"]),
+        "normal":        lambda self, v: as_Vect(v, name=self.__descriptions__["normal"], is_norm=True),
         "origin":        lambda self, v: as_Vect(v, name=self.__descriptions__["origin"]),
         "grid_offset":   lambda self, v: as_Vect(v, name=self.__descriptions__["grid_offset"]),
-        "axis1":         lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["axis1"]),
+        "axis1":         lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["axis1"], is_norm=True),
         "spacing1":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing1"]),
         "spacing2":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing2"]),
         "size":          lambda self, v: as_Number(v, name=self.__descriptions__["size"]),

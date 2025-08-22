@@ -1,10 +1,9 @@
 import numpy as np
-from typing import Tuple, Optional, List, Literal
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import Vect, as_Vect, as_QField5, Tensor, as_Tensor
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
+from ..opts import OptsPlaneGrid, merge_opts
 
 
 class PlotPlaneGrid:
@@ -12,50 +11,32 @@ class PlotPlaneGrid:
     @logging_and_warning_decorator
     def __init__(
         self,
-        normal: Vect(3),
-        spacing1: float,
-        spacing2: float,
-        size: float,
-        shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: Vect(3) = (0, 0, 0),
-        axis1: Optional[Vect(3)] = None,
-        corners_limit: Optional[np.ndarray] = None,
-        grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        opts = OptsPlaneGrid(),
         logger=None,
+        **kwargs
     ):
+        
+        opts = merge_opts(opts, kwargs)
+        
+        self._internal_opts = opts
 
         self.update_grid(
-            normal,
-            shape,
-            space1,
-            space2,
-            size,
-            origin=origin,
-            axis1=axis1,
-            corners_limit=corners_limit,
-            grid_offset=grid_offset,
-            grid_transform=grid_transform,
+            opts = self._internal_opts,
             logger=logger,
         )
 
     def update_grid(
         self,
-        normal: Vect(3),
-        shape: Literal["circle", "rectangle"],
-        space1: float,
-        space2: float,
-        size: float,
-        origin: Vect(3) = (0, 0, 0),
-        axis1: Optional[Vect(3)] = None,
-        corners_limit: Optional[np.ndarray] = None,
-        grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        opts = OptsPlaneGrid(),
         logger=None,
     ):
 
-        space1 = float(space1)
-        space2 = float(space2)
+        space1 = opts.spacing1
+        space2 = opts.spacing2
+        size = opts.size
+        origin = opts.origin
+        normal = opts.normal
+        axis1 = opts.axis1
 
         num1 = int(size / space1)
         num2 = int(size / space2)
@@ -63,20 +44,10 @@ class PlotPlaneGrid:
         # space1 = (size-1)/(num1-1)
         # space1 = (size-1)/(num2-1)
 
-        origin = as_Vect(origin)
-
-        if shape not in ["circle", "rectangle"]:
-            msg = f">>> Input shape must either be 'circle' or 'rectangle'. Got {shape} instead.\n"
-            msg += "Use 'rectangle' in the following."
-            shape = "rectangle"
-            logger.warning(msg)
-
-        normal = as_Vect(normal, is_norm=True)
-
         if axis1 is not None:
-            axis1 = as_Vect(axis1, is_norm=True)
             if normal @ axis1 != 0:
                 msg = "normal must be perpendicular to axis1.\n"
+                msg = "Got {normal} and {axis1}. \n"
                 msg += "Discard the component aligned with normal along axis1 in the following."
                 logger.info(msg)
         if axis1 is None:
@@ -98,22 +69,25 @@ class PlotPlaneGrid:
         offset = -np.average(grid, axis=0) + origin
         grid = grid + offset
         grid = apply_linear_transform(
-            grid, transform=grid_transform, offset=grid_offset
+            grid, transform=opts.grid_transform, offset=opts.grid_offset
         )
-
-        grid_select = select_grid_in_box(
-            grid, corners_limit=corners_limit, logger=logger
-        )
+            
+        if opts.corners_limit is not None:
+            grid_select = select_grid_in_box(
+                grid, corners_limit=opts.corners_limit, logger=logger
+            )
+        else:
+            grid_select = grid
 
         self._grid = grid_select
         self._axis1 = axis1
         self._normal = normal
-        self._origin = origin
-        self._shape = shape
-        self._space1 = spaces[0]
-        self._space2 = spaces[1]
+        self._origin = opts.origin
+        self._shape = opts.shape
+        self._spacing1 = spaces[0]
+        self._spacing2 = spaces[1]
         self._grid_all = np.reshape(grid, (*target_shape, 3))
         self._offset = offset
         self._grid_int = grid_int
-        self._grid_transform = grid_transform
-        self._grid_offset = grid_offset
+        self._grid_transform = opts.grid_transform
+        self._grid_offset = opts.grid_offset
