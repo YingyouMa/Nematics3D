@@ -328,13 +328,13 @@ def auto_opts_tubes(bindings: dict):
             key = name[len("opts_"):]  # 去掉 "opts_" 前缀，映射到 _internal.xxx
 
             def getter(self, _key=key):
-                return getattr(self._internal, _key)
+                return getattr(self._internal_opts, _key)
 
             def setter(self, value, _attrs=attrs, _key=key):
                 # 1. 存到 _internal，会触发校验
-                setattr(self._internal, _key, value)
+                setattr(self._internal_opts, _key, value)
 
-                processed = getattr(self._internal, _key)
+                processed = getattr(self._internal_opts, _key)
 
                 for item in self._items:
                     target = item
