@@ -102,10 +102,10 @@ class OptsScene:
 # --- Plane Options ---
 @dataclass(slots=True)
 class OptsPlaneGrid:
-    normal: Vect(3)
-    spacing1: Number
-    spacing2: Number
-    size: Number
+    normal: Optional[Vect(3)] = None
+    spacing1: Optional[Number] = None
+    spacing2: Optional[Number] = None
+    size: Optional[Number] = None
     shape: Literal["circle", "rectangle"] = "rectangle"
     origin: Vect(3) = (0, 0, 0)
     axis1: Optional[Vect(3)] = None
@@ -127,13 +127,13 @@ class OptsPlaneGrid:
     }
 
     _validators = {
-        "normal":        lambda self, v: as_Vect(v, name=self.__descriptions__["normal"], is_norm=True),
+        "normal":        lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["normal"], is_norm=True),
         "origin":        lambda self, v: as_Vect(v, name=self.__descriptions__["origin"]),
         "grid_offset":   lambda self, v: as_Vect(v, name=self.__descriptions__["grid_offset"]),
         "axis1":         lambda self, v: None if v is None else as_Vect(v, name=self.__descriptions__["axis1"], is_norm=True),
-        "spacing1":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing1"]),
-        "spacing2":      lambda self, v: as_Number(v, name=self.__descriptions__["spacing2"]),
-        "size":          lambda self, v: as_Number(v, name=self.__descriptions__["size"]),
+        "spacing1":      lambda self, v: None if v is None else as_Number(v, name=self.__descriptions__["spacing1"]),
+        "spacing2":      lambda self, v: None if v is None else as_Number(v, name=self.__descriptions__["spacing2"]),
+        "size":          lambda self, v: None if v is None else as_Number(v, name=self.__descriptions__["size"]),
         "grid_transform":lambda self, v: as_Tensor(v, (3,3), name=self.__descriptions__["grid_transform"]),
         "corners_limit": lambda self, v: None if v is None else as_Tensor(v, (8,3), name=self.__descriptions__["corners_limit"]),
         "shape":         lambda self, v: (
@@ -153,7 +153,7 @@ class OptsPlaneGrid:
 # --- nPlane Options ---
 @dataclass(slots=True)
 class OptsnPlane:
-    QInterpolator: RegularGridInterpolator
+    QInterpolator: Optional[RegularGridInterpolator] = None,
     colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
     opacity: Union[Callable[nField, np.ndarray], float] = 1
     length: Number = 3.5

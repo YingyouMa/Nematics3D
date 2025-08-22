@@ -14,7 +14,7 @@ from ..datatypes import (
     as_QField5,
     SField,
     nField,
-    ColorRGB,
+    Number,
     DimensionFlagInput,
     as_dimension_info,
     check_Sn,
@@ -308,56 +308,51 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def visualize_n_in_Q(
         self,
-        normal: Vect(3),
-        space: float,
-        size: float,
+        plane_normal: Optional[Vect(3)] = None,
+        plane_spacing: Optional[Number] = None,
+        plane_size: Optional[Number] = None,
         is_new: bool = True,
-        fig_size: Tuple[int, int] = (1920, 1360),
-        bgcolor: ColorRGB = (1.0, 1.0, 1.0),
-        fgcolor: ColorRGB = (0.0, 0.0, 0.0),
-        shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: ColorRGB = (0, 0, 0),
-        axis1: Optional[ColorRGB] = None,
-        colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse,
-        opacity: Union[Callable[nField, np.ndarray], float] = 1,
-        length: float = 3.5,
-        radius: float = 0.5,
-        is_n_defect: bool = True,
-        defect_opacity: float = 1,
         is_extent: bool = True,
-        extent_radius: float = 1,
-        extent_opacity: float = 1,
+        opts_grid = OptsPlaneGrid(),
+        opts_nPlane = OptsnPlane(),
+        opts_extent = OptsExtent(),
+        opts_scene = OptsScene(),
         logger=None,
+        **kwargs
     ):
+        
+        opts_extent.corners = self._corners
+        opts_grid.corners_limit = self._corners
 
-        figure = self.add_scene(is_new, fig_size, bgcolor, fgcolor)
+        opts_grid = merge_opts(opts_grid, kwargs, prefix="plane_")
+        opts_nPlane = merge_opts(opts_nPlane, kwargs, prefix="n_")
+        opts_extent = merge_opts(opts_extent, kwargs, prefix="extent_")
+        opts_scene = merge_opts(opts_scene, kwargs, prefix="scene_")
 
-        self.update_interpolator()
+        if not hasattr(self, '_interpolator'):
+            self.update_interpolator()
+        opts_nPlane.QInterpolator = self._interpolator
+
+        opts_grid.normal = plane_normal
+        opts_grid.spacing1 = plane_spacing
+        opts_grid.spacing2 = plane_spacing
+        opts_grid.size = plane_size
+
+
+        check_bool_flags(locals())
+
+        figure = self.add_scene(is_new, opts=opts_scene)
 
         nPlane = PlotnPlane(
-            normal,
-            space,
-            size,
-            self._interpolator,
-            shape=shape,
-            origin=origin,
-            axis1=axis1,
-            corners_limit=self._corners,
-            colors=colors,
-            opacity=opacity,
-            length=length,
-            radius=radius,
-            is_n_defect=is_n_defect,
-            defect_opacity=defect_opacity,
-            grid_offset=self._grid_offset,
-            grid_transform=self._grid_transform,
+            opts_grid=opts_grid,
+            opts_nPlane=opts_nPlane,
             logger=logger,
         )
 
         figure.add_object(nPlane, category="nPlane")
 
         if is_extent:
-            extent = self.add_extent(extent_radius, extent_opacity)
+            extent = PlotExtent(opts_extent)
             figure.add_object(extent, category="extent")
 
     def add_scene(self, is_new=True, opts=OptsScene):

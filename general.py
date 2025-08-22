@@ -548,6 +548,56 @@ def split_points(
 
     return only_in_points1, also_in_points2
 
+@logging_and_warning_decorator()
+def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
+    if colors is None:
+        colors = np.ones((num_points, 3))
+    elif callable(colors):
+        colors = colors(data)
+    elif isinstance(colors, (list, tuple, np.ndarray)):
+        colors = np.asarray(colors)
+        if np.size(colors) == 3:
+            colors = as_ColorRGB(colors)
+            colors = [colors for i in range(num_points)]
+        else:
+            if np.shape(colors) != (num_points, 3):
+                msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
+                msg += "In the following, set directors to be white."
+                logger.warning(msg)
+                colors = [(1, 1, 1) for i in range(num_points)]
+            else:
+                colors = [(color) for color in colors]
+    return colors
+
+
+@logging_and_warning_decorator()
+def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
+    if opacity is None:
+        opacity = np.ones(num_points)
+    elif isinstance(opacity, (int, float)):
+        if opacity > 1 or opacity < 0:
+            msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
+            msg += "In the following, set opacity of directors as 1."
+            logger.warning(msg)
+            opacity = np.ones(num_points)
+        else:
+            opacity = np.zeros(num_points) + opacity
+    elif callable(opacity):
+        opacity = opacity(data)
+    else:
+        opacity = np.asarray(opacity)
+        if np.max(opacity) > 1 or np.min(opacity) < 0:
+            msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
+            msg += "In the following, set opacity of directors as 1."
+            logger.warning(msg)
+            opacity = np.ones(num_points)
+        elif len(opacity) != num_points:
+            msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
+            msg += "In the following, set opacity of directors as 1."
+            logger.warning(msg)
+            opacity = np.ones(num_points)
+    return opacity
+
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
@@ -563,56 +613,6 @@ def split_points(
 #     condition_large = dist <= dist_large - strict[0] * epsilon
 
 #     return np.where(condition_large * condition_small)
-
-# @logging_and_warning_decorator()
-# def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
-#     if colors is None:
-#         colors = np.ones((num_points, 3))
-#     elif callable(colors):
-#         colors = colors(data)
-#     elif isinstance(colors, (list, tuple, np.ndarray)):
-#         colors = np.asarray(colors)
-#         if np.size(colors) == 3:
-#             colors = as_ColorRGB(colors)
-#             colors = [colors for i in range(num_points)]
-#         else:
-#             if np.shape(colors) != (num_points, 3):
-#                 msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
-#                 msg += "In the following, set directors to be white."
-#                 logger.warning(msg)
-#                 colors = [(1, 1, 1) for i in range(num_points)]
-#             else:
-#                 colors = [(color) for color in colors]
-#     return colors
-
-
-# @logging_and_warning_decorator()
-# def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
-#     if opacity is None:
-#         opacity = np.ones(num_points)
-#     elif isinstance(opacity, (int, float)):
-#         if opacity > 1 or opacity < 0:
-#             msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
-#             msg += "In the following, set opacity of directors as 1."
-#             logger.warning(msg)
-#             opacity = np.ones(num_points)
-#         else:
-#             opacity = np.zeros(num_points) + opacity
-#     elif callable(opacity):
-#         opacity = opacity(data)
-#     else:
-#         opacity = np.asarray(opacity)
-#         if np.max(opacity) > 1 or np.min(opacity) < 0:
-#             msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
-#             msg += "In the following, set opacity of directors as 1."
-#             logger.warning(msg)
-#             opacity = np.ones(num_points)
-#         elif len(opacity) != num_points:
-#             msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
-#             msg += "In the following, set opacity of directors as 1."
-#             logger.warning(msg)
-#             opacity = np.ones(num_points)
-#     return opacity
 
 
 # def get_plane(points):

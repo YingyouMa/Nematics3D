@@ -18,12 +18,13 @@ class Interpolator:
         self._interpolator = interpolator
         self._grid_offset = as_Vect(grid_offset, name='grid_offset')
         self._grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self._grid_max = grid_max
 
     def interpolate(self, points: np.ndarray, is_index=False):
 
         if not is_index:
             points = apply_linear_transform(
-                points, transform=np.linalg.inv(self._transform), offset=-self._offset
+                points, transform=np.linalg.inv(self._grid_transform), offset=-self._grid_offset
             )
 
         u, v, w = self._grid_max

@@ -2,6 +2,7 @@ import numpy as np
 from typing import Optional, Literal, Callable, List, Union
 
 from .plot_plane_grid import PlotPlaneGrid
+from ..opts import OptsPlaneGrid, OptsnPlane ,merge_opts
 from Nematics3D.datatypes import Vect, as_Vect, nField, ColorRGB, as_ColorRGB, Tensor, as_Tensor
 from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
@@ -14,90 +15,60 @@ class PlotnPlane:
     @logging_and_warning_decorator
     def __init__(
         self,
-        normal: Vect(3),
-        space: float,
-        size: float,
-        QInterpolator,
-        shape: Literal["circle", "rectangle"] = "rectangle",
-        origin: Vect(3) = (0, 0, 0),
-        axis1: Optional[Vect(3)] = None,
-        corners_limit: Optional[np.ndarray] = None,
-        colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse,
-        opacity: Union[Callable[nField, np.ndarray], float] = 1,
-        length: float = 3.5,
-        radius: float = 0.5,
-        is_n_defect: bool = True,
-        defect_opacity: float = 1,
-        grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3,3)) = np.eye(3),
+        opts_grid = OptsPlaneGrid(),
+        opts_nPlane = OptsnPlane(),
         logger=None,
+        **kwargs
     ):
+        
+        for name, value in {"normal": opts_grid.normal, "spacing1": opts_grid.spacing1, "spacing2": opts_grid.spacing2, "size": opts_grid.size}.items():
+            if value is None:
+                raise ValueError(f"Missing required variable {name} to generate plane_grid")
+                
+        if opts_nPlane.QInterpolator is None:
+            raise ValueError("Missing required variable QInterpolator to generate nPlane")
+
+        opts_grid = merge_opts(opts_grid, kwargs, prefix="plane__")
+        opts_nPlane = merge_opts(opts_nPlane, kwargs, prefix="n_")
+        
+        self._internal_opts_nPlane = opts_nPlane
+        self._QInterpolator = opts_nPlane.QInterpolator
 
         self.make_figure(
-            normal,
-            space,
-            size,
-            QInterpolator,
-            shape,
-            origin,
-            axis1,
-            corners_limit,
-            colors,
-            opacity,
-            length,
-            radius,
-            is_n_defect,
-            defect_opacity,
-            grid_offset,
-            grid_transform,
+            opts_grid = opts_grid,
+            opts_nPlane = opts_nPlane,
             logger=logger,
         )
 
     @logging_and_warning_decorator
     def make_figure(
         self,
-        normal,
-        space,
-        size,
-        QInterpolator,
-        shape,
-        origin,
-        axis1,
-        corners_limit,
-        colors,
-        opacity,
-        length,
-        radius,
-        is_n_defect,
-        defect_opacity,
-        grid_offset,
-        grid_transform,
+        opts_grid = OptsPlaneGrid(),
+        opts_nPlane = OptsnPlane(),
         logger=None,
     ):
-
-        self._QInterpolator = QInterpolator
-
-        self.plane = PlotPlaneGrid(
-            normal,
-            space,
-            space,
-            size,
-            shape=shape,
-            origin=origin,
-            axis1=axis1,
-            corners_limit=corners_limit,
-            grid_offset=grid_offset,
-            grid_transform=grid_transform,
+        
+        self._items_plane = PlotPlaneGrid(
+            opts = opts_grid,
             logger=logger,
         )
+        
+        is_n_defect = opts_nPlane.is_n_defect
+        QInterpolator = opts_nPlane.QInterpolator
+        corners_limit = self._items_plane._corners_limit
+        colors = opts_nPlane.colors
+        opacity = opts_nPlane.opacity
+        defect_opacity = opts_nPlane.defect_opacity
+        length = opts_nPlane.length
+        radius = opts_nPlane.radius
 
         if is_n_defect:
 
             axis_both = np.array(
-                [self.plane._axis1, np.cross(self.plane._normal, self.plane._axis1)]
+                [self._items_plane._axis1, np.cross(self._items_plane._normal, self._items_plane._axis1)]
             )
-            shape_all = np.shape(self.plane._grid_all)[:2]
-            grid_all_flatten = np.reshape(self.plane._grid_all, (-1, 3))
+            shape_all = np.shape(self._items_plane._grid_all)[:2]
+            grid_all_flatten = np.reshape(self._items_plane._grid_all, (-1, 3))
 
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
@@ -108,26 +79,26 @@ class PlotnPlane:
                 defect_plane_index, num_shell=1
             ).reshape((-1, 3))[:, 1:]
             bulk_index, defect_vicinity_index = split_points(
-                self.plane._grid_int, defect_vicinity_index
+                self._items_plane._grid_int, defect_vicinity_index
             )
 
             defect_vicinity = (
                 np.einsum("ai, ib -> ab", defect_vicinity_index, axis_both)
-                * self.plane._space1
-                + self.plane._offset
+                * self._items_plane._spacing1
+                + self._items_plane._offset
             )
             defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
 
             bulk = (
-                np.einsum("ai, ib -> ab", bulk_index, axis_both) * self.plane._space1
-                + self.plane._offset
+                np.einsum("ai, ib -> ab", bulk_index, axis_both) * self._items_plane._spacing1
+                + self._items_plane._offset
             )
             bulk = select_grid_in_box(bulk, corners_limit)
 
         else:
-            bulk = self.plane._grid
+            bulk = self._items_plane._grid
 
-        grid = self.plane._grid
+        grid = self._items_plane._grid
         self.num_points = np.shape(grid)[0]
 
         self.colors_func = self.colors_check(colors)
@@ -152,17 +123,16 @@ class PlotnPlane:
             self.n.append(output[1])
 
         self.radius = radius
-        self.axis1 = self.plane._axis1
-        self.normal = self.plane._normal
-        self.origin = origin
-        self.shape = shape
-        self.space = space
-        self.size = size
+        self.axis1 = self._items_plane._axis1
+        self.normal = self._items_plane._normal
+        self.origin = self._items_plane._origin
+        self.shape = self._items_plane._shape
+        self.size = self._items_plane._size
         self.corners_limit = corners_limit
         self.is_n_defect = is_n_defect
         self.defect_opacity = defect_opacity
-        self.grid_offset = as_Vect(grid_offset, name='grid_offset')
-        self.grid_transform = as_Tensor(grid_transform, (3,3), name="grid_transform")
+        self.grid_offset = self._items_plane._grid_offset
+        self.grid_transform = self._items_plane._grid_transform
 
     def n_visualize_each(self, data, opacity_func, length, radius):
 
@@ -302,7 +272,7 @@ class PlotnPlane:
 
         set_color(0)
 
-        if self.is_n_defect and len(self.items > 0):
+        if self.is_n_defect and len(self.items) > 0:
             set_color(1)
 
     @logging_and_warning_decorator
@@ -314,13 +284,13 @@ class PlotnPlane:
         for k, v in changes.items():
             setattr(self, k, v)
 
-        keys_rebuild = ["axis1", "normal", "origin", "shape", "space", "size"]
+        keys_rebuild = ["axis1", "normal", "origin", "shape", "spacing", "size"]
 
         for k in keys_rebuild:
             if k in changes:
                 self.make_figure(
                     self.normal,
-                    self.space,
+                    self.spacing,
                     self.size,
                     self._QInterpolator,
                     self.shape,

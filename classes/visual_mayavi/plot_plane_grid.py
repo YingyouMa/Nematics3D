@@ -16,19 +16,26 @@ class PlotPlaneGrid:
         **kwargs
     ):
         
+        for name, value in {"normal": opts.normal, "spacing1": opts.spacing1, "spacing2": opts.spacing2, "size": opts.size}.items():
+            if value is None:
+                raise ValueError(f"Missing required variable {name} to generate plane_grid")
+        
         opts = merge_opts(opts, kwargs)
         
         self._internal_opts = opts
 
-        self.update_grid(
+        self.commit(
             opts = self._internal_opts,
             logger=logger,
         )
+        
+        for key, value in vars(self._internal_opts).items():
+            setattr(self, f"opts_{key}", value)
 
-    def update_grid(
+    def commit(
         self,
-        opts = OptsPlaneGrid(),
         logger=None,
+        **kwargs,
     ):
 
         space1 = opts.spacing1
@@ -84,6 +91,7 @@ class PlotPlaneGrid:
         self._normal = normal
         self._origin = opts.origin
         self._shape = opts.shape
+        self._size = opts.size
         self._spacing1 = spaces[0]
         self._spacing2 = spaces[1]
         self._grid_all = np.reshape(grid, (*target_shape, 3))
@@ -91,3 +99,4 @@ class PlotPlaneGrid:
         self._grid_int = grid_int
         self._grid_transform = opts.grid_transform
         self._grid_offset = opts.grid_offset
+        self._corners_limit = opts.corners_limit
