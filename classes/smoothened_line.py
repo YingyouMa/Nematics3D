@@ -46,7 +46,7 @@ class SmoothenedLine:
         "_data_coord": "Raw input line coordinates (shape: N x D)",
         "_calc_N_init": "Number of input points (before smoothing)",
         "_calc_N_out": "Number of output points (after smoothing)",
-        "_output": "Smoothed output coordinates (shape: M x D)",
+        "_entities": "Whose first element is smoothed output coordinates (shape: M x D)",
         "_state_is_smoothened": "Boolean flag indicating whether smoothing was applied",
         "_opts_window_ratio": "Ratio used to compute window_length if not explicitly provided",
         "_opts_window_length": "Explicit smoothing window length (overrides window_ratio if set)",
@@ -85,7 +85,7 @@ class SmoothenedLine:
         if len(self._data_coord) < self._opts_min_line_length:
             self._state_is_smoothened = False
             logger.warning(f"{self.name} is not smoothened, because its length {self._data_coord} is shorter than the minum length {self._opts_min_line_length}.")
-            self._output = self._data_coord
+            self._entities = [self._data_coord]
         else:
 
             self._state_is_smoothened = True
@@ -122,7 +122,7 @@ class SmoothenedLine:
 
             # Step 3: Fit and evaluate spline
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            self._output = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
+            self._entities = [np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T]
 
     @logging_and_warning_decorator()
     def log_parameters(self, is_return: bool = False, logger=None) -> None:
@@ -175,7 +175,7 @@ class SmoothenedLine:
     @property
     def output(self) -> np.ndarray:
         """Get the smoothened output line."""
-        return self._output
+        return self._entities[0]
     
     @property
     def input(self) -> np.ndarray:
