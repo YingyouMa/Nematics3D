@@ -53,7 +53,7 @@ class PlotExtent:
         self._data_corners = opts.corners
         self._items = self.draw_box(opts)
 
-        self._internal = opts
+        self._opts_all = opts
 
     # @property
     # def opts_color(self):

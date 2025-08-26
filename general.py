@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping, Optional
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from .datatypes import as_ColorRGB
+from .datatypes import as_ColorRGB, Vect, as_Vect, Tensor
 
 
 def make_hash_table(
@@ -598,6 +598,58 @@ def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=
             logger.warning(msg)
             opacity = np.ones(num_points)
     return opacity
+
+
+def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) ) -> Tensor((3,3)):
+    """
+    Construct a rotation matrix that rotates one vector to another.
+
+    This function computes a 3×3 rotation matrix `R` such that:
+        R @ source_vector ≈ target_vector
+
+    It internally uses SciPy's `Rotation.align_vectors` to find the 
+    minimal rotation that maps the source direction to the target 
+    direction.
+
+    Parameters
+    ----------
+    source_vector : array_like, shape (3,)
+        The initial vector that you want to rotate from.
+    target_vector : array_like, shape (3,)
+        The final vector that you want to rotate to.
+
+    Returns
+    -------
+    rotation_matrix : ndarray, shape (3, 3)
+        A proper rotation matrix (orthogonal with det=+1) that rotates 
+        `source_vector` to align with `target_vector`.
+
+    Notes
+    -----
+    - Both vectors are normalized internally before computing the rotation.
+    - If the vectors are parallel (or anti-parallel), the rotation axis 
+      may be underdetermined, but `Rotation.align_vectors` chooses a 
+      consistent solution.
+    - To apply the rotation to other vectors, use the returned matrix 
+      with the `@` operator (matrix multiplication).
+
+    Examples
+    --------
+    >>> source = [0, 0, 1]
+    >>> target = [1, 0, 0]
+    >>> Rmat = rotation_matrix_from_vectors(source, target)
+    >>> np.allclose(Rmat @ source, target)
+    True
+    """
+    
+    from scipy.spatial.transform import Rotation as R
+    
+    source_vector = as_Vect(source_vector, name="The vector used as the starting source when constructing the rotation matrix", is_norm=True)
+    target_vector = as_Vect(target_vector, name="The vector used as the endinbg target when constructing the rotation matrix", is_norm=True)
+
+    rot, _ = R.align_vectors([target_vector], [source_vector])
+    
+    return rot.as_matrix()
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):

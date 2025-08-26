@@ -18,6 +18,8 @@ from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, split_points
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 
+from Nematics3D.debug.debug_store import DEBUG_VARS
+
 
 class PlotnPlane:
 
@@ -102,12 +104,14 @@ class PlotnPlane:
 
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
-            n_all = np.reshape(n_all, (1, *shape_all, 3))
-            defect_plane_index = defect_detect(n_all, planes=(True, False, False))
+            n_all = np.reshape(n_all, (*shape_all, 1, 3))
 
+            defect_plane_index = defect_detect(n_all, planes=(False, False, True))
             defect_vicinity_index = defect_vicinity_grid(
                 defect_plane_index, num_shell=1
-            ).reshape((-1, 3))[:, 1:]
+            )
+            defect_vicinity_index = defect_vicinity_index.reshape((-1, 3))[:, :-1]
+                
             bulk_index, defect_vicinity_index = split_points(
                 self._entities_plane[0]._entities_grid_int[0], defect_vicinity_index
             )
@@ -136,9 +140,9 @@ class PlotnPlane:
         self._calc_opacity_func = self._helper_opacity_check(opacity)
         self._calc_defect_opacity_func = self._helper_opacity_check(defect_opacity)
 
-        if hasattr(self, "items"):
-            self._entities[0].remove()
-            self._entities[1].remove()
+        # if hasattr(self, "._entities"):
+        #     self._entities[0].remove()
+        #     self._entities[1].remove()
 
         self._entities = []
         self._calc_n = []

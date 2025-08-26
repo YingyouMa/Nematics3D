@@ -1,9 +1,9 @@
 import numpy as np
 import time
-from typing import Tuple, Optional, List, Union, Callable, Literal
+from typing import Optional, Union
 from dataclasses import replace
 
-from ..logging_decorator import logging_and_warning_decorator, Logger
+from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
     as_Vect,
@@ -25,7 +25,6 @@ from ..field import (
     getQ,
     generate_coordinate_grid,
     apply_linear_transform,
-    n_color_immerse,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
@@ -37,11 +36,11 @@ from .opts import (
     OptsPlaneGrid,
     OptsnPlane,
     OptsScene,
-    OptsSmoothen,
     OptsTube,
     merge_opts,
 )
 from ..general import get_box_corners
+from .smoothened_line import OptsSmoothen
 
 
 class QFieldObject:
@@ -59,11 +58,12 @@ class QFieldObject:
         grid_offset: Vect(3) = np.array([0, 0, 0]),
         grid_transform: Tensor((3, 3)) = np.eye(3),
         is_diag: bool = True,
-        logger: Logger = None,
+        logger=None,
     ) -> None:
 
         self._grid_offset = as_Vect(grid_offset, name="grid_offset")
         self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
+        check_bool_flags(locals())
 
         start = time.time()
         logger.debug("Start to initialize Q field")
@@ -92,7 +92,7 @@ class QFieldObject:
                     self._S, self._n = Q_diagonalize(self._Q, logger=logger)
             else:
                 raise NameError("No data is input")
-
+            
         self._box_periodic_flag = as_dimension_info(box_periodic_flag)
         self._box_size_periodic = np.zeros(3)
         for i, flag in enumerate(self._box_periodic_flag):
@@ -141,7 +141,6 @@ class QFieldObject:
         self,
         grid_offset: Vect(3) = np.array([0, 0, 0]),
         grid_transform: Tensor((3, 3)) = np.eye(3),
-        logger=None,
     ):
         """
         Generate the coordinates grid in the real space from the lattice indices through linear transform.
@@ -185,12 +184,13 @@ class QFieldObject:
         **kwargs,
     ):
 
-        opts = merge_opts(opts, kwargs, prefix="smoothen_")
+        opts = merge_opts(opts, kwargs, prefix="")
+        opts.is_window_warning = False
 
-        if opts.window_length is not None:
-            logger.warning(
-                f">>> Window_length is manual input as {opts.window_length}. window_ratio would be ignored."
-            )
+        if opts.window_length is not None and opts.window_ratio is not None:
+            msg = f">>> ``window_length`` is manual input as {opts.window_length}.\n"
+            msg += f">>> ``window_ratio`` as {opts.window_ratio} would be ignored."
+            logger.warning(msg)
 
         for line in self._lines:
             if line._defect_num >= opts.min_line_length:
@@ -257,9 +257,7 @@ class QFieldObject:
             min_line_length = self.DEFAULT_MINIMUM_LINE_LENGTH
 
         if is_smooth and hasattr(self._lines[0], "_defect_coords_smooth_obj"):
-            _min_len_length_smooth = self._lines[
-                0
-            ]._defect_coords_smooth_obj._opts_min_line_length
+            _min_len_length_smooth = self._lines[0]._defect_coords_smooth_obj.opts_min_line_length
             if _min_len_length_smooth > min_line_length:
                 msg = f">>> The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
                 msg += f">>> Use the larger value {_min_len_length_smooth} instead."

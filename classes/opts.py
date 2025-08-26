@@ -17,66 +17,6 @@ from Nematics3D.datatypes import (
 from Nematics3D.field import n_color_immerse
 
 
-@dataclass()
-class OptsSmoothen:
-    window_ratio: Number = 3
-    window_length: Optional[Number] = 41
-    order: Number = 3
-    N_out_ratio: Number = 3.0
-    mode: Literal["interp", "wrap"] = "interp"
-    min_line_length: int = 50
-    name: str = "None"
-
-    __descriptions__ = {
-        "window_ratio": "window ratio for smoothening",
-        "window_length": "explicit window length for smoothening",
-        "order": "smoothing polynomial order",
-        "N_out_ratio": "ratio between output and input #points in smoothening",
-        "mode": "smoothing mode (interp or wrap)",
-        "min_line_length": "minimum line length to be smoothened",
-        "name": "name identifier of smoothen options",
-    }
-
-    _validators = {
-        "window_ratio": lambda self, v: as_Number(
-            v, name=self.__descriptions__["window_ratio"]
-        ),
-        "window_length": lambda self, v: (
-            None
-            if v is None
-            else as_Number(v, name=self.__descriptions__["window_length"])
-        ),
-        "order": lambda self, v: as_Number(v, name=self.__descriptions__["order"]),
-        "N_out_ratio": lambda self, v: as_Number(
-            v, name=self.__descriptions__["N_out_ratio"]
-        ),
-        "mode": lambda self, v: (
-            v
-            if v in ("interp", "wrap")
-            else (_ for _ in ()).throw(
-                ValueError(
-                    f"{self.__descriptions__['mode']} must be 'interp' or 'wrap', got {v!r}"
-                )
-            )
-        ),
-        "min_line_length": lambda self, v: (
-            v
-            if isinstance(v, int)
-            else (_ for _ in ()).throw(
-                TypeError(
-                    f"{self.__descriptions__['min_line_length']} must be int, got {type(v)}"
-                )
-            )
-        ),
-        "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
-    }
-
-    def __setattr__(self, key, value):
-        if key in self._validators:
-            value = self._validators[key](self, value)
-        object.__setattr__(self, key, value)
-
-
 # --- Scene Options ---
 @dataclass(slots=True)
 class OptsScene:
@@ -403,13 +343,13 @@ def auto_opts_tubes(bindings: dict):
             key = name[len("opts_") :]  # 去掉 "opts_" 前缀，映射到 _internal.xxx
 
             def getter(self, _key=key):
-                return getattr(self._internal_opts, _key)
+                return getattr(self._opts_all, _key)
 
             def setter(self, value, _attrs=attrs, _key=key):
                 # 1. 存到 _internal，会触发校验
-                setattr(self._internal_opts, _key, value)
+                setattr(self._opts_all, _key, value)
 
-                processed = getattr(self._internal_opts, _key)
+                processed = getattr(self._opts_all, _key)
 
                 for item in self._items:
                     target = item

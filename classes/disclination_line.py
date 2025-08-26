@@ -16,7 +16,8 @@ from ..datatypes import (
 )
 from ..field import apply_linear_transform
 from .visual_mayavi.plot_tube import PlotTube
-from .opts import OptsSmoothen, OptsTube
+from .opts import OptsTube
+from .smoothened_line import OptsSmoothen
 
 
 class DisclinationLine:
@@ -240,8 +241,8 @@ class DisclinationLine:
         output = SmoothenedLine(coords, opts=new_opts)
 
         result = output._entities[0][
-            int(tail_length * output._opts_N_out_ratio) : int(
-                (-tail_length - 1) * output._opts_N_out_ratio
+            int(tail_length * output.opts_N_out_ratio) : int(
+                (-tail_length - 1) * output.opts_N_out_ratio
             )
         ]
         result = shift_to_box(result, self._box_size_periodic_index)

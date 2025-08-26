@@ -62,16 +62,18 @@ class PlotPlaneGrid:
 
         if axis1 is not None:
             if normal @ axis1 != 0:
+                axis1 = axis1 - axis1 @ normal * normal
+                axis1 /= np.linalg.norm(axis1)
                 msg = "normal must be perpendicular to axis1.\n"
-                msg = "Got {normal} and {axis1}. \n"
-                msg += "Discard the component aligned with normal along axis1 in the following."
+                msg += f"Got {normal} and {axis1}. \n"
+                msg += "Discard the component aligned with normal along axis1.\n"
+                msg += f"Use axis1={axis1} in the following"
                 logger.info(msg)
         if axis1 is None:
-            axis1 = np.random.randn(3)
-            axis1 /= np.linalg.norm(axis1)
-
-        axis1 = axis1 - axis1 @ normal * normal
-        axis1 /= np.linalg.norm(axis1)
+            from Nematics3D.general import rotation_matrix_from_vectors
+            _rotation_matrix = rotation_matrix_from_vectors((0,0,1), normal)
+            axis1 = _rotation_matrix @ np.array([1,0,0])
+        
         axis_both = np.array([axis1, np.cross(normal, axis1)])
 
         source_shape = (size, size)
@@ -99,5 +101,9 @@ class PlotPlaneGrid:
         self._entities_grid_all = [np.reshape(grid, (*target_shape, 3))]
         self._entities_grid_int = [grid_int]
         self._calc_offset_real = offset
+        self.opts_spacing1 = spaces[0]
+        self._opts_all.spacing1 = spaces[0]
+        self.opts_spacing2 = spaces[1]
+        self._opts_all.spacing2 = spaces[1]
         self.opts_axis1 = axis1
         self._opts_all.axis1 = axis1

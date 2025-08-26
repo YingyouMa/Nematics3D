@@ -19,6 +19,8 @@ from .datatypes import (
 )
 from .logging_decorator import logging_and_warning_decorator
 
+# from .debug.debug_store import DEBUG_VARS
+
 
 DEFECT_NEIGHBOR = np.zeros((10, 3))
 DEFECT_NEIGHBOR[0] = (1, 0, 0)
@@ -33,7 +35,7 @@ DEFECT_NEIGHBOR[8] = (-0.5, 0, 0.5)
 DEFECT_NEIGHBOR[9] = (-0.5, 0, -0.5)
 
 
-def detect_defects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
+def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     """
     Detect defects in xy-plane of a reoriented director field (z as loop normal).
 
@@ -60,9 +62,14 @@ def detect_defects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     c = align_directors(b, n[1:, 1:])
     d = align_directors(c, n[:-1, 1:])
     test = np.einsum("...i,...i->...", a, d)
+    
+    #print(test[:, :-1])
+    #print(np.array(np.where(test < threshold)).T.astype(float))
+    
 
     coords = np.array(np.where(test < threshold)).T.astype(float)
     coords[:, [0, 1]] += 0.5
+    
     return coords
 
 
@@ -142,6 +149,7 @@ def defect_detect(
         1: (0, 2, 1),  # y-direction → move axis 1 to back
         2: (0, 1, 2),  # z-direction → identity
     }
+    
 
     now = time.time()
 
@@ -152,7 +160,7 @@ def defect_detect(
         perm = axis_permutations[axis]
         n_rot = np.moveaxis(n, [0, 1, 2], perm)  # shape (A, B, C, 3)
 
-        coords = detect_defects_xyplane(n_rot, threshold)
+        coords = defect_detects_xyplane(n_rot, threshold)
 
         # Restore original axis order
         inv_perm = np.argsort(perm)

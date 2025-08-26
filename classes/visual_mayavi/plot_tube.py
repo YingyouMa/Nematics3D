@@ -61,7 +61,7 @@ class PlotTube:
         self._items = []
         self._data_coords_all = coords_all
         self._data_scalars_all = scalars_all
-        self._internal_opts = opts
+        self._opts_all = opts
 
         if opts.color is None:
             logger.warning("The color input of tube is None. Changed it into (1,1,1).")
