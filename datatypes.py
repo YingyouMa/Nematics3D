@@ -60,11 +60,44 @@ Number = numbers.Real
 # - list/tuple/array of 3 values → used directly
 NumericInput = Union[Number, Sequence[Number]]
 
+@logging_and_warning_decorator
+def as_Number(input_data, name="input data", is_int=False, value_range=None, bounded=False, logger=None):
 
-def as_Number(input_data, name="input data"):
-
-    if not isinstance(input_data, numbers.Real):
+    if is_int and not isinstance(input_data, numbers.Integral):
         raise TypeError(f"{name} must be a number. Got {input_data} instead.")
+    else:
+        if not isinstance(input_data, numbers.Real):
+            raise TypeError(f"{name} must be a number. Got {input_data} instead.")
+            
+            
+    if value_range is not None:
+        try:
+            value_range = np.asarray(value_range)
+            if (len(value_range) != 2
+                or not isinstance(value_range[0], numbers.Real)
+                or not isinstance(value_range[1], numbers.Real)):
+                raise TypeError(f"value_range must be a tuple/list of two numbers, got {value_range!r}")
+
+            lo, hi = value_range
+            if hi <= lo:
+                raise ValueError(f"value_range must be strictly increasing, got {value_range!r}")
+
+        except Exception as e:
+            logger.exception(f"Invalid value_range for {name}: {value_range!r}. Reason: {e}")
+            logger.recovery("Ignore value_range in the following.")
+            value_range = None
+            
+            
+    if value_range is not None:
+
+        if not (lo <= input_data <= hi):
+            if not bounded:
+                raise ValueError(f"{name} must be in [{lo}, {hi}], got {input_data}")
+            else:
+                if lo > input_data:
+                    input_data = lo
+                elif input_data > hi:
+                    input_data = hi
 
     return input_data
 
@@ -114,7 +147,7 @@ def as_Vect(input_data, dim=3, name="input data", is_norm=False):
     if (
         not isinstance(input_data, (tuple, list, np.ndarray))
         or len(input_data) != dim
-        or not any(isinstance(x, numbers.Real) for x in input_data)
+        or not all(isinstance(x, numbers.Real) for x in input_data)
     ):
         raise ValueError(
             f"{name} must be a vector with {dim} numbers. Got {input_data} instead."
@@ -151,8 +184,8 @@ def as_Tensor(input_data, shape, name="input data"):
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
 
-
-def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2):
+@logging_and_warning_decorator()
+def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, default=(1,1,1), logger=None):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -199,27 +232,30 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2):
     >>> as_ColorRGB([0.2, 0.5, 0.8], is_norm=True, norm_order=2)
     (0.19245008972987526, 0.480, 0.7698001794597505)
     """
-
-    if (
-        not isinstance(input_data, (tuple, list, np.ndarray))
-        or len(input_data) != 3
-        or not any(isinstance(x, numbers.Real) for x in input_data)
-    ):
-        raise ValueError(
-            f"{name} is ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
-        )
-
-    input_data = np.asarray(input_data)
-
-    if np.max(input_data) > 1 or np.min(input_data) < 0:
-        raise ValueError(
-            f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
-        )
-
-    if is_norm:
-        if np.sum(input_data) < 1e-3:
-            return (0, 0, 0)
-        input_data = input_data / np.sum(input_data**norm_order)
+    
+    try:
+        if (
+            not isinstance(input_data, (tuple, list, np.ndarray))
+            or len(input_data) != 3
+            or not all(isinstance(x, numbers.Real) for x in input_data)
+        ):
+            raise ValueError(
+                f"{name} is ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
+            )
+    
+        input_data = np.asarray(input_data)
+    
+        if np.max(input_data) > 1 or np.min(input_data) < 0:
+            raise ValueError(
+                f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
+            )
+    except:
+        logger.recovery(f"Set color={default} in the following.")
+    
+        if is_norm:
+            if np.sum(input_data) < 1e-3:
+                return (0, 0, 0)
+            input_data = input_data / np.sum(input_data**norm_order)
 
     return tuple(input_data)
 
@@ -254,7 +290,7 @@ DimensionInfo = np.ndarray
 DimensionInfoInput = NumericInput
 
 
-def as_dimension_info(input_data: DimensionInfoInput) -> DimensionInfo:
+def as_dimension_info(input_data: DimensionInfoInput, name: str = "input_data", is_bool: bool = False) -> DimensionInfo:
     """
     Convert flexible user input into a standardized DimensionInfo array of shape (3,).
 
@@ -274,17 +310,24 @@ def as_dimension_info(input_data: DimensionInfoInput) -> DimensionInfo:
     ------
     ValueError
         If input is not a scalar or not a 3-element structure.
+    ValueError
+        If is_bool is True and non-boolian data is input.
     """
 
     if isinstance(input_data, (int, float)):
-        return np.array([input_data] * 3)
-
-    if isinstance(input_data, (list, tuple, np.ndarray)) and len(input_data) == 3:
-        return np.array(input_data)
-
-    raise ValueError(
-        "Input must be either a single number or a list, tuple, or NumPy array of exactly three elements."
-    )
+        result = np.array([input_data] * 3)
+    elif isinstance(input_data, (list, tuple, np.ndarray)) and len(input_data) == 3:
+        result = np.array(input_data)
+    else:
+        raise ValueError(
+            f"{name} must be either a single number or a list, tuple, or NumPy array of exactly three elements."
+        )
+        
+    if (is_bool and not all(isinstance(x, (bool, np.bool_)) for x in result)):
+        raise ValueError(f"The elements in {name} must be bool. Got {result} instead.")
+        
+    return result
+        
 
 
 # -------------------------
@@ -562,8 +605,43 @@ def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
 #   This defines a 2×2 loop over which the director field forms a closed path.
 DefectIndex = np.ndarray
 
+def as_DefectIndex(arr: np.ndarray, tol=1e-8, is_return_row=False) -> DefectIndex:
+    
+    arr = np.asarray(arr)
+    
+    if arr.ndim != 2 or arr.shape[1] != 3:
+        raise ValueError(f"Input must be (N,3) array for defect_indices, got shape {arr.shape}")
+        
+    nearest_int = np.round(arr)
+    is_int = np.abs(arr - nearest_int) < tol
+    is_half = np.abs(arr - (nearest_int + 0.5)) < tol
+    
+    valid_rows = (is_int.sum(axis=1) == 1) & (is_half.sum(axis=1) == 2)
+    
+    if not np.all(valid_rows):
+        msg = "DefectIndex is not valid. For each defect there must be one integer and two half-intergers.\n"
+        if is_return_row:
+            bad_idx = np.where(~valid_rows)[0]
+            msg += f"Invalid DefectIndex rows detected at indices {bad_idx.tolist()} "
+        raise ValueError(msg)
+    
+    return arr
+
+
+def as_bool(input_data, name="input data") -> np.ndarray:
+
+    if isinstance(input_data, Number) and input_data not in (0,1):
+        raise TypeError(f"{name} must contain only 0/1 when numeric. Got {input_data}.")
+
+    if isinstance(input_data, (bool, np.bool_)):
+        return input_data
+
+    raise TypeError(f"{name} must be boolean or in (0,1). Got {input_data} with dtype={input_data.dtype}")
+
+
 
 def check_bool_flags(d: dict, prefix: str = "is_"):
     for name, value in d.items():
-        if name.startswith(prefix) and not isinstance(value, bool):
-            raise TypeError(f"{name} must be a bool, got {type(value)}")
+        if name.startswith(prefix):
+            if not isinstance(value, (bool, np.bool_, Number)) or (isinstance(value, Number) and value not in (0,1)):
+                raise TypeError(f"{name} must be a bool, got {type(value)}")

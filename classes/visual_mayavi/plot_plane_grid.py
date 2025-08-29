@@ -1,11 +1,89 @@
 import numpy as np
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
+from typing import Optional, Literal
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
-from ..opts import OptsPlaneGrid, merge_opts
+from ..opts import merge_opts_all
+from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Tensor
 
+
+# --- Plane Options ---
+@dataclass(slots=True)
+class OptsPlaneGrid:
+    normal: Optional[Vect(3)] = None
+    spacing1: Optional[Number] = None
+    spacing2: Optional[Number] = None
+    size: Optional[Number] = None
+    shape: Literal["circle", "rectangle"] = "rectangle"
+    origin: Vect(3) = (0, 0, 0)
+    axis1: Optional[Vect(3)] = None
+    corners_limit: Optional[np.ndarray] = None
+    grid_offset: Vect(3) = (0, 0, 0)
+    grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
+
+    __descriptions__ = {
+        "normal": "normal of plane",
+        "spacing1": "grid spacing along axis1",
+        "spacing2": "grid spacing along axis2",
+        "size": "size of plane",
+        "origin": "origin of plane",
+        "axis1": "first in-plane axis",
+        "corners_limit": "bounding box corners (8×3 array)",
+        "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
+        "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
+        "shape": "plane shape (circle or rectangle)",
+    }
+
+    _validators = {
+        "normal": lambda self, v: (
+            None
+            if v is None
+            else as_Vect(v, name=self.__descriptions__["normal"], is_norm=True)
+        ),
+        "origin": lambda self, v: as_Vect(v, name=self.__descriptions__["origin"]),
+        "grid_offset": lambda self, v: as_Vect(
+            v, name=self.__descriptions__["grid_offset"]
+        ),
+        "grid_transform": lambda self, v: as_Tensor(
+            v, (3, 3), name=self.__descriptions__["grid_transform"]
+        ),
+        "axis1": lambda self, v: (
+            None
+            if v is None
+            else as_Vect(v, name=self.__descriptions__["axis1"], is_norm=True)
+        ),
+        "spacing1": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["spacing1"])
+        ),
+        "spacing2": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["spacing2"])
+        ),
+        "size": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["size"])
+        ),
+        "corners_limit": lambda self, v: (
+            None
+            if v is None
+            else as_Tensor(v, (8, 3), name=self.__descriptions__["corners_limit"])
+        ),
+        "shape": lambda self, v: (
+            v
+            if v in ("circle", "rectangle")
+            else (_ for _ in ()).throw(
+                ValueError(
+                    f"Invalid {self.__descriptions__['shape']}: {v!r}. "
+                    f"Allowed values: 'circle', 'rectangle'"
+                )
+            )
+        ),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 class PlotPlaneGrid:
 
@@ -23,22 +101,19 @@ class PlotPlaneGrid:
                     f"Missing required variable {name} to generate plane_grid"
                 )
 
-        opts = merge_opts(opts, kwargs)
+        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
 
         self._opts_all = opts
 
-        self.act_commit(
-            opts=self._opts_all,
-            logger=logger,
-        )
+        self.act_commit(logger=logger)
 
     def act_commit(
         self,
         logger=None,
         **kwargs,
     ):
-
-        self._opts_all = merge_opts(self._opts_all, kwargs)
+        
+        self._opts_all = merge_opts_all({"": self._opts_all}, kwargs, type(self).__name__)[""]
 
         for key, value in asdict(self._opts_all).items():
             setattr(self, f"opts_{key}", value)

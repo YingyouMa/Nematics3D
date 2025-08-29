@@ -1,8 +1,6 @@
 import time
 import numpy as np
 from mayavi import mlab
-import re
-import glob
 import logging
 # import matplotlib.pyplot as plt
 
@@ -11,35 +9,33 @@ import sys
 sys.path.insert(0, 'D:/Document/GitHub/')
 import Nematics3D
 
-from Nematics3D.debug.debug_store import DEBUG_VARS
+# from Nematics3D.debug.debug_store import DEBUG_VARS
 
 index_max =  128
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
+Q.act_lines_classify()
+Q.act_lines_smooth()
+Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
 
-Q.update_defects()
-Q.update_lines_classify()
-Q.update_lines_smoothen()
-Q.visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
-
-Q.update_lines_smoothen(min_line_length=30, window_length=21)
-Q.visualize_disclination_lines(is_wrap=True, min_line_length=40)
-extent = Q.figures[1].objects['extent'][0]
+Q.act_lines_smooth(min_line_length=30, window_length=21)
+Q.act_visualize_disclination_lines(is_wrap=True, min_line_length=40)
+extent = Q._figures[1].objects['extent'][0]
 extent.opts_opacity = 0.5
 extent.opts_radius = 0.2
 extent.opts_color = [1,0,0]
-scene = Q.figures[1].scene
-scene.azimuth = 90
-scene.elevation = 30
-scene.roll = 30
-scene.bgcolor = [0.5,0.5,0.5]
-for line in Q.figures[1].objects['lines']:
+scene = Q._figures[1].scene
+scene.opts_azimuth = 90
+scene.opts_elevation = 30
+scene.opts_roll = 30
+scene.opts_bgcolor = [0.5,0.5,0.5]
+for line in Q._figures[1].objects['lines']:
     line.opts_specular_power = 20
-    line.opts_specular_color = (1,0,0)
+    line.specular_color = (1,0,0)
     line.opts_radius = 2
-    line.opts_sides = 20
+    line.sides = 20
     
     
 index_max =  60
@@ -47,22 +43,31 @@ n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
-
-Q.update_defects()
-Q.update_lines_classify()
-Q.update_lines_smoothen(window_length=21, min_line_length=40)
-Q.visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, radius=0.2)
+Q.act_lines_classify()
+Q.act_lines_smooth(window_length=21, min_line_length=40)
+Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4)
     
 trans = 7.5
 spacing = 2.5
-Q.visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
+Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=False, is_extent=False, n_is_n_defect=True)
-Q.figures[0].scene.azimuth = 90
-Q.figures[0].scene.elevation = 90
+Q._figures[0].scene.opts_azimuth = 90
+Q._figures[0].scene.opts_elevation = 90
 
+Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
+                   plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
+                   n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=True, is_extent=False, n_is_n_defect=True)
+Q._figures[1].objects["nPlane"][0].act_commit(opts_spacing=3, opts_length=3, opts_origin=(30,30,30), opts_normal=(1,1,0), sda=1)
 
-
+test = Q._calc_lines[0]._calc_defect_coords_smooth_obj
+test.N_out_ratio = 1
+test.act_visualize()
+with test as l:
+    l.window_length = 5
+    l.opts_N_out_ratio = 3
+    l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
+    
 
 # @Nematics3D.logging_and_warning_decorator
 # def example_visualize(Q, logger=None):

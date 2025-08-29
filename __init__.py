@@ -4,7 +4,7 @@ from .disclination import *
 # from .elastic import *
 # from .coarse import *
 from .classes.opts import *
-from .classes.smoothened_line import SmoothenedLine
+from .classes.smoothed_line import SmoothedLine
 from .classes.disclination_line import DisclinationLine
 from .classes.graph import Graph
 from .classes.Q_field_object import QFieldObject
@@ -16,4 +16,4 @@ from .classes.visual_mayavi.plot_n_plane import PlotnPlane
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
 
-__version__ = "0.1.0"
+__version__ = "0.1.7"

@@ -1,10 +1,69 @@
 from mayavi import mlab
 import numpy as np
-from typing import Optional
-from dataclasses import replace
+from typing import Optional, List
+from dataclasses import dataclass, asdict
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import OptsTube, auto_opts_tubes
+from ..opts import auto_opts_tubes
+from Nematics3D.datatypes import (
+    ColorRGB,
+    as_ColorRGB,
+    Number,
+    as_Number,
+    as_str,
+    as_bool
+)
+
+
+# --- Tube Options ---
+@dataclass(slots=True)
+class OptsTube:
+    radius: Number = 0.5
+    opacity: Number = 1
+    color: ColorRGB = (1.0, 1.0, 1.0)
+    sides: Number = 6
+    specular: Number = 1
+    specular_color: ColorRGB = (1.0, 1.0, 1.0)
+    specular_power: Number = 11
+    name: str = "None"
+    is_visible: bool = True
+
+    __descriptions__ = {
+        "radius": "radius of tube",
+        "opacity": "opacity of tube",
+        "color": "RGB color of tube surface",
+        "sides": "number of sides of tube",
+        "specular": "strength of specular highlight",
+        "specular_color": "RGB color of specular highlight",
+        "specular_power": "shininess of specular highlight",
+        "name": "name identifier of tube",
+        "is_visible": "whether represent this line"
+    }
+
+    _validators = {
+        "radius": lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "opacity": lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
+        "color": lambda self, v: (
+            None if v is None else as_ColorRGB(v, name=self.__descriptions__["color"])
+        ),
+        "sides": lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
+        "specular": lambda self, v: as_Number(
+            v, name=self.__descriptions__["specular"]
+        ),
+        "specular_color": lambda self, v: as_ColorRGB(
+            v, name=self.__descriptions__["specular_color"]
+        ),
+        "specular_power": lambda self, v: as_Number(
+            v, name=self.__descriptions__["specular_power"]
+        ),
+        "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+        "is_visible": lambda self, v: as_bool(v, name=self.__descriptions__["is_visible"])
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 @auto_opts_tubes(
@@ -16,65 +75,131 @@ from ..opts import OptsTube, auto_opts_tubes
         "opts_specular": "actor.property.specular",
         "opts_specular_color": "actor.property.specular_color",
         "opts_specular_power": "actor.property.specular_power",
-        "_state_is_visible": "actor.visible",
+        "opts_is_visible": "actor.visible",
     }
 )
 class PlotTube:
     """
-    A utility class to create and manage a 3D tube-like curve in Mayavi.
+    Visualize 3D polylines as tubular surfaces using Mayavi's ``mlab.plot3d``.
 
-    Features:
-    - Draws a smooth tube along given coordinates.
-    - Provides dynamic attribute access to key visual properties (color, opacity, radius, etc.).
-    - Supports scalar coloring for gradient effects.
-    - Includes convenience methods for updating coordinates, hiding/showing, and removing the tube.
+    Workflow
+    --------
+    1. For each subline of input coordinates, call ``mlab.plot3d`` to create a tube
+       mesh with either uniform color or per-point scalars.
+    2. Apply visual options such as radius, sides, opacity, and specular highlights
+       from the associated :class:`OptsTube` dataclass.
+    3. Expose these options back to the user as ``opts_*`` attributes, which are
+       automatically synchronized with both the internal state and the underlying
+       Mayavi objects.
 
-    Attributes:
-        actor: The Mayavi pipeline object returned by mlab.plot3d().
+    Parameters
+    ----------
+    coords_all : list of (N, 3) arrays
+        List of 3D coordinate arrays, one for each subline to be drawn as a tube.
+
+    scalars_all : list of arrays or None, optional
+        Optional scalar values to color each subline. If provided, diffuse RGB
+        color (``opts_color``) will be ignored.
+
+    opts : OptsTube, optional
+        Options controlling tube rendering, such as radius, color, opacity,
+        and specular highlights. See :attr:`OptsTube.__descriptions__` for details.
+
+    logger : logging.Logger, optional
+        Logger instance for warnings and information messages.
+        If None, falls back to the global logging configuration.
+
+    Attributes
+    ----------
+    See :attr:`PlotTube.__descriptions__` for a full list and explanation of
+    attributes (including both internal state such as ``_entities`` and
+    mirrored options such as ``opts_radius``).
+
+    Methods
+    -------
+    act_hide()
+        Hide all tubes (set ``opts_is_visible=False``).
+
+    act_show()
+        Show all tubes (set ``opts_is_visible=True``).
+
+    act_remove()
+        Remove all Mayavi objects associated with this tube.
+
+    act_log_parameters(is_return=False, logger=None)
+        Log or return a formatted summary of parameters and results.
+
+    Python Special Methods
+    ----------------------
+    - ``str(tube)`` → formatted summary of parameters (e.g., ``print(tube)``).
+    - ``len(tube)`` → # sublines.
+
+    Notes
+    -----
+    - If scalar values are provided for coloring, ``opts_color`` will be ignored.
+    - Internal attributes (prefixed with ``_``) are protected and cannot be
+      modified directly.
+    - Option attributes (prefixed with ``opts_``) are implemented as properties
+      and automatically update the underlying Mayavi objects when changed.
+    - For convenience, during user assignment the ``opts_`` prefix is optional:
+      e.g. ``tube.color = (1,0,0)`` is automatically redirected to
+      ``tube.opts_color = (1,0,0)``.
     """
+    
+    __descriptions__ = {
+        "name": "Name identifier of this tube object",
+    
+        # --- internal states ---
+        "_entities": "List of Mayavi tube objects (mlab.plot3d items)",
+        "_raw_coords_all": "Raw input coordinates for all sublines (list of arrays, each shape: N×3)",
+        "_raw_scalars_all": "Optional scalar values for coloring each subline (list of arrays or None)",
+        "_backup_opts": "only used in __enter__ and __exit__, which helps users modify options", 
+    
+        # --- mirrored options ---
+        "opts_color": "Diffuse RGB color of tube surface (ignored if scalars are provided)",
+        "opts_opacity": "Opacity of tube surface",
+        "opts_radius": "Tube radius (applied in mlab.plot3d)",
+        "opts_sides": "Number of polygonal sides used to approximate tube cross-section",
+        "opts_specular": "Strength of specular highlight on tube surface",
+        "opts_specular_color": "RGB color of the specular highlight",
+        "opts_specular_power": "Shininess exponent controlling specular highlight size",
+        "opts_is_visible": "Boolean flag indicating whether tubes are visible in the scene",
+        "_opts_all": "The dataclass OptsTube storing all option values",
+    }
+    
+    __slots__ = tuple(__descriptions__.keys())
 
     @logging_and_warning_decorator()
     def __init__(
         self,
-        coords_all: np.ndarray,
-        scalars_all: Optional[np.ndarray] = None,
+        coords_all: List,
+        scalars_all: Optional[List] = None,
         opts=OptsTube(),
         logger=None,
     ) -> None:
-        """
-        Initialize and draw the tube.
 
-        Args:
-            coords (np.ndarray): (num_sublines, N, 3) array of 3D coordinates defining the tube path.
-            color (Vect3D): RGB color tuple in [0, 1]. Ignored if 'scalars' is provided.
-            radius (float): Tube radius.
-            opacity (float): Opacity in [0, 1].
-            sides (int): Number of sides for the tube cross-section (higher = smoother).
-            specular (float): Specular reflection coefficient.
-            specular_color (Vect3D): RGB color tuple for specular highlight.
-            specular_power (float): Shininess exponent for specular highlight.
-            scalars (Optional[np.ndarray]): Optional scalar values for each vertex
-                (enables gradient coloring). If provided, overrides 'color'.
-            logger: Optional logger instance used for warnings.
-        """
-
-        self._items = []
-        self._data_coords_all = coords_all
-        self._data_scalars_all = scalars_all
-        self._opts_all = opts
+        # We deliberately use object.__setattr__ here to bypass the custom __setattr__.
+        # This ensures that internal state variables (e.g., _initializing, _entities,
+        # _state_is_smoothed, etc.) can be assigned without triggering the validation
+        # or auto-commit logic of __setattr__. (same below)
+        object.__setattr__(self, "_entities", [])
+        object.__setattr__(self, "_raw_coords_all", coords_all)
+        object.__setattr__(self, "_raw_scalars_all", scalars_all)
+        object.__setattr__(self, "_opts_all", opts)
 
         if opts.color is None:
             logger.warning("The color input of tube is None. Changed it into (1,1,1).")
             opts.color = (1, 1, 1)
 
-        num_sublines = len(self._data_coords_all)
-        if self._data_scalars_all is not None:
+        num_sublines = len(self._raw_coords_all)
+        if self._raw_scalars_all is not None:
             logger.debug(">>> The scalars of tube is input")
             logger.debug(">>> The color of tube will be ignored")
         else:
-            self._data_scalars_all = [None for i in range(num_sublines)]
-
-        for coords, scalars in zip(self._data_coords_all, self._data_scalars_all):
+            object.__setattr__(self, "_raw_scalars_all", [None for i in range(num_sublines)])
+            
+        logger.debug("Plotting ...")
+        for coords, scalars in zip(self._raw_coords_all, self._raw_scalars_all):
 
             x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
 
@@ -111,41 +236,77 @@ class PlotTube:
             prop.specular_color = opts.specular_color
             prop.specular_power = opts.specular_power
 
-            self._items.append(item)
+            self._entities.append(item)
 
             self.name = opts.name
 
     def act_hide(self):
-        self._state_is_visible = False
+        self.opts_is_visible = False
 
     def act_show(self):
-        self._state_is_visible = True
+        self.opts_is_visible = True
 
     def act_remove(self):
-        for item in self._items:
+        for item in self._entities:
             item.remove()
+            
+    @logging_and_warning_decorator()
+    def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
+        """
+        Log parameters for inspection.
 
-    # @logging_and_warning_decorator()
-    # def log_properties(self, logger=None) -> None:
-    #     """
-    #     Log all current tube properties using logger.info().
+        This is the standard logging interface used in this library, which
+        can be redirected to console or to a file depending on the logger
+        configuration and the behavior of ``logging_and_warning_decorator``.
 
-    #     This will include all attributes defined in the @auto_properties mapping,
-    #     as well as the number of points in the coordinates.
-    #     """
+        All attributes listed in ``__descriptions__`` are included,
+        formatted in a single log entry with a clear separator.
+        """
+        lines = []
+        lines.append("-------------- PlotTube Parameters --------------")
+        
+        lines.append(f"[{self.name}] plotting parameters:")
+        for attr in self.__slots__:
+            desc = self.__descriptions__.get(attr, "(no description)")
+            value = getattr(self, attr, None)
+            lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
+        lines.append("-----------------------------------------------------")
 
-    #     print_lines = []
-    #     print_lines.append("=== PlotTube Properties ===")
+        msg = "\n".join(lines)
 
-    #     for attr_name in self.__class__._auto_properties.keys():
-    #         if attr_name in {"x", "y", "z"}:
-    #             continue
-    #         try:
-    #             value = getattr(self, attr_name)
-    #             print_lines.append(f"{attr_name}: {value}")
-    #         except Exception as e:
-    #             logger.warning(f"Could not retrieve '{attr_name}': {e}")
+        if is_return:
+            return msg
+        else:
+            logger.info(msg)
+            
+    def __setattr__(self, key, value):
+        if key.startswith("_"):
+            raise AttributeError(f"Internal attribute {key} cannot be modified directly.")
+            
+        if key == "name":
+            object.__setattr__(self, key, value)
+            return
+        
+        if not key.startswith("opts"):
+            key_new = "opts_" + key
+        else:
+            key_new = key
+        if key_new not in self.__slots__:
+            raise NameError(f"Either {key} or {key_new} is not a valid attribute of {type(self).__name__}")
+            
+        descriptor = type(self).__dict__.get(key_new, None)
+        descriptor.__set__(self, value)
+            
+    def __str__(self) -> str:
+        header = f"<{self.__class__.__name__} object>"
+        return header + "\n" + self.act_log_parameters(is_return=True)
+    
+    def __len__(self) -> int:
+        return len(self._raw_coords_all)
 
-    #     print_lines.append("===========================")
+      
 
-    #     logger.info("\n".join(print_lines))
+
+    
+
+

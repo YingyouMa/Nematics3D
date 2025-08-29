@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Optional, Tuple
-from dataclasses import replace
+from dataclasses import replace, dataclass, field, asdict
 
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
@@ -10,250 +10,275 @@ from ..datatypes import (
     Tensor,
     as_Tensor,
     DefectIndex,
+    as_DefectIndex,
     DimensionPeriodicInput,
     as_dimension_info,
     boundary_periodic_size_to_flag,
+    as_str,
+    as_Number
 )
 from ..field import apply_linear_transform
-from .visual_mayavi.plot_tube import PlotTube
-from .opts import OptsTube
-from .smoothened_line import OptsSmoothen
+from .visual_mayavi.plot_tube import PlotTube, OptsTube
+from .opts import merge_opts_all
+from .smoothed_line import OptsSmooth
+
+@dataclass(slots=True)
+class InputLine:
+    defect_indices: Optional[DefectIndex] = None
+    box_size_periodic_index: DimensionPeriodicInput = False
+    grid_offset: Vect(3) = (0,0,0)
+    grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
+    name: Optional[str] = None
+
+    __descriptions__ = {
+        "defect_indices": "indices of defect points in the Q array",
+        "box_size_periodic_index": "the maximum index of each index in the Q array (finite values for periodic boundary conditions and np.inf for non-periodic)",
+        "grid_offset": "grid translation offset to map lattice indices of Q array to real-space coordinates",
+        "grid_transform": "grid transform matrix to map lattice indices of Q array to real-space coordinates (3x3)",
+        "name": "name identifier of this line",
+    }
+
+    _validators = {
+        "defect_indices": lambda self, v: as_DefectIndex(v, is_return_row=True),
+        "box_size_periodic_index": lambda self, v: as_dimension_info(v, name=self.__descriptions__["box_size_periodic_index"]),
+        "grid_offset": lambda self, v: as_Vect(
+            v, name=self.__descriptions__["grid_offset"]
+        ),
+        "grid_transform": lambda self, v: as_Tensor(
+            v, (3, 3), name=self.__descriptions__["grid_transform"]
+        ),
+        "name": lambda self, v: as_str(v, name="Name of Q field")
+    }
+
 
 
 class DisclinationLine:
     """
-    Represent a single disclination line extracted from a 3D liquid crystal director field.
+    Internal representation of a single disclination line detected
+    from the Q-tensor field. 
 
-    This class handles the geometry and visualization of topological line defects.
+    This class is not intended for direct user interaction.
+    Instances are created and managed internally by the Q-field object.
+    All input data (defect indices, periodic box info, grid transform, etc.)
+    are provided by the parent Q-field and should not be modified manually.
 
-    It supports:
-    - Coordinate transformation and spatial offset for real-space analysis
-    - Automated classification of line types (loop / cross / segment)
-    - Optional smoothing using Savitzky-Golay filtering and spline interpolation
-    - 3D Mayavi visualization, including support for periodic boundaries
-    - Tological analysis (ongoing)
+    Responsibilities
+    ----------------
+    - Store the raw lattice indices of a defect line and the corresponding
+      grid/box information from the Q-field.
+    - Classify the line as one of:
+        * ``"loop"`` — closed loop (start and end coincide)
+        * ``"cross"`` — passes across periodic boundaries
+        * ``"seg"`` — open segment
+    - Compute derived quantities such as:
+        * number of defect points
+        * real-space coordinates of the defect line
+        * transformed box size in real space
+    - Provide smoothing utilities via :meth:`act_smooth`
+      (Savitzky–Golay filtering + spline interpolation).
+    - Provide visualization hooks via :meth:`act_visualize`,
+      which returns a :class:`PlotTube` object. 
 
     Attributes
     ----------
-    _defect_indices : DefectIndex, np.ndarray of shape (N_defects, 3)
-        Grid-based defect point indices. Each point has one integer and two half-integer components.
-        The geometrical meaning of these components is explained in the definition of `DefectIndex`
-        in `datatype.py`.
+    See :attr:`DisclinationLine.__descriptions__` for a complete list of
+    raw inputs (``_raw_*``) and derived results (``_calc_*``).
 
-    _defect_coords : np.ndarray of shape (N_defects, 3)
-        Real-space coordinates of the defect points, after applying transformation and offset.
+    Methods
+    -------
+    act_smooth(opts=OptsSmooth(), **kwargs)
+        Smooth the defect line trajectory with optional padding/unwrapping.
+        Returns the smoothed coordinates and stores the associated
+        :class:`SmoothedLine` object internally.
 
-    _box_size_periodic : DimensionPeriodic, np.ndarray of shape (3,)
-        Box size (in index units) for each dimension, indicating periodicity.
-        - np.inf → non-periodic
-        - int → periodic, with value as the boundary size
+    act_visualize(is_wrap=True, is_smooth=True, scalars=None, opts=OptsTube())
+        Visualize the defect line as tubes via Mayavi.
+        Returns a :class:`PlotTube` object (not stored internally).
 
-    _end2end_category : str
-        Indicates the type of line:
-        - 'loop': Closed loop (first == last)
-        - 'cross': Cross-boundary loop (same after modulo) as the line crossing whole box
-        - 'seg' : Open segment
-
-    _defect_coords_smooth : np.ndarray, optional
-        Smoothed version of the defect coordinates, if smoothing was applied.
-
-    _figures : list of Mayavi figure handles
-        3D visualization objects rendered using Mayavi.
+    Notes
+    -----
+    - This class is considered an **internal helper**; do not construct
+      or modify it directly.
     """
+
+    __descriptions__ = {
+        # ========== user-facing ==========
+        "name": "Name identifier of this disclination line",
+
+        # ========== raw (copied directly from InputLine or computed) ==========
+        "_raw_defect_indices": "Lattice indices of defect points forming the line (array of shape N×3)",
+        "_raw_box_size_periodic_index": "Box size along each dimension in index space (finite for periodic boundaries, np.inf for non-periodic)",
+        "_raw_grid_offset": "Grid translation offset mapping lattice indices to real-space coordinates (3-vector)",
+        "_raw_grid_transform": "Grid transformation matrix (3×3) mapping lattice indices to real-space coordinates",
+
+        # ========== calc (derived quantities) ==========
+        "_calc_end2end_category": "Category of line ends: 'loop' (closed loop), 'cross' (wraps across boundary), or 'seg' (open segment)",
+        "_calc_defect_num": "Number of defect points forming this line (integer)",
+        "_calc_defect_coords": "Real-space coordinates of defect line (array of shape N×3)",
+        "_calc_box_size_periodic_coord": "Box size expressed in real-space coordinates (3-vector, transformed from indices)",
+        "_calc_defect_coords_smooth_obj": "SmoothedLine object generated by act_smooth (stores smoothing details)",
+        "_calc_defect_coords_smooth": "Real-space coordinates of smoothed defect line (array of shape N×3)",
+    }
 
     def __init__(
         self,
-        defect_indices: DefectIndex,
-        box_size_periodic_index: DimensionPeriodicInput,
+        inputValue = InputLine(),
         is_sorted: bool = True,
-        grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3, 3)) = np.eye(3),
-        name: Optional[str] = None,
+        **kwargs
     ):
-        """
-        Initialize a DisclinationLine object from a list of defect indices.
+        inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
+        if inputValue.defect_indices is None:
+            raise ValueError("No defects are input into disclination line")
+        for k, v in asdict(inputValue).items():
+            if k == "name":
+                setattr(self, "name", v)
+            else:
+                setattr(self, f"_raw_{k}", v)
 
-        Parameters
-        ----------
-        defect_indices : DefectIndex, np.ndarray of shape (N_defects, 3)
-            Grid indices of all the defects composing the line.
-            Each point should contain one integer and two half-integers (e.g., [1, 3.5, 7.5]).
-            The geometrical meaning of these components is explained in the definition of `DefectIndex`
-            in `datatype.py`.
-
-        box_size_periodic_index : DimensionPeriodic,
-            array_like of 3 ints or a single int
-            Grid size in each dimension, used to infer periodicity.
-            If a single float `x` is provided, it is interpreted as (x, x, x).
-            Use `np.inf` for non-periodic directions.
-            Example: [128, 128, np.inf] indicates periodicity in x and y only.
-
-        is_sorted : bool, optional
-            Whether the input defect indices are pre-sorted by nearest-neighbor order.
-            If False, the constructor will reorder them using a greedy sorting algorithm.
-            Default is True.
-
-        grid_offset : Vect3D, array_like of 3 floats, optional
-            Global offset added to all coordinates after transformation.
-            Useful for shifting lines in real space.
-            Default is (0, 0, 0) (no shift).
-
-        grid_transform : np.ndarray of shape (3, 3), optional
-            Linear transformation matrix applied to the defect indices
-            to convert from grid space to physical space (e.g., for anisotropic grids).
-            Default is np.eye(3) (identity transform).
-
-        name : str, optional
-            The name of this line.
-        """
         if is_sorted == False:
-            defect_indices = sort_line_indices(defect_indices)
+            self._raw_defect_indices = sort_line_indices(self._raw_defect_indices)
 
-        box_size_periodic_index = as_dimension_info(box_size_periodic_index)
+        self._raw_box_size_periodic_index = as_dimension_info(self._raw_box_size_periodic_index)
 
-        if np.linalg.norm(defect_indices[0] - defect_indices[-1]) == 0:
-            self._end2end_category = "loop"
-            self._defect_indices = defect_indices[:-1]
+        if np.linalg.norm(self._raw_defect_indices[0] - self._raw_defect_indices[-1]) == 0:
+            self._calc_end2end_category = "loop"
+            self._raw_defect_indices = self._raw_defect_indices[:-1]
         else:
-            defect1 = defect_indices[0].copy()
-            defect2 = defect_indices[-1].copy()
+            defect1 = self._raw_defect_indices[0].copy()
+            defect2 = self._raw_defect_indices[-1].copy()
             defect1 = np.where(
-                box_size_periodic_index == np.inf,
+                self._raw_box_size_periodic_index == np.inf,
                 defect1,
-                defect1 % box_size_periodic_index,
+                defect1 % self._raw_box_size_periodic_index,
             )
             defect2 = np.where(
-                box_size_periodic_index == np.inf,
+                self._raw_box_size_periodic_index == np.inf,
                 defect2,
-                defect2 % box_size_periodic_index,
+                defect2 % self._raw_box_size_periodic_index,
             )
             if np.linalg.norm(defect1 - defect2) == 0:
-                self._end2end_category = "cross"
-                self._defect_indices = defect_indices[:-1]
+                self._calc_end2end_category = "cross"
+                self._raw_defect_indices = self._raw_defect_indices[:-1]
             else:
-                self._end2end_category = "seg"
-                self._defect_indices = defect_indices
+                self._calc_end2end_category = "seg"
+                self._raw_defect_indices = self._raw_defect_indices
 
-        self._defect_num = np.shape(self._defect_indices)[0]
-        self._box_size_periodic_index = box_size_periodic_index
+        self._calc_defect_num = np.shape(self._raw_defect_indices)[0]
 
-        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
-        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
-
-        self.update_to_coord(grid_transform=grid_transform, grid_offset=grid_offset)
-
-        if name == None:
-            self._name = "line"
-        else:
-            self._name = name
-
-    def update_to_coord(
-        self,
-        grid_offset: Vect(3) = np.array([0, 0, 0]),
-        grid_transform: Tensor((3, 3)) = np.eye(3),
-    ):
-
-        self._grid_offset = as_Vect(grid_offset, name="grid_offset")
-        self._grid_transform = as_Tensor(grid_transform, (3, 3), name="grid_transform")
-        self._defect_coords = apply_linear_transform(
-            self._defect_indices,
-            transform=self._grid_transform,
-            offset=self._grid_offset,
+        self._calc_defect_coords = apply_linear_transform(
+            self._raw_defect_indices,
+            transform=self._raw_grid_transform,
+            offset=self._raw_grid_offset,
         )
-        self._box_size_periodic_coord = apply_linear_transform(
-            self._box_size_periodic_index,
-            transform=self._grid_transform,
-            offset=self._grid_offset,
+        self._calc_box_size_periodic_coord = apply_linear_transform(
+            self._raw_box_size_periodic_index,
+            transform=self._raw_grid_transform,
+            offset=self._raw_grid_offset,
         )
 
-    def update_smoothen(
+    def act_smooth(
         self,
-        opts: OptsSmoothen = OptsSmoothen(),
+        opts: OptsSmooth = OptsSmooth(),
+        padding_length: int = 50,
+        head_padding_extra: int = 25,
+        **kwargs
     ) -> np.ndarray:
         """
-        Smoothen the defect line using Savitzky-Golay filtering and cubic spline interpolation.
+        Smooth the defect line trajectory using Savitzky–Golay filtering and spline interpolation.
 
-        This method updates the smoothened version of the internal defect line coordinates,
-        using either `window_ratio` or `window_length` to control the filter resolution.
-        The smoothing mode is automatically selected based on whether the line is a loop.
+        This method performs trajectory unwrapping (for periodic boundary conditions),
+        optional head/tail padding to reduce boundary artifacts, and curve smoothing.
 
         Parameters
         ----------
-        window_ratio : int, optional
-            Ratio used to compute the Savitzky-Golay filter window length.
-            If provided, `window_length` is ignored.
+        opts : Optssmooth, optional
+            Options controlling the smoothing procedure.
 
-        window_length : int, optional
-            Directly specify the Savitzky-Golay filter window length (must be odd).
-            Ignored if `window_ratio` is given. Default is 21.
+        tail_length : int, default=50
+            Number of lattice points to duplicate from the **head and tail** of the
+            trajectory as padding. These duplicated points provide extra context
+            for the smoothing filter to reduce boundary artifacts. The padding
+            is trimmed away after smoothing.
 
-        order : int, optional
-            Order of the Savitzky-Golay filter polynomial. Default is 3.
+        head_extra_unwrap_length : int, default=25
+            Extra number of points at the **head** to unwrap before smoothing.
+            This helps stabilize unwrapping when the trajectory crosses periodic
+            boundaries and reduces artifacts near the trajectory start.
 
-        N_out_ratio : float, optional
-            Ratio of output points to input points in the smoothened line.
-            For example, 3.0 means 3× as many points as input. Default is 3.0.
+        **kwargs :
+            Additional keyword arguments to override fields in `opts`.
 
         Returns
         -------
-        smoothened_coords : np.ndarray of shape (N_out, M)
-            The coordinates of the smoothened line.
-            Also stored internally as `self._defect_coords_smooth`.
+        np.ndarray
+            smoothed trajectory coordinates, cropped to exclude the
+            head/tail padding.
+        
+        Notes
+        -----
+        - If the defect line category is `"loop"`, smoothing is performed in wrap mode
+        without padding.
+        - If the category is `"cross"`, the trajectory is unwrapped across the box
+        boundaries, padded with head/tail segments, smoothed, and then cropped back.
+        - Otherwise, smoothing is performed in simple interpolation mode.
         """
+
         from ..field import unwrap_trajectory, shift_to_box
-        from .smoothened_line import SmoothenedLine
+        from .smoothed_line import SmoothedLine
 
-        coords = self._defect_coords.copy()
+        coords = self._calc_defect_coords.copy()
 
-        if self._end2end_category == "loop":
-            smoothen_mode = "wrap"
-            tail_length = 0
-        elif self._end2end_category == "cross":
-            tail_length = 50
-            indices_origin = self._defect_indices.copy()
-            tail = indices_origin[:tail_length].copy()
-            head = indices_origin[-tail_length - 1 :]
+        if self._calc_end2end_category == "loop":
+            smooth_mode = "wrap"
+            padding_length = 0
+        elif self._calc_end2end_category == "cross":
+            padding_length = as_Number(padding_length, is_int=True, value_range=(0, self._calc_defect_num))
+            head_padding_extra = as_Number(head_padding_extra, is_int=True, value_range=(0, self._calc_defect_num))
+            indices_origin = self._raw_defect_indices.copy()
+            tail = indices_origin[:padding_length].copy()
+            head = indices_origin[-padding_length - 1 :]
             indices = np.concatenate([head, indices_origin, tail])
 
-            indices[:75] = unwrap_trajectory(
-                indices[:75],
-                box_size_periodic=self._box_size_periodic_index,
+            indices[:padding_length+head_padding_extra] = unwrap_trajectory(
+                indices[:padding_length+head_padding_extra],
+                box_size_periodic=self._raw_box_size_periodic_index,
                 is_reverse=True,
             )
             indices = unwrap_trajectory(
                 indices,
-                box_size_periodic=self._box_size_periodic_index,
+                box_size_periodic=self._raw_box_size_periodic_index,
                 is_start_in_box=True,
             )
 
             coords = apply_linear_transform(
                 indices,
-                transform=self._grid_transform,
-                offset=self._grid_offset,
+                transform=self._raw_grid_transform,
+                offset=self._raw_grid_offset,
             )
 
-            smoothen_mode = "interp"
+            smooth_mode = "interp"
         else:
-            smoothen_mode = "interp"
-            tail_length = 0
+            smooth_mode = "interp"
+            padding_length = 0
 
-        new_opts = replace(opts, mode=smoothen_mode)
-        output = SmoothenedLine(coords, opts=new_opts)
+        opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
+        opts.mode = smooth_mode
+        output = SmoothedLine(coords, opts=opts)
 
         result = output._entities[0][
-            int(tail_length * output.opts_N_out_ratio) : int(
-                (-tail_length - 1) * output.opts_N_out_ratio
+            int(padding_length * output.opts_N_out_ratio) : int(
+                (-padding_length - 1) * output.opts_N_out_ratio
             )
         ]
-        result = shift_to_box(result, self._box_size_periodic_index)
+        result = shift_to_box(result, self._raw_box_size_periodic_index)
 
-        self._defect_coords_smooth_obj = output
-        self._defect_coords_smooth = result
+        self._calc_defect_coords_smooth_obj = output
+        self._calc_defect_coords_smooth = result
 
-        return output.output
+        return output._entities[0]
 
     @logging_and_warning_decorator()
-    def visualize(
+    def act_visualize(
         self,
         is_wrap: bool = True,
         is_smooth: bool = True,
@@ -268,31 +293,19 @@ class DisclinationLine:
         ----------
         is_wrap : bool, optional
             Whether to apply periodic boundary wrapping to the defect line.
-            Default is False.
+            Default is True.
 
         is_smooth : bool, optional
             Whether to use the smoothed version of the defect line.
             Default is True.
 
-        radius : float, optional
-            Radius of the 3D tube for visualization.
-            Default is 1.
-
-        opacity : float, optional
-            Opacity of the tube. Range [0, 1].
-            Default is 1.
-
-        color : tuple of 3 floats, optional
-            RGB color of the tube, values in [0, 1].
-            Default is (1., 1., 1.), which is white.
-
         scalars : np.ndarray, optional
             Optional scalar values for each vertex.
             (enables gradient coloring). If provided, overrides 'color'.
 
-        name : str, optional
-            The name of this plotted line.
-            If not provides, use the line's name is directly applied.
+        opts : OptsTube, optional
+            Options controlling properties of visualized tubes.
+            See :attr:`OptsTube.__descriptions__` for definitions.
         """
 
         if not isinstance(is_smooth, bool):
@@ -304,16 +317,17 @@ class DisclinationLine:
         logger.debug(f"Start to visualize line: {self.opts.name}")
 
         if is_smooth:
-            if hasattr(self, "_defect_coords_smooth"):
-                line_coords = self._defect_coords_smooth
+            if hasattr(self, "_calc_defect_coords_smooth"):
+                line_coords = self._calc_defect_coords_smooth
             else:
-                logger.warning(">>> The line has not been smoothened")
-                logger.warning(">>> Use original data instead")
-                line_coords = self._defect_coords
+                msg = ">>> The line has not been smoothed\n"
+                msg += ">>> Use original data instead"
+                logger.warning(msg)
+                line_coords = self._calc_defect_coords.copy()
         else:
-            line_coords = self._defect_coords.copy()
+            line_coords = self._calc_defect_coords.copy()
 
-        if self._end2end_category == "loop":
+        if self._calc_end2end_category == "loop":
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
             if scalars is not None:
                 scalars = np.concatenate((scalars, [scalars[0]]))
@@ -330,17 +344,17 @@ class DisclinationLine:
             )
         else:
             boundary_flag = boundary_periodic_size_to_flag(
-                self._box_size_periodic_index
+                self._raw_box_size_periodic_index
             )
             line_coords_origin = apply_linear_transform(
                 line_coords,
-                transform=np.linalg.inv(self._grid_transform),
-                offset=-self._grid_offset,
+                transform=np.linalg.inv(self._raw_grid_transform),
+                offset=-self._raw_grid_offset,
             )
 
             line_coords_origin = np.where(
                 boundary_flag,
-                line_coords_origin % self._box_size_periodic_index,
+                line_coords_origin % self._raw_box_size_periodic_index,
                 line_coords_origin,
             )
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
@@ -350,8 +364,8 @@ class DisclinationLine:
 
             line_coords = apply_linear_transform(
                 line_coords_origin,
-                transform=self._grid_transform,
-                offset=self._grid_offset,
+                transform=self._raw_grid_transform,
+                offset=self._raw_grid_offset,
             )
 
             coords_all = []
@@ -371,20 +385,18 @@ class DisclinationLine:
                 logger=logger,
             )
 
-        self._line_plot = line_plot
-
         return line_plot
 
     # def update_norm(self):
-    #     self._norm = get_plane(self._defect_coords)
+    #     self._norm = get_plane(self._calc_defect_coords)
     #     return self._norm
 
     # def update_center(self):
-    #     self._center = np.average(self._defect_indices, axis=0)
+    #     self._center = np.average(self._raw_defect_indices, axis=0)
     #     return self._center
 
     # def update_rotation(self, n, num_shell=1, method='plane'):
-    #     self._Omega = defect_rotation(self._defect_indices, n,
+    #     self._Omega = defect_rotation(self._raw_defect_indices, n,
     #                                   num_shell=num_shell, method=method, box_size_periodic=self._box_size_periodic)
     #     return self._Omega
 
@@ -400,7 +412,7 @@ class DisclinationLine:
     #     else:
     #         norm = self.update_norm()
 
-    #     norm = np.broadcast_to(norm, (self._defect_num,3))
+    #     norm = np.broadcast_to(norm, (self._calc_defect_num,3))
     #     self._gamma = np.arccos(np.abs(np.einsum('ia, ia -> i', norm, Omega))) / np.pi * 180
 
     #     return self._gamma
@@ -409,31 +421,31 @@ class DisclinationLine:
 
     #     if is_smooth:
     #         if hasattr(self, '_defect_coords_smooth'):
-    #             if self._defect_coords_smooth_obj._N_out_ratio == 1:
-    #                 points = self._defect_coords_smooth
+    #             if self._calc_defect_coords_smooth_obj._N_out_ratio == 1:
+    #                 points = self._calc_defect_coords_smooth
     #             else:
     #                 print('There are more points in the smooth line')
     #                 print('Start to re-smooth it with N_out_ratio=1')
-    #                 print(f'window_length={self._defect_coords_smooth_obj._window_length}')
-    #                 print(f'order={self._defect_coords_smooth_obj._order}')
-    #                 print(f'mode={self._defect_coords_smooth_obj._mode}')
+    #                 print(f'window_length={self._calc_defect_coords_smooth_obj._window_length}')
+    #                 print(f'order={self._calc_defect_coords_smooth_obj._order}')
+    #                 print(f'mode={self._calc_defect_coords_smooth_obj._mode}')
 
-    #                 points = SmoothenedLine(self._defect_coords,
-    #                                         window_length=self._defect_coords_smooth_obj._window_length,
-    #                                         order=self._defect_coords_smooth_obj._order,
+    #                 points = smoothedLine(self._calc_defect_coords,
+    #                                         window_length=self._calc_defect_coords_smooth_obj._window_length,
+    #                                         order=self._calc_defect_coords_smooth_obj._order,
     #                                         N_out_ratio=1,
-    #                                         mode=self._defect_coords_smooth_obj._mode,
+    #                                         mode=self._calc_defect_coords_smooth_obj._mode,
     #                                         is_keep_origin=False)._output
     #                 print('Done!')
 
     #         else:
-    #             print('The line has not been smoothened')
+    #             print('The line has not been smoothed')
     #             print('Use original data instead')
-    #             points = self._defect_coords
+    #             points = self._calc_defect_coords
     #     else:
-    #         points = self._defect_coords
+    #         points = self._calc_defect_coords
 
-    #     is_periodic = self._end2end_category == 'loop'
+    #     is_periodic = self._calc_end2end_category == 'loop'
 
     #     tangents = get_tangent(points, is_periodic=is_periodic, is_norm=False)
     #     tangents_size = np.linalg.norm(tangents, axis=1, keepdims=True)

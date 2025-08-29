@@ -1,24 +1,60 @@
 import numpy as np
-from typing import Optional, Literal, Callable, List, Union
-from scipy.interpolate import RegularGridInterpolator
+from typing import Optional, Callable, Union
+from dataclasses import dataclass
 
-from .plot_plane_grid import PlotPlaneGrid
-from ..opts import OptsPlaneGrid, OptsnPlane, merge_opts
+from .plot_plane_grid import PlotPlaneGrid, OptsPlaneGrid
+from ..opts import merge_opts_all
 from Nematics3D.datatypes import (
-    Vect,
-    as_Vect,
     nField,
     ColorRGB,
     as_ColorRGB,
-    Tensor,
-    as_Tensor,
+    Number,
+    as_Number
 )
 from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, split_points
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from ..Interpolator import Interpolator
 
-from Nematics3D.debug.debug_store import DEBUG_VARS
+
+# --- nPlane Options ---
+@dataclass(slots=True)
+class OptsnPlane:
+    colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
+    opacity: Union[Callable[nField, np.ndarray], float] = 1
+    length: Number = 3.5
+    radius: Number = 0.5
+    is_n_defect: bool = True
+    defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
+
+    __descriptions__ = {
+        "colors": "RGB color or callable mapping n-field → RGB",
+        "opacity": "opacity value or callable mapping n-field → array",
+        "length": "length of directors in plane visualization",
+        "radius": "radius of directors in plane visualization",
+        "is_n_defect": "flag whether to highlight n around defects",
+        "defect_opacity": "opacity value or callable mapping n-field → array for defects",
+    }
+
+    _validators = {
+        "length": lambda self, v: as_Number(v, name=self.__descriptions__["length"]),
+        "radius": lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "is_n_defect": lambda self, v: (
+            v
+            if isinstance(v, bool)
+            else (_ for _ in ()).throw(
+                TypeError(
+                    f"{self.__descriptions__['is_n_defect']} must be a boolean, got {v}"
+                )
+            )
+        ),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 class PlotnPlane:
@@ -26,7 +62,7 @@ class PlotnPlane:
     @logging_and_warning_decorator
     def __init__(
         self,
-        QInterpolator: Optional[RegularGridInterpolator] = None,
+        QInterpolator: Optional[Interpolator] = None,
         opts_grid=OptsPlaneGrid(),
         opts_nPlane=OptsnPlane(),
         logger=None,
@@ -48,28 +84,41 @@ class PlotnPlane:
             raise ValueError(
                 "Missing required variable QInterpolator to generate nPlane"
             )
+            
+        if not isinstance(QInterpolator, Interpolator):
+            raise TypeError(
+                "Interpolator for PlotnPlane must be the class of Nematics3D.classes.Interpolator.Interpolator"
+                )
 
-        opts_grid = merge_opts(opts_grid, kwargs, prefix="plane__")
-        opts_nPlane = merge_opts(opts_nPlane, kwargs, prefix="n_")
+        merge = merge_opts_all(
+            {
+             "plane_": opts_grid,
+             "n_": opts_nPlane
+             },
+            kwargs, type(self).__name__
+            )
+
+        opts_grid = merge["plane_"]
+        opts_nPlane = merge["n_"]
 
         self._opts_all_nPlane = opts_nPlane
         self._raw_QInterpolator = QInterpolator
 
-        self.make_figure(
+        self._helper_make_figure(
             opts_grid=opts_grid,
             opts_nPlane=opts_nPlane,
             logger=logger,
         )
 
     @logging_and_warning_decorator
-    def make_figure(
+    def _helper_make_figure(
         self,
         opts_grid=OptsPlaneGrid(),
         opts_nPlane=OptsnPlane(),
         logger=None,
     ):
 
-        self._opts_all = opts_nPlane
+        self._opts_all_nplane = opts_nPlane
 
         self._entities_plane = [
             PlotPlaneGrid(
@@ -139,10 +188,10 @@ class PlotnPlane:
         self._calc_colors_func = self._helper_colors_check(colors)
         self._calc_opacity_func = self._helper_opacity_check(opacity)
         self._calc_defect_opacity_func = self._helper_opacity_check(defect_opacity)
-
-        # if hasattr(self, "._entities"):
-        #     self._entities[0].remove()
-        #     self._entities[1].remove()
+        
+        if hasattr(self, "_entities"):
+            for item in self._entities:
+                item.remove()
 
         self._entities = []
         self._calc_n = []
@@ -159,17 +208,18 @@ class PlotnPlane:
             self._entities.append(output[0])
             self._calc_n.append(output[1])
 
-        self.radius = radius
-        self.axis1 = plane_grid.opts_axis1
-        self.normal = plane_grid.opts_normal
-        self.origin = plane_grid.opts_origin
-        self.shape = plane_grid.opts_shape
-        self.size = plane_grid.opts_size
-        self.corners_limit = corners_limit
-        self.is_n_defect = is_n_defect
-        self.defect_opacity = defect_opacity
-        self.grid_offset = plane_grid.opts_grid_offset
-        self.grid_transform = plane_grid.opts_grid_transform
+        self.opts_radius = radius
+        self.opts_axis1 = plane_grid.opts_axis1
+        self.opts_normal = plane_grid.opts_normal
+        self.opts_origin = plane_grid.opts_origin
+        self.opts_shape = plane_grid.opts_shape
+        self.opts_size = plane_grid.opts_size
+        self.opts_corners_limit = corners_limit
+        self.opts_is_n_defect = is_n_defect
+        self.opts_defect_opacity = defect_opacity
+        self.opts_length = length
+        self._raw_grid_offset = plane_grid.opts_grid_offset
+        self._raw_grid_transform = plane_grid.opts_grid_transform
 
     def _helper_n_visualize_each(self, data, opacity_func, length, radius):
 
@@ -218,32 +268,32 @@ class PlotnPlane:
         return opacity
 
     @property
-    def length(self):
+    def opts_length(self):
         return self._entities[0].glyph.glyph_source.glyph_source.height
 
-    @length.setter
-    def length(self, value: float):
+    @opts_length.setter
+    def opts_length(self, value: float):
         self._entities[0].glyph.glyph_source.glyph_source.height = float(value)
         if len(self._entities) > 1:
             self._entities[1].glyph.glyph_source.glyph_source.height = float(value)
 
     @property
-    def radius(self):
+    def opts_radius(self):
         return self._entities[0].glyph.glyph_source.glyph_source.radius
 
-    @radius.setter
-    def radius(self, value: float):
+    @opts_radius.setter
+    def opts_radius(self, value: float):
         self._entities[0].glyph.glyph_source.glyph_source.radius = float(value)
         if len(self._entities) > 1:
             self._entities[1].glyph.glyph_source.glyph_source.radius = float(value)
 
     @property
-    def opacity_bulk(self):
+    def opts_opacity_bulk(self):
         rgba = self._entities[0].parent.parent.data.point_data.scalars
         return np.array(rgba)[:, 3] / 255
 
-    @opacity_bulk.setter
-    def opacity_bulk(self, data):
+    @opts_opacity_bulk.setter
+    def opts_opacity_bulk(self, data):
         self._calc_opacity_func = self._helper_opacity_check(data)
         rgba = self._entities[0].parent.parent.data.point_data.scalars
         num_points = len(rgba)
@@ -255,8 +305,8 @@ class PlotnPlane:
         self._entities[0].parent.parent.data.point_data.scalars.modified()
 
     @property
-    def opacity_defect(self):
-        if self.is_n_defect:
+    def opts_opacity_defect(self):
+        if self.opts_is_n_defect:
             if len(self._entities) > 1:
                 rgba = self._entities[1].parent.parent.data.point_data.scalars
                 return np.array(rgba)[:, 3] / 255
@@ -265,9 +315,9 @@ class PlotnPlane:
         else:
             raise ValueError("Directors around defects are not plotted seperately")
 
-    @opacity_defect.setter
-    def opacity_defect(self, data):
-        if self.is_n_defect:
+    @opts_opacity_defect.setter
+    def opts_opacity_defect(self, data):
+        if self.opts_is_n_defect:
             if len(self._entities) > 1:
                 self._calc_opacity_func = self._helper_opacity_check(data)
                 rgba = self._entities[1].parent.parent.data.point_data.scalars
@@ -284,7 +334,7 @@ class PlotnPlane:
             raise ValueError("There are no isolated directors around defects")
 
     @property
-    def colors(self):
+    def opts_colors(self):
         rgba0 = self._entities[0].parent.parent.data.point_data.scalars
         result = []
         result.append(np.array(rgba0)[:, :3] / 255)
@@ -293,8 +343,8 @@ class PlotnPlane:
             result.append(np.array(rgba1)[:, :3] / 255)
         return result
 
-    @colors.setter
-    def colors(self, data):
+    @opts_colors.setter
+    def opts_colors(self, data):
         self._calc_colors_func = self._helper_colors_check(data)
 
         def set_color(index):
@@ -309,7 +359,7 @@ class PlotnPlane:
 
         set_color(0)
 
-        if self.is_n_defect and len(self._entities) > 0:
+        if self.opts_is_n_defect and len(self._entities) > 0:
             set_color(1)
 
     @logging_and_warning_decorator
@@ -317,17 +367,33 @@ class PlotnPlane:
 
         if not changes:
             return
-
+        
+        keys_modify = ["opts_radius", "opts_length", "opts_opacity_bulk", "opts_opacity_defect", "opts_colors"]
+        keys_rebuild = ["opts_axis1", "opts_normal", "opts_origin", "opts_shape", "opts_spacing", "opts_size"]
+        
         for k, v in changes.items():
-            setattr(self._opts_all, k, v)
-
-        keys_rebuild = ["axis1", "normal", "origin", "shape", "spacing", "size"]
-
+            if k in keys_modify:
+                setattr(self._opts_all_nplane, k[5:], v)
+                setattr(self, k, v)
+            elif k in keys_rebuild:
+                if k == "opts_spacing":
+                    setattr(self._entities_plane[0]._opts_all, "spacing1", v)
+                    setattr(self._entities_plane[0]._opts_all, "spacing2", v)
+                else:
+                    setattr(self._entities_plane[0]._opts_all, k[5:], v)
+                setattr(self, k, v)
+            else:
+                try:
+                    raise ValueError(f"{k} is not attribute in PlotnPlane")
+                except:
+                    logger.recovery(f"Ignore {k}")
+                
         for k in keys_rebuild:
             if k in changes:
-                self.make_figure(
+                self._helper_make_figure(
                     opts_grid=self._entities_plane[0]._opts_all,
-                    opts_plane=self._opts_all,
+                    opts_nPlane=self._opts_all_nplane,
                     logger=logger,
                 )
                 return
+            

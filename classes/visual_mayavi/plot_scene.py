@@ -1,11 +1,69 @@
 import numpy as np
 from mayavi import mlab
 from collections import defaultdict
+from dataclasses import dataclass
+from typing import Optional
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import as_ColorRGB
 from .scene_wrapper import SceneWrapper
-from ..opts import OptsScene
+from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, as_str, Vect, as_Vect
+
+# --- Scene Options ---
+@dataclass(slots=True)
+class OptsScene:
+    is_new: bool = True
+    fig_size: Vect(2) = (1920, 1360)
+    bgcolor: ColorRGB = (1.0, 1.0, 1.0)
+    fgcolor: ColorRGB = (0.0, 0.0, 0.0)
+    name: str = "None"
+    azimuth: Number = 45
+    elevation: Number = 54.735610317245346
+    roll: Number = 0
+    distance: Optional[Number] = None
+    focal_point: Optional[Vect(3)] = None
+    name: str = "None"
+
+    __descriptions__ = {
+        "is_new": "whether to create a new scene",
+        "fig_size": "size of figure window (width, height)",
+        "bgcolor": "background color (RGB)",
+        "fgcolor": "foreground color (RGB)",
+        "name": "name identifier of scene",
+        "azimuth": "azimuth angle of camera",
+        "elevation": "elevation angle of camera",
+        "roll": "roll angle of camera",
+        "distance": "distance of camera from focal point",
+        "focal_point": "3D focal point of camera",
+    }
+
+    _validators = {
+        "fig_size": lambda self, v: tuple(
+            as_Vect(v, dim=2, name=self.__descriptions__["fig_size"])
+        ),
+        "bgcolor": lambda self, v: as_ColorRGB(
+            v, name=self.__descriptions__["bgcolor"]
+        ),
+        "fgcolor": lambda self, v: as_ColorRGB(
+            v, name=self.__descriptions__["fgcolor"]
+        ),
+        "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+        "azimuth": lambda self, v: as_Number(v, name=self.__descriptions__["azimuth"]),
+        "elevation": lambda self, v: as_Number(
+            v, name=self.__descriptions__["elevation"]
+        ),
+        "roll": lambda self, v: as_Number(v, name=self.__descriptions__["roll"]),
+        "distance": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["distance"])
+        ),
+        "focal_point": lambda self, v: (
+            None if v is None else as_Vect(v, name=self.__descriptions__["focal_point"])
+        ),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 class PlotScene:
@@ -16,16 +74,7 @@ class PlotScene:
 
     @logging_and_warning_decorator
     def __init__(self, is_new: bool = True, opts=OptsScene(), logger=None):
-        """
-        Initialize the scene with a new Mayavi figure.
 
-        Args:
-            size (tuple): Window size in pixels (width, height).
-            bgcolor (tuple): Background color as RGB in [0, 1].
-            fgcolor (tuple): Foreground color (axes, labels) as RGB in [0, 1].
-            is_new: If create a now scene.
-                If not, use the current scene and all other arguments are ignored.
-        """
         if is_new:
             size = opts.fig_size
             bgcolor = opts.bgcolor

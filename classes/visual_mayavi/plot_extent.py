@@ -1,9 +1,49 @@
 from mayavi import mlab
 import numpy as np
-from dataclasses import fields
+from typing import Optional
+from dataclasses import dataclass
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import OptsExtent, auto_opts_tubes
+from ..opts import auto_opts_tubes
+from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, Tensor, as_Tensor, as_str
+
+
+# --- Extent Options ---
+@dataclass(slots=True)
+class OptsExtent:
+    corners: Optional[Tensor((8,3))] = None
+    radius: Number = 1.0
+    sides: Number = 6
+    opacity: Number = 1.0
+    color: ColorRGB = (0, 0, 0)
+    name: str = "None"
+
+    __descriptions__ = {
+        "corners": "bounding box corners (8×3 array)",
+        "radius": "radius of extent tubes",
+        "sides": "sides number of extent tubes",
+        "opacity": "opacity of extent tubes",
+        "color": "RGB color of extent tubes",
+        "name": "name of extent",
+    }
+
+    _validators = {
+        "corners": lambda self, v: (
+            None
+            if v is None
+            else as_Tensor(v, (8, 3), name=self.__descriptions__["corners"])
+        ),
+        "radius": lambda self, v: as_Number(v, name=self.__descriptions__["radius"]),
+        "sides": lambda self, v: as_Number(v, name=self.__descriptions__["sides"]),
+        "opacity": lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
+        "color": lambda self, v: as_ColorRGB(v, name=self.__descriptions__["color"]),
+        "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+    }
+
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            value = self._validators[key](self, value)
+        object.__setattr__(self, key, value)
 
 
 @auto_opts_tubes(
@@ -15,7 +55,7 @@ from ..opts import OptsExtent, auto_opts_tubes
         "opts_specular": "actor.property.specular",
         "opts_specular_color": "actor.property.specular_color",
         "opts_specular_power": "actor.property.specular_power",
-        "_state__state_is_visible": "actor.visible",
+        "opts_is_visible": "actor.visible",
     }
 )
 class PlotExtent:
@@ -25,33 +65,13 @@ class PlotExtent:
     """
 
     def __init__(self, opts=OptsExtent()):
-        """
-        Create an Extent object and draw it in the Mayavi scene.
 
-        Parameters
-        ----------
-        corners : np.ndarray, (8,3),
-            Coordinates of the 8 corners of the box.
-
-        radius : float, optional
-            Thickness of the box edges.
-
-        sides : int, optional
-            Number of sides of each tube (smoothness).
-
-        color : tuple of 3 floats, optional
-            RGB color of the box edges, values in [0, 1].
-            Default is black
-
-        opacity : float in [0,1], optional
-            The opacity of extent
-        """
         if opts.corners is None:
             raise ValueError(
                 "The array 'corners', which stores the positions of the 8 points, are not inputted (the value is None)"
             )
-        self._data_corners = opts.corners
-        self._items = self.draw_box(opts)
+        self._raw_corners = opts.corners
+        self._entities = self.draw_box(opts)
 
         self._opts_all = opts
 
@@ -62,12 +82,12 @@ class PlotExtent:
     # @opts_color.setter
     # def opts_color(self, value):
     #     self._internal.color = value
-    #     for item in self._items:
+    #     for item in self._entities:
     #         item.actor.property.diffuse_color = self._internal.color
 
     def draw_box(self, opts):
         """Draw the box edges and store the actors."""
-        corners = self._data_corners
+        corners = self._raw_corners
         edges = [
             (0, 1),
             (0, 2),
@@ -107,7 +127,7 @@ class PlotExtent:
         self._state_is_visible = True
 
     def remove(self):
-        for item in self._items:
+        for item in self._entities:
             item.remove()
 
     # @logging_and_warning_decorator()

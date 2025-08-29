@@ -30,10 +30,10 @@ class SceneWrapper:
     def _set_angles(self, az, el, roll, dist, focal):
 
         if dist is None:
-            dist = self.distance
+            dist = self.opts_distance
 
         if focal is None:
-            focal = self.focal_point
+            focal = self.opts_focal_point
 
         az = np.radians(az)
         el = np.radians(el)
@@ -66,62 +66,62 @@ class SceneWrapper:
         self._cam.compute_view_plane_normal()
 
     @property
-    def azimuth(self):
+    def opts_azimuth(self):
         return self._get_angles()[0]
 
-    @azimuth.setter
-    def azimuth(self, value):
+    @opts_azimuth.setter
+    def opts_azimuth(self, value):
         _, el, roll, dist, focal = self._get_angles()
         self._set_angles(value, el, roll, dist, focal)
 
     @property
-    def elevation(self):
+    def opts_elevation(self):
         return self._get_angles()[1]
 
-    @elevation.setter
-    def elevation(self, value):
+    @opts_elevation.setter
+    def opts_elevation(self, value):
         az, _, roll, dist, focal = self._get_angles()
         self._set_angles(az, value, roll, dist, focal)
 
     @property
-    def roll(self):
+    def opts_roll(self):
         return self._get_angles()[2]
 
-    @roll.setter
-    def roll(self, value):
+    @opts_roll.setter
+    def opts_roll(self, value):
         az, el, _, dist, focal = self._get_angles()
         self._set_angles(az, el, value, dist, focal)
 
     @property
-    def distance(self):
+    def opts_distance(self):
         return self._get_angles()[3]
 
-    @distance.setter
-    def distance(self, value):
+    @opts_distance.setter
+    def opts_distance(self, value):
         az, el, roll, _, focal = self._get_angles()
         self._set_angles(az, el, roll, value, focal)
 
     @property
-    def focal_point(self):
+    def opts_focal_point(self):
         return tuple(self._cam.focal_point)
 
-    @focal_point.setter
-    def focal_point(self, value):
+    @opts_focal_point.setter
+    def opts_focal_point(self, value):
         az, el, roll, dist, _ = self._get_angles()
         self._set_angles(az, el, roll, dist, value)
 
     @property
-    def bgcolor(self):
+    def opts_bgcolor(self):
         return self._scene.background
 
-    @bgcolor.setter
-    def bgcolor(self, value):
+    @opts_bgcolor.setter
+    def opts_bgcolor(self, value):
         self._scene.background = tuple(value)
 
     @property
-    def fgcolor(self):
+    def opts_fgcolor(self):
         return self._scene.foreground
 
-    @fgcolor.setter
-    def fgcolor(self, value):
+    @opts_fgcolor.setter
+    def opts_fgcolor(self, value):
         self._scene.foreground = tuple(value)
