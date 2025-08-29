@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import auto_opts_tubes
-from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, Tensor, as_Tensor, as_str
+from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, Tensor, as_Tensor, as_str, as_bool
 
 
 # --- Extent Options ---
@@ -17,6 +17,7 @@ class OptsExtent:
     opacity: Number = 1.0
     color: ColorRGB = (0, 0, 0)
     name: str = "None"
+    is_visible: bool = True
 
     __descriptions__ = {
         "corners": "bounding box corners (8×3 array)",
@@ -25,6 +26,7 @@ class OptsExtent:
         "opacity": "opacity of extent tubes",
         "color": "RGB color of extent tubes",
         "name": "name of extent",
+        "is_visible": "whether represent this line",
     }
 
     _validators = {
@@ -38,6 +40,7 @@ class OptsExtent:
         "opacity": lambda self, v: as_Number(v, name=self.__descriptions__["opacity"]),
         "color": lambda self, v: as_ColorRGB(v, name=self.__descriptions__["color"]),
         "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
+        "is_visible": lambda self, v: as_bool(v, name=self.__descriptions__["is_visible"]),
     }
 
     def __setattr__(self, key, value):
@@ -70,22 +73,11 @@ class PlotExtent:
             raise ValueError(
                 "The array 'corners', which stores the positions of the 8 points, are not inputted (the value is None)"
             )
-        self._raw_corners = opts.corners
-        self._entities = self.draw_box(opts)
+        object.__setattr__(self, "_raw_corners", opts.corners)
+        object.__setattr__(self, "_entities", self._helper_draw_box(opts))
+        object.__setattr__(self, "_opts_all", opts)
 
-        self._opts_all = opts
-
-    # @property
-    # def opts_color(self):
-    #     return self._internal.color
-
-    # @opts_color.setter
-    # def opts_color(self, value):
-    #     self._internal.color = value
-    #     for item in self._entities:
-    #         item.actor.property.diffuse_color = self._internal.color
-
-    def draw_box(self, opts):
+    def _helper_draw_box(self, opts):
         """Draw the box edges and store the actors."""
         corners = self._raw_corners
         edges = [
@@ -120,13 +112,13 @@ class PlotExtent:
 
         return result
 
-    def hide(self):
-        self._state_is_visible = False
+    def act_hide(self):
+        self.opts_is_visible = False
 
-    def show(self):
-        self._state_is_visible = True
+    def act_show(self):
+        self.opts_is_visible = True
 
-    def remove(self):
+    def act_remove(self):
         for item in self._entities:
             item.remove()
 

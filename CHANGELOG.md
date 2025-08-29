@@ -2,7 +2,7 @@
 
 ## [0.1.7]
 ### Added
- - log
+ - as_Number
 
 ## [0.1.6]
 ### Added
@@ -12,9 +12,7 @@
  - Changed ```Vect3D``` into ```Vect(3)```. The new semantic alias could be used to verify vectors beyond 3D, for example, ```fig_size```.   
  - Re-organized the attribute names of some classes. Now they follow the prefix conventions as below:  
    - `opts_`:  
-     User-configurable options (parameters that users are expected to modify).  
-   - `_opts_`:  
-     Internal options (parameters derived or managed internally, not meant to be modified directly).  
+     User-configurable options (parameters that users are expected to modify).   
    - `_calc_`:  
      Computed values (attributes calculated from other properties, read-only).  
    - `_data_`:  
