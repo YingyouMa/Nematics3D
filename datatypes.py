@@ -257,7 +257,7 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, defa
                 return (0, 0, 0)
             input_data = input_data / np.sum(input_data**norm_order)
 
-    return tuple(input_data)
+    return tuple(map(float, input_data))
 
 
 @logging_and_warning_decorator

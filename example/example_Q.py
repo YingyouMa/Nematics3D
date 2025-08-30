@@ -24,8 +24,8 @@ Q.act_lines_smooth(min_line_length=30, window_length=21)
 Q.act_visualize_disclination_lines(is_wrap=True, min_line_length=40)
 extent = Q._figures[1].objects['extent'][0]
 extent.opts_opacity = 0.5
-extent.opts_radius = 0.2
-extent.opts_color = [1,0,0]
+extent.radius = 0.2
+extent.color = [1,0,0]
 scene = Q._figures[1].scene
 scene.opts_azimuth = 90
 scene.opts_elevation = 30
@@ -36,6 +36,7 @@ for line in Q._figures[1].objects['lines']:
     line.specular_color = (1,0,0)
     line.opts_radius = 2
     line.sides = 20
+    
     
     
 index_max =  60

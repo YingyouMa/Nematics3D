@@ -5,7 +5,7 @@ from typing import Optional, Literal
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_coordinate_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
-from ..opts import merge_opts_all
+from .opts import merge_opts_all
 from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Tensor
 
 
@@ -85,7 +85,7 @@ class OptsPlaneGrid:
             value = self._validators[key](self, value)
         object.__setattr__(self, key, value)
 
-class PlotPlaneGrid:
+class PlaneGrid:
 
     @logging_and_warning_decorator
     def __init__(self, opts=OptsPlaneGrid(), logger=None, **kwargs):

@@ -133,6 +133,9 @@ class PlotTube:
     ----------------------
     - ``str(tube)`` → formatted summary of parameters (e.g., ``print(tube)``).
     - ``len(tube)`` → # sublines.
+    - ``iter(tube)`` → iterate over sublines
+    - ``line[tube]`` → get the i-th subline
+    - ``repr(line)`` → short identifier for debugging. (e.g., just type ``line`` in an interactive shell)
 
     Notes
     -----
@@ -153,7 +156,6 @@ class PlotTube:
         "_entities": "List of Mayavi tube objects (mlab.plot3d items)",
         "_raw_coords_all": "Raw input coordinates for all sublines (list of arrays, each shape: N×3)",
         "_raw_scalars_all": "Optional scalar values for coloring each subline (list of arrays or None)",
-        "_backup_opts": "only used in __enter__ and __exit__, which helps users modify options", 
     
         # --- mirrored options ---
         "opts_color": "Diffuse RGB color of tube surface (ignored if scalars are provided)",
@@ -250,6 +252,24 @@ class PlotTube:
         for item in self._entities:
             item.remove()
             
+    def __setattr__(self, key, value):
+        if key.startswith("_"):
+            raise AttributeError(f"Internal attribute {key} cannot be modified.")
+            
+        if key == "name":
+            object.__setattr__(self, key, value)
+            return
+        
+        if not key.startswith("opts"):
+            key_new = "opts_" + key
+        else:
+            key_new = key
+        if key_new not in self.__slots__:
+            raise NameError(f"Either {key} or {key_new} is not a valid attribute of {type(self).__name__}")
+            
+        descriptor = type(self).__dict__.get(key_new, None)
+        descriptor.__set__(self, value)
+            
     @logging_and_warning_decorator()
     def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
         """
@@ -269,7 +289,7 @@ class PlotTube:
         for attr in self.__slots__:
             desc = self.__descriptions__.get(attr, "(no description)")
             value = getattr(self, attr, None)
-            lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
+            lines.append(f"  {attr}: {value!r}  # {desc}")
         lines.append("-----------------------------------------------------")
 
         msg = "\n".join(lines)
@@ -278,31 +298,24 @@ class PlotTube:
             return msg
         else:
             logger.info(msg)
-            
-    def __setattr__(self, key, value):
-        if key.startswith("_"):
-            raise AttributeError(f"Internal attribute {key} cannot be modified directly.")
-            
-        if key == "name":
-            object.__setattr__(self, key, value)
-            return
-        
-        if not key.startswith("opts"):
-            key_new = "opts_" + key
-        else:
-            key_new = key
-        if key_new not in self.__slots__:
-            raise NameError(f"Either {key} or {key_new} is not a valid attribute of {type(self).__name__}")
-            
-        descriptor = type(self).__dict__.get(key_new, None)
-        descriptor.__set__(self, value)
-            
+
     def __str__(self) -> str:
         header = f"<{self.__class__.__name__} object>"
         return header + "\n" + self.act_log_parameters(is_return=True)
     
     def __len__(self) -> int:
         return len(self._raw_coords_all)
+    
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}(name={self.name!r}), with color={self.opts_color!r} and radius={self.opts_radius!r}"
+        return msg
+    
+    def __iter__(self):
+        return iter(self._entities)
+    
+    def __getitem__(self, idx):
+        return self._entities[idx]
 
       
 

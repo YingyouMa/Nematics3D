@@ -34,7 +34,7 @@ from .visual_mayavi.plot_n_plane import OptsnPlane, PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene, OptsScene
 from .visual_mayavi.plot_extent import PlotExtent, OptsExtent
 from .visual_mayavi.plot_tube import OptsTube
-from .visual_mayavi.plot_plane_grid import OptsPlaneGrid
+from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth

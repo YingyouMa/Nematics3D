@@ -2,7 +2,7 @@ import numpy as np
 from typing import Optional, Callable, Union
 from dataclasses import dataclass
 
-from .plot_plane_grid import PlotPlaneGrid, OptsPlaneGrid
+from ..plane_grid import PlaneGrid, OptsPlaneGrid
 from ..opts import merge_opts_all
 from Nematics3D.datatypes import (
     nField,
@@ -121,7 +121,7 @@ class PlotnPlane:
         self._opts_all_nplane = opts_nPlane
 
         self._entities_plane = [
-            PlotPlaneGrid(
+            PlaneGrid(
                 opts=opts_grid,
                 logger=logger,
             )

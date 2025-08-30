@@ -55,23 +55,34 @@ class OptsExtent:
         "opts_opacity": "actor.property.opacity",
         "opts_radius": "parent.parent.filter.radius",
         "opts_sides": "parent.parent.filter.number_of_sides",
-        "opts_specular": "actor.property.specular",
-        "opts_specular_color": "actor.property.specular_color",
-        "opts_specular_power": "actor.property.specular_power",
         "opts_is_visible": "actor.visible",
     }
 )
 class PlotExtent:
-    """
-    Represents a 3D rectangular box (wireframe) in Mayavi,
-    allowing unified control over its appearance and lifecycle.
-    """
+
+    __descriptions__ = {
+    "name": "Name identifier of this extent object",
+
+    # --- internal states ---
+    "_entities": "List of Mayavi tube objects (mlab.plot3d items), as 12 edges of the box",
+    "_raw_corners": "bounding box corners (8×3 array)",
+
+    # --- mirrored options ---
+    "opts_color": "Diffuse RGB color of tube surface (ignored if scalars are provided)",
+    "opts_opacity": "Opacity of tube surface",
+    "opts_radius": "Tube radius (applied in mlab.plot3d)",
+    "opts_sides": "Number of polygonal sides used to approximate tube cross-section",
+    "opts_is_visible": "Boolean flag indicating whether tubes are visible in the scene",
+    "_opts_all": "The dataclass OptsTube storing all option values",
+}
+    
+    __slots__ = tuple(__descriptions__.keys())
 
     def __init__(self, opts=OptsExtent()):
 
         if opts.corners is None:
             raise ValueError(
-                "The array 'corners', which stores the positions of the 8 points, are not inputted (the value is None)"
+                "The array 'corners' as bounding box corners, which stores the positions of the 8 points, are not inputted (the value is None)"
             )
         object.__setattr__(self, "_raw_corners", opts.corners)
         object.__setattr__(self, "_entities", self._helper_draw_box(opts))
@@ -121,28 +132,66 @@ class PlotExtent:
     def act_remove(self):
         for item in self._entities:
             item.remove()
+            
+    def __setattr__(self, key, value):
+        if key.startswith("_"):
+            raise AttributeError(f"Internal attribute {key} cannot be modified.")
+            
+        if key == "name":
+            object.__setattr__(self, key, value)
+            return
+        
+        if not key.startswith("opts"):
+            key_new = "opts_" + key
+        else:
+            key_new = key
+        if key_new not in self.__slots__:
+            raise NameError(f"Either {key} or {key_new} is not a valid attribute of {type(self).__name__}")
+            
+        descriptor = type(self).__dict__.get(key_new, None)
+        descriptor.__set__(self, value)
+        
+    def __str__(self) -> str:
+        header = f"<{self.__class__.__name__} object>"
+        return header + "\n" + self.act_log_parameters(is_return=True)
+    
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}(name={self.name!r}). with color={self.opts_color!r} and box corners: \n"
+        msg += f"{self._raw_corners}"
+        return msg
+        
+    def __iter__(self):
+        return iter(self._entities)
+    
+    def __getitem__(self, idx):
+        return self._entities[idx]
 
-    # @logging_and_warning_decorator()
-    # def log_properties(self, logger=None) -> None:
-    #     """
-    #     Log all current tube properties using logger.info().
+    @logging_and_warning_decorator()
+    def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
+        """
+        Log parameters for inspection.
 
-    #     This will include all attributes defined in the @auto_properties mapping,
-    #     as well as the number of points in the coordinates.
-    #     """
+        This is the standard logging interface used in this library, which
+        can be redirected to console or to a file depending on the logger
+        configuration and the behavior of ``logging_and_warning_decorator``.
 
-    #     print_lines = []
-    #     print_lines.append("=== PlotTube Properties ===")
+        All attributes listed in ``__descriptions__`` are included,
+        formatted in a single log entry with a clear separator.
+        """
+        lines = []
+        lines.append("-------------- PlotExtent Parameters --------------")
+        
+        lines.append(f"[{self.name}] plotting parameters:")
+        for attr in self.__slots__:
+            desc = self.__descriptions__.get(attr, "(no description)")
+            value = getattr(self, attr, None)
+            lines.append(f"  {attr}: {value!r}  # {desc}")
+        lines.append("-----------------------------------------------------")
 
-    #     for attr_name in self.__class__._auto_properties.keys():
-    #         if attr_name in {"x", "y", "z"}:
-    #             continue
-    #         try:
-    #             value = getattr(self, attr_name)
-    #             print_lines.append(f"{attr_name}: {value}")
-    #         except Exception as e:
-    #             logger.warning(f"Could not retrieve '{attr_name}': {e}")
+        msg = "\n".join(lines)
 
-    #     print_lines.append("===========================")
-
-    #     logger.info("\n".join(print_lines))
+        if is_return:
+            return msg
+        else:
+            logger.info(msg)
