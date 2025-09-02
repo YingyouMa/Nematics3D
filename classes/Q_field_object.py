@@ -156,7 +156,7 @@ class QFieldObject:
             self._calc_grid_origin, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
 
-        self._figures = []
+        self._calc_figures = []
 
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
         corners_index = get_box_corners(Lx, Ly, Lz)
@@ -415,15 +415,23 @@ class QFieldObject:
 
     def act_add_scene(self, is_new=True, opts=OptsScene):
         figure = PlotScene(is_new=is_new, opts=opts)
-        if is_new or (not is_new and len(self._figures) == 0):
-            self._figures.append(figure)
+        if is_new or (not is_new and len(self._calc_figures) == 0):
+            self._calc_figures.append(figure)
         else:
-            figure = self._figures[-1]
+            figure = self._calc_figures[-1]
 
         return figure
 
     def reset_figures(self):
-        self._figures = []
+        self._calc_figures = []
+        
+    @property
+    def lines(self):
+        return self._calc_lines
+    
+    @property
+    def figs(self):
+        return self._calc_figures
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q

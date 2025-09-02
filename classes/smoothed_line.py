@@ -2,7 +2,9 @@ import numpy as np
 from typing import Optional, Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict      
+import os
+import json
 
 from ..logging_decorator import logging_and_warning_decorator
 from .opts import merge_opts_all
@@ -17,7 +19,7 @@ class OptsSmooth:
     N_out_ratio: Number = 3.0
     mode: Literal["interp", "wrap"] = "interp"
     min_line_length: int = 50
-    name: str = "None"
+    name: str = "smoothed_line"
     is_window_warning: bool = True
 
     __descriptions__ = {
@@ -418,4 +420,187 @@ class SmoothedLine:
     
     def act_copy(self):
         return SmoothedLine(self._raw_coord.copy(), opts=OptsSmooth(**asdict(self._opts_all)))
+    
+    @logging_and_warning_decorator()
+    def act_save(self, folder: str = "save/smoothed_line/", filename: Optional[str]=None, logger=None):
+        """
+        Save the smoothing results and parameters into files.
+
+        Parameters
+        ----------
+        folder : str, default="."
+            Target folder to save files.
+
+        filename : str, optional
+            Base filename (without extension). 
+            If None, use `self.name` (fallback: "smoothed_line").
+
+        logger : logging.Logger, optional
+            Logger instance.
+
+        Files Generated
+        ---------------
+        - {filename}.json : parameters (opts + metadata), readable text
+        - {filename}.npz  : NumPy arrays containing:
+            - raw_coord  : original input points
+            - smooth_out : smoothed and resampled output points
+        """
+
+        folder = as_str(folder, name=f"the folder to store smoothed line ``{self.name}``", replace="save/smoothed_line/")
+        if filename is not None:
+            filename = as_str(filename, name=f"the filename to store smoothed line ``{self.name}``", replace=self.namme)
+        else:
+            filename = self.name
+            
+        logger.debug(f"Start to save smoothed line ``{filename}`` into {folder}")
+
+        # ---------- ensure folder ----------
+        os.makedirs(folder, exist_ok=True)
+
+        if filename is None:
+            filename = self.name
+
+        # ---------- save JSON ----------
+        json_path = os.path.join(folder, f"{filename}.json")
+        param_dict = {
+            "opts": asdict(self._opts_all),
+            "metadata": {
+                "name": self.name,
+                "calc_N_init": self._calc_N_init,
+                "calc_N_out": getattr(self, "_calc_N_out", None),
+                "state_is_smoothed": self._state_is_smoothed,
+            },
+        }
+        
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(param_dict, f, indent=4)
+
+        # ---------- save NumPy ----------
+        npz_path = os.path.join(folder, f"{filename}.npz")
+        np.savez_compressed(
+            npz_path,
+            raw_coord=self._raw_coord,
+            smooth_out=self._entities[0]
+        )
+
+        
+    @classmethod
+    @logging_and_warning_decorator()
+    def act_load(cls, folder: str = ".", filename: str = "smoothed_line", logger=None):
+        """
+        Load a SmoothedLine object from saved JSON + NPZ files.
+
+        Parameters
+        ----------
+        folder : str, default="."
+            Folder containing the files.
+
+        filename : str, optional
+            Base filename (without extension).
+            If None, default is "smoothed_line".
+
+        logger : logging.Logger, optional
+            Logger instance.
+
+        Returns
+        -------
+        SmoothedLine
+            A restored SmoothedLine object.
+        """
+        
+        filename = as_str(filename, name="the folder to load smoothed line")
+        folder = as_str(folder, name=f"the folder to load smoothed line ``{filename}``")
+
+        json_path = os.path.join(folder, f"{filename}.json")
+        npz_path = os.path.join(folder, f"{filename}.npz")
+        logger.debug(f"Start to load SmoothedLine from {json_path} and {npz_path}")
+
+        if not os.path.exists(json_path) or not os.path.exists(npz_path):
+            raise FileNotFoundError(
+                f"Missing required files: {json_path} / {npz_path}"
+            )
+
+        # ---------- load JSON ----------
+        with open(json_path, "r", encoding="utf-8") as f:
+            param_dict = json.load(f)
+
+        opts = OptsSmooth(**param_dict["opts"])
+
+        # ---------- load NPZ ----------
+        data = np.load(npz_path, allow_pickle=True)
+        raw_coord = data["raw_coord"]
+        smooth_out = data["smooth_out"]
+
+        # ---------- reconstruct object ----------
+        obj = cls(raw_coord, opts=opts)
+        object.__setattr__(obj, "_entities", [smooth_out])
+        object.__setattr__(obj, "_calc_N_init", param_dict["metadata"]["calc_N_init"])
+        object.__setattr__(obj, "_calc_N_out", param_dict["metadata"]["calc_N_out"])
+        object.__setattr__(obj, "_state_is_smoothed", param_dict["metadata"]["state_is_smoothed"])
+        object.__setattr__(obj, "name", param_dict["metadata"]["name"])
+
+        return obj
+    
+    @logging_and_warning_decorator()
+    def __eq__(self, other, logger=None) -> bool:
+        """
+        Compare equality with another SmoothedLine object.
+
+        Two SmoothedLine objects are considered equal iff **all attributes**
+        in __slots__ are equal (deep equality for numpy arrays, shallow for scalars).
+
+        Parameters
+        ----------
+        other : object
+            Another object to compare against.
+
+        logger : logging.Logger, optional
+            Logger instance to record differences when not equal.
+
+        Returns
+        -------
+        bool
+            True if all attributes match, False otherwise.
+        """
+        if not isinstance(other, SmoothedLine):
+            logger.info("The other variable is not class SmoothedLine")
+            return False
+
+        all_equal = True
+        diffs = []
+
+        for attr in self.__slots__:
+            v1 = getattr(self, attr, None)
+            v2 = getattr(other, attr, None)
+
+            if attr == "_entities":
+                v1, v2 = v1[0], v2[0]
+
+            if attr == "_state_is_smoothed" and v1 != v2:
+                if v1:
+                    logger.info(f"{self.name} is smoothed while {other.name} is not")
+                if v2:
+                    logger.info(f"{other.name} is smoothed while {self.name} is not")
+                all_equal = False
+
+                pass
+
+            if isinstance(v1, np.ndarray) or isinstance(v2, np.ndarray):
+                if not (isinstance(v1, np.ndarray) and isinstance(v2, np.ndarray) and np.array_equal(v1, v2)):
+                    all_equal = False
+                    diffs.append(f"{attr}: self={np.shape(v1)}, other={np.shape(v2)} (arrays differ)")
+            else:
+                if v1 != v2:
+                    all_equal = False
+                    diffs.append(f"{attr}: self={v1!r}, other={v2!r}")
+
+        if not all_equal:
+            if len(diffs)>0:
+                logger.info(
+                    "SmoothedLine objects are not equal.\nDifferences:\n" + "\n".join(diffs)
+                )
+        else:
+            logger.info("SmoothedLine objects are equal.")
+
+        return all_equal
 

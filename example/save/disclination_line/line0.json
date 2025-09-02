@@ -1,0 +1,44 @@
+{
+    "raw": {
+        "box_size_periodic_index": [
+            128.0,
+            128.0,
+            128.0
+        ],
+        "grid_offset": [
+            0,
+            0,
+            0
+        ],
+        "grid_transform": [
+            [
+                1.0,
+                0.0,
+                0.0
+            ],
+            [
+                0.0,
+                1.0,
+                0.0
+            ],
+            [
+                0.0,
+                0.0,
+                1.0
+            ]
+        ]
+    },
+    "metadata": {
+        "name": "line0",
+        "category": "cross",
+        "defect_num": 10518,
+        "box_size_periodic_coord": [
+            128.0,
+            128.0,
+            128.0
+        ]
+    },
+    "smooth": {
+        "exists": true
+    }
+}

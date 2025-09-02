@@ -26,7 +26,7 @@ class OptsnPlane:
     length: Number = 3.5
     radius: Number = 0.5
     is_n_defect: bool = True
-    defect_opacity: Union[Callable[nField, np.ndarray], float] = 1
+    opacity_defect: Union[Callable[nField, np.ndarray], float] = 1
 
     __descriptions__ = {
         "colors": "RGB color or callable mapping n-field → RGB",
@@ -34,7 +34,7 @@ class OptsnPlane:
         "length": "length of directors in plane visualization",
         "radius": "radius of directors in plane visualization",
         "is_n_defect": "flag whether to highlight n around defects",
-        "defect_opacity": "opacity value or callable mapping n-field → array for defects",
+        "opacity_defect": "opacity value or callable mapping n-field → array for defects",
     }
 
     _validators = {
@@ -56,8 +56,48 @@ class OptsnPlane:
             value = self._validators[key](self, value)
         object.__setattr__(self, key, value)
 
+SLOT = "slot"
+PROP = "property"
 
 class PlotnPlane:
+    
+    __descriptions__ = {
+        "name": ("Name identifier of this n-plane object", SLOT),
+
+        # --- internal states ---
+        "_raw_QInterpolator": ("Interpolator object for Q-tensor field (class Interpolator)", SLOT),
+        "_entities_plane": ("List containing the PlaneGrid entity (geometry of the plane)", SLOT),
+        "_entities": ("List of Mayavi visualized objects for n-field directors", SLOT),
+        "_calc_n": ("List of director field arrays (from Q-diagonalization)", SLOT),
+        "_calc_num_points": ("Total number of lattice points in the plane", SLOT),
+        "_calc_colors_func": ("Callable that maps n-field to RGB colors (bulk region)", SLOT),
+        "_calc_opacity_func": ("Callable that maps n-field to opacity values (bulk region)", SLOT),
+        "_calc_opacity_defect_func": ("Callable that maps n-field to opacity values (defect region)", SLOT),
+        "_raw_grid_offset": ("Grid offset of the plane in real-space coordinates", SLOT),
+        "_raw_grid_transform": ("Grid transformation matrix of the plane (3×3)", SLOT),
+        "_opts_all_nPlane": ("Dataclass OptsnPlane storing all options for n-plane visualization", SLOT),
+
+        # --- visualization options mirrored onto instance ---
+        "opts_axis1": ("First in-plane axis (3-vector)", SLOT),
+        "opts_normal": ("Normal vector of the plane (3-vector)", SLOT),
+        "opts_origin": ("Origin of the plane in real-space coordinates (3-vector)", SLOT),
+        "opts_shape": ("Shape of the plane grid (tuple of integers)", SLOT),
+        "opts_size": ("Size of the plane in real-space coordinates", SLOT),
+        "opts_corners_limit": ("Bounding box corners of the plane (8×3 array)", SLOT),
+        "opts_spacing": ("Spacing between neighboring directors", SLOT),
+        "opts_is_n_defect": ("Flag whether directors near defects are visualized separately", SLOT),
+
+        # --- properties (not in __slots__) ---
+        "opts_length": ("Length of directors in Mayavi visualization", PROP),
+        "opts_radius": ("Radius (thickness) of directors in Mayavi visualization", PROP),
+        "opts_opacity_bulk": ("Opacity values (array) of directors in bulk region", PROP),
+        "opts_opacity_defect": ("Opacity values (array) of directors in defect region", PROP),
+        "opts_colors": ("RGB colors (array) of directors in bulk and defect regions", PROP),
+    }
+    
+    __slots__ = tuple(
+        k for k, (_, flag) in __descriptions__.items() if flag == SLOT
+    )
 
     @logging_and_warning_decorator
     def __init__(
@@ -118,7 +158,7 @@ class PlotnPlane:
         logger=None,
     ):
 
-        self._opts_all_nplane = opts_nPlane
+        self._opts_all_nPlane = opts_nPlane
 
         self._entities_plane = [
             PlaneGrid(
@@ -134,7 +174,7 @@ class PlotnPlane:
         corners_limit = plane_grid.opts_corners_limit
         colors = opts_nPlane.colors
         opacity = opts_nPlane.opacity
-        defect_opacity = opts_nPlane.defect_opacity
+        opacity_defect = opts_nPlane.opacity_defect
         length = opts_nPlane.length
         radius = opts_nPlane.radius
 
@@ -187,7 +227,7 @@ class PlotnPlane:
 
         self._calc_colors_func = self._helper_colors_check(colors)
         self._calc_opacity_func = self._helper_opacity_check(opacity)
-        self._calc_defect_opacity_func = self._helper_opacity_check(defect_opacity)
+        self._calc_opacity_defect_func = self._helper_opacity_check(opacity_defect)
         
         if hasattr(self, "_entities"):
             for item in self._entities:
@@ -203,7 +243,7 @@ class PlotnPlane:
 
         if is_n_defect and len(defect_vicinity) > 0:
             output = self._helper_n_visualize_each(
-                defect_vicinity, self._calc_defect_opacity_func, length, radius
+                defect_vicinity, self._calc_opacity_defect_func, length, radius
             )
             self._entities.append(output[0])
             self._calc_n.append(output[1])
@@ -216,7 +256,7 @@ class PlotnPlane:
         self.opts_size = plane_grid.opts_size
         self.opts_corners_limit = corners_limit
         self.opts_is_n_defect = is_n_defect
-        self.opts_defect_opacity = defect_opacity
+        self.opts_opacity_defect = opacity_defect
         self.opts_length = length
         self._raw_grid_offset = plane_grid.opts_grid_offset
         self._raw_grid_transform = plane_grid.opts_grid_transform
@@ -258,7 +298,7 @@ class PlotnPlane:
     def _helper_opacity_check(self, data, logger=None):
         if isinstance(data, (int, float)):
             opacity = lambda n: np.broadcast_to(data, len(n))
-        elif not callable(input):
+        elif not callable(data):
             msg = "Opacity must be either callable function or a float.\n"
             msg = "Use 1 in the following."
             logger.warning(msg)
@@ -322,7 +362,7 @@ class PlotnPlane:
                 self._calc_opacity_func = self._helper_opacity_check(data)
                 rgba = self._entities[1].parent.parent.data.point_data.scalars
                 num_points = len(rgba)
-                opacity_out = self._calc_defect_opacity_func(self._calc_n[1]) * 255
+                opacity_out = self._calc_opacity_defect_func(self._calc_n[1]) * 255
                 rgba = np.array(rgba)
                 rgba[:, 3] = opacity_out
                 for i in range(num_points):
@@ -361,6 +401,12 @@ class PlotnPlane:
 
         if self.opts_is_n_defect and len(self._entities) > 0:
             set_color(1)
+            
+    def __setattr__(self, key, value):
+        
+        if key in ["length", "radius", "colors", "opacity_bulk", "opacity_defect"]:
+            key = "opts_" + key
+        object.__setattr__(self, key, value)
 
     @logging_and_warning_decorator
     def act_commit(self, logger=None, **changes):
@@ -372,8 +418,12 @@ class PlotnPlane:
         keys_rebuild = ["opts_axis1", "opts_normal", "opts_origin", "opts_shape", "opts_spacing", "opts_size"]
         
         for k, v in changes.items():
+            if k == "name":
+                setattr(self, "name", v)
+            elif not k.startswith("opts_"):
+                k = "opts_" + k
             if k in keys_modify:
-                setattr(self._opts_all_nplane, k[5:], v)
+                setattr(self._opts_all_nPlane, k[5:], v)
                 setattr(self, k, v)
             elif k in keys_rebuild:
                 if k == "opts_spacing":
@@ -384,16 +434,104 @@ class PlotnPlane:
                 setattr(self, k, v)
             else:
                 try:
-                    raise ValueError(f"{k} is not attribute in PlotnPlane")
+                    raise NameError(f"{k} is not attribute in PlotnPlane")
                 except:
+                    logger.exception("Error is caught")
                     logger.recovery(f"Ignore {k}")
                 
         for k in keys_rebuild:
             if k in changes:
                 self._helper_make_figure(
                     opts_grid=self._entities_plane[0]._opts_all,
-                    opts_nPlane=self._opts_all_nplane,
+                    opts_nPlane=self._opts_all_nPlane,
                     logger=logger,
                 )
                 return
+            
+    @logging_and_warning_decorator()
+    def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
+        """
+        Log parameters for inspection.
+
+        This is the standard logging interface used in this library, which
+        can be redirected to console or to a file depending on the logger
+        configuration and the behavior of ``logging_and_warning_decorator``.
+
+        All attributes listed in ``__descriptions__`` are included,
+        formatted in a single log entry with a clear separator.
+        
+        Includes both slots and properties (differentiated by flag).
+        """
+        lines = []
+        lines.append("-------------- PlotnPlane Parameters --------------")
+        lines.append(f"[{self.name}] parameters:")
+
+        for attr, (desc, flag) in self.__descriptions__.items():
+            value = getattr(self, attr, None)
+            lines.append(f"  {attr}: {value!r}  # {desc}")
+
+        lines.append("-----------------------------------------------------")
+        msg = "\n".join(lines)
+
+        if is_return:
+            return msg
+        else:
+            logger.info(msg)
+            
+    @logging_and_warning_decorator
+    def act_copy(self, is_deep_interpolator: bool = False, logger=None) -> "PlotnPlane":
+        """
+        Create a copy of the current PlotnPlane object.
+
+        Parameters
+        ----------
+        is_deep_interpolator : bool, optional
+            Whether to perform a deep copy of the QInterpolator.
+            - If False (default), reuse the same Interpolator reference.
+            - If True, call `copy.deepcopy` on the Interpolator.
+        logger : logging.Logger, optional
+            Logger instance provided by the decorator.
+
+        Returns
+        -------
+        PlotnPlane
+            A new PlotnPlane instance with identical visualization options.
+            The Mayavi entities are re-built, so it is independent of the original.
+        
+        Notes
+        -----
+        - Copies all options stored in `_opts_all_nPlane` and `PlaneGrid._opts_all`.
+        - Mayavi entities are rebuilt via `_helper_make_figure`, 
+          so modifications to the copy will not affect the original object.
+        """
+        import copy
+
+        if is_deep_interpolator:
+            QInterp_new = copy.deepcopy(self._raw_QInterpolator)
+        else:
+            QInterp_new = self._raw_QInterpolator
+
+        opts_grid_new = copy.deepcopy(self._entities_plane[0]._opts_all)
+        opts_nPlane_new = copy.deepcopy(self._opts_all_nPlane)
+
+        new_obj = self.__class__(
+            QInterpolator=QInterp_new,
+            opts_grid=opts_grid_new,
+            opts_nPlane=opts_nPlane_new,
+            logger=logger,
+        )
+
+        if hasattr(self, "name"):
+            new_obj.name = getattr(self, "name")
+
+        return new_obj
+            
+    def __str__(self) -> str:
+        header = f"<{self.__class__.__name__} object>"
+        return header + "\n" + self.act_log_parameters(is_return=True)
+    
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}(name={self.name!r}), normal={self.opts_normal}, axis1={self.opts_axis1}"
+        return msg
             

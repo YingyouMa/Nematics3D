@@ -265,12 +265,13 @@ def as_str(input_data, name="input_data", replace="None", logger=None):
 
     if not isinstance(input_data, str):
         if replace is not None:
-            msg = f">>> {name} should be str. Got {input_data} instead. \n"
-            msg += f">>> Changed it into {replace} in the following."
-            logger.warning(f"f{name} should be str. Got ")
+            try:
+                raise TypeError(f"{name} should be str. Got {input_data} with type {type(input_data)} instead. \n")
+            except:
+                logger.recovery(f"Changed it into {replace} in the following.")
             input_data = replace
         else:
-            raise TypeError(f"{name} should be str. Got {input_data} instead. \n")
+            raise TypeError(f"{name} should be str. Got {input_data} with type {type(input_data)} instead. \n")
 
     return input_data
 
