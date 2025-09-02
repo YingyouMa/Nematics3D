@@ -19,21 +19,22 @@ Q.figs[0].save('figures', 'lines.png')
 Q.act_visualize_disclination_lines(is_wrap=False)
 Q.figs[1].save('figures', 'lines_unwrap.png')
 
-Q.act_visualize_disclination_lines(is_wrap=True, min_line_length=40)
-extent = Q.figs[1].objects['extent'][0]
+Q.act_visualize_disclination_lines()
+extent = Q.figs[2].objects['extent'][0]
 extent.opacity = 0.5
 extent.radius = 0.2
 extent.color = [1,0,0]
-scene = Q.figs[1].scene
+scene = Q.figs[2].scene
 scene.azimuth = 90
 scene.elevation = 30
 scene.roll = 30
 scene.bgcolor = [0.5,0.5,0.5]
-for line in Q.figs[1].objects['lines']:
+for line in Q.figs[2].objects['lines']:
     line.specular_power = 20
     line.specular_color = (1,0,0)
     line.radius = 2
     line.sides = 20
+Q.figs[2].save('figures', 'lines_modified.png')
 
 
 

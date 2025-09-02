@@ -80,47 +80,42 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
     return results
 
 
-# def make_opts_property(attr):
-#     """Generate a property that proxies access to self._opts[field]."""
-#     def getter(self):
-#         return getattr(self._opts_all, attr)
-#     def setter(self, value):
-#         setattr(self._opts_all, attr, value)
-        
-#     return property(getter, setter)
 
+def register_opts_aliases(cls):
+    """
+    Class decorator to register alias properties without the ``opts_`` prefix.
 
-def auto_opts_tubes(bindings: dict):
+    This function scans all properties defined in the class whose names start 
+    with ``opts_`` and automatically creates new properties with the same 
+    getter, setter, and deleter, but without the prefix.
 
-    def decorator(cls):
-        for name, path in bindings.items():
-            if name.startswith("_"):
-                raise AttributeError(
-                    f"Invalid binding for '{name}': internal fields cannot be exposed."
-                )
-        for name, path in bindings.items():
-            attrs = path.split(".")  
-            key = name[len("opts_") :]  
+    Example:
+        >>> @register_opts_aliases
+        ... class SceneWrapper:
+        ...     @property
+        ...     def opts_fgcolor(self):
+        ...         return (1, 1, 1)
+        ...
+        ...     @opts_fgcolor.setter
+        ...     def opts_fgcolor(self, value):
+        ...         pass
+        ...
+        >>> wrapper = SceneWrapper()
+        >>> wrapper.fgcolor        # Equivalent to wrapper.opts_fgcolor
+        >>> wrapper.fgcolor = (0,0,0)  # Equivalent to wrapper.opts_fgcolor = (0,0,0)
 
-            def getter(self, _key=key):
-                return getattr(self._opts_all, _key)
+    Args:
+        cls (type): The class to decorate.
 
-            def setter(self, value, _attrs=attrs, _key=key):
-                setattr(self._opts_all, _key, value)
-
-                processed = getattr(self._opts_all, _key)
-
-                for item in self._entities:
-                    target = item
-                    for attr in _attrs[:-1]:
-                        target = getattr(target, attr)
-                    setattr(target, _attrs[-1], processed)
-
-            setattr(cls, name, property(getter, setter))
-
-        return cls
-
-    return decorator
+    Returns:
+        type: The same class with additional alias properties.
+    """
+    for name, attr in list(cls.__dict__.items()):
+        if isinstance(attr, property) and name.startswith("opts_"):
+            alias = name[len("opts_"):]
+            if not hasattr(cls, alias):
+                setattr(cls, alias, property(attr.fget, attr.fset, attr.fdel, attr.__doc__))
+    return cls
 
 
 def auto_opts_tubes(bindings: dict):

@@ -1,6 +1,7 @@
 import numpy as np
+from Nematics3D.classes.opts import register_opts_aliases
 
-
+@register_opts_aliases
 class SceneWrapper:
     def __init__(self, scene):
         self._scene = scene
