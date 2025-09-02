@@ -407,7 +407,7 @@ class QFieldObject:
             logger=logger,
         )
 
-        figure.add_object(nPlane, category="nPlane")
+        figure.add_object(nPlane, category="nPlanes")
 
         if is_extent:
             extent = PlotExtent(opts_extent)
@@ -432,6 +432,14 @@ class QFieldObject:
     @property
     def figs(self):
         return self._calc_figures
+    
+    @property
+    def S(self):
+        return self._raw_S
+
+    @property
+    def n(self):
+        return self._raw_n
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q

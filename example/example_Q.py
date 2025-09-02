@@ -28,19 +28,19 @@ Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
 
 Q.act_lines_smooth(min_line_length=30, window_length=21)
 Q.act_visualize_disclination_lines(is_wrap=True, min_line_length=40)
-extent = Q._calc_figures[1].objects['extent'][0]
-extent.opts_opacity = 0.5
+extent = Q.figs[1].objects['extent'][0]
+extent.opacity = 0.5
 extent.radius = 0.2
 extent.color = [1,0,0]
-scene = Q._calc_figures[1].scene
-scene.opts_azimuth = 90
-scene.opts_elevation = 30
-scene.opts_roll = 30
-scene.opts_bgcolor = [0.5,0.5,0.5]
-for line in Q._calc_figures[1].objects['lines']:
-    line.opts_specular_power = 20
+scene = Q.figs[1].scene
+scene.azimuth = 90
+scene.elevation = 30
+scene.roll = 30
+scene.bgcolor = [0.5,0.5,0.5]
+for line in Q.figs[1].objects['lines']:
+    line.specular_power = 20
     line.specular_color = (1,0,0)
-    line.opts_radius = 2
+    line.radius = 2
     line.sides = 20
     
     
@@ -65,8 +65,8 @@ Q.figs[0].scene.opts_elevation = 90
 Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=True, is_extent=False, n_is_n_defect=True)
-Q.figs[1].objects["nPlane"][0].act_commit(opts_spacing=3, length=3, origin=(30,30,30), opts_normal=(1,1,0), opts_radius=0.1, sda=1)
-Q.figs[1].objects["nPlane"][0].colors = (1,0,0)
+Q.figs[1].objects["nPlanes"][0].act_commit(opts_spacing=3, length=3, origin=(30,30,30), opts_normal=(1,1,0), opts_radius=0.1, sda=1)
+Q.figs[1].objects["nPlanes"][0].colors = (1,0,0)
 
 test = Q.lines[0].smooth_obj
 test.N_out_ratio = 1
