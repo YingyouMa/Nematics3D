@@ -422,46 +422,19 @@ class SmoothedLine:
         return SmoothedLine(self._raw_coord.copy(), opts=OptsSmooth(**asdict(self._opts_all)))
     
     @logging_and_warning_decorator()
-    def act_save(self, folder: str = "save/smoothed_line/", filename: Optional[str]=None, logger=None):
-        """
-        Save the smoothing results and parameters into files.
+    def act_save(self, dirpath: Optional[str]=None, logger=None):
 
-        Parameters
-        ----------
-        folder : str, default="."
-            Target folder to save files.
-
-        filename : str, optional
-            Base filename (without extension). 
-            If None, use `self.name` (fallback: "smoothed_line").
-
-        logger : logging.Logger, optional
-            Logger instance.
-
-        Files Generated
-        ---------------
-        - {filename}.json : parameters (opts + metadata), readable text
-        - {filename}.npz  : NumPy arrays containing:
-            - raw_coord  : original input points
-            - smooth_out : smoothed and resampled output points
-        """
-
-        folder = as_str(folder, name=f"the folder to store smoothed line ``{self.name}``", replace="save/smoothed_line/")
-        if filename is not None:
-            filename = as_str(filename, name=f"the filename to store smoothed line ``{self.name}``", replace=self.namme)
-        else:
-            filename = self.name
+        if dirpath is None:
+            dirpath = f"save/smoothed_line/{self.name}"
+        dirpath = as_str(dirpath, name=f"the folder to store smoothed line ``{self.name}``")
             
-        logger.debug(f"Start to save smoothed line ``{filename}`` into {folder}")
+        logger.debug(f"Start to save smoothed line ``{self.name}`` into {dirpath}")
 
-        # ---------- ensure folder ----------
-        os.makedirs(folder, exist_ok=True)
-
-        if filename is None:
-            filename = self.name
+        # ---------- ensure dirpath ----------
+        os.makedirs(dirpath, exist_ok=True)
 
         # ---------- save JSON ----------
-        json_path = os.path.join(folder, f"{filename}.json")
+        json_path = os.path.join(dirpath, "info.json")
         param_dict = {
             "opts": asdict(self._opts_all),
             "metadata": {
@@ -476,7 +449,7 @@ class SmoothedLine:
             json.dump(param_dict, f, indent=4)
 
         # ---------- save NumPy ----------
-        npz_path = os.path.join(folder, f"{filename}.npz")
+        npz_path = os.path.join(dirpath, "data.npz")
         np.savez_compressed(
             npz_path,
             raw_coord=self._raw_coord,
@@ -486,33 +459,12 @@ class SmoothedLine:
         
     @classmethod
     @logging_and_warning_decorator()
-    def act_load(cls, folder: str = ".", filename: str = "smoothed_line", logger=None):
-        """
-        Load a SmoothedLine object from saved JSON + NPZ files.
-
-        Parameters
-        ----------
-        folder : str, default="."
-            Folder containing the files.
-
-        filename : str, optional
-            Base filename (without extension).
-            If None, default is "smoothed_line".
-
-        logger : logging.Logger, optional
-            Logger instance.
-
-        Returns
-        -------
-        SmoothedLine
-            A restored SmoothedLine object.
-        """
+    def act_load(cls, dirpath: Optional[str]=None, logger=None):
         
-        filename = as_str(filename, name="the folder to load smoothed line")
-        folder = as_str(folder, name=f"the folder to load smoothed line ``{filename}``")
+        dirpath = as_str(dirpath, name="the folder to load smoothed line")
 
-        json_path = os.path.join(folder, f"{filename}.json")
-        npz_path = os.path.join(folder, f"{filename}.npz")
+        json_path = os.path.join(dirpath, "info.json")
+        npz_path = os.path.join(dirpath, f"data.npz")
         logger.debug(f"Start to load SmoothedLine from {json_path} and {npz_path}")
 
         if not os.path.exists(json_path) or not os.path.exists(npz_path):

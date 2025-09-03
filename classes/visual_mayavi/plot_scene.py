@@ -198,16 +198,10 @@ class PlotScene:
         for category in list(self.objects.keys()):
             self.hide_category(category)
 
-    def save(self, folder: str, filename: str):
-        
+    def save(self, path: str):
         import os
-        
-        folder = as_str(folder, name="The folder to save figure")
-        filename = as_str(filename, name="The filename of the figure to be saved")
-        
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, filename)
-        
+        path = as_str(path, name="The path to save figure")
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
         mlab.savefig(path, figure=self._fig)
 
     @logging_and_warning_decorator()

@@ -9,7 +9,9 @@ from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
     Number,
-    as_Number
+    as_Number,
+    as_str,
+    as_Tensor
 )
 from Nematics3D.field import Q_diagonalize, n_color_immerse, n_visualize
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
@@ -283,7 +285,7 @@ class PlotnPlane:
     @logging_and_warning_decorator
     def _helper_colors_check(self, data, logger=None):
         if isinstance(data, (tuple, list, np.ndarray)):
-            data = as_ColorRGB(data)
+            data = as_ColorRGB(data, name="Color for directors on PlotnPlane")
             colors = lambda n: np.broadcast_to(data, (len(n), 3))
         elif not callable(data):
             msg = "Colors must be either callable function or a tuple of three elements.\n"
@@ -297,6 +299,7 @@ class PlotnPlane:
     @logging_and_warning_decorator
     def _helper_opacity_check(self, data, logger=None):
         if isinstance(data, (int, float)):
+            data = as_Number(data, name="Opacity for directors on PlotnPlane", value_range=(0,1), bounded=True)
             opacity = lambda n: np.broadcast_to(data, len(n))
         elif not callable(data):
             msg = "Opacity must be either callable function or a float.\n"
@@ -389,10 +392,10 @@ class PlotnPlane:
 
         def set_color(index):
             rgba = self._entities[index].parent.parent.data.point_data.scalars
-            num_points = len(rgba)
             colors_out = self._calc_colors_func(self._calc_n[index]) * 255
             rgba = np.array(rgba)
             rgba[:, :3] = colors_out
+            num_points = len(rgba)
             for i in range(num_points):
                 self._entities[index].parent.parent.data.point_data.scalars[i] = rgba[i]
             self._entities[index].parent.parent.data.point_data.scalars.modified()
@@ -468,7 +471,10 @@ class PlotnPlane:
 
         for attr, (desc, flag) in self.__descriptions__.items():
             value = getattr(self, attr, None)
-            lines.append(f"  {attr}: {value!r}  # {desc}")
+            if attr in ("opts_axis1", "opts_spacing"):
+                lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
+            else:    
+                lines.append(f"  {attr}: {value!r}  # {desc}")
 
         lines.append("-----------------------------------------------------")
         msg = "\n".join(lines)
@@ -479,31 +485,8 @@ class PlotnPlane:
             logger.info(msg)
             
     @logging_and_warning_decorator
-    def act_copy(self, is_deep_interpolator: bool = False, logger=None) -> "PlotnPlane":
-        """
-        Create a copy of the current PlotnPlane object.
-
-        Parameters
-        ----------
-        is_deep_interpolator : bool, optional
-            Whether to perform a deep copy of the QInterpolator.
-            - If False (default), reuse the same Interpolator reference.
-            - If True, call `copy.deepcopy` on the Interpolator.
-        logger : logging.Logger, optional
-            Logger instance provided by the decorator.
-
-        Returns
-        -------
-        PlotnPlane
-            A new PlotnPlane instance with identical visualization options.
-            The Mayavi entities are re-built, so it is independent of the original.
+    def act_copy(self, is_deep_interpolator: bool = True, logger=None) -> "PlotnPlane":
         
-        Notes
-        -----
-        - Copies all options stored in `_opts_all_nPlane` and `PlaneGrid._opts_all`.
-        - Mayavi entities are rebuilt via `_helper_make_figure`, 
-          so modifications to the copy will not affect the original object.
-        """
         import copy
 
         if is_deep_interpolator:
@@ -525,6 +508,63 @@ class PlotnPlane:
             new_obj.name = getattr(self, "name")
 
         return new_obj
+    
+    def act_set_rgba(self, rgba, index=0):
+        
+        num_points = len(self._calc_n[index])
+        rgba = as_Tensor((num_points,4), name="The RGBA value to reset PlotnPlane")
+        for i in range(num_points):
+            self._entities[index].parent.parent.data.point_data.scalars[i] = rgba[i]
+        self._entities[index].parent.parent.data.point_data.scalars.modified()
+    
+    # def act_save(self, dirpath: Optional[str] = None, logger=None) -> None:
+        
+    #     import os
+    #     import json
+        
+    #     if dirpath is None:
+    #          dirpath = os.path.join("save", "PlotnPlane", str(self.name))
+             
+    #     dirpath = as_str(
+    #         dirpath,
+    #         name=f"the folder to store PlotnPlane ``{getattr(self, 'name', None)}``"
+    #     )
+        
+    #     logger.debug(f"Start to save plotnPlane ``{self.name}`` into {dirpath}")
+    #     logger.debug("Start with parameters")
+    #     os.makedirs(dirpath, exist_ok=True)
+
+    #     grid_path = os.path.join(dirpath, "PlaneGrid.json")
+    #     self._entities_plane[0].act_save(grid_path, logger=logger)
+
+    #     params = {
+    #         "name": getattr(self, "name", None),
+    #         "opts_nPlane": {
+    #             "length": self.opts_length,
+    #             "radius": self.opts_radius,
+    #             "is_n_defect": self.opts_is_n_defect,
+    #         },
+    #     }
+        
+    #     with open(os.path.join(dirpath, "opts.json"), "w") as f:
+    #         json.dump(params, f, indent=2)
+        
+    #     logger.debug("Now it's time to save data")
+        
+    #     data_dict = {}
+    #     data_dict["n_bulk"] = self._calc_n[0]
+    #     data_dict["rgba_bulk"] = np.array(
+    #         self._entities[0].parent.parent.data.point_data.scalars
+    #     )
+
+    #     if self.opts_is_n_defect and len(self._entities) > 1:
+    #         data_dict["n_defect"] = self._calc_n[1]
+    #         data_dict["rgba_defect"] = np.array(
+    #             self._entities[1].parent.parent.data.point_data.scalars
+    #         )
+            
+    #     np.savez(os.path.join(dirpath, "nplane_data.npz"), **data_dict)
+        
             
     def __str__(self) -> str:
         header = f"<{self.__class__.__name__} object>"
@@ -532,6 +572,6 @@ class PlotnPlane:
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}(name={self.name!r}), normal={self.opts_normal}, axis1={self.opts_axis1}"
+        msg = f"{cls_name}(name={self.name!r}), normal={self.opts_normal}, axis1={self.opts_axis1}, origin={self.opts_origin}"
         return msg
             

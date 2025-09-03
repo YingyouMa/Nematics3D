@@ -453,60 +453,24 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_save(
         self,
-        folder: str = "save/disclination_line/",
-        filename: Optional[str] = None,
+        dirpath: Optional[str] = None,
         logger=None,
     ) -> None:
-        """
-        Save this disclination line to disk (JSON + NPZ).
-
-        Parameters
-        ----------
-        folder : str, default="save/disclination_line/"
-            Target folder to save files.
-
-        filename : str, optional
-            Base filename (without extension).
-            If None, use `self.name` (fallback: "disclination_line").
-
-        logger : logging.Logger, optional
-            Logger instance.
-
-        Files Generated
-        ---------------
-        - {filename}.json : human-readable metadata & small parameters
-            - raw (grid mapping / periodicity) 
-            - metadata (name / category / sizes / flags)
-            - smooth 
-        - {filename}.npz  : NumPy arrays:
-            - defect_indices       
-            - defect_coords        
-            - defect_coords_smooth 
-        Dependencies
-        ------------
-        - numpy, os, json
-        - logging_and_warning_decorator
-        """
+        
         # ---------- sanitize inputs ----------
-        folder = as_str(
-            folder,
-            name=f"the folder to store disclination line ``{getattr(self, 'name', None)}``",
-            replace="save/disclination_line/",
+
+        if dirpath is None:
+             dirpath = os.path.join("save", "disclination_line", str(self.name))
+
+        dirpath = as_str(
+            dirpath,
+            name=f"the folder to store disclination line ``{getattr(self, 'name', None)}``"
         )
 
-        if filename is not None:
-            filename = as_str(
-                filename,
-                name=f"the filename to store disclination line ``{getattr(self, 'name', None)}``",
-                replace=getattr(self, "name", "disclination_line"),
-            )
-        else:
-            filename = getattr(self, "name", None) or "disclination_line"
-
-        logger.debug(f"Start to save disclination line ``{filename}`` into {folder}")
+        logger.debug(f"Start to save disclination line ``{self.name}`` into {dirpath}")
 
         # ---------- ensure folder ----------
-        os.makedirs(folder, exist_ok=True)
+        os.makedirs(dirpath, exist_ok=True)
 
         # ---------- compose JSON payload ----------
         json_payload = {
@@ -528,16 +492,16 @@ class DisclinationLine:
         
         if hasattr(self, "_calc_defect_coords_smooth"):
             logger.debug("Start to store smoothed coordinates")
-            smooth_folder = folder + "/smoothed_line/"
-            self._calc_defect_coords_smooth_obj.act_save(folder=smooth_folder, logger=logger)
+            smooth_dirpath = dirpath + "/smoothed_line/"
+            self._calc_defect_coords_smooth_obj.act_save(dirpath=smooth_dirpath, logger=logger)
 
-        json_path = os.path.join(folder, f"{filename}.json")
+        json_path = os.path.join(dirpath, "info.json")
         logger.debug(f"Dtart to write JSON to {json_path}")
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(json_payload, f, indent=4)
 
         # ---------- compose NPZ arrays ----------
-        npz_path = os.path.join(folder, f"{filename}.npz")
+        npz_path = os.path.join(dirpath, "data.npz")
         logger.debug(f"Start to write NPZ to {npz_path}")
         arrays = {}
         arrays["defect_indices"] = np.asarray(self._raw_defect_indices)
@@ -551,42 +515,14 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_load(
         cls,
-        folder: str = "save/disclination_line/",
-        filename: Optional[str] = None,
+        dirpath: str = "save/disclination_line/",
         logger=None,
     ) -> "DisclinationLine":
-        """
-        Load a DisclinationLine from JSON + NPZ files.
 
-        Parameters
-        ----------
-        folder : str, default="save/disclination_line/"
-            Folder containing the files.
+        dirpath = as_str(dirpath, name="the folder to load disclination line")
 
-        filename : str, optional
-            Base filename (without extension).
-            If None, use "disclination_line".
-
-        logger : logging.Logger, optional
-            Logger instance.
-
-        Returns
-        -------
-        DisclinationLine
-            Restored object with raw/derived arrays and (if available) smoothed coords.
-        Dependencies
-        ------------
-        - numpy, os, json
-        - InputLine, as_dimension_info/as_Vect/as_Tensor, etc.
-        """
-        folder = as_str(folder, name="the folder to load disclination line")
-        filename = as_str(
-            filename if filename is not None else "disclination_line",
-            name="the filename to load disclination line",
-        )
-
-        json_path = os.path.join(folder, f"{filename}.json")
-        npz_path = os.path.join(folder, f"{filename}.npz")
+        json_path = os.path.join(dirpath, f"info.json")
+        npz_path = os.path.join(dirpath, f"data.npz")
         logger.debug(f"Start to load DisclinationLine from {json_path} and {npz_path}")
 
         if not os.path.exists(json_path) or not os.path.exists(npz_path):
@@ -629,9 +565,9 @@ class DisclinationLine:
 
         if defect_coords_smooth is not None:
             logger.debug("Start to load smoothed coordinates")
-            smooth_folder = folder + "/smoothed_line/"
+            smooth_dirpath = dirpath + "/smoothed_line/"
             object.__setattr__(obj, "_calc_defect_coords_smooth", defect_coords_smooth)
-            smoothObj = SmoothedLine.act_load(smooth_folder, logger=logger)
+            smoothObj = SmoothedLine.act_load(smooth_dirpath, logger=logger)
             object.__setattr__(obj, "_calc_defect_coords_smooth_obj", smoothObj)
 
         return obj

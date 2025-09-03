@@ -20,7 +20,7 @@ Q.act_lines_classify()
 Q.act_lines_smooth()
 test1 = Q.lines[0].act_copy()
 Q.lines[0].act_save()
-test2 = Q.lines[0].act_load(filename="line0")
+test2 = Q.lines[0].act_load("save\disclination_line\line0")
 if test1 != test2:
     raise NameError("test1 != test2")
 print(test2)
