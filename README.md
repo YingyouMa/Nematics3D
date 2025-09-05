@@ -79,17 +79,18 @@ Q.act_lines_smooth()
 
 To visualize these disclination lines in $Q$ field, use ```Q.act_visualize_disclination_lines()```. The following is one example with the most important arguments input:
 ```python
-Q.act_visualize_disclination_lines(min_line_length=20, lines_color_input_all=(1,0,0), radius=1)
+Q.act_visualize_disclination_lines(min_line_length=20, lines_color_input_all=(1,0,0), radius=1, is_smooth=False)
 ```
 * ```min_line_length``` ：the minimum length of disclinations to plot. This is set because tiny disclination loops are often below the coarse-grained resolution, making smoothing/visualization less meaningful.
 * ```lines_color_input_all``` RGB color(s) in $[0,1]$ for the lines. . If this value is not set, the visualization will use the default colormap which tries to set those longest lines with distinct colors.
 * ```radius```: tube radius used for rendering.
+* ```is_smooth```: whether plot the smoothed line or the original line itself. ```is_smooth=False``` is helpful when you are adjusting the parameters of smoothing.
 * Additional arguments are documented in the function’s docstring.
 
 For instance, after setting up $Q$ as the example above, the following code    
 ```python
 Q.act_visualize_disclination_lines()
-Q.figs[0].save('figures', 'lines.png')
+Q.figs[0].save('figures/lines.png')
 ```
 will produce the figure   
 <p align="center">
@@ -100,7 +101,7 @@ and save it as ```figures/lines.png```.
 For the system with periodic boundary conditions, the disclination lines might cross boundaries or even the entire box. To comprehend this phenomena, you can disable line wrapping with flag ```is_wrap=False```:
 ```python
 Q.act_visualize_disclination_lines(is_wrap=False)
-Q.figs[1].save('figures', 'lines_unwrap.png')
+Q.figs[1].save('figures/lines_unwrap.png')
 ```
 <p align="center">
   <img src="example/figures/lines_unwrap.png" width="720">
@@ -126,7 +127,7 @@ for line in Q.figs[2].objects['lines']:
     line.specular_color = (1,0,0)
     line.radius = 2
     line.sides = 20
-Q.figs[2].save('figures', 'lines_modified.png')
+Q.figs[2].save('figures/lines_modified.png')
 ```
 the figure correspondingly changes into
 <p align="center">
@@ -134,6 +135,27 @@ the figure correspondingly changes into
 </p>
 
 ### Visualization of directors
+It will be beneficial to plot disclination lines and directos in the same figure. You could visualize directors on a plane via ```Q.act_visualize_n_in_Q()```. Here we generate a new $Q$ field to focus on more local structure:
+```python
+index_max =  64
+n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+Q = Nematics3D.QFieldObject(S=S, n=n)
+Q.act_lines_classify()
+Q.act_lines_smooth()
+
+Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1, line_radius=0.4)
+
+n_length = 2.5
+n_radius = 0.3
+spacing = 2.5
+
+Q.act_visualize_n_in_Q(plane_normal=(0,0,1), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), int(index_max)/2,0), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3,
+                       is_new=False, is_extent=False)
+Q.figs[0].save('figures/PlotnPlaneZ.png')
+```
+The following is the most significant parameters for ```Q.act_visualize_n_in_Q()```:
 
 
 ### Logging function
