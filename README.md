@@ -194,7 +194,9 @@ Q.figs[1].save('figures/PlotnPlaneXYZ.png')
 
 We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```.        
 
-If you want to put the objects of different visualization functions into one figure, set ```is_new=True``` for the first function (this is the default setting) and set this flag to False in the following functions. Besides, here ```extent``` stands for the bounding outline in the figure. You could change their parameters by argument ```extent_color```, ```extent_radius``` in the functions of visualization. Since we are sharing the same extent of different visualization functions in this example, it's useless to to plot extent individually so we set ```is_extent=False``` except the first visualization function.
+If you want to put the objects of different visualization functions into one figure, set ```is_new=True``` for the first function (this is the default setting) and set this flag to ```False``` in the following functions. Besides, here ```extent``` stands for the bounding outline in the figure. You could change their parameters by argument ```extent_color```, ```extent_radius``` in the functions of visualization. Since we are sharing the same extent of different visualization functions in this example, it's useless to plot extent individually so we set ```is_extent=False``` except the first visualization function.    
+
+You might be curious why some directors are highlighted while no discliantion lines are shown nearby. This happens because we do not visualize those disclination lines shorter than a given threshold, the argument ```min_line_length``` in ```Q.act_visualize_disclination_lines```. Since these lines are too short, it has less physics meaning to smooth and visualize them. But if you still want to visualize those defects, you could use ```min_line_length=1``` and ```is_smooth=False```.
 
 ### Logging function
 Before moving on to additional features, it is helpful to introduce the logging mechanism provided in this package. Logging is enabled through the decorator ```logging_and_warning_decorator``` in ```logging_decorator.py```.    
