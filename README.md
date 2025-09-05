@@ -151,7 +151,7 @@ n_radius = 0.3
 spacing = 2.5
 
 Q.act_visualize_n_in_Q(plane_normal=(0,0,1), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), int(index_max)/2,0), 
-                       n_length=2.5, n_opacity=1, n_radius=0.3, n_opacity_defect=1,
+                       n_length=2.5, n_radius=0.3, n_opacity=1, n_opacity_defect=1,
                        is_new=False, is_extent=False)
 Q.figs[0].save('figures/PlotnPlaneZ.png')
 ```
@@ -169,7 +169,9 @@ The following is the most significant parameters for ```Q.act_visualize_n_in_Q()
 *  ```n_opacity```: the opacity of director glyph not closed to any defects
 *  ```n_opacity_defect```: the opacity of director glyph closed to defects
 
-Here we distinguish the directors by whether they are closed to a defect. The opacity of them is controlled by ```n_opacity``` and ```n_opacity_defect```. 
+Here we distinguish the directors by whether they are closed to a defect. The opacity of them is controlled by ```n_opacity``` and ```n_opacity_defect```. In our currrent example figure, we could not see the difference because they have the same opacity. The following is another example with different opacities:
+```python
+```
 
 
 ### Logging function
