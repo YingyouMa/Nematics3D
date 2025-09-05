@@ -217,6 +217,19 @@ Q.figs[2].save('figures/PlotnPlaneXYZall.png')
 Now all highlighted directors are closed to disclination lines.    
 
 You could set ```plane_normal``` to be any vector (except 0, of course):
+```python
+Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1, line_radius=0.4)
+
+trans = 7.5
+Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100, plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
+                       n_length=spacing, n_opacity=0.2, n_radius=0.3, 
+                       scene_azimuth=90, scene_elevation=90,
+                       is_new=False, is_extent=False)
+Q.figs[3].save('figures/PlotnPlaneTilt.png')
+```
+<p align="center">
+  <img src="example/figures/PlotnPlaneTilt.png" width="720">
+</p>
 
 
 
