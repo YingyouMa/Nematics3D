@@ -191,7 +191,8 @@ Q.figs[1].save('figures/PlotnPlaneXYZ.png')
 <p align="center">
   <img src="example/figures/PlotnPlaneXYZ.png" width="720">
 </p>
-We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```.     
+
+We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```.        
 
 If you want to put the objects of different visualization functions into one figure, set ```is_new=True``` for the first function (this is the default setting) and set this flag to False in the following functions. Besides, here ```extent``` stands for the bounding outline in the figure. You could change their parameters by argument ```extent_color```, ```extent_radius``` in the functions of visualization. Since we are sharing the same extent of different visualization functions in this example, it's useless to to plot extent individually so we set ```is_extent=False``` except the first visualization function.
 
