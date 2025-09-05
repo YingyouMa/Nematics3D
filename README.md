@@ -189,7 +189,7 @@ Q.figs[1].save('figures/PlotnPlaneXYZ.png')
 <p align="center">
   <img src="example/figures/PlotnPlaneXYZ.png" width="720">
 </p>
-We descriminate directors 
+We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```. 
 
 ### Logging function
 Before moving on to additional features, it is helpful to introduce the logging mechanism provided in this package. Logging is enabled through the decorator ```logging_and_warning_decorator``` in ```logging_decorator.py```.    
