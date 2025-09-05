@@ -31,27 +31,6 @@ import numbers
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 
-# __all__ = [
-#     "NumericInput",
-#     "Vect3D",
-#     "DimensionInfo",
-#     "DimensionInfoInput",
-#     "DimensionPeriodic",
-#     "DimensionPeriodicInput",
-#     "as_dimension_info",
-#     "DimensionFlag",
-#     "DimensionFlagInput",
-#     "boundary_periodic_size_to_flag",
-#     "GeneralField",
-#     "nField",
-#     "SField",
-#     "QField5",
-#     "QField9",
-#     "QField",
-#     "as_QField5",
-#     "as_QField9",
-# ]
-
 # Number includes int, float, np.interger, np.floating and so on.
 # Notably, Number includes np.inf
 Number = numbers.Real
@@ -523,7 +502,7 @@ def as_QField9(qtensor: Union[QField5, QField9]) -> QField9:
     )
 
 
-def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
+def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
     """
     Convert a Q-tensor field into full 3×3 matrix form (QField9).
 
@@ -554,7 +533,7 @@ def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
 
     if not np.issubdtype(qtensor.dtype, np.floating):
         raise TypeError(
-            f"QField must be a float-type NumPy array, got dtype {qtensor.dtype}"
+            f"QField must be a float-type NumPy array, got dtype {qtensor.dtype}. Name of QField: {name}"
         )
 
     shape = qtensor.shape
@@ -578,6 +557,7 @@ def as_QField5(qtensor: Union[QField5, QField9]) -> QField5:
     raise ValueError(
         "Invalid QField shape: expected (..., 5) or (..., 3, 3), "
         f"but got shape {shape}"
+        f"Name of QField: {name}"
     )
 
 
