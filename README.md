@@ -158,14 +158,15 @@ Q.figs[0].save('figures/PlotnPlaneZ.png')
 <p align="center">
   <img src="example/figures/PlotnPlaneZ.png" width="720">
 </p>
-The following is the most significant parameters for ```Q.act_visualize_n_in_Q()```:    
-* ```plane_normal```: the normal vector of your plane. Here "plane" stands for the plane you are going to plot directors on.
-* ```plane_spcaing```: the spcacing between neighboring directors
-* ```plane_size```: the side length (radius) of plane if it is square (circle)
-* ```plane_origin```: the position of center of the plane
-*  ```n_length```: the length of director glyph
-*  ```n_radius```: the radius of director glyph
-*  ```n_opacity```: the opacity of director glyph ONLY IN THE BULK
+
+The following is the most significant parameters for ```Q.act_visualize_n_in_Q()```:   
+* ```plane_normal```: the normal vector of your plane. Here "plane" stands for the plane you are going to plot directors on.    
+* ```plane_spcaing```: the spcacing between neighboring directors    
+* ```plane_size```: the side length (radius) of plane if it is square (circle)    
+* ```plane_origin```: the position of center of the plane    
+*  ```n_length```: the length of director glyph    
+*  ```n_radius```: the radius of director glyph    
+*  ```n_opacity```: the opacity of director glyph ONLY IN THE BULK    
 
 
 ### Logging function
