@@ -24,7 +24,7 @@ from ..Interpolator import Interpolator
 @dataclass(slots=True)
 class OptsnPlane:
     colors: Union[Callable[nField, ColorRGB], ColorRGB] = n_color_immerse
-    opacity: Union[Callable[nField, np.ndarray], float] = 1
+    opacity: Union[Callable[nField, np.ndarray], float] = 0.2
     length: Number = 3.5
     radius: Number = 0.5
     is_n_defect: bool = True
