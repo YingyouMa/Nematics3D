@@ -137,6 +137,8 @@ the figure correspondingly changes into
   <img src="example/figures/lines_modified.png" width="720">
 </p>
 
+We make this example simply to demonstrate that you can modify a figure after plotting. The specific meaning of ```extent``` and ```scene``` will be introduced later.    
+
 ### Visualization of directors
 It will be beneficial to plot disclination lines and directos in the same figure. You could visualize directors on a plane via ```Q.act_visualize_n_in_Q()```. Here we generate a new $Q$ field to focus on more local structure:
 ```python
@@ -164,7 +166,7 @@ Q.figs[0].save('figures/PlotnPlaneZ.png')
 
 The following is the most significant parameters for ```Q.act_visualize_n_in_Q()```:   
 * ```plane_normal```: the normal vector of your plane. Here "plane" stands for the plane you are going to plot directors on.    
-* ```plane_spcaing```: the spcacing between neighboring directors    
+* ```plane_spcaing```: the spcacing between neighboring directors (how sparse the directors are)    
 * ```plane_size```: the side length (radius) of plane if it is square (circle)    
 * ```plane_origin```: the position of center of the plane    
 *  ```n_length```: the length of director glyph    
@@ -189,7 +191,9 @@ Q.figs[1].save('figures/PlotnPlaneXYZ.png')
 <p align="center">
   <img src="example/figures/PlotnPlaneXYZ.png" width="720">
 </p>
-We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```. 
+We descriminate directors in order to highlight the defect structure. You could disable this by ```n_is_n_defect=False```.     
+
+Here ```extent``` stands for the bounding outline in the figure. You could change their parameters by argument ```extent_color```, ```extent_radius``` in the functions of visualization. 
 
 ### Logging function
 Before moving on to additional features, it is helpful to introduce the logging mechanism provided in this package. Logging is enabled through the decorator ```logging_and_warning_decorator``` in ```logging_decorator.py```.    
