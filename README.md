@@ -196,7 +196,33 @@ We descriminate directors in order to highlight the defect structure. You could 
 
 If you want to put the objects of different visualization functions into one figure, set ```is_new=True``` for the first function (this is the default setting) and set this flag to ```False``` in the following functions. Besides, here ```extent``` stands for the bounding outline in the figure. You could change their parameters by argument ```extent_color```, ```extent_radius``` in the functions of visualization. Since we are sharing the same extent of different visualization functions in this example, it's useless to plot extent individually so we set ```is_extent=False``` except the first visualization function.    
 
-You might be curious why some directors are highlighted while no discliantion lines are shown nearby. This happens because we do not visualize those disclination lines shorter than a given threshold, the argument ```min_line_length``` in ```Q.act_visualize_disclination_lines```. Since these lines are too short, it has less physics meaning to smooth and visualize them. But if you still want to visualize those defects, you could use ```min_line_length=1``` and ```is_smooth=False```.
+You might be curious why some directors are highlighted while no discliantion lines are shown nearby. This happens because we do not visualize those disclination lines shorter than a given threshold, the argument ```min_line_length``` in ```Q.act_visualize_disclination_lines()```. Since these lines are too short, it has less physics meaning to smooth and visualize them. But if you still want to visualize those defects, you could use ```min_line_length=1``` and ```is_smooth=False```.
+```python
+Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1, line_radius=0.4, min_line_length=1, is_smooth=False)
+Q.act_visualize_n_in_Q(plane_normal=(0,0,1), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), int(index_max)/2,0), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.act_visualize_n_in_Q(plane_normal=(0,1,0), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), 0, int(index_max)/2), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.act_visualize_n_in_Q(plane_normal=(1,0,0), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(0, int(index_max/2), int(index_max)/2), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.figs[2].save('figures/PlotnPlaneXYZall.png')
+```
+<p align="center">
+  <img src="example/figures/PlotnPlaneXYZall.png" width="720">
+</p>
+
+Now all highlighted directors are closed to disclination lines.    
+
+You could set ```plane_normal``` to be any vector (except 0, of course):
+
+
+
+
+
+
 
 ### Logging function
 Before moving on to additional features, it is helpful to introduce the logging mechanism provided in this package. Logging is enabled through the decorator ```logging_and_warning_decorator``` in ```logging_decorator.py```.    
