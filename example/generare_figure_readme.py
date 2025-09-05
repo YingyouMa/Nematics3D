@@ -79,6 +79,17 @@ Q.act_visualize_n_in_Q(plane_normal=(1,0,0), plane_spacing=spacing, plane_size=0
                        is_new=False, is_extent=False)
 Q.figs[2].save('figures/PlotnPlaneXYZall.png')
 
+Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1, line_radius=0.4)
+trans = 7.5
+Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100, plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
+                       n_length=spacing, n_opacity=0.2, n_radius=0.3, 
+                       scene_azimuth=90, scene_elevation=90,
+                       is_new=False, is_extent=False)
+Q.figs[3].save('figures/PlotnPlaneTilt.png')
+
+# Q.figs[3].objects["nPlanes"][0].act_commit(opts_spacing=3, length=3, origin=(30,30,30), opts_normal=(1,1,0), opts_radius=0.1, sda=1)
+# Q.figs[3].objects["nPlanes"][0].colors = (1,0,0)
+
  
 
 
