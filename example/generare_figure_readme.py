@@ -51,7 +51,7 @@ n_radius = 0.3
 spacing = 2.5
 
 Q.act_visualize_n_in_Q(plane_normal=(0,0,1), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), int(index_max)/2,0), 
-                       n_length=2.5, n_opacity=0.2, n_radius=0.3,
+                       n_length=2.5, n_radius=0.3, n_opacity=1, 
                        is_new=False, is_extent=False)
 Q.figs[0].save('figures/PlotnPlaneZ.png')
 
