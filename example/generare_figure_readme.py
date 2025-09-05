@@ -67,6 +67,18 @@ Q.act_visualize_n_in_Q(plane_normal=(1,0,0), plane_spacing=spacing, plane_size=0
                        is_new=False, is_extent=False)
 Q.figs[1].save('figures/PlotnPlaneXYZ.png')
 
+Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1, line_radius=0.4, min_line_length=1, is_smooth=False)
+Q.act_visualize_n_in_Q(plane_normal=(0,0,1), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), int(index_max)/2,0), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.act_visualize_n_in_Q(plane_normal=(0,1,0), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(int(index_max/2), 0, int(index_max)/2), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.act_visualize_n_in_Q(plane_normal=(1,0,0), plane_spacing=spacing, plane_size=0.95*index_max, plane_origin=(0, int(index_max/2), int(index_max)/2), 
+                       n_length=2.5, n_opacity=0.2, n_radius=0.3, n_is_n_defect=True,
+                       is_new=False, is_extent=False)
+Q.figs[2].save('figures/PlotnPlaneXYZall.png')
+
  
 
 
