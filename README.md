@@ -214,7 +214,12 @@ Q.figs[2].save('figures/PlotnPlaneXYZall.png')
   <img src="example/figures/PlotnPlaneXYZall.png" width="720">
 </p>
 
-Now all highlighted directors are closed to disclination lines.
+Now all highlighted directors are closed to disclination lines.    
+
+You could set ```plane_normal``` to be any vector (except 0, of course):
+
+
+
 
 
 
