@@ -13,6 +13,7 @@ from Nematics3D.datatypes import (
     as_str,
     as_bool
 )
+from .plot_tube_each import OptsTubeEach, PlotTubeEach
 
 
 # --- Tube Options ---
@@ -188,6 +189,7 @@ class PlotTube:
         object.__setattr__(self, "_raw_coords_all", coords_all)
         object.__setattr__(self, "_raw_scalars_all", scalars_all)
         object.__setattr__(self, "_opts_all", opts)
+        self.name = opts.name
 
         if opts.color is None:
             logger.warning("The color input of tube is None. Changed it into (1,1,1).")
@@ -201,46 +203,21 @@ class PlotTube:
             object.__setattr__(self, "_raw_scalars_all", [None for i in range(num_sublines)])
             
         logger.debug("Plotting ...")
-        for coords, scalars in zip(self._raw_coords_all, self._raw_scalars_all):
+        for coords, scalars, index in zip(self._raw_coords_all, self._raw_scalars_all, np.arange(num_sublines)):
 
-            x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-
-            if scalars is not None and len(scalars) != len(x):
-                msg = f">>> The length of this subline {len(x)} does not match with scalars {len(scalars)}.\n"
-                msg += ">>> Ignore scalars in the following"
-                logger.warning(msg)
-                scalars = None
-
-            if scalars is not None:
-
-                item = mlab.plot3d(
-                    x,
-                    y,
-                    z,
-                    scalars,
-                    tube_radius=opts.radius,
-                    tube_sides=opts.sides,
-                    opacity=opts.opacity,
-                )
-            else:
-                item = mlab.plot3d(
-                    x,
-                    y,
-                    z,
-                    color=opts.color,
-                    tube_radius=opts.radius,
-                    tube_sides=opts.sides,
-                    opacity=opts.opacity,
+            opts_each = OptsTubeEach(
+                radius=opts.radius,
+                sides=opts.sides,
+                opacity=opts.opacity,
+                color=opts.color,
+                specular = opts.specular,
+                specular_color = opts.specular_color,
+                specular_power = opts.specular_power,
+                name = self.name + f"_{index}"
                 )
 
-            prop = item.actor.property
-            prop.specular = opts.specular
-            prop.specular_color = opts.specular_color
-            prop.specular_power = opts.specular_power
-
-            self._entities.append(item)
-
-            self.name = opts.name
+            subline = PlotTubeEach(coords, scalars, opts=opts_each)
+            self._entities.append(subline)
 
     def act_hide(self):
         self.opts_is_visible = False

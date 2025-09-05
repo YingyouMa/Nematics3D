@@ -139,7 +139,7 @@ def auto_opts_tubes(bindings: dict):
                 processed = getattr(self._opts_all, _key)
 
                 for item in self._entities:
-                    target = item
+                    target = item._entities[0]
                     for attr in _attrs[:-1]:
                         target = getattr(target, attr)
                     setattr(target, _attrs[-1], processed)
@@ -149,3 +149,35 @@ def auto_opts_tubes(bindings: dict):
 
         return cls
     return decorator
+
+def auto_opts_tubes_each(bindings: dict):
+    def decorator(cls):
+        for name, path in bindings.items():
+            if name.startswith("_"):
+                raise AttributeError(
+                    f"Invalid binding for '{name}': internal fields cannot be exposed."
+                )
+
+            key = name[len("opts_") :]
+
+            attrs = path.split(".")
+
+            def getter(self, _key=key):
+                return getattr(self._opts_all, _key)
+            
+            def setter(self, value, _attrs=attrs, _key=key, _name=name):
+
+                setattr(self._opts_all, _key, value)
+                processed = getattr(self._opts_all, _key)
+                
+                target = self._entities[0]
+                for attr in _attrs[:-1]:
+                    target = getattr(target, attr)
+                setattr(target, _attrs[-1], processed)
+
+            setattr(cls, name, property(getter, setter))
+
+
+        return cls
+    return decorator
+

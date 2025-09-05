@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from ..opts import auto_opts_tubes
 from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, Tensor, as_Tensor, as_str, as_bool
+from .plot_tube_each import OptsTubeEach, PlotTubeEach
 
 
 # --- Extent Options ---
@@ -85,11 +86,10 @@ class PlotExtent:
                 "The array 'corners' as bounding box corners, which stores the positions of the 8 points, are not inputted (the value is None)"
             )
         object.__setattr__(self, "_raw_corners", opts.corners)
-        object.__setattr__(self, "_entities", self._helper_draw_box(opts))
         object.__setattr__(self, "_opts_all", opts)
-
-    def _helper_draw_box(self, opts):
-        """Draw the box edges and store the actors."""
+        object.__setattr__(self, "_entities", [])
+        self.name = opts.name
+        
         corners = self._raw_corners
         edges = [
             (0, 1),
@@ -105,23 +105,15 @@ class PlotExtent:
             (5, 7),
             (6, 7),
         ]
-        result = []
+        
+        index = 0
         for i, j in edges:
             p1, p2 = corners[i], corners[j]
             coords = np.array([p1, (p1 + p2) / 2, p2])
-            x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-            actor = mlab.plot3d(
-                x,
-                y,
-                z,
-                tube_radius=opts.radius,
-                tube_sides=opts.sides,
-                color=opts.color,
-                opacity=opts.opacity,
-            )
-            result.append(actor)
+            opts_each = OptsTubeEach(radius=opts.radius, opacity=opts.opacity, color=opts.color, name=self.name+f"_{index}")
+            subline = PlotTubeEach(coords, opts=opts_each)
+            self._entities.append(subline)
 
-        return result
 
     def act_hide(self):
         self.opts_is_visible = False

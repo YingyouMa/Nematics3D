@@ -1,10 +1,10 @@
 from mayavi import mlab
 import numpy as np
 from typing import Optional, List
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from ..opts import auto_opts_tubes
+from ..opts import auto_opts_tubes_each
 from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
@@ -66,7 +66,7 @@ class OptsTubeEach:
         object.__setattr__(self, key, value)
 
 
-@auto_opts_tubes(
+@auto_opts_tubes_each(
     {
         "opts_color": "actor.property.diffuse_color",
         "opts_opacity": "actor.property.opacity",
@@ -78,7 +78,7 @@ class OptsTubeEach:
         "opts_is_visible": "actor.visible",
     }
 )
-class PlotTube:
+class PlotTubeEach:
 
     
     __descriptions__ = {
@@ -107,7 +107,7 @@ class PlotTube:
     def __init__(
         self,
         coords: List,
-        scalars: Optional[List, np.ndarray] = None,
+        scalars: Optional[[List, np.ndarray]] = None,
         opts=OptsTubeEach(),
         logger=None,
     ) -> None:
@@ -132,14 +132,14 @@ class PlotTube:
             logger.warning(msg)
             scalars = None
             
-        item = _helper_make_figure(x, y, z, scalars, 
+        item = self._helper_make_figure(x, y, z, scalars, 
                                    opts.color, opts.radius, opts.sides, opts.opacity,
                                    opts.specular, opts.specular_color, opts.specular_power)
         
         self._entities.append(item)
             
-            
-    def _helper_make_figure(x, y, z, scalars, color, radius, sides, opacity, specular, specular_color, specular_power):
+    @classmethod
+    def _helper_make_figure(cls, x, y, z, scalars, color, radius, sides, opacity, specular, specular_color, specular_power):
     
         if scalars is not None:
 
@@ -210,7 +210,7 @@ class PlotTube:
         formatted in a single log entry with a clear separator.
         """
         lines = []
-        lines.append("-------------- PlotTube Parameters --------------")
+        lines.append("-------------- PlotTubeEach Parameters --------------")
         
         lines.append(f"[{self.name}] plotting parameters:")
         for attr in self.__slots__:
