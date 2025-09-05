@@ -181,6 +181,8 @@ class PlotnPlane:
         radius = opts_nPlane.radius
 
         if is_n_defect:
+            
+            print(opts_nPlane.is_n_defect)
 
             axis_both = np.array(
                 [
