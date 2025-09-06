@@ -83,7 +83,7 @@ Q.act_visualize_disclination_lines(line_color=(0.5, 0.5, 0.5), extent_radius=0.1
 trans = 7.5
 Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100, plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
                        n_length=spacing, n_opacity=0.2, n_radius=0.3, 
-                       scene_azimuth=90, scene_elevation=90, scene_distance=150,
+                       scene_azimuth=90, scene_elevation=90, scene_distance=190,
                        is_new=False, is_extent=False)
 Q.figs[3].save('figures/PlotnPlaneTilt.png')
 

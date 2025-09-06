@@ -99,7 +99,7 @@ class PlotScene:
         if opts.name is None:
             if not hasattr(self, "name"):
                 self.name = opts.name
-
+        
         self.scene._set_angles(
             opts.azimuth, opts.elevation, opts.roll, opts.distance, opts.focal_point
         )
@@ -231,8 +231,8 @@ class PlotScene:
             log_scene_params()
             for category, objs in self.objects.items():
                 for obj in objs:
-                    # Each object has its own print function
-                    # We capture its printed text into logger
+                    # Each object has its own log function
+                    # We capture its logged text into logger
                     obj.log_properties(logger=logger)
 
         elif mode in self.objects:

@@ -443,7 +443,7 @@ QField5 = np.ndarray
 QField9 = np.ndarray
 
 
-def as_QField9(qtensor: Union[QField5, QField9]) -> QField9:
+def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
     #! strict3d
     """
     Convert a Q-tensor field into full 3×3 matrix form (QField9).
@@ -473,7 +473,7 @@ def as_QField9(qtensor: Union[QField5, QField9]) -> QField9:
 
     if not np.issubdtype(qtensor.dtype, np.floating):
         raise TypeError(
-            f"QField must be a float-type NumPy array, got dtype {qtensor.dtype}"
+            f"QField must be a float-type NumPy array, got dtype {qtensor.dtype}. Name of QField: {name}"
         )
 
     shape = qtensor.shape
@@ -499,6 +499,7 @@ def as_QField9(qtensor: Union[QField5, QField9]) -> QField9:
     raise ValueError(
         "Invalid QField shape: expected (..., 5) or (..., 3, 3), "
         f"but got shape {shape}"
+        f"Name of QField: {name}"
     )
 
 

@@ -353,6 +353,7 @@ class QFieldObject:
         if is_extent:
             extent = PlotExtent(opts_extent)
             figure.add_object(extent, category="extent")
+            figure.scene.distance = opts_scene.distance
 
     @logging_and_warning_decorator()
     def act_visualize_n_in_Q(
@@ -412,14 +413,15 @@ class QFieldObject:
         if is_extent:
             extent = PlotExtent(opts_extent)
             figure.add_object(extent, category="extent")
+            figure.scene.distance = opts_scene.distance
+
+        if opts_scene.distance != None:
+            figure.scene.distance = opts_scene.distance
 
     def act_add_scene(self, is_new=True, opts=OptsScene):
         figure = PlotScene(is_new=is_new, opts=opts)
         if is_new or (not is_new and len(self._calc_figures) == 0):
             self._calc_figures.append(figure)
-        else:
-            figure = self._calc_figures[-1]
-
         return figure
 
     def reset_figures(self):

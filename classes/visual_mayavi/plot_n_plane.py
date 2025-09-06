@@ -181,8 +181,6 @@ class PlotnPlane:
         radius = opts_nPlane.radius
 
         if is_n_defect:
-            
-            print(opts_nPlane.is_n_defect)
 
             axis_both = np.array(
                 [
@@ -350,18 +348,20 @@ class PlotnPlane:
         self._entities[0].parent.parent.data.point_data.scalars.modified()
 
     @property
-    def opts_opacity_defect(self):
+    @logging_and_warning_decorator
+    def opts_opacity_defect(self, logger=None):
         if self.opts_is_n_defect:
             if len(self._entities) > 1:
                 rgba = self._entities[1].parent.parent.data.point_data.scalars
                 return np.array(rgba)[:, 3] / 255
             else:
-                raise ValueError("There are no directors around defects")
+                logger.info("There are no directors around defects")
         else:
-            raise ValueError("Directors around defects are not plotted seperately")
-
+            logger.info("There are no directors around defects")
+    
     @opts_opacity_defect.setter
-    def opts_opacity_defect(self, data):
+    @logging_and_warning_decorator
+    def opts_opacity_defect(self, data, logger=None):
         if self.opts_is_n_defect:
             if len(self._entities) > 1:
                 self._calc_opacity_func = self._helper_opacity_check(data)
@@ -374,9 +374,9 @@ class PlotnPlane:
                     self._entities[1].parent.parent.data.point_data.scalars[i] = rgba[i]
                 self._entities[1].parent.parent.data.point_data.scalars.modified()
             else:
-                raise ValueError("There are no directors around defects")
+                logger.info("There are no directors around defects")
         else:
-            raise ValueError("There are no isolated directors around defects")
+            logger.info("There are no directors around defects")
 
     @property
     def opts_colors(self):
@@ -389,7 +389,7 @@ class PlotnPlane:
         return result
 
     @opts_colors.setter
-    def opts_colors(self, data):
+    def opts_colors(self, data, logger=None):
         self._calc_colors_func = self._helper_colors_check(data)
 
         def set_color(index):
