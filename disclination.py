@@ -127,10 +127,6 @@ def defect_detect(
         in `datatype.py`.
     """
 
-    logger.debug(
-        f"Threshold of the inner product between the first and last director is {threshold}"
-    )
-
     n_origin = check_Sn(n_origin, "n")
 
     from .field import add_periodic_boundary
@@ -138,9 +134,13 @@ def defect_detect(
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
 
-    logger.info("Start to defect defects")
+    logger.debug("Start to defect defects")
     logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
-
+    logger.debug(
+        f"Threshold of the inner product between the first and last director is {threshold}"
+    )
+    
+    logger.detail("Add padding directors for periodic boundary conditions if needed")
     n = add_periodic_boundary(n_origin, is_boundary_periodic)
     defect_indices = np.empty((0, 3), dtype=float)
 
@@ -167,15 +167,20 @@ def defect_detect(
         coords = coords[:, inv_perm]
 
         defect_indices = np.vstack((defect_indices, coords))
-        logger.info(f"Finished axis {axis}-direction in {round(time.time() - now, 2)}s")
+        logger.debug(f"Finished axis {axis}-direction in {round(time.time() - now, 2)}s")
         now = time.time()
 
     # Wrap indices under periodic conditions
+    logger.detail("Start to deal with periodic boundary conditions")
     for i, periodic in enumerate(is_boundary_periodic):
         if periodic:
             defect_indices[:, i] %= n_origin.shape[i]
-
+            
+    logger.detail("Deduplicate defects")
     defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
+    
+    logger.info(f"{len(defect_indices)} defects are found.")
+    
     return defect_indices
 
 
@@ -239,6 +244,8 @@ def defect_classify_into_lines(
     from .classes.disclination_line import DisclinationLine
     from .field import unwrap_trajectory
     from .general import make_hash_table, search_in_reservoir
+    
+    logger.debug("Start line classfication")
 
     box_size_periodic = as_dimension_info(box_size_periodic)
     logger.debug(f"box_size_periodic: {box_size_periodic}")
@@ -266,7 +273,8 @@ def defect_classify_into_lines(
         for path in paths
     ]
     logger.debug("Done!")
-
+    
+    logger.detail("Store the information of lines into DisclinationLine object.")
     lines = [
         DisclinationLine(
             defect_indices=path,
@@ -276,6 +284,7 @@ def defect_classify_into_lines(
         )
         for path in paths
     ]
+    logger.info(f"{len(lines)} lines are found.")
 
     return lines
 

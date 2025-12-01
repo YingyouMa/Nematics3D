@@ -109,6 +109,7 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def __init__(
         self,
+        is_detect_defects: bool = True,
         is_classify_lines: bool = True,
         inputValue = InputQ(),
         logger=None,
@@ -122,7 +123,7 @@ class QFieldObject:
             else:
                setattr(self, f"_raw_{k}", v)
         
-        logger.debug("Start to initialize Q field")
+        logger.progress(f"Start to initialize Q tensor `{self.name}`.")
         if self._raw_n is not None:
             logger.debug("Initialize Q field with S and n")
             if self._raw_S is None:
@@ -133,9 +134,9 @@ class QFieldObject:
             self._raw_Q = as_QField5(getQ(self._raw_n, S=self._raw_S))
         else:
             if self._raw_Q is not None:
-                self._raw_S, self._raw_n = Q_diagonalize(self._raw_Q, logger=logger)
+                self._raw_S, self._raw_n = Q_diagonalize(self._raw_Q)
             else:
-                raise NameError("No data is input  to initialize Q field.")
+                raise NameError("No data is input to initialize Q field.")
             
         self._calc_box_size_periodic_index = np.zeros(3)
         for i, flag in enumerate(self._raw_box_periodic_flag):
@@ -167,27 +168,53 @@ class QFieldObject:
         self._calc_corners_index = corners_index
         self._calc_corners = corners
         
-        logger.debug("Start to detect defects in Q field")
+        if (not is_detect_defects) and is_classify_lines:
+            is_classify_lines = False
+            msg = (
+                f"Invalid combination: is_detect_defects={is_detect_defects} "
+                f"and is_classify_lines={is_classify_lines}.\n"
+                "Line classification depends on defect detection. "
+                "Automatically disabling line classification."
+            )
+            logger.warning(msg)
+       
+        if is_detect_defects:
+            
+            start = time.time()
+            
+            msg = "\n"
+            msg += "Start defect analysis as detecting defects"
+            if is_classify_lines:
+                msg += " and classifying them into distinct lines"
+            msg += f" for Q tensor `{self.name}` \n"
+            msg += "This operation might take a while.\n"
+            msg += "You can disable this automatic operation by setting is_detect_defects=False and is_classify_lines=False when initializing the Q tensor."
+            logger.progress(msg)
+                    
+            self.act_defect_detect()
+            
+            logger.detail("Start to calculate the coordinates of defects in real space.")
+            self._calc_defect_grid = apply_linear_transform(
+                self._calc_defect_indices,
+                transform=self._raw_grid_transform,
+                offset=self._raw_grid_offset,
+            )
+        
+            if is_classify_lines:
+                self.act_lines_classify()
+                
+            logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
+            
+            
+    @logging_and_warning_decorator()
+    def act_defect_detect(self, logger=None):
         self._calc_defect_indices = defect_detect(
             self._raw_n,
             is_boundary_periodic=self._raw_box_periodic_flag,
-            logger=logger,
         )
-        
-        self._calc_defect_grid = apply_linear_transform(
-            self._calc_defect_indices,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
-        )
-        
-        if is_classify_lines:
-            self.act_lines_classify(logger=logger)
 
     @logging_and_warning_decorator()
     def act_lines_classify(self, logger=None):
-        
-        logger.info("Start to classify disclinations into different lines.")
-        start = time.time()
         
         self._calc_lines = defect_classify_into_lines(
             self._calc_defect_indices,
@@ -196,13 +223,12 @@ class QFieldObject:
             grid_transform=self._raw_grid_transform,
             logger=logger,
         )
+        logger.detail("Sorting lines by length")
         self._calc_lines = sorted(
             self._calc_lines, key=lambda line: line._calc_defect_num, reverse=True
         ) 
         for i, line in enumerate(self._calc_lines):
             line.name = f"line{i}"
-            
-        logger.info(f"Finished! With {time.time()-start:.2f} s")
 
         return self._calc_lines
 
@@ -214,16 +240,22 @@ class QFieldObject:
         **kwargs,
     ):
         
+        logger.progress("Start to smoothen disclination lines.")
+        
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.is_window_warning = False
 
         if opts.window_length is not None and opts.window_ratio is not None:
-            msg = f">>> ``window_length`` is manual input as {opts.window_length}.\n"
-            msg += f">>> ``window_ratio`` as {opts.window_ratio} would be ignored."
+            msg = f"``window_length`` is manual input as {opts.window_length}.\n"
+            msg += f"``window_ratio`` as {opts.window_ratio} would be ignored."
             logger.warning(msg)
         
         if 'min_line_length' not in kwargs.keys():
             opts.min_line_length = self._raw_default_miminum_line_length_smooth
+            msg = "\n"
+            msg += "No input value provided for minimum smoothed line length. \n"
+            msg += f"Using the default value {self._raw_default_miminum_line_length_smooth}."
+            logger.info(msg)
 
         for line in self._calc_lines:
             if line._calc_defect_num >= opts.min_line_length:
@@ -300,8 +332,8 @@ class QFieldObject:
         if is_smooth and hasattr(self._calc_lines[0], "_calc_defect_coords_smooth_obj"):
             _min_len_length_smooth = self._calc_lines[0]._calc_defect_coords_smooth_obj.opts_min_line_length
             if _min_len_length_smooth > min_line_length:
-                msg = f">>> The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
-                msg += f">>> Use the larger value {_min_len_length_smooth} instead."
+                msg = f"The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
+                msg += f"Use the larger value {_min_len_length_smooth} instead."
                 min_line_length = _min_len_length_smooth
                 logger.warning(msg)
 
@@ -317,7 +349,7 @@ class QFieldObject:
             lines_colors = [None for line in lines_plot]
             if opts_tube.color is not None:
                 logger.warning(
-                    ">>> scalars of lines are input. Their color_input will be ignored"
+                    "scalars of lines are input. Their color_input will be ignored"
                 )
         else:
             lines_scalars = [None for line in lines_plot]
