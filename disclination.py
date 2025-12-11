@@ -179,8 +179,6 @@ def defect_detect(
     logger.detail("Deduplicate defects")
     defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
     
-    logger.info(f"{len(defect_indices)} defects are found.")
-    
     return defect_indices
 
 
@@ -284,7 +282,6 @@ def defect_classify_into_lines(
         )
         for path in paths
     ]
-    logger.info(f"{len(lines)} lines are found.")
 
     return lines
 

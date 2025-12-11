@@ -176,7 +176,7 @@ class SmoothedLine:
 
     __slots__ = tuple(__descriptions__.keys())
 
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         line_coord_input: np.ndarray,
@@ -244,7 +244,7 @@ class SmoothedLine:
             line_length = self._calc_N_init
             if self.opts_window_length >= line_length:
                 raise ValueError(
-                    f"Filter window size {len(self.opts_window_length)} must be smaller than line length {line_length}"
+                    f"Filter window size {self.opts_window_length} must be smaller than line length {line_length}"
                 )
             line_points = savgol_filter(
                 self._raw_coord,

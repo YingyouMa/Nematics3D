@@ -212,6 +212,7 @@ class QFieldObject:
             self._raw_n,
             is_boundary_periodic=self._raw_box_periodic_flag,
         )
+        logger.info(f"{len(self._calc_defect_indices)} defects are found.")
 
     @logging_and_warning_decorator()
     def act_lines_classify(self, logger=None):
@@ -229,6 +230,8 @@ class QFieldObject:
         ) 
         for i, line in enumerate(self._calc_lines):
             line.name = f"line{i}"
+            
+        logger.info(f"{len(self._calc_lines)} lines are found.")
 
         return self._calc_lines
 
