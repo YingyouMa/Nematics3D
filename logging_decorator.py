@@ -18,7 +18,9 @@ Available Log Levels (from most verbose to least verbose):
 
  20  INFO
       Key results and essential runtime messages. Concise summaries of important
-      events, outcomes, and performance information.
+      events, outcomes, and performance information. This level is also used to 
+      report critical default parameters that were implicitly applied because the 
+      user did not provide explicit values.
 
  30  WARNING
       A potentially incorrect or risky condition was detected. Execution continues,

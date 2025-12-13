@@ -49,6 +49,7 @@ class InputQ:
     grid_offset: Vect(3) = (0,0,0)
     grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
     default_miminum_line_length_smooth: Number = 61
+    default_smooth_window_length: Number = 41
     default_miminum_line_length_visual: Number = 75
     name: str = "None"
     
@@ -61,6 +62,7 @@ class InputQ:
         "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3)",
         "name": "name identifier of this Q field",
         "default_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
+        "default_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
         "default_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized"
     }
     
@@ -91,6 +93,9 @@ class InputQ:
         ),
         "default_miminum_line_length_smooth": lambda self, v: (
             int(as_Number(v, name=self.__descriptions__["default_miminum_line_length_smooth"], value_range=(1, np.inf)))
+            ),
+        "default_smooth_window_length": lambda self, v: (
+            as_Number(v, name=self.__descriptions__["default_smooth_window_length"], value_range=(2, np.inf))
             ),
         "default_miminum_line_length_visual": lambda self, v: (
             as_Number(v, name=self.__descriptions__["default_miminum_line_length_visual"], value_range=(1, np.inf))
@@ -193,6 +198,11 @@ class QFieldObject:
                     
             self.act_defect_detect()
             
+            if is_classify_lines:
+                self.act_lines_classify()
+                
+            logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
+            
             logger.detail("Start to calculate the coordinates of defects in real space.")
             self._calc_defect_grid = apply_linear_transform(
                 self._calc_defect_indices,
@@ -200,13 +210,9 @@ class QFieldObject:
                 offset=self._raw_grid_offset,
             )
         
-            if is_classify_lines:
-                self.act_lines_classify()
-                
-            logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
+
             
-            
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
         self._calc_defect_indices = defect_detect(
             self._raw_n,
@@ -214,7 +220,7 @@ class QFieldObject:
         )
         logger.info(f"{len(self._calc_defect_indices)} defects are found.")
 
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_lines_classify(self, logger=None):
         
         self._calc_lines = defect_classify_into_lines(
@@ -252,11 +258,16 @@ class QFieldObject:
             msg = f"``window_length`` is manual input as {opts.window_length}.\n"
             msg += f"``window_ratio`` as {opts.window_ratio} would be ignored."
             logger.warning(msg)
+            
+        if opts.window_length is None and opts.window_ratio is None:
+            opts.window_length = self._raw_default_smooth_window_length
+            msg = "No input value provided for smooth window length of disclination lines. \n"
+            msg += f"Using the default value {self._raw_default_smooth_window_length}."
+            logger.info(msg)
         
         if 'min_line_length' not in kwargs.keys():
             opts.min_line_length = self._raw_default_miminum_line_length_smooth
-            msg = "\n"
-            msg += "No input value provided for minimum smoothed line length. \n"
+            msg = "No input value provided for minimum smoothed line length. \n"
             msg += f"Using the default value {self._raw_default_miminum_line_length_smooth}."
             logger.info(msg)
 

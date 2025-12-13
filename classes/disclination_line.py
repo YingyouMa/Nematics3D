@@ -515,7 +515,7 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_load(
         cls,
-        dirpath: str = "save/disclination_line/",
+        dirpath: str,
         logger=None,
     ) -> "DisclinationLine":
 
@@ -581,7 +581,7 @@ class DisclinationLine:
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}(name={self.name!r}), with {self._calc_defect_num} defect points with type {self._calc_end2end_category}"
+        msg = f"{cls_name}(name={self.name!r}), has {self._calc_defect_num} defect points with type {self._calc_end2end_category}"
         return msg
     
     def __iter__(self):

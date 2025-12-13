@@ -13,6 +13,7 @@
         "name": "smoothed_line",
         "calc_N_init": 10619,
         "calc_N_out": 31857,
-        "state_is_smoothed": true
+        "state_is_smoothed": true,
+        "state_status": "Success"
     }
 }

@@ -18,7 +18,7 @@ S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
 # Q.act_lines_classify()
 Q.act_lines_smooth()
-'''
+
 test1 = Q.lines[0].act_copy()
 Q.lines[0].act_save()
 test2 = Q.lines[0].act_load("save\disclination_line\line0")
@@ -45,7 +45,7 @@ for line in Q.figs[1].objects['lines']:
     line.sides = 20
     
     
-    
+'''    
 index_max =  60
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
