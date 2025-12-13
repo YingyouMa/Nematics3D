@@ -151,9 +151,11 @@ class SmoothedLine:
       will be IGNORED. Warnings depend on the `is_window_warning` flag in :class:`OptsSmooth`.
     - Option attributes (prefixed with ``opts_``) are implemented as properties
       and automatically update final result when changed.
-    - For convenience, during user assignment the ``opts_`` prefix is optional:
+    - The line will be re-smoothed if ``opts_`` attribute is assigned manualy,
+      e.g. ``tube.opts_order = 4``. For convenience, during user assignment 
+      the ``opts_`` prefix is optional:
       e.g. ``tube.order = 4`` is automatically redirected to
-      ``tube.opts_order = 4``.  
+      ``tube.opts_order = 4``. 
     """
 
     __descriptions__ = {
@@ -417,6 +419,12 @@ class SmoothedLine:
             if hasattr(self, "_initializing"):
                 del self._initializing
         return
+    
+    
+    def __getattr__(self, key):
+        if not key.startswith("opts_"):
+            key = 'opts_' + key
+        return object.__getattribute__(self, key)
 
 
     def __str__(self) -> str:
