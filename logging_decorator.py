@@ -296,7 +296,7 @@ def _decorate(func,
                 # 防御一下极端用法
                 safe_log(level, None)
             else:
-                safe_log(level, f"<{display_name}> {msg}")
+                safe_log(level, f"<{display_name}> \n{msg}")
         logger_obj = Logger(bound_safe_log)
         kwargs["logger"] = logger_obj
 

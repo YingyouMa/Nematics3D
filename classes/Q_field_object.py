@@ -136,6 +136,12 @@ class QFieldObject:
                 self._raw_S = np.zeros(np.shape(self._raw_n)[:-1]) + 1.0
             if self._raw_Q is not None:
                 logger.warning("Both Q and n are provided to initialize Q field. Q will be IGNORED.")
+            if np.shape(self._raw_S) != np.shape(self._raw_n)[:3]:
+                raise ValueError(
+                    "Shape mismatch between director field `n` and scalar field `S`: "
+                    f"expected n.shape[:3] == S.shape, "
+                    f"but got n.shape = {self._raw_n.shape}, S.shape = {self._raw_S.shape}."
+                )
             self._raw_Q = as_QField5(getQ(self._raw_n, S=self._raw_S))
         else:
             if self._raw_Q is not None:
@@ -187,8 +193,7 @@ class QFieldObject:
             
             start = time.time()
             
-            msg = "\n"
-            msg += "Start defect analysis as detecting defects"
+            msg = "Start defect analysis as detecting defects"
             if is_classify_lines:
                 msg += " and classifying them into distinct lines"
             msg += f" for Q tensor `{self.name}` \n"

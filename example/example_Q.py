@@ -10,7 +10,7 @@ sys.path.insert(0, 'D:/Document/GitHub/')
 import Nematics3D
 
 # from Nematics3D.debug.debug_store import DEBUG_VARS
-
+'''
 index_max =  128
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
@@ -43,15 +43,15 @@ for line in Q.figs[1].objects['lines']:
     line.specular_color = (1,0,0)
     line.radius = 2
     line.sides = 20
-    
-    
 '''    
+    
+   
 index_max =  60
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
-Q.act_lines_classify()
+# Q.act_lines_classify()
 Q.act_lines_smooth(window_length=21, min_line_length=40)
 Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4)
     
@@ -76,7 +76,7 @@ with test as l:
     l.window_length = 5
     l.opts_N_out_ratio = 3
     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
-'''
+
     
 
 # @Nematics3D.logging_and_warning_decorator
