@@ -113,8 +113,7 @@ class PlotnPlane:
 
         for name, value in {
             "normal": opts_grid.normal,
-            "spacing1": opts_grid.spacing1,
-            "spacing2": opts_grid.spacing2,
+            "spacing": opts_grid.spacing,
             "size": opts_grid.size,
         }.items():
             if value is None:
@@ -152,7 +151,7 @@ class PlotnPlane:
             logger=logger,
         )
 
-    @logging_and_warning_decorator
+    @logging_and_warning_decorator()
     def _helper_make_figure(
         self,
         opts_grid=OptsPlaneGrid(),
@@ -209,14 +208,14 @@ class PlotnPlane:
 
             defect_vicinity = (
                 np.einsum("ai, ib -> ab", defect_vicinity_index, axis_both)
-                * plane_grid.opts_spacing1
+                * plane_grid.opts_spacing
                 + plane_grid._calc_offset_real
             )
             defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
 
             bulk = (
                 np.einsum("ai, ib -> ab", bulk_index, axis_both)
-                * plane_grid.opts_spacing1
+                * plane_grid.opts_spacing
                 + plane_grid._calc_offset_real
             )
             bulk = select_grid_in_box(bulk, corners_limit)
@@ -432,8 +431,8 @@ class PlotnPlane:
                 setattr(self, k, v)
             elif k in keys_rebuild:
                 if k == "opts_spacing":
-                    setattr(self._entities_plane[0]._opts_all, "spacing1", v)
-                    setattr(self._entities_plane[0]._opts_all, "spacing2", v)
+                    setattr(self._entities_plane[0]._opts_all, "spacing", v)
+                    setattr(self._entities_plane[0]._opts_all, "spacing_extra", v)
                 else:
                     setattr(self._entities_plane[0]._opts_all, k[5:], v)
                 setattr(self, k, v)

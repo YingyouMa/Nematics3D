@@ -10,7 +10,7 @@ sys.path.insert(0, 'D:/Document/GitHub/')
 import Nematics3D
 
 # from Nematics3D.debug.debug_store import DEBUG_VARS
-'''
+
 index_max =  128
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
@@ -43,9 +43,9 @@ for line in Q.figs[1].objects['lines']:
     line.specular_color = (1,0,0)
     line.radius = 2
     line.sides = 20
-'''    
-    
    
+    
+'''   
 index_max =  60
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
@@ -76,7 +76,7 @@ with test as l:
     l.window_length = 5
     l.opts_N_out_ratio = 3
     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
-
+'''
     
 
 # @Nematics3D.logging_and_warning_decorator

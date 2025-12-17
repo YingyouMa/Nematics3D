@@ -129,12 +129,16 @@ class DisclinationLine:
     
     __slots__ = tuple(__descriptions__.keys()) + ("_descriptions",)
 
+    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         inputValue = InputLine(),
         is_sorted: bool = True,
+        logger=None,
         **kwargs
     ):
+        
+        logger.detail('Initializing the disclination line')
         
         self._descriptions = self.__class__.__descriptions__.copy()        
         
@@ -190,34 +194,54 @@ class DisclinationLine:
         
         if self.name is None:
             self.name = "disclination_line"
+            
+        logger.detail(f"line `{self.name}' is of '{self._calc_end2end_category}' type.")
     
     @logging_and_warning_decorator()
     def act_smooth(
         self,
         opts: OptsSmooth = OptsSmooth(),
-        padding_length: int = 50,
-        head_padding_extra: int = 25,
+        padding_num: int = 50,
+        head_padding_extra: int = 5,
         logger=None,
         **kwargs
     ) -> np.ndarray:
         """
         Smooth the defect line trajectory using Savitzky–Golay filtering and spline interpolation.
+        
+        For cross-type defect lines, periodic unwrapping is performed in two stages.
+        
+        Padding segments are first attached to both ends of the trajectory
+        (`padding_num`) to avoid endpoint distortions during smoothing.
+        
+        A short prefix consisting of the padded head and an extra segment from
+        the original trajectory (`head_padding_extra`) is then unwrapped in
+        reverse direction. This step fixes the global periodic-image branch by
+        anchoring the unwrapping on the original trajectory rather than on padding.
+        
+        Finally, the entire padded trajectory is unwrapped in forward direction
+        to obtain a globally continuous curve for smoothing. The padded segments
+        are removed after smoothing, and the result is shifted back into the box.
 
-        This method performs trajectory unwrapping (for periodic boundary conditions),
-        optional head/tail padding to reduce boundary artifacts, and curve smoothing.
 
         Parameters
         ----------
         opts : Optssmooth, optional
             Options controlling the smoothing procedure.
 
-        tail_length : int, default=50
-            Number of lattice points to duplicate from the **head and tail** of the
-            trajectory as padding. These duplicated points provide extra context
-            for the smoothing filter to reduce boundary artifacts. The padding
-            is trimmed away after smoothing.
+        max_padding_num : int, default=50
+            [Adaptive Smoothing Buffer] The maximum number of points to duplicate 
+            from the trajectory ends for padding. 
+            
+            Logic:
+            - If the trajectory is long: It uses `max_padding_num` to provide 
+              sufficient context for the smoothing filter while maintaining 
+              computational efficiency.
+            - If the trajectory is short: It automatically caps the padding at 
+              the total number of points available (N) to prevent out-of-bounds 
+              errors and avoid biased smoothing caused by over-extrapolation.
 
-        head_extra_unwrap_length : int, default=25
+        head_extra_unwrap_length : int, default=5
             Extra number of points at the **head** to unwrap before smoothing.
             This helps stabilize unwrapping when the trajectory crosses periodic
             boundaries and reduces artifacts near the trajectory start.
@@ -245,29 +269,33 @@ class DisclinationLine:
 
         coords = self._calc_defect_coords.copy()
         
-        logger.debug(f"line name is ``{self.name}``, with type ``{self._calc_end2end_category}``")
+        logger.debug(f"Smoothing line ``{self.name}``, with type ``{self._calc_end2end_category}``")
 
         if self._calc_end2end_category == "loop":
             smooth_mode = "wrap"
-            padding_length = 0
+            padding_num = 0
         elif self._calc_end2end_category == "cross":
             
-            msg = f"line {self.name} is cross-type. It has to deal with periodic boundary condition to smooth this line. \n"
-            msg += f"padding_length={padding_length}, head_padding_extra={head_padding_extra}"
-            logger.info(msg)
-            
-            padding_length = as_Number(padding_length, is_int=True, value_range=(0, self._calc_defect_num))
+            max_padding_num = as_Number(padding_num, is_int=True, value_range=(0, self._calc_defect_num))
+            padding_num = min(max_padding_num, self._calc_defect_num)
             head_padding_extra = as_Number(head_padding_extra, is_int=True, value_range=(0, self._calc_defect_num))
+            
+            msg = f"line {self.name} is cross-type. It has to deal with periodic boundary condition to smooth this line. \n"
+            msg += f"padding_num={padding_num}, head_padding_extra={head_padding_extra}"
+            logger.debug(msg)
+            
             indices_origin = self._raw_defect_indices.copy()
-            tail = indices_origin[:padding_length].copy()
-            head = indices_origin[-padding_length - 1 :]
+            tail = indices_origin[:padding_num].copy()
+            head = indices_origin[-padding_num - 1 :]
             indices = np.concatenate([head, indices_origin, tail])
 
-            indices[:padding_length+head_padding_extra] = unwrap_trajectory(
-                indices[:padding_length+head_padding_extra],
+            logger.detail("Start the reverse unwrap for the beginning of this line.")
+            indices[:padding_num+head_padding_extra] = unwrap_trajectory(
+                indices[:padding_num+head_padding_extra],
                 box_size_periodic=self._raw_box_size_periodic_index,
                 is_reverse=True,
             )
+            logger.detail("Start the whole unwrap.")
             indices = unwrap_trajectory(
                 indices,
                 box_size_periodic=self._raw_box_size_periodic_index,
@@ -283,18 +311,16 @@ class DisclinationLine:
             smooth_mode = "interp"
         else:
             smooth_mode = "interp"
-            padding_length = 0
+            padding_num = 0
 
         logger.debug("Start to smooth line")
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.mode = smooth_mode
         output = SmoothedLine(coords, opts=opts)
         
-        if self._calc_end2end_category == "cross":
-            logger.debug("Start to deal with periodic boundary condition")
         result = output._entities[0][
-            int(padding_length * output.opts_N_out_ratio) : int(
-                (-padding_length - 1) * output.opts_N_out_ratio
+            int(padding_num * output.opts_N_out_ratio) : int(
+                (-padding_num - 1) * output.opts_N_out_ratio
             )
         ]
         result = shift_to_box(result, self._raw_box_size_periodic_index)
@@ -334,13 +360,17 @@ class DisclinationLine:
             Options controlling properties of visualized tubes.
             See :attr:`OptsTube.__descriptions__` for definitions.
         """
+        
+        try:
+            if not isinstance(is_smooth, bool):
+                raise TypeError(
+                    f"is_smooth must be a boolean value. Got {is_smooth} instead."
+                )
+        except:
+            logger.recovery("Set is_smooth=False in the following.")
+            is_smooth = False
 
-        if not isinstance(is_smooth, bool):
-            raise TypeError(
-                f"is_smooth must be a boolean value. Got {is_smooth} instead."
-            )
-
-        logger.debug(f"Start to visualize line: {opts.name}")
+        logger.debug(f"Start to visualize line: ``{opts.name}`` with type ``{self._calc_end2end_category}``")
 
         if is_smooth:
             if hasattr(self, "_calc_defect_coords_smooth"):
@@ -366,9 +396,9 @@ class DisclinationLine:
                 line_coords_all,
                 scalars_all=scalars_all,
                 opts=opts,
-                logger=logger,
             )
         else:
+            logger.debug('Start to deal with the periodic boundary condition')
             boundary_flag = boundary_periodic_size_to_flag(
                 self._raw_box_size_periodic_index
             )
@@ -404,11 +434,11 @@ class DisclinationLine:
                 else:
                     scalars_all.append(None)
 
+            logger.debug('Done!')
             line_plot = PlotTube(
                 coords_all,
                 scalars_all=scalars_all,
                 opts=opts,
-                logger=logger,
             )
 
         return line_plot
@@ -493,7 +523,7 @@ class DisclinationLine:
         if hasattr(self, "_calc_defect_coords_smooth"):
             logger.debug("Start to store smoothed coordinates")
             smooth_dirpath = dirpath + "/smoothed_line/"
-            self._calc_defect_coords_smooth_obj.act_save(dirpath=smooth_dirpath, logger=logger)
+            self._calc_defect_coords_smooth_obj.act_save(dirpath=smooth_dirpath)
 
         json_path = os.path.join(dirpath, "info.json")
         logger.debug(f"Dtart to write JSON to {json_path}")
@@ -521,8 +551,8 @@ class DisclinationLine:
 
         dirpath = as_str(dirpath, name="the folder to load disclination line")
 
-        json_path = os.path.join(dirpath, f"info.json")
-        npz_path = os.path.join(dirpath, f"data.npz")
+        json_path = os.path.join(dirpath, "info.json")
+        npz_path = os.path.join(dirpath, "data.npz")
         logger.debug(f"Start to load DisclinationLine from {json_path} and {npz_path}")
 
         if not os.path.exists(json_path) or not os.path.exists(npz_path):

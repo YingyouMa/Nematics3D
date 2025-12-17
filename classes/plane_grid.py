@@ -13,8 +13,8 @@ from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Te
 @dataclass(slots=True)
 class OptsPlaneGrid:
     normal: Optional[Vect(3)] = None
-    spacing1: Optional[Number] = None
-    spacing2: Optional[Number] = None
+    spacing: Optional[Number] = None
+    spacing_extra: Optional[Number] = None
     size: Optional[Number] = None
     shape: Literal["circle", "rectangle"] = "rectangle"
     origin: Vect(3) = (0, 0, 0)
@@ -25,8 +25,8 @@ class OptsPlaneGrid:
 
     __descriptions__ = {
         "normal": "normal of plane",
-        "spacing1": "grid spacing along axis1",
-        "spacing2": "grid spacing along axis2",
+        "spacing": "grid spacing along axis1",
+        "spacing_extra": "grid spacing along axis2",
         "size": "size of plane",
         "origin": "origin of plane",
         "axis1": "first in-plane axis",
@@ -54,11 +54,11 @@ class OptsPlaneGrid:
             if v is None
             else as_Vect(v, name=self.__descriptions__["axis1"], is_norm=True)
         ),
-        "spacing1": lambda self, v: (
-            None if v is None else as_Number(v, name=self.__descriptions__["spacing1"])
+        "spacing": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["spacing"])
         ),
-        "spacing2": lambda self, v: (
-            None if v is None else as_Number(v, name=self.__descriptions__["spacing2"])
+        "spacing_extra": lambda self, v: (
+            None if v is None else as_Number(v, name=self.__descriptions__["spacing_extra"])
         ),
         "size": lambda self, v: (
             None if v is None else as_Number(v, name=self.__descriptions__["size"])
@@ -90,8 +90,8 @@ class PlaneGrid:
     __descriptions__ = {
         # ========== options mirrored onto the instance ==========
         "_opts_all": "Dataclass OptsPlaneGrid storing all user-specified and default options for the plane grid",
-        "opts_spacing1": "Final spacing of grid along axis1 (float, computed from size and shape)",
-        "opts_spacing2": "Final spacing of grid along axis2 (float, computed from size and shape)",
+        "opts_spacing": "Final spacing of grid along axis1 (float, computed from size and shape)",
+        "opts_spacing_extra": "Final spacing of grid along axis2 (float, computed from size and shape)",
         "opts_axis1": "Normalized axis1 vector (3-vector), adjusted to be perpendicular to normal",
         "opts_normal": "Normal vector of the plane (3-vector)",
         "opts_origin": "Origin of the plane in real-space coordinates (3-vector)",
@@ -112,20 +112,21 @@ class PlaneGrid:
 
     __slots__ = tuple(__descriptions__.keys())
 
-    @logging_and_warning_decorator
+    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(self, opts=OptsPlaneGrid(), logger=None, **kwargs):
 
         for name, value in {
             "normal": opts.normal,
-            "spacing1": opts.spacing1,
-            "spacing2": opts.spacing2,
+            "spacing": opts.spacing,
             "size": opts.size,
         }.items():
             if value is None:
                 raise ValueError(
                     f"Missing required variable {name} to generate plane_grid"
                 )
-
+        
+        if opts.spacing_extra == None:
+            opts.spacing_extra = opts.spacing
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
 
         self._opts_all = opts
@@ -138,13 +139,15 @@ class PlaneGrid:
         **kwargs,
     ):
         
+        logger.debug("Start to generate a new plane.")
+        
         self._opts_all = merge_opts_all({"": self._opts_all}, kwargs, type(self).__name__)[""]
 
         for key, value in asdict(self._opts_all).items():
             setattr(self, f"opts_{key}", value)
 
-        space1 = self._opts_all.spacing1
-        space2 = self._opts_all.spacing2
+        space1 = self._opts_all.spacing
+        space2 = self._opts_all.spacing_extra
         size = self._opts_all.size
         origin = self._opts_all.origin
         normal = self._opts_all.normal
@@ -164,7 +167,7 @@ class PlaneGrid:
             if normal @ axis1 != 0:
                 axis1 = axis1 - axis1 @ normal * normal
                 axis1 /= np.linalg.norm(axis1)
-                msg = "normal must be perpendicular to axis1.\n"
+                msg = "Normal must be perpendicular to axis1.\n"
                 msg += f"Got {normal} and {axis1}. \n"
                 msg += "Discard the component aligned with normal along axis1.\n"
                 msg += f"Use axis1={axis1} in the following"
@@ -173,24 +176,34 @@ class PlaneGrid:
             from Nematics3D.general import rotation_matrix_from_vectors
             _rotation_matrix = rotation_matrix_from_vectors((0,0,1), normal)
             axis1 = _rotation_matrix @ np.array([1,0,0])
+            msg = "No input provided for axis1. \n"
+            msg += f"Automatically set axis1 as {axis1} in the following."
+            logger.debug(msg)
+        
+        axis2 = np.cross(normal, axis1)
+        logger.debug(f"axis2={axis2}")
         
         axis_both = np.array([axis1, np.cross(normal, axis1)])
-
         source_shape = (size, size)
         target_shape = (num1, num2)
 
+        logger.detail("Start to generate coordinate grids.")
         grid, grid_int, spaces = generate_coordinate_grid(source_shape, target_shape)
         grid_int = np.reshape(grid_int, (-1, 2))
         grid = np.reshape(grid, (-1, 2))
         grid = np.einsum("ai, ib -> ab", grid, axis_both)
 
+        logger.detail("Transparent the grid to make its center at origin.")
         offset = -np.average(grid, axis=0) + origin
         grid = grid + offset
+        
+        logger.detail("Perform linear transform into real axes.")
         grid = apply_linear_transform(
             grid, transform=grid_transform, offset=grid_offset
         )
 
         if corners_limit is not None:
+            logger.debug(f"Select the grids inside the corners limit {corners_limit}.")
             grid_select = select_grid_in_box(
                 grid, corners_limit=corners_limit, logger=logger
             )
@@ -201,10 +214,10 @@ class PlaneGrid:
         self._entities_grid_all = [np.reshape(grid, (*target_shape, 3))]
         self._entities_grid_int = [grid_int]
         self._calc_offset_real = offset
-        self.opts_spacing1 = spaces[0]
-        self._opts_all.spacing1 = spaces[0]
-        self.opts_spacing2 = spaces[1]
-        self._opts_all.spacing2 = spaces[1]
+        self.opts_spacing = spaces[0]
+        self._opts_all.spacing = spaces[0]
+        self.opts_spacing_extra = spaces[1]
+        self._opts_all.spacing_extra = spaces[1]
         self.opts_axis1 = axis1
         self._opts_all.axis1 = axis1
         
@@ -228,7 +241,7 @@ class PlaneGrid:
             desc = self.__descriptions__.get(attr, "(no description)")
             value = getattr(self, attr, None)
 
-            if attr in ("opts_axis1", "opts_spacing1", "opts_spacing1"):
+            if attr in ("opts_axis1", "opts_spacing", "opts_spacing"):
                 lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
             else:
                 lines.append(f"  {attr}: {value!r}  # {desc}")

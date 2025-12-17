@@ -444,8 +444,7 @@ class QFieldObject:
             self.act_add_interpolator()
 
         opts_grid.normal = plane_normal
-        opts_grid.spacing1 = plane_spacing
-        opts_grid.spacing2 = plane_spacing
+        opts_grid.spacing = plane_spacing
         opts_grid.size = plane_size
 
         check_bool_flags(locals())
