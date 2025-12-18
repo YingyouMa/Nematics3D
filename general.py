@@ -651,6 +651,53 @@ def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) 
     
     return rot.as_matrix()
 
+def fit_plane(points):
+    #! how good are points lying in a plane
+    #! average rotation vector
+    """
+    Calculate the normal vector of the best-fit plane to a set of 3D points
+    using Singular Value Decomposition (SVD).
+
+    Parameters
+    ----------
+    points : numpy.ndarray, (..., N, 3)
+             Array containing the 3D coordinates of the points.
+             The last dimension represents the coordinates (x, y, z).
+             It will find the averaged normal vector for each group of N points.
+
+    Returns
+    -------
+    normal_vector : numpy.ndarray, (..., 3)
+                    Array representing the normal vector of the best-fit plane.
+
+    Dependencies
+    ------------
+    - numpy: 1.22.0
+    """
+    ndim = points.ndim
+    if ndim == 2:
+        points = np.array([points])
+
+    # Calculate the center of the points
+    center = points.mean(axis=-2)
+
+    # Translate the points to be relative to the center
+    N = np.shape(points)[-2]
+    relative = points - np.tile(
+        center[:, np.newaxis, :], (*(np.ones(points.ndim - 2).astype(int)), N, 1)
+    )
+
+    # Perform Singular Value Decomposition (SVD) on the transposed relative points
+    svd = np.linalg.svd(np.swapaxes(relative, -1, -2), full_matrices=False)[0]
+
+    # Extract the left singular vector corresponding to the smallest singular value
+    normal_vector = svd[:, :, -1]
+
+    if ndim == 2:
+        normal_vector = normal_vector[0]
+
+    return normal_vector
+
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
@@ -665,54 +712,6 @@ def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) 
 #     condition_large = dist <= dist_large - strict[0] * epsilon
 
 #     return np.where(condition_large * condition_small)
-
-
-# def get_plane(points):
-#     #! how good are points lying in a plane
-#     #! average rotation vector
-#     """
-#     Calculate the normal vector of the best-fit plane to a set of 3D points
-#     using Singular Value Decomposition (SVD).
-
-#     Parameters
-#     ----------
-#     points : numpy.ndarray, (..., N, 3)
-#              Array containing the 3D coordinates of the points.
-#              The last dimension represents the coordinates (x, y, z).
-#              It will find the averaged normal vector for each group of N points.
-
-#     Returns
-#     -------
-#     normal_vector : numpy.ndarray, (..., 3)
-#                     Array representing the normal vector of the best-fit plane.
-
-#     Dependencies
-#     ------------
-#     - numpy: 1.22.0
-#     """
-#     ndim = points.ndim
-#     if ndim == 2:
-#         points = np.array([points])
-
-#     # Calculate the center of the points
-#     center = points.mean(axis=-2)
-
-#     # Translate the points to be relative to the center
-#     N = np.shape(points)[-2]
-#     relative = points - np.tile(
-#         center[:, np.newaxis, :], (*(np.ones(points.ndim - 2).astype(int)), N, 1)
-#     )
-
-#     # Perform Singular Value Decomposition (SVD) on the transposed relative points
-#     svd = np.linalg.svd(np.swapaxes(relative, -1, -2), full_matrices=False)[0]
-
-#     # Extract the left singular vector corresponding to the smallest singular value
-#     normal_vector = svd[:, :, -1]
-
-#     if ndim == 2:
-#         normal_vector = normal_vector[0]
-
-#     return normal_vector
 
 
 # def get_rotation_axis(vectors):

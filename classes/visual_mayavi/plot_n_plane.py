@@ -101,7 +101,7 @@ class PlotnPlane:
         k for k, (_, flag) in __descriptions__.items() if flag == SLOT
     )
 
-    @logging_and_warning_decorator
+    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         QInterpolator: Optional[Interpolator] = None,
@@ -148,7 +148,6 @@ class PlotnPlane:
         self._helper_make_figure(
             opts_grid=opts_grid,
             opts_nPlane=opts_nPlane,
-            logger=logger,
         )
 
     @logging_and_warning_decorator()
@@ -180,6 +179,8 @@ class PlotnPlane:
         radius = opts_nPlane.radius
 
         if is_n_defect:
+            
+            logger.debug("Start to identify the directors surrouding defects.")
 
             axis_both = np.array(
                 [
@@ -191,17 +192,20 @@ class PlotnPlane:
             grid_all = self._entities_plane[0]._entities_grid_all[0]
             shape_all = np.shape(grid_all)[:2]
             grid_all_flatten = np.reshape(grid_all, (-1, 3))
-
+            
+            logger.detail("Interpolating ...")
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
             n_all = np.reshape(n_all, (*shape_all, 1, 3))
-
+            
+            logger.detail("Detecting the defects and surrounding directors ...")
             defect_plane_index = defect_detect(n_all, planes=(False, False, True))
             defect_vicinity_index = defect_vicinity_grid(
                 defect_plane_index, num_shell=1
             )
             defect_vicinity_index = defect_vicinity_index.reshape((-1, 3))[:, :-1]
-                
+            
+            logger.detail("Spliting the directors by whether they surround defects ...")
             bulk_index, defect_vicinity_index = split_points(
                 self._entities_plane[0]._entities_grid_int[0], defect_vicinity_index
             )
@@ -211,13 +215,17 @@ class PlotnPlane:
                 * plane_grid.opts_spacing
                 + plane_grid._calc_offset_real
             )
-            defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
+            
 
             bulk = (
                 np.einsum("ai, ib -> ab", bulk_index, axis_both)
                 * plane_grid.opts_spacing
                 + plane_grid._calc_offset_real
+                
             )
+            
+            logger.detail("Erasing the directors out of the box.")
+            defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
             bulk = select_grid_in_box(bulk, corners_limit)
 
         else:

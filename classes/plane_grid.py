@@ -91,12 +91,12 @@ class PlaneGrid:
         # ========== options mirrored onto the instance ==========
         "_opts_all": "Dataclass OptsPlaneGrid storing all user-specified and default options for the plane grid",
         "opts_spacing": "Final spacing of grid along axis1 (float, computed from size and shape)",
-        "opts_spacing_extra": "Final spacing of grid along axis2 (float, computed from size and shape)",
+        "opts_spacing_extra": "Final spacing of grid along axis2 (float, computed from size and shape). NOT AVAILABLE IN THE CURRENT VERSION",
         "opts_axis1": "Normalized axis1 vector (3-vector), adjusted to be perpendicular to normal",
         "opts_normal": "Normal vector of the plane (3-vector)",
         "opts_origin": "Origin of the plane in real-space coordinates (3-vector)",
         "opts_size": "Extent (size) of the plane in real-space coordinates (float)",
-        "opts_shape": "Shape of the plane grid ('circle' or 'rectangle')",
+        "opts_shape": "Shape of the plane grid ('circle' or 'rectangle'). NOT AVAILABLE IN THE CURRENT VERSION",
         "opts_corners_limit": "Optional bounding-box corners for grid filtering (array of shape 8×3)",
         "opts_grid_offset": "Translation offset applied to grid coordinates (3-vector)",
         "opts_grid_transform": "Linear transformation matrix applied to grid coordinates (3×3)",
@@ -139,7 +139,7 @@ class PlaneGrid:
         **kwargs,
     ):
         
-        logger.debug("Start to generate a new plane.")
+        logger.debug("Start to generate a new 2D grid.")
         
         self._opts_all = merge_opts_all({"": self._opts_all}, kwargs, type(self).__name__)[""]
 
@@ -197,7 +197,7 @@ class PlaneGrid:
         offset = -np.average(grid, axis=0) + origin
         grid = grid + offset
         
-        logger.detail("Perform linear transform into real axes.")
+        logger.detail("Perform linear transform into real coordinates.")
         grid = apply_linear_transform(
             grid, transform=grid_transform, offset=grid_offset
         )
@@ -241,7 +241,7 @@ class PlaneGrid:
             desc = self.__descriptions__.get(attr, "(no description)")
             value = getattr(self, attr, None)
 
-            if attr in ("opts_axis1", "opts_spacing", "opts_spacing"):
+            if attr in ("opts_axis1", "opts_spacing", "opts_spacing_extra"):
                 lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
             else:
                 lines.append(f"  {attr}: {value!r}  # {desc}")

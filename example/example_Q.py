@@ -45,7 +45,7 @@ for line in Q.figs[1].objects['lines']:
     line.sides = 20
    
     
-'''   
+   
 index_max =  60
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
@@ -76,7 +76,7 @@ with test as l:
     l.window_length = 5
     l.opts_N_out_ratio = 3
     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
-'''
+
     
 
 # @Nematics3D.logging_and_warning_decorator
