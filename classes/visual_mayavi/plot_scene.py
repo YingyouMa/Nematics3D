@@ -112,8 +112,10 @@ class PlotScene:
         If no 'name' exists, one is assigned automatically.
         """
         # Ensure the category exists
+        print(self.objects,'aaaaaaaaaaaaaaaaaaaaaaaa')
         if category not in self.objects:
             self.objects[category] = []
+            print(self.objects)
 
         # Step 1: Determine the base name
         if hasattr(obj, "name"):
@@ -138,6 +140,7 @@ class PlotScene:
 
         # Step 4: Add to storage
         self.objects[category].append(obj)
+        print(self.objects)
 
     @logging_and_warning_decorator
     def find_object(self, category: str, name: str, logger=None):

@@ -400,6 +400,7 @@ class QFieldObject:
             )
 
             figure.add_object(line_visual, category="lines")
+            print(self.figs[-1].objects, 'BBBBBBBBBBBBB')
 
         if is_extent:
             extent = PlotExtent(opts_extent)
@@ -457,8 +458,11 @@ class QFieldObject:
             opts_nPlane=opts_nPlane,
             logger=logger,
         )
-
+        
+        print(self.figs[-1].objects, 'CCCCCCCCCCCC')
+        print(figure.objects, 'DDDDDDDDDDD')
         figure.add_object(nPlane, category="nPlanes")
+        print(self.figs[-1].objects, 'BBBBBBBBBBBBB')
 
         if is_extent:
             extent = PlotExtent(opts_extent)
