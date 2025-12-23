@@ -163,7 +163,7 @@ def as_Tensor(input_data, shape, name="input data"):
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
 
-@logging_and_warning_decorator()
+@logging_and_warning_decorator(start_finish_level=5)
 def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, default=(1,1,1), logger=None):
     """
     Convert input into an RGB color tuple with optional normalization.

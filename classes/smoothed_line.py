@@ -29,7 +29,7 @@ class OptsSmooth:
         "N_out_ratio": "ratio between output and input #points in smoothing",
         "mode": "smoothing mode (interp or wrap)",
         "min_line_length": "minimum line length to be smoothed",
-        "name": "name identifier of smooth options",
+        "name": "name identifier of the line",
         "is_window_warning" : "whether present the warning when window_length and window_ratio are both input"
     }
 
@@ -245,6 +245,12 @@ class SmoothedLine:
             else:
                 object.__setattr__(self, f"opts_{k}", v)
                 
+        msg = f'Start to smooth line {self.name!r} with {self._calc_N_init} points.\n'
+        msg += f"window length = {opts.window_length}\n"
+        msg += f"window ratio = {opts.window_ratio}\n"
+        msg += f"minimum smoothed line length = {opts.min_line_length}"
+        logger.debug(msg)
+                
         if self._calc_N_init < self.opts_min_line_length:
             reason = f"the minimum length of line smoothing is set to be {self.opts_min_line_length} points, while the current line has {self._calc_N_init} points"
             logger.warning(f"{self.name!r} is not smoothed, because {reason}.")
@@ -252,6 +258,7 @@ class SmoothedLine:
             return
         
         try:
+            logger.detail("Start to determine the smoothing window length.")
             if self.opts_window_length is None:
                 if self.opts_window_ratio is None:
                     raise SmoothingConfigError("No input value provided for smooth window length.")
@@ -275,8 +282,11 @@ class SmoothedLine:
                 raise SmoothingConfigError(
                     f"Filter window length {self.opts_window_length} should not be smaller than filter order {self.opts_order}"
                 )
+                
+            logger.debug(f"Smoothing window length is finally chosen as {opts.window_length}")
 
             object.__setattr__(self, "_calc_N_out", int(self._calc_N_init * self.opts_N_out_ratio))
+            logger.detail(f"Number of output points after smoothing is {self._calc_N_out}.")
 
             # Step 1: Apply Savitzky-Golay filter to smooth the curve
             line_points = savgol_filter(
@@ -314,7 +324,7 @@ class SmoothedLine:
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
             self._helper_fallback_no_smooth(reason)
 
-    @logging_and_warning_decorator(start_finish_level=5)
+
     def act_commit(self, logger=None, **changes):
 
         if not changes:
@@ -329,7 +339,7 @@ class SmoothedLine:
 
         self._helper_apply_smooth(self._opts_all)
 
-    @logging_and_warning_decorator()
+
     def act_visualize(self, 
                       color: ColorRGB = (1,1,1), 
                       scale_factor: Number = 1, 
@@ -479,7 +489,7 @@ class SmoothedLine:
     def act_copy(self):
         return SmoothedLine(self._raw_coord.copy(), opts=OptsSmooth(**asdict(self._opts_all)))
     
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_save(self, dirpath: Optional[str]=None, logger=None):
 
         if dirpath is None:
@@ -517,7 +527,7 @@ class SmoothedLine:
 
         
     @classmethod
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_load(cls, dirpath: Optional[str]=None, logger=None):
         
         dirpath = as_str(dirpath, name="the folder to load smoothed line")

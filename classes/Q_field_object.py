@@ -110,6 +110,58 @@ class InputQ:
 
 
 class QFieldObject:
+    
+    __descriptions__ = {
+        # --- Identity ---
+        "name": ["Name identifier of this Q tensor object.", "SLOT"],
+
+        # --- Raw inputs (stored as _raw_*) ---
+        "_raw_Q": ["Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).", "SLOT"],
+        "_raw_S": ["Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).", "SLOT"],
+        "_raw_n": ["Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).", "SLOT"],
+        "_raw_box_periodic_flag": ["Per-dimension periodic boundary condition flags (bool array-like of length 3).", "SLOT"],
+        "_raw_grid_offset": ["Grid translation offset mapping lattice indices -> real-space coordinates (Vect(3)).", "SLOT"],
+        "_raw_grid_transform": ["Grid linear transform mapping lattice indices -> real-space coordinates (3x3 Tensor).", "SLOT"],
+
+        # --- Defaults / thresholds (stored as _raw_default_*) ---
+        "_raw_default_miminum_line_length_smooth": ["Default minimum line length (#points) required to apply smoothing.", "SLOT"],
+        "_raw_default_smooth_window_length": ["Default smoothing window length (#points) used when not specified.", "SLOT"],
+        "_raw_default_miminum_line_length_visual": ["Default minimum line length (#points) required for visualization.", "SLOT"],
+        "_raw_default_cross_line_padding_num_": ["Default number of points padded for smoothing cross-type disclination line.", "SLOT"],
+
+        # --- Derived grids / geometry (stored as _calc_*) ---
+        "_calc_grid_index": ["Lattice coordinate grid in index space (before applying transform/offset).", "SLOT"],
+        "_calc_grid": ["Coordinate grid in real space after applying grid_transform and grid_offset.", "SLOT"],
+        "_calc_corners_index": ["Box corners in lattice-index space.", "SLOT"],
+        "_calc_corners": ["Box corners in real space coordinates.", "SLOT"],
+        "_calc_box_size_periodic_index": [(
+            "Effective periodic box size in index units. "
+            "For periodic dims equals grid size, otherwise inf."
+        ), "SLOT"],
+        "_calc_box_size_periodic_coord": ["Effective periodic box size in real-space coordinates.", "SLOT"],
+
+        # --- Defects / disclinations (stored as _calc_*) ---
+        "_calc_defect_indices": ["Indices (lattice coordinates) of detected defect points.", "SLOT"],
+        "_calc_defect_grid": ["Real-space coordinates of detected defect points.", "SLOT"],
+        "_calc_lines": ["List of disclination line objects classified from defect indices.", "SLOT"],
+
+        # --- Interpolation (stored as _calc_*) ---
+        "_calc_interpolator": ["Interpolator object for Q field in real space / index space.", "SLOT"],
+
+        # --- Visualization state ---
+        "_calc_figures": ["List of PlotScene objects created for visualization.", "SLOT"],
+
+        # --- Public properties (semantic) ---
+        "S": ["Property accessor: scalar order parameter field S. This equals _raw_S", "PROPERTY"],
+        "n": ["Property accessor: director field n. This equals _raw_n", "PROPERTY"],
+        "lines": ["Property accessor: classified disclination lines. This equals _calc_lines", "PROPERTY"],
+        "figs": ["Property accessor: visualization scenes/figures. This equals _calc_figures", "PROPERTY"],
+    }
+
+    __slots__ = tuple(
+        k for k, (_, kind) in __descriptions__.items()
+        if kind == "SLOT"
+    )
 
     @logging_and_warning_decorator()
     def __init__(
@@ -149,35 +201,44 @@ class QFieldObject:
             else:
                 raise NameError("No data is input to initialize Q field.")
             
+        
+        logger.detail("Recording the information of periodic boundary conditions.")
         self._calc_box_size_periodic_index = np.zeros(3)
         for i, flag in enumerate(self._raw_box_periodic_flag):
             if flag:
                 self._calc_box_size_periodic_index[i] = np.shape(self._raw_Q)[i]
             else:
                 self._calc_box_size_periodic_index[i] = np.inf
-        self._calc_box_size_periodic_coord = apply_linear_transform(
-            self._calc_box_size_periodic_index,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
+        T = np.asarray(self._raw_grid_transform, dtype=float)
+        diag = np.diag(T).astype(float)
+        self._calc_box_size_periodic_coord = np.full(3, np.inf, dtype=float)
+        finite_mask = np.isfinite(self._calc_box_size_periodic_index)
+        self._calc_box_size_periodic_coord[finite_mask] = (
+            diag[finite_mask] * self._calc_box_size_periodic_index[finite_mask]
         )
+        msg = f"Effective periodic box size in lattice-index units is {self._calc_box_size_periodic_index}.\n"
+        msg += f"Effective periodic box size in real-space coordinates is {self._calc_box_size_periodic_coord}."
+        logger.detail(msg)
 
-        logger.debug("Start to transform lattice grid into real space")
+        logger.detail("Generating grid of Q")
         grid_shape = np.shape(self._raw_Q)[:3]
-        self._calc_grid_origin, _, _ = generate_coordinate_grid(grid_shape, grid_shape)
+        self._calc_grid_index, _, _ = generate_coordinate_grid(grid_shape, grid_shape)
         self._calc_grid = apply_linear_transform(
-            self._calc_grid_origin, transform=self._raw_grid_transform, offset=self._raw_grid_offset
+            self._calc_grid_index, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
 
         self._calc_figures = []
-
+        
+        logger.debug("Generating the coorners of Q.")
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
         corners_index = get_box_corners(Lx, Ly, Lz)
         corners = apply_linear_transform(
             corners_index, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
-
         self._calc_corners_index = corners_index
         self._calc_corners = corners
+        msg = f"Box corners in lattice-index units is {self._calc_corners_index}.\n"
+        msg = f"Box corners in reap-space coordinates is {self._calc_corners}."
         
         if (not is_detect_defects) and is_classify_lines:
             is_classify_lines = False
@@ -207,16 +268,8 @@ class QFieldObject:
                 self.act_lines_classify()
                 
             logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
-            
-            logger.detail("Start to calculate the coordinates of defects in real space.")
-            self._calc_defect_grid = apply_linear_transform(
-                self._calc_defect_indices,
-                transform=self._raw_grid_transform,
-                offset=self._raw_grid_offset,
-            )
         
-
-            
+          
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
         self._calc_defect_indices = defect_detect(
@@ -224,6 +277,13 @@ class QFieldObject:
             is_boundary_periodic=self._raw_box_periodic_flag,
         )
         logger.info(f"{len(self._calc_defect_indices)} defects are found.")
+        
+        logger.detail("Start to calculate the coordinates of defects in real space.")
+        self._calc_defect_grid = apply_linear_transform(
+            self._calc_defect_indices,
+            transform=self._raw_grid_transform,
+            offset=self._raw_grid_offset,
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_lines_classify(self, logger=None):
@@ -254,32 +314,54 @@ class QFieldObject:
         **kwargs,
     ):
         
-        logger.progress("Start to smoothen disclination lines.")
+        logger.detail("Start to smoothen disclination lines.")
         
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.is_window_warning = False
 
         if opts.window_length is not None and opts.window_ratio is not None:
-            msg = f"``window_length`` is manual input as {opts.window_length}.\n"
+            msg = f"``window_length`` of smoothing disclination lines is manual input as {opts.window_length}.\n"
             msg += f"``window_ratio`` as {opts.window_ratio} would be ignored."
             logger.warning(msg)
+            opts.window_ratio = None
             
         if opts.window_length is None and opts.window_ratio is None:
             opts.window_length = self._raw_default_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += f"Using the default value {self._raw_default_smooth_window_length}."
+            msg += "Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
             logger.info(msg)
         
         if 'min_line_length' not in kwargs.keys():
             opts.min_line_length = self._raw_default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value {self._raw_default_miminum_line_length_smooth}."
+            msg += "Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
             logger.info(msg)
+            
+        msg = "Start to smooth disclination lines in Q tensor `self.name` With paramaters: \n"
+        msg += f"window length = {opts.window_length}\n"
+        msg += f"window ratio = {opts.window_ratio}\n"
+        msg += f"minimum smoothed line length = {opts.min_line_length}"
+        logger.debug(msg)
 
+        num_smooth = 0
+        window_list = {}
         for line in self._calc_lines:
             if line._calc_defect_num >= opts.min_line_length:
-                logger.debug(f"Start to smooth {line.name}")
                 line.act_smooth(opts=opts)
+                num_smooth += 1
+                window_list[line.name] = line._calc_defect_coords_smooth_obj.opts_window_length
+            else:
+                logger.debug(f"Line `{line.name}` is not smoothed because it is too short, with only {line._calc_defect_num} defects. ")
+                
+        msg = f"There are {len(self._calc_lines)} disclination lines in total, with {num_smooth} lines are smoothed.\n"
+        msg += "The smoothing window length is: "
+        if opts.window_length is not None:
+            msg += str(opts.window_length)
+        else:
+            msg += "\n"
+            for k, v in window_list.items():
+                msg += f"{k}: {v} \n"
+        logger.info(msg)
 
     @logging_and_warning_decorator()
     def act_add_interpolator(self, logger=None):
@@ -478,7 +560,7 @@ class QFieldObject:
             self._calc_figures.append(figure)
         return figure
 
-    def reset_figures(self):
+    def act_reset_figures(self):
         self._calc_figures = []
         
     @property
@@ -499,3 +581,24 @@ class QFieldObject:
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q
+    
+    
+    
+'''
+
+        # --- Core actions ---
+        "act_defect_detect": ["Detect defect points from director field n under specified boundary conditions.", "METHOD"],
+        "act_lines_classify": ["Group defect points into disclination lines under periodic connectivity.", "METHOD"],
+        "act_lines_smooth": ["Smooth disclination line trajectories using OptsSmooth options.", "METHOD"],
+        "act_add_interpolator": ["Build and attach an interpolator for Q field queries at arbitrary points.", "METHOD"],
+        "act_interpolate": ["Interpolate Q at given points (index or real space).", "METHOD"],
+
+        # --- Visualization actions ---
+        "act_add_scene": ["Create a PlotScene and optionally register it into internal figure list.", "METHOD"],
+        "act_visualize_disclination_lines": ["Visualize disclination lines (tube rendering) in a Mayavi scene.", "METHOD"],
+        "act_visualize_n_in_Q": ["Visualize director field sampled on planes via Q interpolator in a Mayavi scene.", "METHOD"],
+        "act_reset_figures": ["Clear all cached figures/scenes.", "METHOD"],
+
+        # --- Misc ---
+        "__call__": ["Return the raw Q field array.", "MAGIC"]
+'''

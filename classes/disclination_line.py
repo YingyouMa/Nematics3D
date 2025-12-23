@@ -133,12 +133,10 @@ class DisclinationLine:
     def __init__(
         self,
         inputValue = InputLine(),
-        is_sorted: bool = True,
+        is_sorted: bool = False,
         logger=None,
         **kwargs
     ):
-        
-        logger.detail('Initializing the disclination line')
         
         self._descriptions = self.__class__.__descriptions__.copy()        
         
@@ -150,12 +148,19 @@ class DisclinationLine:
                 setattr(self, "name", v)
             else:
                 setattr(self, f"_raw_{k}", v)
+                
+        logger.detail(f"Initializing the disclination line {self.name!r}")
+
+        if self.name is None:
+            self.name = "disclination_line"
 
         if is_sorted == False:
+            logger.detail("Sorting defects by closest neighboring pairs.")
             self._raw_defect_indices = sort_line_indices(self._raw_defect_indices)
 
         self._raw_box_size_periodic_index = as_dimension_info(self._raw_box_size_periodic_index)
 
+        logger.debug("Classifying line type by the distance between head and tail.")
         if np.linalg.norm(self._raw_defect_indices[0] - self._raw_defect_indices[-1]) == 0:
             self._calc_end2end_category = "loop"
             self._raw_defect_indices = self._raw_defect_indices[:-1]
@@ -178,24 +183,17 @@ class DisclinationLine:
             else:
                 self._calc_end2end_category = "seg"
                 self._raw_defect_indices = self._raw_defect_indices
+        logger.debug(f"Disclination line {self.name!r} is of type {self._calc_end2end_category!r}")
+        logger.detail(f"The first and end point are {self._raw_defect_indices[0]} and {self._raw_defect_indices[-1]}")
 
         self._calc_defect_num = np.shape(self._raw_defect_indices)[0]
-
+        
+        logger.detail('Calculateing the defects positions in real-space units.')
         self._calc_defect_coords = apply_linear_transform(
             self._raw_defect_indices,
             transform=self._raw_grid_transform,
             offset=self._raw_grid_offset,
         )
-        self._calc_box_size_periodic_coord = apply_linear_transform(
-            self._raw_box_size_periodic_index,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
-        )
-        
-        if self.name is None:
-            self.name = "disclination_line"
-            
-        logger.detail(f"line `{self.name}' is of '{self._calc_end2end_category}' type.")
     
     @logging_and_warning_decorator()
     def act_smooth(
@@ -269,6 +267,7 @@ class DisclinationLine:
 
         coords = self._calc_defect_coords.copy()
         
+        opts.name = self.name
         logger.debug(f"Smoothing line ``{self.name}``, with type ``{self._calc_end2end_category}``")
 
         if self._calc_end2end_category == "loop":
@@ -281,7 +280,8 @@ class DisclinationLine:
             head_padding_extra = as_Number(head_padding_extra, is_int=True, value_range=(0, self._calc_defect_num))
             
             msg = f"line {self.name} is cross-type. It has to deal with periodic boundary condition to smooth this line. \n"
-            msg += f"padding_num={padding_num}, head_padding_extra={head_padding_extra}"
+            msg += f"padding_num={padding_num}, head_padding_extra={head_padding_extra}. \n"
+            msg += "You could change the value of padding_num by `padding_num` keywords in `act_smooth()`. Note that it will be automatically truncated to line length if it is longer."
             logger.debug(msg)
             
             indices_origin = self._raw_defect_indices.copy()
@@ -301,7 +301,8 @@ class DisclinationLine:
                 box_size_periodic=self._raw_box_size_periodic_index,
                 is_start_in_box=True,
             )
-
+            
+            logger.detail("Generating the points coordinates in real-space units.")
             coords = apply_linear_transform(
                 indices,
                 transform=self._raw_grid_transform,
@@ -323,6 +324,7 @@ class DisclinationLine:
                 (-padding_num - 1) * output.opts_N_out_ratio
             )
         ]
+        logger.detail("Checking: shifting the entire trajectory so that the first point is inside the periodic box.")
         result = shift_to_box(result, self._raw_box_size_periodic_index)
 
         self._calc_defect_coords_smooth_obj = output
@@ -376,8 +378,8 @@ class DisclinationLine:
             if hasattr(self, "_calc_defect_coords_smooth"):
                 line_coords = self._calc_defect_coords_smooth
             else:
-                msg = ">>> The line has not been smoothed\n"
-                msg += ">>> Use original data instead"
+                msg = "The line has not been smoothed.\n"
+                msg += "Use original data instead"
                 logger.warning(msg)
                 line_coords = self._calc_defect_coords.copy()
         else:
@@ -402,22 +404,25 @@ class DisclinationLine:
             boundary_flag = boundary_periodic_size_to_flag(
                 self._raw_box_size_periodic_index
             )
+            logger.detail("Swtiching the point positions in real-space units back to lattice-grid indices and wrapping them.")
             line_coords_origin = apply_linear_transform(
                 line_coords,
                 transform=np.linalg.inv(self._raw_grid_transform),
                 offset=-self._raw_grid_offset,
             )
-
             line_coords_origin = np.where(
                 boundary_flag,
                 line_coords_origin % self._raw_box_size_periodic_index,
                 line_coords_origin,
             )
+            
+            logger.detail("Extracting the points at periodic boundaries.")
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
             diff = np.linalg.norm(diff, axis=-1)
             end_list = np.where(diff > 1)[0] + 1
             end_list = np.concatenate([[0], end_list, [len(line_coords_origin)]])
 
+            logger.detail("Switching to real-space units.")
             line_coords = apply_linear_transform(
                 line_coords_origin,
                 transform=self._raw_grid_transform,
@@ -426,6 +431,7 @@ class DisclinationLine:
 
             coords_all = []
             scalars_all = []
+            logger.detail("Classifying the line into different segements due to periodic boundary conditions.")
 
             for i in range(len(end_list) - 1):
                 coords_all.append(line_coords[end_list[i] : end_list[i + 1]])

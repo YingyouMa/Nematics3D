@@ -6,12 +6,11 @@ from typing import Optional
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from .scene_wrapper import SceneWrapper
-from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, as_str, Vect, as_Vect
+from Nematics3D.datatypes import Number, as_Number, ColorRGB, as_ColorRGB, as_str, Vect, as_Vect, check_bool_flags
 
 # --- Scene Options ---
 @dataclass(slots=True)
 class OptsScene:
-    is_new: bool = True
     fig_size: Vect(2) = (1920, 1360)
     bgcolor: ColorRGB = (1.0, 1.0, 1.0)
     fgcolor: ColorRGB = (0.0, 0.0, 0.0)
@@ -24,7 +23,6 @@ class OptsScene:
     name: str = "None"
 
     __descriptions__ = {
-        "is_new": "whether to create a new scene",
         "fig_size": "size of figure window (width, height)",
         "bgcolor": "background color (RGB)",
         "fgcolor": "foreground color (RGB)",
@@ -72,8 +70,14 @@ class PlotScene:
     sharing a single Mayavi figure as the drawing canvas.
     """
 
-    @logging_and_warning_decorator
-    def __init__(self, is_new: bool = True, opts=OptsScene(), logger=None):
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __init__(self, 
+                 is_new: bool = True, 
+                 is_apply_opts: bool = False,
+                 opts=OptsScene(), logger=None):
+
+        
+        check_bool_flags(locals())
 
         if is_new:
             size = opts.fig_size
@@ -84,8 +88,9 @@ class PlotScene:
         else:
             self._fig = mlab.gcf()
             self.scene = SceneWrapper(self._fig.scene)
-            self.scene.background = opts.bgcolor
-            self.scene.foreground = opts.fgcolor
+            if is_apply_opts:
+                self.scene.background = opts.bgcolor
+                self.scene.foreground = opts.fgcolor
 
         # Store objects in categories: { "tubes": [obj1, obj2], "surfaces": [...] }
         self.objects = defaultdict(list)
@@ -100,9 +105,10 @@ class PlotScene:
             if not hasattr(self, "name"):
                 self.name = opts.name
         
-        self.scene._set_angles(
-            opts.azimuth, opts.elevation, opts.roll, opts.distance, opts.focal_point
-        )
+        if is_apply_opts:
+            self.scene._set_angles(
+                opts.azimuth, opts.elevation, opts.roll, opts.distance, opts.focal_point
+            )
 
     @logging_and_warning_decorator
     def add_object(self, obj, category: str = "default", logger=None) -> None:

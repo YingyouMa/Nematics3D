@@ -248,11 +248,12 @@ def defect_classify_into_lines(
     box_size_periodic = as_dimension_info(box_size_periodic)
     logger.debug(f"box_size_periodic: {box_size_periodic}")
 
+    logger.detail("Making hash table of defects.")
     defect_indices_hash = make_hash_table(defect_indices)
 
     graph = Graph()
 
-    logger.debug("Start to find neighboring defects")
+    logger.detail("Start to find neighboring defects")
     for idx1, defect in enumerate(defect_indices):
         neighbor = defect_neighbor_possible_get(
             defect, box_size_periodic=box_size_periodic
@@ -264,7 +265,7 @@ def defect_classify_into_lines(
         for idx2 in search:
             graph.add_edge(idx1, idx2)
 
-    logger.debug("Start to perform Hierholzer algorithm")
+    logger.detail("Start to perform Hierholzer algorithm")
     paths = graph.find_path()
     paths = [
         unwrap_trajectory(defect_indices[path], box_size_periodic=box_size_periodic)
@@ -279,6 +280,7 @@ def defect_classify_into_lines(
             box_size_periodic_index=box_size_periodic,
             grid_offset=grid_offset,
             grid_transform=grid_transform,
+            is_sorted=True
         )
         for path in paths
     ]
