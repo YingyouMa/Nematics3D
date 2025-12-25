@@ -39,89 +39,87 @@ Number = numbers.Real
 # - list/tuple/array of 3 values → used directly
 NumericInput = Union[Number, Sequence[Number]]
 
-@logging_and_warning_decorator
-def as_Number(input_data, name="input data", is_int=False, value_range=None, bounded=False, logger=None):
-
-    if is_int and not isinstance(input_data, numbers.Integral):
-        raise TypeError(f"{name} must be a number. Got {input_data} instead.")
-    else:
-        if not isinstance(input_data, numbers.Real):
-            raise TypeError(f"{name} must be a number. Got {input_data} instead.")
-            
-            
-    if value_range is not None:
-        try:
-            value_range = np.asarray(value_range)
-            if (len(value_range) != 2
-                or not isinstance(value_range[0], numbers.Real)
-                or not isinstance(value_range[1], numbers.Real)):
-                raise TypeError(f"value_range must be a tuple/list of two numbers, got {value_range!r}")
-
-            lo, hi = value_range
-            if hi <= lo:
-                raise ValueError(f"value_range must be strictly increasing, got {value_range!r}")
-
-        except Exception as e:
-            logger.exception(f"Invalid value_range for {name}: {value_range!r}. Reason: {e}")
-            logger.recovery("Ignore value_range in the following.")
-            value_range = None
-            
-            
-    if value_range is not None:
-
-        if not (lo <= input_data <= hi):
-            if not bounded:
-                raise ValueError(f"{name} must be in [{lo}, {hi}], got {input_data}")
+@logging_and_warning_decorator(start_finish_level=5)
+def as_Number(input_data, name="input data", is_int=False, value_range=None, bounded=False, replace=None, logger=None):
+    
+    try:
+        # --- Type checks ---
+        if is_int:
+            if isinstance(input_data, numbers.Integral):
+                input_data = int(input_data)
+            elif isinstance(input_data, numbers.Real) and float(input_data).is_integer():
+                input_data = int(input_data)
             else:
-                if lo > input_data:
+                raise TypeError(
+                    f"{name!r} must be an integer-valued number. Got {input_data} instead."
+                )
+        else:
+            if not isinstance(input_data, numbers.Real):
+                raise TypeError(f"{name!r} must be a number. Got {input_data} instead.")
+
+        lo = hi = None
+
+        # --- Validate value_range itself (recover by ignoring range if malformed) ---
+        if value_range is not None:
+            try:
+                value_range_arr = np.asarray(value_range)
+
+                if (
+                    len(value_range_arr) != 2
+                    or not isinstance(value_range_arr[0], numbers.Real)
+                    or not isinstance(value_range_arr[1], numbers.Real)
+                ):
+                    raise TypeError(
+                        f"value_range must be a tuple/list of two numbers, got {value_range!r}"
+                    )
+
+                lo, hi = value_range_arr
+                if hi <= lo:
+                    raise ValueError(f"value_range must be strictly increasing, got {value_range!r}")
+
+            except Exception as e:
+                logger.exception(
+                    f"Invalid value_range for {name!r}: {value_range!r}. Reason: {e}"
+                )
+                logger.recovery("Ignore value_range in the following.")
+                value_range = None
+
+        # --- Enforce range if applicable ---
+        if value_range is not None:
+            if not (lo <= input_data <= hi):
+                msg = f"{name!r} must be in [{lo}, {hi}], got {input_data}."
+
+                if not bounded:
+                    raise ValueError(msg)
+
+                # bounded=True: clip and warn
+                if input_data < lo:
                     input_data = lo
                 elif input_data > hi:
                     input_data = hi
 
-    return input_data
+                msg += f"\nSet {name!r} to be {input_data} in the following."
+                logger.warning(msg)
+
+        return input_data
+
+    except (TypeError, ValueError) as e:
+        # --- Recovery ---
+        if replace is None:
+            raise
+            
+        logger.exception(f"Validation failed for {name!r}: {e}")
+        logger.recovery(f"Set {name!r} to be {replace!r} in the following.")
+
+        return replace
 
 
 # Vect(d) is simply vector in d-dimensions
 def Vect(d):
     return Union[Sequence[Union[int, float]], np.ndarray]
 
-
-def as_Vect(input_data, dim=3, name="input data", is_norm=False):
-    """
-    Convert the given input into a dim-D NumPy vector, with optional normalization.
-
-    This function ensures that the input is interpreted as a NumPy array with shape (dim,).
-    If `is_norm` is True, the vector will be normalized according to the sum of the squares
-    of its components. The normalization is done in-place after the shape check.
-
-    Parameters
-    ----------
-    input_data : array-like
-        The input vector to be converted. Can be a list, tuple, or NumPy array.
-        Must contain exactly dim elements.
-
-    is_norm : bool, optional
-        If True, normalize the vector so that its magnitude (based on sum of squares)
-        becomes 1. Defaults to False.
-
-    Returns
-    -------
-    numpy.ndarray
-        A NumPy array of shape (dim,) representing the (optionally normalized) vector.
-
-    Raises
-    ------
-    ValueError
-        If the input cannot be reshaped into a vector of exactly 3 elements.
-
-    Examples
-    --------
-    >>> as_Vect3D([1, 2, 3])
-    array([1, 2, 3])
-
-    >>> as_Vect3D((3, 4, 0), is_norm=True)
-    array([0.6, 0.8, 0.0])
-    """
+@logging_and_warning_decorator(start_finish_level=5)
+def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, logger=None):
 
     if (
         not isinstance(input_data, (tuple, list, np.ndarray))
@@ -164,7 +162,7 @@ def as_Tensor(input_data, shape, name="input data"):
 ColorRGB = Tuple[float, float, float]
 
 @logging_and_warning_decorator(start_finish_level=5)
-def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, default=(1,1,1), logger=None):
+def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, replace=(0,0,0), logger=None):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -190,6 +188,11 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, defa
             - norm_order=2 : Euclidean-like normalization (sum of squares)
             - norm_order=1 : L1 normalization (sum of absolute values)
         Defaults to 2.
+    
+    replace : ColorRGB, optional
+        Recover the input_data to this replace value if the input_data is illegal.
+        Defaults to (0,0,0), black.
+        
 
     Returns
     -------
@@ -229,7 +232,9 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, defa
                 f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
             )
     except:
-        logger.recovery(f"Set color={default} in the following.")
+        logger.exception("Please check data type.")
+        logger.recovery(f"Set color={replace} in the following.")
+        input_data = (0,0,0)
     
         if is_norm:
             if np.sum(input_data) < 1e-3:
@@ -238,8 +243,94 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, defa
 
     return tuple(map(float, input_data))
 
+@logging_and_warning_decorator(start_finish_level=5)
+def as_ColorRGB_array(
+    input_data,
+    name="input data",
+    is_norm=False,
+    norm_order=2,
+    replace=(0, 0, 0),
+    logger=None,
+):
+    """
+    Validate and process an (N, 3) array of RGB colors with optional row-wise normalization.
 
-@logging_and_warning_decorator
+    Recovery is ONLY applied when:
+      - input_data is array-like with shape (N, 3)
+      - but contains illegal values (dtype or range)
+
+    Any other structural error is not recoverable.
+    """
+
+    # ---------- Structural check (NOT recoverable) ----------
+    if not isinstance(input_data, (list, tuple, np.ndarray)):
+        raise ValueError(
+            f"{name} must be an array-like with shape (N, 3). Got {type(input_data)}."
+        )
+
+    input_data = np.asarray(input_data)
+
+    if input_data.ndim != 2 or input_data.shape[1] != 3:
+        raise ValueError(
+            f"{name} must have shape (N, 3). Got shape {input_data.shape}."
+        )
+
+    N = input_data.shape[0]
+
+    # ---------- Content check (recoverable) ----------
+    try:
+        if not np.issubdtype(input_data.dtype, np.number):
+            raise ValueError(
+                f"{name} must contain numeric values. Got dtype {input_data.dtype}."
+            )
+
+        if np.max(input_data) > 1 or np.min(input_data) < 0:
+            raise ValueError(
+                f"{name} is ColorRGB array, where each number should be in [0,1]."
+            )
+
+        input_data = input_data.astype(float)
+
+    except Exception:
+        logger.exception("Please check color array values.")
+        logger.recovery(f"Set color array to {replace} in the following.")
+
+        # --- Recovery: broadcast replace to (N, 3) ---
+        replace_arr = np.asarray(replace, dtype=float)
+
+        if replace_arr.ndim == 1:
+            if replace_arr.shape != (3,):
+                raise ValueError(
+                    f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}."
+                )
+            # (3,) -> (N, 3)
+            input_data = np.tile(replace_arr, (N, 1))
+        
+        elif replace_arr.ndim == 2:
+            if replace_arr.shape != (N, 3):
+                raise ValueError(
+                    f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}, "
+                    f"expected (N, 3) with N={N}."
+                )
+            input_data = replace_arr
+        
+        else:
+            raise ValueError(
+                f"replace must be shape (3,) or (N, 3). Got array with ndim={replace_arr.ndim}."
+            )
+
+    # ---------- Row-wise normalization ----------
+    if is_norm:
+        norms = np.sum(input_data ** norm_order, axis=1)
+
+        safe = norms >= 1e-3
+        input_data[safe] /= norms[safe][:, None]
+        input_data[~safe] = 0.0
+
+    return input_data
+
+
+@logging_and_warning_decorator(start_finish_level=5)
 def as_str(input_data, name="input_data", replace="None", logger=None):
 
     if not isinstance(input_data, str):
@@ -247,6 +338,7 @@ def as_str(input_data, name="input_data", replace="None", logger=None):
             try:
                 raise TypeError(f"{name} should be str. Got {input_data} with type {type(input_data)} instead. \n")
             except:
+                logger.exception("Please check data type.")
                 logger.recovery(f"Changed it into {replace} in the following.")
             input_data = replace
         else:
@@ -609,16 +701,38 @@ def as_DefectIndex(arr: np.ndarray, tol=1e-8, is_return_row=False) -> DefectInde
     
     return arr
 
+@logging_and_warning_decorator(start_finish_level=5)
+def as_bool(input_data, name="input data", replace=None, logger=None) -> bool:
+    
+    try:
+        # --- Case 1: already boolean ---
+        if isinstance(input_data, (bool, np.bool_)):
+            return input_data
 
-def as_bool(input_data, name="input data") -> np.ndarray:
+        # --- Case 2: numeric 0 / 1 ---
+        if isinstance(input_data, Number):
+            if input_data in (0, 1):
+                return bool(input_data)
+            else:
+                raise TypeError(
+                    f"{name} must contain only 0/1 when numeric. Got {input_data}."
+                )
 
-    if isinstance(input_data, Number) and input_data not in (0,1):
-        raise TypeError(f"{name} must contain only 0/1 when numeric. Got {input_data}.")
+        # --- Everything else is invalid ---
+        raise TypeError(
+            f"{name} must be boolean or in (0,1). "
+            f"Got {input_data} with dtype={getattr(input_data, 'dtype', type(input_data))}"
+        )
 
-    if isinstance(input_data, (bool, np.bool_)):
-        return input_data
-
-    raise TypeError(f"{name} must be boolean or in (0,1). Got {input_data} with dtype={input_data.dtype}")
+    except TypeError:
+        # --- No recovery allowed ---
+        if replace is None:
+            raise
+            
+        logger.exception("Please check data type")
+        logger.recovery(f"set {name} to be {replace} in the following.")
+        
+        return replace
 
 
 

@@ -20,7 +20,7 @@ from ..datatypes import (
     as_Number
 )
 from ..field import apply_linear_transform
-from .visual_mayavi.plot_tube import PlotTube, OptsTube
+from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all
 from .smoothed_line import OptsSmooth, SmoothedLine
 

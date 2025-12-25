@@ -34,7 +34,7 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
     """
     if not is_dataclass(opts):
         raise TypeError("opts must be a dataclass instance")
-        
+    
     field_names = {f.name for f in fields(opts)}
 
     updates = {}

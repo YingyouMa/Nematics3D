@@ -127,7 +127,7 @@ class Logger:
             exc_text = traceback.format_exc()
         else:
             exc_text = "".join(traceback.format_exception(*exc_info))
-        self._log(logging.ERROR, msg + "\n" + exc_text)
+        self._log(logging.ERROR, ">>> " + msg + "\n" + exc_text)
 
 
 def logging_and_warning_decorator(

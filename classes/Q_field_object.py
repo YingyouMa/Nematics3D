@@ -33,7 +33,7 @@ from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import OptsnPlane, PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene, OptsScene
 from .visual_mayavi.plot_extent import PlotExtent, OptsExtent
-from .visual_mayavi.plot_tube import OptsTube
+from .visual.plot_tube import OptsTube
 from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
 from ..general import get_box_corners
@@ -402,7 +402,7 @@ class QFieldObject:
         min_line_length: Optional[int] = None,
         lines_scalars_name: Optional[str] = None,
         opts_scene=OptsScene(),
-        opts_tube=OptsTube(color=None),
+        opts_tube=OptsTube(color_rule='sample_far'), #!!!!!!!!!!!!!!!!!!
         opts_extent=OptsExtent(),
         logger=None,
         **kwargs,
@@ -447,15 +447,15 @@ class QFieldObject:
         if lines_scalars_name is not None:
             logger.info("Scalars of lines are input")
             lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
-            lines_colors = [None for line in lines_plot]
-            if opts_tube.color is not None:
+            lines_colors = [(1,1,1) for line in lines_plot] #!!!!!!!!!!!!!!!!!!!!!!!
+            if opts_tube.color_rule is not None:
                 logger.warning(
                     "scalars of lines are input. Their color_input will be ignored"
                 )
         else:
             lines_scalars = [None for line in lines_plot]
 
-        if opts_tube.color is None:
+        if opts_tube.color_rule == 'sample_far':   #!!!!!!!!!!!!!!!!!!!!!
             from ..general import blue_red_in_white_bg, sample_far
 
             color_map = blue_red_in_white_bg()
@@ -464,7 +464,7 @@ class QFieldObject:
                 (sample_far(len(lines_plot)) * color_map_length).astype(int)
             ]
         else:
-            lines_colors = [opts_tube.color for line in lines_plot]
+            lines_colors = [opts_tube.color_rule for line in lines_plot]
 
         figure = self.act_add_scene(is_new, opts=opts_scene)
 
