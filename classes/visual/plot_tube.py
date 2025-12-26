@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field, asdict
-from typing import Union, Optional, Callable, List
+from typing import Optional, Callable, List
 import numpy as np
 import pyvista as pv
 
@@ -91,7 +91,7 @@ class OptsTube:
     # --- Phong Lighting ---
     ambient: float = 0.0
     diffuse: float = 1.0
-    specular: float = 0.0
+    specular: float = 1.0
     specular_pow: float = 10.0
     specular_color: ColorRGB = (1.0, 1.0, 1.0)
 
@@ -126,6 +126,7 @@ class OptsTube:
 
     # --- Internal State ---
     _owner: object | None = field(default=None, repr=False, init=False)
+    _restricted: bool = field(default=False, init=False, repr=False)
 
     _validators = {
         
@@ -194,7 +195,7 @@ class PlotTube:
         "_calc_mesh": "The generated PyVista PolyData mesh of the tube",
         "_calc_poly": "The generated PyVista PolyData",
         "_entities": "The PyVista Actor in the plotter",
-        "opts": "The OptsTube instance for configuration"
+        "opts": "The OptsTube instance for configuration",
     }
     
     __slots__ = tuple(__descriptions__.keys())
@@ -223,6 +224,8 @@ class PlotTube:
         logger.detail("Executing initial plot")
         self._helper_resolver_init()
         self._helper_make_figure(plotter=plotter)
+        
+        object.__setattr__(self.opts, "_restricted", True)
       
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(self, rule_attr, values_attr, target_shape, default_val, logger=None):
@@ -398,6 +401,8 @@ class PlotTube:
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_imperative(self, attr, values, logger=None):
 
+        object.__setattr__(self.opts, "_restricted", False)        
+
         valid_attrs = ['color', 'radius', 'scalars', 'opacity']
         if attr not in valid_attrs:
             raise ValueError(f"Imperative attribute must be in {valid_attrs}. Got '{attr}' instead.")
@@ -414,8 +419,10 @@ class PlotTube:
             
         if attr == 'scalars':
             self.opts.color_rule = 'scalars'
-
+        
         self._helper_resolver_spec(attr)
+        
+        object.__setattr__(self.opts, "_restricted", True)
         
         
     @logging_and_warning_decorator(start_finish_level=5)

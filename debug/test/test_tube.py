@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'D:/Document/GitHub/')
-from Nematics3D import PlotTube
+import Nematics3D
 
 import numpy as np
 import pyvista as pv
@@ -25,7 +25,7 @@ def opacity_func(coords):
 plotter = pv.Plotter()
 
 # --- 案例 1: 固定参数 (类似于你给的例子) ---
-tube1 = PlotTube(
+tube1 = Nematics3D.PlotTube(
     coords=get_path(offset_y=0), 
     plotter=plotter, 
     name="solid_blue",
@@ -36,7 +36,7 @@ tube1 = PlotTube(
 )
 
 # --- 案例 2: 函数驱动 (一次性传入函数) ---
-tube2 = PlotTube(
+tube2 = Nematics3D.PlotTube(
     coords=get_path(offset_y=5),
     plotter=plotter,
     name="functional_pbr",
@@ -46,7 +46,7 @@ tube2 = PlotTube(
 )
 
 # --- 案例 3: 手动模式 + 透明度 ---
-tube3 = PlotTube(
+tube3 = Nematics3D.PlotTube(
     coords=get_path(offset_y=10),
     plotter=plotter,
     name="manual_alpha",
@@ -59,7 +59,7 @@ tube3 = PlotTube(
     roughness=0.4    
 )
 
-tube4 = PlotTube(
+tube4 = Nematics3D.PlotTube(
     coords=get_path(offset_y=15),
     plotter=plotter,
     name="func_scalars",
@@ -71,19 +71,19 @@ tube4 = PlotTube(
     cmap='plasma'     
 )
 
-# tube5 = PlotTube(
-#     coords=get_path(offset_y=20),
-#     plotter=plotter,
-#     name="func_scalars2",
-#     sides=20,
-#     color_rule="scalars",
-#     radius_rule=0.25,
-#     opacity_rule=1,     
-#     scalars_rule=radius_wave,  
-#     shading_type='pbr',
-#     metallic=1,
-#     roughness=0.4,
-#     clim=(0,0.2)
-# )
+tube5 = Nematics3D.PlotTube(
+    coords=get_path(offset_y=20),
+    plotter=plotter,
+    name="func_scalars2",
+    sides=20,
+    color_rule="scalars",
+    radius_rule=0.25,
+    opacity_rule=1,     
+    scalars_rule=radius_wave,  
+    shading_type='pbr',
+    metallic=1,
+    roughness=0.4,
+    clim=(0,0.2)
+)
 
 plotter.show(interactive_update=True)

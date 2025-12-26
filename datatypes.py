@@ -120,20 +120,31 @@ def Vect(d):
 
 @logging_and_warning_decorator(start_finish_level=5)
 def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, logger=None):
-
-    if (
-        not isinstance(input_data, (tuple, list, np.ndarray))
-        or len(input_data) != dim
-        or not all(isinstance(x, numbers.Real) for x in input_data)
-    ):
-        raise ValueError(
-            f"{name} must be a vector with {dim} numbers. Got {input_data} instead."
-        )
-    else:
-        input_data = np.asarray(input_data)
+    
+    try:
+        if (
+            not isinstance(input_data, (tuple, list, np.ndarray))
+            or len(input_data) != dim
+            or not all(isinstance(x, numbers.Real) for x in input_data)
+        ):
+            raise ValueError(
+                f"{name!r} must be a vector with {dim} numbers. Got {input_data} instead."
+            )
+    except ValueError:
+        if replace is None:
+            raise
+        else:
+            logger.exception("Check input data.")
+            logger.recovery(f"Change {name!r} into {replace} in the following.")
+            input_data = replace
+            if not isinstance(input_data, (tuple, list, np.ndarray)):
+                return input_data
+            
+    input_data = np.asarray(input_data)
 
     if is_norm:
-        input_data = input_data / np.linalg.norm(input_data)
+        if np.linalg.norm(input_data) < 1e-3:
+            input_data = input_data / np.linalg.norm(input_data)
 
     return input_data
 
