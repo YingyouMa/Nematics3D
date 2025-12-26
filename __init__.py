@@ -9,6 +9,7 @@ from .classes.disclination_line import DisclinationLine
 from .classes.graph import Graph
 from .classes.Q_field_object import QFieldObject
 from .classes.visual.plot_tube import PlotTube
+from .classes.visual.plot_figure import PlotFigure
 from .classes.visual_mayavi.plot_scene import PlotScene
 from .classes.visual_mayavi.plot_extent import PlotExtent
 from .classes.plane_grid import PlaneGrid

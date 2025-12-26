@@ -41,7 +41,7 @@ class OptsCamera:
         "roll": lambda self, v: as_Number(
             v, 
             name=self.__descriptions__["roll"], 
-            value_range=(-180, 180), 
+            value_range=(-180,180), 
             bounded=True
         ),
         "distance": lambda self, v: as_Number(
@@ -62,8 +62,8 @@ class OptsCamera:
         
         old_value = getattr(self, key, None)
         object.__setattr__(self, key, value)
-
-        if old_value is not None and not np.allclose(old_value, value, atol=1e-7) and not key.startswith("_"):
+        
+        if not key.startswith("_") and old_value is not None and not np.allclose(old_value, value, atol=1e-7):
             if self._on_change:
                 self._on_change(key, value)
                 
@@ -76,6 +76,16 @@ class FigureCamera:
         self._helper_sync_from_cam()
         self.opts._on_change = self._helper_sync_from_opts
         
+        weak_self = weakref.proxy(self)
+        
+        def _on_interaction_end(obj, event):
+            try:
+                weak_self._helper_sync_from_cam()
+            except ReferenceError:
+                pass
+            
+        plotter.iren.add_observer('EndInteractionEvent', _on_interaction_end)
+        
     @property
     def _internal_plotter(self):
         return self._internal_plotter_ref()
@@ -84,6 +94,26 @@ class FigureCamera:
     def _internal_cam(self):
         p = self._internal_plotter
         return p.camera if p else None
+    
+    @staticmethod
+    def _helper_convert_pos_to_spherical(position, focal_point):
+
+        pos = np.array(position)
+        foc = np.array(focal_point)
+        vec = pos - foc
+        
+        dist = np.linalg.norm(vec)
+        
+        if dist < 1e-9:
+            return 0.0, 0.0, 0.0, focal_point
+
+        elevation = np.degrees(np.arcsin(vec[2] / dist))
+
+        az_rad = np.arctan2(vec[1], vec[0])
+        azimuth = np.degrees(az_rad) % 360  # 转为 [0, 360)
+        
+        return azimuth, elevation, dist
+    
     
     def _helper_sync_from_opts(self, key, value):
         cam = self._internal_cam
@@ -100,11 +130,15 @@ class FigureCamera:
         cb = self.opts._on_change
         self.opts._on_change = None
         
-        self.opts.azimuth = self._internal_cam.azimuth
-        self.opts.elevation = self._internal_cam.elevation
         self.opts.roll = self._internal_cam.roll
-        self.opts.distance = self._internal_cam.distance
         self.opts.focal_point = self._internal_cam.focal_point
+        
+        temp = self._helper_convert_pos_to_spherical(self._internal_cam.position, 
+                                                     self._internal_cam.focal_point)
+        
+        self.opts.azimuth = temp[0]
+        self.opts.elevation = temp[1]
+        self.opts.distance = temp[2]
         
         self.opts._on_change = cb
 

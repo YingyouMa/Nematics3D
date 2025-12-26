@@ -14,6 +14,7 @@ from Nematics3D.datatypes import (
     Vect,
     as_Vect
 )
+from .plot_figure import PlotFigure
 from ..opts import merge_opts_all
 
 #! scalars_limit
@@ -31,8 +32,10 @@ LEVEL_REMESH = 2  # Needs to re-run the tube filter to rebuild the 3D mesh. (Hea
 ATTR_MAP = {
     # === Visibility & Global Settings ===
     "name":                 (LEVEL_ACTOR,  None,                    "Unique identifier for the actor in the plotter."),
+    "category":             (LEVEL_ACTOR,  None,                    "The semantic category of this plotting entity."),
     "is_visible":           (LEVEL_ACTOR,  "visibility",            "Whether the tube is visible in the scene."),
-    "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",     "'phong', 'pbr' (Physical)"),
+    "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",    "'phong', 'pbr' (Physical)"),
+    "is_reset_camera":      (LEVEL_ACTOR,  None,                    "Whether to reset the camera settings for each (re-)plot."),
 
     # === Legacy Lighting - Phong ===
     "ambient":              (LEVEL_ACTOR,  "prop.ambient",          "Reflected light from environment (0-1)."),
@@ -50,7 +53,7 @@ ATTR_MAP = {
                                                                      "1) Uniform (e.g. (1,0,0)), "
                                                                      "2) Function (mapping function), "
                                                                      "3) 'manual' (uses color_values), "
-                                                                     "4) 'scalars' (maps 1D data to colors using cmap/clim).")),
+                                                                     "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim).")),
     "color_values":         (LEVEL_RECALC, None,                    "The resolved RGB/RGBA array."),
 
     # === Opacity Control ===
@@ -64,8 +67,8 @@ ATTR_MAP = {
     # === Scalars Control (Needs color_rule='scalars') ===
     "scalars_rule":         (LEVEL_RECALC, None,                    "Determines point scalars. Options: 1) Function (mapping function), 2) 'manual' (uses scalars_values), 3) None (No scalars)"),
     "scalars_values":       (LEVEL_RECALC, None,                    "The resolved scalars array."),
-    "cmap":                 (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color_rule is scalar."),
-    "clim":                 (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
+    "scalars_cmap":         (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color_rule is scalar."),
+    "scalars_clim":         (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
     "is_scalar_bar":        (LEVEL_ACTOR,  None,                    "Whether to display the color legend (scalar bar)."),
     "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
 
@@ -85,8 +88,10 @@ ATTR_MAP = {
 class OptsTube:
     # --- Visibility & Global ---
     name: str = "tube"
+    category: str = 'line'
     is_visible: bool = True
     shading_type: str = "phong"
+    is_reset_camera: bool = True
 
     # --- Phong Lighting ---
     ambient: float = 0.0
@@ -112,8 +117,8 @@ class OptsTube:
     # --- Scalars (Used if color_rule='scalars') ---
     scalars_rule: str | Callable | None = None
     scalars_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
-    cmap: str = "viridis"
-    clim: Vect(2) = (0,0)
+    scalars_cmap: str = "viridis"
+    scalars_clim: Vect(2) | None = None
     is_scalar_bar: bool = True
     scalar_bar_title: str = 'scalars'
     
@@ -131,8 +136,10 @@ class OptsTube:
     _validators = {
         
         "name": lambda self, v, d: as_str(v, name=d, replace='tube'),
+        "category": lambda self, v, d: as_str(v, name=d, replace='line'),
         "is_visible": lambda self, v, d: as_bool(v, name=d, replace=True),
         # "shading_type": lambda self, v, d: v if v.lower() in ['phong', 'pbr'] else 'standard',
+        "is_reset_camera": lambda self, v, d: as_bool(v, name=d, replace=True),
         
         "ambient": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.0),
         "diffuse": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=1.0),
@@ -164,8 +171,8 @@ class OptsTube:
         #"scalars_rule": lambda self, v, d: v if (isinstance(v, Callable) or v in ['manual', None]) else None,
         #"scalars_values": lambda self, v, d: v if isinstance(v, np.ndarray) or v is None else None,
         
-        "cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
-        "clim": lambda self, v, d: as_Vect(v, name=d, dim=2, replace=(0,0)),
+        "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
+        "scalars_clim": lambda self, v, d: v if v is None else as_Vect(v, name=d, dim=2, replace=None),
         "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=True),
         "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace='scalars'),
         
@@ -204,11 +211,12 @@ class PlotTube:
     def __init__(
         self,
         coords: np.ndarray,
-        plotter: pv.Plotter,
+        Figure: PlotFigure,
         opts: OptsTube = OptsTube(),
         logger = None,
         **kwargs
     ):
+
         
         # Initializing internal states
         object.__setattr__(self, "_raw_coords", np.asarray(coords))
@@ -216,14 +224,28 @@ class PlotTube:
         object.__setattr__(self, "_calc_mesh", None)
         object.__setattr__(self, "_calc_poly", None)
 
-        # Handle explicit kwargs overrides
+        logger.detail('Handling explicit kwargs overrides')
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_owner", self)
         object.__setattr__(self, "opts", opts)
+        
+        logger.detail('Checking if name already exists')
+        name_set = set(Figure.act_get_entities_names())
+        name_input = opts.name
+        if name_input in name_set:
+            index = 1
+            new_name = f"{name_input}_{index}"
+            while opts.name in name_set:
+                index += 1
+                new_name = f"{name_input}_{index}"
+                
+            opts.name = new_name
+            logger.warning(f"{name_input!r} already exists in PlotFigure object! Renamed to {opts.name!r}.")
+        
 
         logger.detail("Executing initial plot")
         self._helper_resolver_init()
-        self._helper_make_figure(plotter=plotter)
+        self._helper_make_figure(Figure=Figure, is_reset_camera=opts.is_reset_camera)
         
         object.__setattr__(self.opts, "_restricted", True)
       
@@ -332,7 +354,7 @@ class PlotTube:
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)    
-    def _helper_make_figure(self, plotter: pv.Plotter, logger=None):
+    def _helper_make_figure(self, Figure: PlotFigure, is_reset_camera: bool = True, logger=None):
         """
         Creates or updates the rendering in a PyVista Plotter.
         """
@@ -340,25 +362,25 @@ class PlotTube:
         is_scalars = (self.opts.color_rule == 'scalars')
         
         input_dir = {
-            "name":     self.opts.name,
-            "pbr":      self.opts.shading_type == 'pbr',
-            "rgb":      not is_scalars,
-            "scalars":  'scalars' if is_scalars else 'rgba',
+            "name":         self.opts.name,
+            "pbr":          self.opts.shading_type == 'pbr',
+            "rgb":          not is_scalars,
+            "scalars":      'scalars' if is_scalars else 'rgba',
+            "reset_camera": is_reset_camera
             }
         if is_scalars:
             input_dir["opacity"] = "opacity"
-            input_dir["cmap"] = self.opts.cmap
+            input_dir["cmap"] = self.opts.scalars_cmap
             input_dir["show_scalar_bar"] = self.opts.is_scalar_bar
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
-            if np.sum(np.asarray(self.opts.clim)**2) != 0:
-                input_dir["clim"] = self.opts.clim
+            if self.opts.scalars_clim is not None:
+                input_dir["clim"] = self.opts.scalars_clim
             
-        
         logger.detail("Creating tube mesh")
         mesh = self._helper_build_tube_mesh()
             
         logger.detail("Visualizing the tube")
-        actor = plotter.add_mesh(mesh, **input_dir)
+        actor = Figure.obj_plotter.add_mesh(mesh, **input_dir)
         
         logger.detail("Applying detailed rendering properties directly to the Actor's property object")
         
@@ -375,27 +397,24 @@ class PlotTube:
         prop.interpolation = shading
         self.opts.shading_type = shading
             
-
-        # Set specific lighting values
         prop.ambient = self.opts.ambient
         prop.diffuse = self.opts.diffuse
         prop.specular = self.opts.specular
         prop.specular_power = self.opts.specular_pow
         prop.specular_color = self.opts.specular_color
         
-        # PBR specific
         if shading == 'pbr':
             prop.metallic = self.opts.metallic
             prop.roughness = self.opts.roughness
             
-        # Global visibility
         actor.visibility = self.opts.is_visible
 
-        # 4. Store the actor reference for future LEVEL_ACTOR updates
         object.__setattr__(self, "_entities", actor)
         
-        # 5. Final render trigger
-        plotter.render()
+        Figure.obj_plotter.render()
+        Figure.obj_plotter.show(interactive_update=True)
+        
+        Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -463,19 +482,19 @@ class PlotTube:
         mapper.SetColorModeToMapScalars()
         mapper.SetArrayName('scalars')
         
-        if np.sum(np.asarray(self.opts.clim)**2) == 0:
+        if self.opts.scalars_clim is None:
             vmin_mesh = float(np.nanmin(self._calc_mesh.point_data['scalars']))
             vmin_poly = float(np.nanmin(self._calc_poly.point_data['scalars']))
             vmin = np.min((vmin_mesh, vmin_poly))
             vmax_mesh = float(np.nanmax(self._calc_mesh.point_data['scalars']))
             vmax_poly = float(np.nanmax(self._calc_poly.point_data['scalars']))
             vmax = np.max((vmax_mesh, vmax_poly))
-            clim = (vmin, vmax)
+            scalars_clim = (vmin, vmax)
         else:
-            clim = self.opts.clim
+            scalars_clim = self.opts.scalars_clim
         
-        mapper.SetLookupTable(pv.LookupTable(cmap=self.opts.cmap))
-        mapper.GetLookupTable().SetRange(*clim)
+        mapper.SetLookupTable(pv.LookupTable(cmap=self.opts.scalars_cmap))
+        mapper.GetLookupTable().SetRange(*scalars_clim)
         mapper.GetLookupTable().Build()
         mapper.SetUseLookupTableScalarRange(True)
             

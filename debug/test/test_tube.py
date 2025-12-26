@@ -22,12 +22,12 @@ def opacity_func(coords):
     opacity = np.abs(np.sin(coords[:, 2]))
     return opacity
 
-plotter = pv.Plotter()
+Figure = Nematics3D.PlotFigure()
 
 # --- 案例 1: 固定参数 (类似于你给的例子) ---
 tube1 = Nematics3D.PlotTube(
-    coords=get_path(offset_y=0), 
-    plotter=plotter, 
+    Figure=Figure,
+    coords=get_path(offset_y=0),  
     name="solid_blue",
     color_rule=(0,0,1), # 蓝色
     radius_rule=0.3,
@@ -37,8 +37,8 @@ tube1 = Nematics3D.PlotTube(
 
 # --- 案例 2: 函数驱动 (一次性传入函数) ---
 tube2 = Nematics3D.PlotTube(
+    Figure=Figure,
     coords=get_path(offset_y=5),
-    plotter=plotter,
     name="functional_pbr",
     color_rule=color_func,     # 渐变色函数
     radius_rule=radius_wave,   # 波动半径函数
@@ -47,8 +47,8 @@ tube2 = Nematics3D.PlotTube(
 
 # --- 案例 3: 手动模式 + 透明度 ---
 tube3 = Nematics3D.PlotTube(
+    Figure=Figure,
     coords=get_path(offset_y=10),
-    plotter=plotter,
     name="manual_alpha",
     color_rule="manual",
     color_values=np.random.rand(50, 3), # 随机色数组
@@ -60,20 +60,20 @@ tube3 = Nematics3D.PlotTube(
 )
 
 tube4 = Nematics3D.PlotTube(
+    Figure=Figure,
     coords=get_path(offset_y=15),
-    plotter=plotter,
     name="func_scalars",
     sides=20,
     color_rule="scalars",
     radius_rule=0.25,
     opacity_rule=1,     
     scalars_rule=radius_wave, 
-    cmap='plasma'     
+    scalars_cmap='plasma'     
 )
 
 tube5 = Nematics3D.PlotTube(
+    Figure=Figure,
     coords=get_path(offset_y=20),
-    plotter=plotter,
     name="func_scalars2",
     sides=20,
     color_rule="scalars",
@@ -83,7 +83,5 @@ tube5 = Nematics3D.PlotTube(
     shading_type='pbr',
     metallic=1,
     roughness=0.4,
-    clim=(0,0.2)
+    scalars_clim=(0,0.2)
 )
-
-plotter.show(interactive_update=True)
