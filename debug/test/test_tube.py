@@ -67,22 +67,23 @@ tube4 = PlotTube(
     color_rule="scalars",
     radius_rule=0.25,
     opacity_rule=1,     
-    scalars_rule=radius_wave,      
+    scalars_rule=radius_wave, 
+    cmap='plasma'     
 )
 
-tube5 = PlotTube(
-    coords=get_path(offset_y=20),
-    plotter=plotter,
-    name="func_scalars2",
-    sides=20,
-    color_rule="scalars",
-    radius_rule=0.25,
-    opacity_rule=1,     
-    scalars_rule=radius_wave,  
-    shading_type='pbr',
-    metallic=1,
-    roughness=0.4,
-    clim=(0,0.2)
-)
+# tube5 = PlotTube(
+#     coords=get_path(offset_y=20),
+#     plotter=plotter,
+#     name="func_scalars2",
+#     sides=20,
+#     color_rule="scalars",
+#     radius_rule=0.25,
+#     opacity_rule=1,     
+#     scalars_rule=radius_wave,  
+#     shading_type='pbr',
+#     metallic=1,
+#     roughness=0.4,
+#     clim=(0,0.2)
+# )
 
 plotter.show(interactive_update=True)

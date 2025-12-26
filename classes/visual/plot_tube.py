@@ -8,10 +8,11 @@ from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
     as_ColorRGB_array,
-    Number,
     as_Number,
     as_str,
-    as_bool
+    as_bool,
+    Vect,
+    as_Vect
 )
 from ..opts import merge_opts_all
 
@@ -19,6 +20,8 @@ from ..opts import merge_opts_all
 #! scalars_bar
 #! clip_geometry
 #! light dark pbr
+
+#! only change cmap
 
 
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
@@ -62,9 +65,9 @@ ATTR_MAP = {
     "scalars_rule":         (LEVEL_RECALC, None,                    "Determines point scalars. Options: 1) Function (mapping function), 2) 'manual' (uses scalars_values), 3) None (No scalars)"),
     "scalars_values":       (LEVEL_RECALC, None,                    "The resolved scalars array."),
     "cmap":                 (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color_rule is scalar."),
-    # "clim":                 (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
-    # "is_scalar_bar":        (LEVEL_ACTOR,  None,                    "Whether to display the color legend (scalar bar)."),
-    # "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
+    "clim":                 (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
+    "is_scalar_bar":        (LEVEL_ACTOR,  None,                    "Whether to display the color legend (scalar bar)."),
+    "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
 
     # === Geometry & Topology (LEVEL_REMESH) ===
     "sides":                (LEVEL_REMESH, None,                    "Number of facets around the tube (higher = smoother)."),
@@ -110,7 +113,10 @@ class OptsTube:
     scalars_rule: str | Callable | None = None
     scalars_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
     cmap: str = "viridis"
-    clim: list | None = None
+    clim: Vect(2) = (0,0)
+    is_scalar_bar: bool = True
+    scalar_bar_title: str = 'scalars'
+    
 
     # --- Geometry & Clipping ---
     sides: int = 6
@@ -156,8 +162,11 @@ class OptsTube:
         
         #"scalars_rule": lambda self, v, d: v if (isinstance(v, Callable) or v in ['manual', None]) else None,
         #"scalars_values": lambda self, v, d: v if isinstance(v, np.ndarray) or v is None else None,
-        #"cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
-        #"clim": lambda self, v, d: v if (isinstance(v, (list, tuple, np.ndarray)) and len(v) == 2) else None,
+        
+        "cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
+        "clim": lambda self, v, d: as_Vect(v, name=d, dim=2, replace=(0,0)),
+        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=True),
+        "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace='scalars'),
         
         "sides": lambda self, v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True, replace=6),
         "is_capping": lambda self, v, d: as_bool(v, name=d, replace=True),
@@ -183,6 +192,7 @@ class PlotTube:
     __descriptions__ = {
         "_raw_coords": "The N x 3 input coordinates",
         "_calc_mesh": "The generated PyVista PolyData mesh of the tube",
+        "_calc_poly": "The generated PyVista PolyData",
         "_entities": "The PyVista Actor in the plotter",
         "opts": "The OptsTube instance for configuration"
     }
@@ -203,6 +213,7 @@ class PlotTube:
         object.__setattr__(self, "_raw_coords", np.asarray(coords))
         object.__setattr__(self, "_entities", None)
         object.__setattr__(self, "_calc_mesh", None)
+        object.__setattr__(self, "_calc_poly", None)
 
         # Handle explicit kwargs overrides
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
@@ -210,6 +221,7 @@ class PlotTube:
         object.__setattr__(self, "opts", opts)
 
         logger.detail("Executing initial plot")
+        self._helper_resolver_init()
         self._helper_make_figure(plotter=plotter)
       
     @logging_and_warning_decorator(start_finish_level=5)
@@ -241,11 +253,22 @@ class PlotTube:
             setattr(self.opts, values_attr, fallback)
             setattr(self.opts, rule_attr, default_val)
             logger.recovery(f"Reset {values_attr} to default: {default_val} everywhere.")
+            
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_resolver_init(self, logger=None):
+        logger.detail("Resolving data for color, opacity and radius")
+        self._helper_resolver_spec('opacity')
+        self._helper_resolver_spec('radius')
+        
+        if self.opts.color_rule == 'scalars':
+            self._helper_resolver_spec('scalars')
+        else:
+            self._helper_resolver_spec('color')
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_spec(self, attr, logger=None):
         
-        if attr not in {'color', 'radius', 'scalars', 'opacity'}:
+        if attr not in ['color', 'radius', 'scalars', 'opacity']:
             raise ValueError(f"Attribute resolved by `_helper_resolver_init()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr} instead.")
             
         default_val_dir = {
@@ -302,6 +325,7 @@ class PlotTube:
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
         object.__setattr__(self, "_calc_mesh", mesh)
+        object.__setattr__(self, "_calc_poly", poly)
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)    
@@ -318,19 +342,17 @@ class PlotTube:
             "rgb":      not is_scalars,
             "scalars":  'scalars' if is_scalars else 'rgba',
             }
-        
-        logger.detail("Resolving data for color, opacity and radius")
-        self._helper_resolver_spec('opacity')
-        self._helper_resolver_spec('radius')
-        
         if is_scalars:
-            self._helper_resolver_spec('scalars')
             input_dir["opacity"] = "opacity"
-        else:
-            self._helper_resolver_spec('color')
+            input_dir["cmap"] = self.opts.cmap
+            input_dir["show_scalar_bar"] = self.opts.is_scalar_bar
+            input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
+            if np.sum(np.asarray(self.opts.clim)**2) != 0:
+                input_dir["clim"] = self.opts.clim
+            
         
         logger.detail("Creating tube mesh")
-        mesh = self._helper_build_tube_mesh(logger=logger)
+        mesh = self._helper_build_tube_mesh()
             
         logger.detail("Visualizing the tube")
         actor = plotter.add_mesh(mesh, **input_dir)
@@ -371,6 +393,87 @@ class PlotTube:
         
         # 5. Final render trigger
         plotter.render()
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_resolver_imperative(self, attr, values, logger=None):
+
+        valid_attrs = ['color', 'radius', 'scalars', 'opacity']
+        if attr not in valid_attrs:
+            raise ValueError(f"Imperative attribute must be in {valid_attrs}. Got '{attr}' instead.")
+
+        is_array_data = (isinstance(values, (np.ndarray, list, tuple)) and 
+                         not (attr == 'color' and not isinstance(values[0], (list, np.ndarray))))
+
+        if is_array_data:
+            setattr(self.opts, f"{attr}_values", np.asarray(values))
+            setattr(self.opts, f"{attr}_rule", "manual")
+            
+        else:
+            setattr(self.opts, f"{attr}_rule", values)
+            
+        if attr == 'scalars':
+            self.opts.color_rule = 'scalars'
+
+        self._helper_resolver_spec(attr)
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_update_rgba(self, logger=None):
+        rgba = np.hstack([self.opts.color_values, self.opts.opacity_values.reshape(-1, 1)])
+        if 'rgba' in self._calc_poly.point_data:
+            del self._calc_poly.point_data['rgba']
+        if 'rgba' in self._calc_mesh.point_data:
+            del self._calc_mesh.point_data['rgba']
+        self._calc_poly.point_data['rgba'] = rgba
+        self._calc_mesh.point_data['rgba'] = self._calc_mesh.interpolate(self._calc_poly).point_data['rgba']
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_switch_scalars_to_rgba(self, logger=None):
+        logger.detail("Change the color_rule from 'scalars' to current color settings")
+        mapper = self._entities.mapper
+        mapper.scalar_visibility = True
+        mapper.color_mode = 'direct'
+        mapper.SetColorModeToDirectScalars()
+        mapper.lookup_table = None
+        self._calc_mesh.set_active_scalars('rgba')
+        mapper.SetArrayName('rgba')
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_switch_rgba_to_scalars(self, logger=None):
+        logger.detail("Change the color_rule from previous color settings to 'scalars'")
+        if 'scalars' in self._calc_poly.point_data:
+            del self._calc_poly.point_data['scalars']
+        if 'scalars' in self._calc_mesh.point_data:
+            del self._calc_mesh.point_data['scalars']
+        self._calc_poly.point_data['scalars'] = self.opts.scalars_values
+        self._calc_mesh.point_data['scalars'] = self._calc_mesh.interpolate(self._calc_poly).point_data['scalars']
+        self._calc_mesh.set_active_scalars('scalars')
+        mapper = self._entities.mapper
+        mapper.scalar_visibility = True
+        mapper.color_mode = "map" 
+        mapper.SetColorModeToMapScalars()
+        mapper.SetArrayName('scalars')
+        
+        if np.sum(np.asarray(self.opts.clim)**2) == 0:
+            vmin_mesh = float(np.nanmin(self._calc_mesh.point_data['scalars']))
+            vmin_poly = float(np.nanmin(self._calc_poly.point_data['scalars']))
+            vmin = np.min((vmin_mesh, vmin_poly))
+            vmax_mesh = float(np.nanmax(self._calc_mesh.point_data['scalars']))
+            vmax_poly = float(np.nanmax(self._calc_poly.point_data['scalars']))
+            vmax = np.max((vmax_mesh, vmax_poly))
+            clim = (vmin, vmax)
+        else:
+            clim = self.opts.clim
+        
+        mapper.SetLookupTable(pv.LookupTable(cmap=self.opts.cmap))
+        mapper.GetLookupTable().SetRange(*clim)
+        mapper.GetLookupTable().Build()
+        mapper.SetUseLookupTableScalarRange(True)
+            
+        
+        
         
     @logging_and_warning_decorator()
     def act_commit(self, logger=None, **updates):
