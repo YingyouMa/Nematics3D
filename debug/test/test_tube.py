@@ -53,7 +53,7 @@ tube3 = Nematics3D.PlotTube(
     color_rule="manual",
     color_values=np.random.rand(50, 3), # 随机色数组
     radius_rule=0.15,
-    opacity_rule=0.5,
+    opacity_rule=1,
     shading_type='pbr',
     metallic=1,
     roughness=0.4    
@@ -66,7 +66,7 @@ tube4 = Nematics3D.PlotTube(
     sides=20,
     color_rule="scalars",
     radius_rule=0.25,
-    opacity_rule=1,     
+    opacity_rule=opacity_func,     
     scalars_rule=radius_wave, 
     scalars_cmap='plasma'     
 )
@@ -83,5 +83,6 @@ tube5 = Nematics3D.PlotTube(
     shading_type='pbr',
     metallic=1,
     roughness=0.4,
-    scalars_clim=(0,0.2)
+    scalars_clim=(0,0.2),
+    scalar_bar_title='test'
 )

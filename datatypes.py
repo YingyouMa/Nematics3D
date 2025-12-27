@@ -342,19 +342,21 @@ def as_ColorRGB_array(
 
 
 @logging_and_warning_decorator(start_finish_level=5)
-def as_str(input_data, name="input_data", replace="None", logger=None):
-
-    if not isinstance(input_data, str):
-        if replace is not None:
-            try:
-                raise TypeError(f"{name} should be str. Got {input_data} with type {type(input_data)} instead. \n")
-            except:
-                logger.exception("Please check data type.")
-                logger.recovery(f"Changed it into {replace} in the following.")
-            input_data = replace
+def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
+    
+    try:
+        if not isinstance(input_data, str):
+            raise TypeError(f"{name!r} should be str. Got {input_data} with type {type(input_data)} instead")
+        elif pool and input_data not in pool:
+            raise ValueError(f"{name!r} must be in {pool}. Got {input_data} instead.")
+    except (TypeError, ValueError):
+        if replace is None:
+            raise
         else:
-            raise TypeError(f"{name} should be str. Got {input_data} with type {type(input_data)} instead. \n")
-
+            logger.exception("Please check data type")
+            logger.recovery(f"Changed it into {replace!r} in the following.")
+            input_data = replace
+    
     return input_data
 
 
