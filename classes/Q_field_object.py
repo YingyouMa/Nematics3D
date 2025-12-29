@@ -402,7 +402,7 @@ class QFieldObject:
         min_line_length: Optional[int] = None,
         lines_scalars_name: Optional[str] = None,
         opts_scene=OptsScene(),
-        opts_tube=OptsTube(color_rule='sample_far'), #!!!!!!!!!!!!!!!!!!
+        opts_tube=OptsTube(), #!!!!!!!!!!!!!!!!!!
         opts_extent=OptsExtent(),
         logger=None,
         **kwargs,

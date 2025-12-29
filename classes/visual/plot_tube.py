@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field, asdict
-from typing import Optional, Callable, List
+from typing import Optional, Callable, Sequence, Literal
 import numpy as np
 import pyvista as pv
 
@@ -8,6 +8,7 @@ from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
     as_ColorRGB_array,
+    Number,
     as_Number,
     as_str,
     as_bool,
@@ -37,37 +38,41 @@ ATTR_MAP = {
     "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",    "'phong', 'pbr' (Physical)"),
     "is_reset_camera":      (LEVEL_ACTOR,  None,                    "Whether to reset the camera settings for each (re-)plot."),
 
-    # === Legacy Lighting - Phong ===
+    # === Lighting - Phong ===
     "ambient":              (LEVEL_ACTOR,  "prop.ambient",          "Reflected light from environment (0-1)."),
     "diffuse":              (LEVEL_ACTOR,  "prop.diffuse",          "Standard matte reflection (0-1)."),
     "specular":             (LEVEL_ACTOR,  "prop.specular",         "Glossy highlight strength (0-1)."),
     "specular_pow":         (LEVEL_ACTOR,  "prop.specular_power",   "Focus of gloss (1-100). Higher = shinier/smaller spot."),
     "specular_color":       (LEVEL_ACTOR,  "prop.specular_color",   "The color of the glossy highlight (RGB). Usually white [1,1,1]."),
     
-    # === Physically Based Rendering - PBR ===
+    # === Lighting - PBR ===
     "metallic":             (LEVEL_ACTOR,  "prop.metallic",         "PBR metallic effect (0-1). Needs PBR enabled."),
     "roughness":            (LEVEL_ACTOR,  "prop.roughness",        "PBR surface roughness (0-1). Needs PBR enabled."),
 
-    # === Color Control ===
-    "color_rule":           (LEVEL_RECALC, None,                    ("Determines point colors. Options: "
-                                                                     "1) Uniform (e.g. (1,0,0)), "
-                                                                     "2) Function (mapping function), "
-                                                                     "3) 'manual' (uses color_values), "
-                                                                     "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim).")),
-    "color_values":         (LEVEL_RECALC, None,                    "The resolved RGB/RGBA array."),
-
-    # === Opacity Control ===
-    "opacity_rule":         (LEVEL_RECALC, None,                    "Determines point transparency. Options: 1) Uniform (float 0-1), 2) Function (mapping function), 3) 'manual' (uses opacity_values)."),
-    "opacity_values":       (LEVEL_RECALC, None,                    "The resolved Alpha array."),
-
-    # === Radius Control ===
-    "radius_rule":          (LEVEL_REMESH, None,                    "Determines tube thickness. Options: 1) Uniform (float), 2) Function (mapping function), 3) 'manual' (uses radius_values)."),
-    "radius_values":        (LEVEL_REMESH, None,                    "The resolved radius array."),
+    # === Shape and Color Control ===
+    "color":                (LEVEL_RECALC, None,                    ("Determines point colors. Options: "
+                                                                    "1) ColorRGB for entire tube (e.g. (1,0,0))"
+                                                                    "2) Function (mapping function), "
+                                                                    "3) color data set manually, "
+                                                                    "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim).")),
+    
+    "opacity":              (LEVEL_RECALC, None,                    ("Determines point transparency. Options: "
+                                                                    "1) float 0-1 for entire tube, "
+                                                                    "2) Function (mapping function), "
+                                                                    "3) opacity data set manually.")),
+    
+    "scalars":              (LEVEL_RECALC, None,                    ("Determines point scalars. Options: "
+                                                                    "1) Function (mapping function), "
+                                                                    "2) scalars data set manually, "
+                                                                    "3) None (No scalars)")),
+    
+    "radius":               (LEVEL_REMESH, None,                    ("Determines tube thickness. Options: "
+                                                                    "1) float for entire tube, "
+                                                                    "2) Function (mapping function), "
+                                                                    "3) radius data set manually.")),
     
     # === Scalars Control (Needs color_rule='scalars') ===
-    "scalars_rule":         (LEVEL_RECALC, None,                    "Determines point scalars. Options: 1) Function (mapping function), 2) 'manual' (uses scalars_values), 3) None (No scalars)"),
-    "scalars_values":       (LEVEL_RECALC, None,                    "The resolved scalars array."),
-    "scalars_cmap":         (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color_rule is scalar."),
+    "scalars_cmap":         (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color is set to scalar."),
     "scalars_clim":         (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
     "is_scalar_bar":        (LEVEL_ACTOR,  None,                    "Whether to display the color legend (scalar bar)."),
     "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
@@ -82,6 +87,13 @@ ATTR_MAP = {
                                                                     "1) List of 6 floats [xmin, xmax...] for axis-aligned box, "
                                                                     "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box).")
 }
+
+DEFAULT_VAL_DIR = {
+    'color':    (0,0,0),
+    'radius':   0.1,
+    'scalars':  0.0,
+    'opacity':  1
+    }
 
 
 @dataclass(slots=True)
@@ -104,19 +116,13 @@ class OptsTube:
     metallic: float = 0.0
     roughness: float = 0.5
 
-    # --- Rules & Values ---
-    color_rule: ColorRGB | str | Callable = (0,0,0)
-    color_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
+    # --- Shape and Color ---
+    color: ColorRGB | Callable | Sequence | Literal['scalars'] = (0,0,0)
+    opacity: float | Callable | Sequence = 1.0
+    scalars: Callable | Sequence | None = None
+    radius: float | Callable | Sequence = 0.1
     
-    opacity_rule: float | str | Callable = 1.0
-    opacity_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
-    
-    radius_rule: float | str | Callable = 0.1
-    radius_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
-    
-    # --- Scalars (Used if color_rule='scalars') ---
-    scalars_rule: str | Callable | None = None
-    scalars_values: Optional[np.ndarray] = field(default=None, repr=False, metadata={"is_data": True})
+    # --- Scalars (Used if color='scalars') ---
     scalars_cmap: str = "viridis"
     scalars_clim: Vect(2) | None = None
     is_scalar_bar: bool = True
@@ -131,7 +137,7 @@ class OptsTube:
 
     # --- Internal State ---
     _owner: object | None = field(default=None, repr=False, init=False)
-    _restricted: bool = field(default=False, init=False, repr=False)
+    _is_category_locked: bool = field(default=False, repr=False, init=False)
         
 
     _validators = {
@@ -151,26 +157,7 @@ class OptsTube:
         "metallic": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.0),
         "roughness": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.5),
         
-        "color_rule": lambda self, v, d: (
-            v if isinstance(v, (str, Callable)) 
-            else as_ColorRGB(v, name=d, replace=(0.0, 0.0, 0.0))
-        ),
-        "color_values": lambda self, v, d: None if v is None else as_ColorRGB_array(v, name="color_values"),
-        
-        "opacity_rule": lambda self, v, d: (
-            v if isinstance(v, (str, Callable)) 
-            else as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=1.0)
-        ),
-        #"opacity_values": lambda self, v, d: v if isinstance(v, np.ndarray) or v is None else None,
-        
-        "radius_rule": lambda self, v, d: (
-            v if isinstance(v, (str, Callable)) 
-            else as_Number(v, name=d, value_range=(0, np.inf), bounded=True, replace=0.1)
-        ),
-        #"radius_values": lambda self, v, d: v if isinstance(v, np.ndarray) or v is None else None,
-        
-        #"scalars_rule": lambda self, v, d: v if (isinstance(v, Callable) or v in ['manual', None]) else None,
-        #"scalars_values": lambda self, v, d: v if isinstance(v, np.ndarray) or v is None else None,
+        # color, opacity, scalars, radius
         
         "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
         "scalars_clim": lambda self, v, d: v if v is None else as_Vect(v, name=d, dim=2, replace=None),
@@ -187,6 +174,9 @@ class OptsTube:
         if key in self._validators:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
             value = self._validators[key](self, value, desc)
+            
+        if self._is_category_locked and key == 'category':
+            raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
 
         object.__setattr__(self, key, value)
         
@@ -200,8 +190,11 @@ class PlotTube:
     """
     __descriptions__ = {
         "_raw_coords": "The N x 3 input coordinates",
-        "_calc_mesh": "The generated PyVista PolyData mesh of the tube",
         "_calc_poly": "The generated PyVista PolyData",
+        "_calc_color": "The pointwise data of color of tube",
+        "_calc_opacity": "The pointwise data of color of tube",
+        "_calc_radius": "The pointwise data of opacity of tube",
+        "_calc_scalars": "The pointwise data of scalars of tube",
         "_entities": "The PyVista Actor in the plotter",
         "opts": "The OptsTube instance for configuration",
     }
@@ -217,17 +210,25 @@ class PlotTube:
         logger = None,
         **kwargs
     ):
-
         
         # Initializing internal states
         object.__setattr__(self, "_raw_coords", np.asarray(coords))
         object.__setattr__(self, "_entities", None)
-        object.__setattr__(self, "_calc_mesh", None)
         object.__setattr__(self, "_calc_poly", None)
+        object.__setattr__(self, "_calc_color", None)
+        object.__setattr__(self, "_calc_opacity", None)
+        object.__setattr__(self, "_calc_radius", None)
+        object.__setattr__(self, "_calc_scalars", None)
 
         logger.detail('Handling explicit kwargs overrides')
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_owner", self)
+        
+        if not (isinstance(opts.color, str) and opts.color == 'scalars') and opts.scalars is not None:
+            msg = "Color input of PlotTube is not set to 'scalars'. However, scalars is provided.\n"
+            msg += "The scalars data will be ignored unless color='scalars' is explicitly specified."
+            logger.warning(msg)
+        
         object.__setattr__(self, "opts", opts)
         
         logger.detail('Checking if name already exists')
@@ -248,43 +249,43 @@ class PlotTube:
         self._helper_resolver_init()
         self._helper_make_figure(Figure=Figure, is_reset_camera=opts.is_reset_camera)
         
-        object.__setattr__(self.opts, "_restricted", True)
+        object.__setattr__(self.opts, "_is_restricted", True)
       
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_generic(self, attr_rule, attr_values, target_shape, default_val, logger=None):
-
-        rule = getattr(self.opts, attr_rule)
+    def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
+        
+        target_shape = (len(self._raw_coords),3) if attr_name=='color' else (len(self._raw_coords),)
         
         try:
-            # 1. Dispatching Logic
-            if rule == "manual":
-                resolved = getattr(self.opts, attr_values)
-                if resolved is None:
-                    raise TypeError(f"`manual` mode of {attr_rule!r} requires {attr_values!r} to provide raw data, but only got `None`.")
+            if attr_input is None:
+                raise TypeError(f"Require input for {attr_name!r}. Got None instead.")
+            elif callable(attr_input):
+                resolved = np.asarray(attr_input(self._raw_coords), dtype=np.float32)
             else:
-                if getattr(self.opts, attr_values) is not None:
-                    msg = f"{attr_rule!r} is set to {rule}. {attr_values!r} will be ignored.\n "
-                    msg += f"To enable {attr_values!r}, set {attr_rule!r} to `manual`."
-                    logger.warning(msg)
-            
-                if callable(rule):
-                    resolved = np.asarray(rule(self._raw_coords))
-                else:
-                    resolved = np.full(target_shape, rule)
+                arr = np.asarray(attr_input, dtype=float)
+                if arr.shape == () and attr_name == 'color':
+                    raise TypeError(f"To provide a single value for color, the input should be expressed by (R, G, B). Got {attr_input} instead.")
+                resolved = np.full(target_shape, arr, dtype=np.float32)
     
-            # 2. Integrity Check
-            resolved = np.asarray(resolved, dtype=np.float32)
             if resolved.shape != target_shape:
-                raise ValueError(f"Shape mismatch: {resolved.shape} vs {target_shape} in {attr_values}")
+                raise ValueError(
+                    f"Shape mismatch for {attr_name!r}: got {resolved.shape}, expected {target_shape}."
+                )
+                
+            if attr_name == 'color':
+                resolved = as_ColorRGB_array(resolved, name='The pairwise color data of tube', replace=default_val)
     
-            setattr(self.opts, attr_values, resolved)
     
-        except Exception as e:
-            logger.exception(f"Failed to resolve {attr_rule}: {str(e)}")
-            fallback = np.full(target_shape, default_val, dtype=np.float32)
-            setattr(self.opts, attr_values, fallback)
-            setattr(self.opts, attr_rule, default_val)
-            logger.recovery(f"Reset {attr_values} to default: {default_val} everywhere.")
+        except:
+            logger.exception(f"Failed to resolve {attr_name!r}")
+            if default_val:
+                resolved = np.full(target_shape, default_val, dtype=np.float32)
+                logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
+            else:
+                logger.recovery(f"Ignore this modification of {attr_name!r}")
+              
+        object.__setattr__(self, '_calc_'+attr_name, resolved)
+            
             
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_init(self, logger=None):
@@ -292,32 +293,22 @@ class PlotTube:
         self._helper_resolver_spec('opacity')
         self._helper_resolver_spec('radius')
         
-        if self.opts.color_rule == 'scalars':
+        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
             self._helper_resolver_spec('scalars')
         else:
             self._helper_resolver_spec('color')
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_spec(self, attr, logger=None):
+    def _helper_resolver_spec(self, attr_name, is_keep_on_error=False, logger=None):
         
-        if attr not in ['color', 'radius', 'scalars', 'opacity']:
-            raise ValueError(f"Attribute resolved by `_helper_resolver_init()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr} instead.")
-            
-        default_val_dir = {
-            'color':    (0,0,0),
-            'radius':   0.1,
-            'scalars':  0.0,
-            'opacity':  1
-            }
-            
-        input_dir = {
-            'attr_rule':        attr + "_rule",
-            'attr_values':       attr + "_values",
-            'target_shape':     (len(self._raw_coords),3) if attr=='color' else (len(self._raw_coords),),
-            'default_val':      default_val_dir[attr]
-            }
+        # is_keep_on_error: whether keep the current settings when resolver failed. If false, use the default settings in DEFAULT_VAL_DIR
         
-        self._helper_resolver_generic(**input_dir)
+        if attr_name not in ['color', 'radius', 'scalars', 'opacity']:
+            raise ValueError(f"Attribute resolved by `_helper_resolver_init()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
+            
+        default_var = None if is_keep_on_error else DEFAULT_VAL_DIR[attr_name]
+        
+        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), default_val)
         
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_tube_mesh(self, logger=None):
@@ -332,12 +323,12 @@ class PlotTube:
             logger.detail(f"Smoothing path with {self.opts.smooth_iter} iterations")
             poly = poly.smooth(n_iter=self.opts.smooth_iter)
         
-        poly.point_data['radius'] = self.opts.radius_values 
-        if self.opts.color_rule == 'scalars':
-            poly.point_data['opacity'] = self.opts.opacity_values
-            poly.point_data['scalars'] = self.opts.scalars_values
+        poly.point_data['radius'] = self._calc_radius 
+        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
+            poly.point_data['opacity'] = self._calc_opacity
+            poly.point_data['scalars'] = self._calc_scalars
         else:
-            rgba_values = np.hstack([self.opts.color_values, self.opts.opacity_values.reshape(-1, 1)])
+            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
             poly.point_data['rgba'] = rgba_values 
             
 
@@ -356,7 +347,6 @@ class PlotTube:
             elif hasattr(self.opts.clip_geometry, "points"):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
-        object.__setattr__(self, "_calc_mesh", mesh)
         object.__setattr__(self, "_calc_poly", poly)
         return mesh
     
@@ -366,7 +356,7 @@ class PlotTube:
         Creates or updates the rendering in a PyVista Plotter.
         """
         
-        is_scalars = (self.opts.color_rule == 'scalars')
+        is_scalars = (isinstance(self.opts.color, str) and self.opts.color == 'scalars')
         
         input_dir = {
             "name":         self.opts.name,
@@ -420,134 +410,64 @@ class PlotTube:
         Figure.obj_plotter.render()
         Figure.obj_plotter.show(interactive_update=True)
         
+        self.opts._is_category_locked = True
         Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
         
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_imperative(self, attr, values, logger=None):
-
-        object.__setattr__(self.opts, "_restricted", False)        
-
-        valid_attrs = ['color', 'radius', 'scalars', 'opacity']
-        if attr not in valid_attrs:
-            raise ValueError(f"Imperative attribute must be in {valid_attrs}. Got '{attr}' instead.")
-
-        is_array_data = (isinstance(values, (np.ndarray, list, tuple)) and 
-                         not (attr == 'color' and not isinstance(values[0], (list, np.ndarray))))
-
-        if is_array_data:
-            setattr(self.opts, f"{attr}_values", np.asarray(values))
-            setattr(self.opts, f"{attr}_rule", "manual")
-            
-        else:
-            setattr(self.opts, f"{attr}_rule", values)
-            
-        if attr == 'scalars':
-            self.opts.color_rule = 'scalars'
-        
-        self._helper_resolver_spec(attr)
-        
-        object.__setattr__(self.opts, "_restricted", True)
-        
-        
     def _helper_replace_data_pv(self, attr: str, data: np.ndarray):
+        mesh = self._entities.mapper.dataset
+        mesh_data = mesh.point_data
         if attr in self._calc_poly.point_data:
             del self._calc_poly.point_data[attr]
-        if attr in self._calc_mesh.point_data:
-            del self._calc_mesh.point_data[attr]
+        if attr in mesh_data:
+            del mesh_data[attr]
         self._calc_poly.point_data[attr] = data
-        self._calc_mesh.point_data[attr] = self._calc_mesh.interpolate(self._calc_poly).point_data[attr]
-        
-    # @logging_and_warning_decorator(start_finish_level=5)
-    # def _helper_update_rgba(self, logger=None):
-    #     rgba = np.hstack([self.opts.color_values, self.opts.opacity_values.reshape(-1, 1)])
-    #     if 'rgba' in self._calc_poly.point_data:
-    #         del self._calc_poly.point_data['rgba']
-    #     if 'rgba' in self._calc_mesh.point_data:
-    #         del self._calc_mesh.point_data['rgba']
-    #     self._calc_poly.point_data['rgba'] = rgba
-    #     self._calc_mesh.point_data['rgba'] = self._calc_mesh.interpolate(self._calc_poly).point_data['rgba']   
+        mesh_data[attr] = mesh.interpolate(self._calc_poly).point_data[attr]
     
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_update_rgba(self, logger=None):
-        rgba = np.hstack([self.opts.color_values, self.opts.opacity_values.reshape(-1, 1)])
+        rgba = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
         self._helper_replace_data_pv('rgba', rgba)
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_switch_scalars_to_rgba(self, logger=None):
-        logger.detail("Change the color_rule from 'scalars' to current color settings")
+        logger.detail("Change the color from 'scalars' to current color settings")
         mapper = self._entities.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = 'direct'
         mapper.SetColorModeToDirectScalars()
         mapper.lookup_table = None
-        self._calc_mesh.set_active_scalars('rgba')
+        self._entities.mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
         
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_update_scalars(self, is_update_opacity=False, logger=None):
+    def _helper_update_scalars(self, logger=None):
         logger.detail("Update scalar coloring, which may involve switching from a direct color-based scheme to scalar-based coloring.")
 
-        self._helper_replace_data_pv('scalars', self.opts.scalars_values)
+        self._helper_replace_data_pv('scalars', self._calc_scalars)
+        self._helper_replace_data_pv('opacity', self._calc_opacity)
         
         mapper = self._entities.mapper
-        mesh = mapper.dataset.point_data
+        mesh_data = mapper.dataset.point_data
+
+        if "__custom_rgba" in mesh_data.keys():
+            mesh_data.remove("__custom_rgba")
         
-        if not is_update_opacity:
-            mapper.set_scalars(
-                mesh['scalars'], 
-                'scalars',
-                cmap = self.opts.scalars_cmap,
-                clim = self.opts.scalars_clim)
-        else:
-            if "__custom_rgba" in mesh.keys():
-                mesh.remove("__custom_rgba")
-            self._helper_replace_data_pv('opacity', self.opts.opacity_values)
-            mapper.set_scalars(
-                mesh['scalars'], 
-                'scalars',
-                cmap = self.opts.scalars_cmap,
-                clim = self.opts.scalars_clim,
-                custom_opac=True,
-                opacity=mesh['opacity'])
-        
-        # self._calc_mesh.set_active_scalars('scalars')
-        # mapper = self._entities.mapper
-        # mapper.scalar_visibility = True
-        # mapper.color_mode = "map" 
-        # mapper.SetColorModeToMapScalars()
-        # mapper.SetArrayName('scalars')
-        
-        # if self.opts.scalars_clim is None:
-        #     s1 = self._calc_mesh.point_data['scalars']
-        #     s2 = self._calc_poly.point_data['scalars']
-        #     vmin = np.nanmin([np.nanmin(s1), np.nanmin(s2)])
-        #     vmax = np.nanmax([np.nanmax(s1), np.nanmax(s2)])
-        #     scalars_clim = (vmin, vmax)
-        # else:
-        #     scalars_clim = self.opts.scalars_clim
-        
-        # mapper.SetLookupTable(pv.LookupTable(cmap=self.opts.scalars_cmap))
-        # mapper.GetLookupTable().SetRange(*scalars_clim)
-        # mapper.GetLookupTable().Build()
-        # mapper.SetUseLookupTableScalarRange(True)
-        
-        # if is_update_opacity:
-        #     self._helper_replace_data_pv('opacity', self.opts.opacity_values)
-        #     mapper.SetScalarOpacityArrayName('opacity')
-        # # mapper.SetUseLookupTableScalarRange(True)
+        mapper.set_scalars(
+            mesh_data['scalars'], 
+            'scalars',
+            cmap = self.opts.scalars_cmap,
+            clim = self.opts.scalars_clim,
+            custom_opac=True,
+            opacity=mesh_data['opacity'])
         
         
-        
-        
-    ''' 
     @logging_and_warning_decorator()
-    def act_commit(self, logger=None, **kwargs):
+    def act_commit(self, is_setattr=True, logger=None, **kwargs):
         
         is_needs_remesh = False
-        
-        current_shading = kwargs.get("shading_type", self.opts.get("shading_type", "phong"))
-        previous_color_rule = self.opts.get("color_rule")
+        current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
+        current_shading = as_str((current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr')))
 
         for key, value in kwargs.items():
             
@@ -568,21 +488,9 @@ class PlotTube:
                         msg += "1) There is no guarantee that name collisions will be avoided in PlotFigure._entities; and\n"
                         msg += "2) The corresponding actor name stored in the PyVista renderer cannot be updated accordingly."
                         logging.warning(msg)
-                        self.opts[key] = value
-                        continue
                     
-                    if key in "is_reset_camera":
-                        self.opts[key] = value
-                        continue
-    
-                    if key in ["is_visible", "shading_type"]:
-                        self.opts[key] = value
-                        parts = attr_path_actor.split('.')
-                        obj = self._entities
-                        for part in parts[:-1]:
-                            obj = getattr(obj, part)
-                        setattr(obj, parts[-1], value)
-                        continue
+                    # if key in "is_reset_camera":
+                    # if key in ["is_visible", "shading_type"]:
     
                     pbr_params = ["metallic", "roughness"]
                     phong_params = ["ambient", "diffuse", "specular", "specular_pow", "specular_color"]
@@ -592,33 +500,19 @@ class PlotTube:
                     elif key in phong_params and current_shading == "pbr":
                         logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
     
-                    self.opts[key] = value
-    
                     if entity_path:
                         parts = attr_path_actor.split('.')
                         obj = self._entities
                         for part in parts[:-1]:
                             obj = getattr(obj, part)
                         setattr(obj, parts[-1], value)
-    
-                
-                 # Dealing with LEVEL_RECALC (resolver for color, opacity and scalars)
-                
-                elif level == self.LEVEL_RECALC:
-                    scalar_bar_keys = ["scalars_cmap", "scalars_clim", "is_scalar_bar", "scalar_bar_title"]
-                    if key in scalar_bar_keys:
-                        raise NotImplementedError(f"Directly modifying '{key}' is not supported in this version.")
-    
-                    if key in ["color_rule", "color_values", "opacity_rule", "opacity_values", "scalars_rule", "scalars_values"]:
-
-                        target_prop = "color"
-                        if "opacity" in key: target_prop = "opacity"
-                        if "scalars" in key: target_prop = "scalars"
                         
-                        raise ValueError(f"Cannot set '{key}' directly. Please use the '.{target_prop}' property instead.")
-    
-                    if key in ["color", "scalars", "opacity"]:
-                        self._helper_resolver_imperative(key, value)
+                    if is_setattr:
+                        object.__setattr__(self.opts, key, value)
+                
+                # Dealing with LEVEL_RECALC (resolver for color, opacity and scalars)
+                elif level == self.LEVEL_RECALC:
+                    self._helper_resolver_spec(key)
     
                 # ==========================================
                 # 3. 处理 LEVEL_REMESH (Geometry)
@@ -640,4 +534,3 @@ class PlotTube:
             if is_needs_remesh:
                 self.replot()
     '''
-

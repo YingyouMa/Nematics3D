@@ -29,8 +29,8 @@ tube1 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=0),  
     name="solid_blue",
-    color_rule=(0,0,1), # 蓝色
-    radius_rule=0.3,
+    color=(0,0,1), # 蓝色
+    radius=0.3,
     sides=12,
     is_capping=False,
 )
@@ -39,21 +39,20 @@ tube1 = Nematics3D.PlotTube(
 tube2 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=5),
-    name="functional_pbr",
-    color_rule=color_func,     # 渐变色函数
-    radius_rule=radius_wave,   # 波动半径函数
-    opacity_rule=opacity_func,
+    name="functional",
+    color=color_func,     # 渐变色函数
+    radius=radius_wave,   # 波动半径函数
+    opacity=opacity_func,
 )
 
 # --- 案例 3: 手动模式 + 透明度 ---
 tube3 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=10),
-    name="manual_alpha",
-    color_rule="manual",
-    color_values=np.random.rand(50, 3), # 随机色数组
-    radius_rule=0.15,
-    opacity_rule=1,
+    name="manual_color",
+    color=np.random.rand(50, 3), # 随机色数组
+    radius=0.15,
+    opacity=1,
     shading_type='pbr',
     metallic=1,
     roughness=0.4    
@@ -64,25 +63,51 @@ tube4 = Nematics3D.PlotTube(
     coords=get_path(offset_y=15),
     name="func_scalars",
     sides=20,
-    color_rule="scalars",
-    radius_rule=0.25,
-    opacity_rule=opacity_func,     
-    scalars_rule=radius_wave, 
+    color='scalars',
+    radius=0.25,
+    opacity=opacity_func,     
+    scalars=radius_wave, 
     scalars_cmap='plasma'     
 )
 
 tube5 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=20),
-    name="func_scalars2",
+    name="manual_scalars2",
     sides=20,
-    color_rule="scalars",
-    radius_rule=0.25,
-    opacity_rule=1,     
-    scalars_rule=radius_wave,  
+    color="scalars",
+    radius=0.25,
+    opacity=1,     
+    scalars=radius_wave(get_path(offset_y=20)),  
     shading_type='pbr',
     metallic=1,
     roughness=0.4,
     scalars_clim=(0,0.2),
     scalar_bar_title='test'
 )
+
+tube1.opts.color = 'scalars'
+tube1.opts.scalars = lambda x: radius_wave(x)+1
+tube1._helper_resolver_spec('scalars')
+tube1._helper_update_scalars()
+
+tube2.opts.color = (1,0,0)
+tube2.opts.opacity = 1
+tube2._helper_resolver_spec('color')
+tube2._helper_resolver_spec('opacity')
+tube2._helper_update_rgba()
+
+tube4.opts.color = (0,1,0)
+tube4._helper_resolver_spec('color')
+tube4._helper_update_rgba()
+tube4._helper_switch_scalars_to_rgba()
+
+tube5.opts.color = 'scalars'
+tube5.opts.opacity = 1
+tube5.opts.scalars = lambda x: np.sin(5*radius_wave(x))
+tube5.opts.scalars_cmap = 'plasma'
+tube5.opts.scalars_clim = None
+tube5._helper_resolver_spec('scalars')
+tube5._helper_resolver_spec('opacity')
+tube5._helper_update_scalars()
+tube5._entities.prop.interpolation = 'phong'
