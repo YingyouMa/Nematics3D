@@ -85,7 +85,7 @@ tube5 = Nematics3D.PlotTube(
     scalars_clim=(0,0.2),
     scalar_bar_title='test'
 )
-
+'''
 tube1.opts.color = 'scalars'
 tube1.opts.scalars = lambda x: radius_wave(x)+1
 tube1._helper_resolver_spec('scalars')
@@ -111,3 +111,4 @@ tube5._helper_resolver_spec('scalars')
 tube5._helper_resolver_spec('opacity')
 tube5._helper_update_scalars()
 tube5._entities.prop.interpolation = 'phong'
+'''

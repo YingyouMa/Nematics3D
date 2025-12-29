@@ -134,10 +134,10 @@ class OptsTube:
     is_capping: bool = True
     smooth_iter: int = 0
     clip_geometry: list[float] | pv.PolyData | None = None
+    _is_category_locked: bool = False
 
     # --- Internal State ---
     _owner: object | None = field(default=None, repr=False, init=False)
-    _is_category_locked: bool = field(default=False, repr=False, init=False)
         
 
     _validators = {
@@ -175,7 +175,7 @@ class OptsTube:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
             value = self._validators[key](self, value, desc)
             
-        if self._is_category_locked and key == 'category':
+        if getattr(self, "_is_category_locked", False) and key == "category":
             raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
 
         object.__setattr__(self, key, value)
@@ -248,8 +248,6 @@ class PlotTube:
         logger.detail("Executing initial plot")
         self._helper_resolver_init()
         self._helper_make_figure(Figure=Figure, is_reset_camera=opts.is_reset_camera)
-        
-        object.__setattr__(self.opts, "_is_restricted", True)
       
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
@@ -278,11 +276,9 @@ class PlotTube:
     
         except:
             logger.exception(f"Failed to resolve {attr_name!r}")
-            if default_val:
-                resolved = np.full(target_shape, default_val, dtype=np.float32)
-                logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
-            else:
-                logger.recovery(f"Ignore this modification of {attr_name!r}")
+            resolved = np.full(target_shape, default_val, dtype=np.float32)
+            logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
+            object.__setattr__(self.opts, attr_name, default_val)
               
         object.__setattr__(self, '_calc_'+attr_name, resolved)
             
@@ -299,16 +295,12 @@ class PlotTube:
             self._helper_resolver_spec('color')
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_spec(self, attr_name, is_keep_on_error=False, logger=None):
-        
-        # is_keep_on_error: whether keep the current settings when resolver failed. If false, use the default settings in DEFAULT_VAL_DIR
+    def _helper_resolver_spec(self, attr_name, logger=None):
         
         if attr_name not in ['color', 'radius', 'scalars', 'opacity']:
-            raise ValueError(f"Attribute resolved by `_helper_resolver_init()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
-            
-        default_var = None if is_keep_on_error else DEFAULT_VAL_DIR[attr_name]
+            raise ValueError(f"Attribute resolved by `_helper_resolver_spec()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
         
-        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), default_val)
+        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), DEFAULT_VAL_DIR[attr_name])
         
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_tube_mesh(self, logger=None):
@@ -435,9 +427,9 @@ class PlotTube:
         mapper = self._entities.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = 'direct'
-        mapper.SetColorModeToDirectScalars()
+        # mapper.SetColorModeToDirectScalars()
         mapper.lookup_table = None
-        self._entities.mapper.dataset.set_active_scalars('rgba')
+        mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -467,13 +459,16 @@ class PlotTube:
         
         is_needs_remesh = False
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
-        current_shading = as_str((current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr')))
+        current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
 
         for key, value in kwargs.items():
             
             try:
                 if key not in ATTR_MAP:
                         raise ValueError(f"Unknown attribute: {key} in class: PlotTube.opts")
+                        
+                if is_setattr and key != "category":
+                    object.__setattr__(self.opts, key, value)
     
                 level, attr_path_actor, doc = self.ATTR_MAP[key]
     
@@ -487,7 +482,7 @@ class PlotTube:
                         msg = "Changing 'name' of PlotTube object is not recommended because: \n"
                         msg += "1) There is no guarantee that name collisions will be avoided in PlotFigure._entities; and\n"
                         msg += "2) The corresponding actor name stored in the PyVista renderer cannot be updated accordingly."
-                        logging.warning(msg)
+                        logger.warning(msg)
                     
                     # if key in "is_reset_camera":
                     # if key in ["is_visible", "shading_type"]:
@@ -500,15 +495,12 @@ class PlotTube:
                     elif key in phong_params and current_shading == "pbr":
                         logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
     
-                    if entity_path:
+                    if attr_path_actor:
                         parts = attr_path_actor.split('.')
                         obj = self._entities
                         for part in parts[:-1]:
                             obj = getattr(obj, part)
                         setattr(obj, parts[-1], value)
-                        
-                    if is_setattr:
-                        object.__setattr__(self.opts, key, value)
                 
                 # Dealing with LEVEL_RECALC (resolver for color, opacity and scalars)
                 elif level == self.LEVEL_RECALC:
@@ -518,19 +510,14 @@ class PlotTube:
                 # 3. 处理 LEVEL_REMESH (Geometry)
                 # ==========================================
                 elif level == self.LEVEL_REMESH:
-                    if key == "clip_geometry":
-                        logging.error("Modification of 'clip_geometry' is currently not supported.")
-                        continue
-                    
-                    if key in ["radius_rule", "radius_values"]:
-                        logging.error("Cannot set radius details directly. Please use the '.radius' property.")
-                        continue
+
     
                     # 正常修改 sides, is_capping, smooth_iter
-                    self.opts[key] = value
-                    needs_remesh = True
+                    is_needs_remesh = True
     
             # 最后处理：如果改了 remesh 级别的参数，触发重画
-            if is_needs_remesh:
-                self.replot()
-    '''
+                if is_needs_remesh:
+                    self.replot()
+        
+            except:
+                pass
