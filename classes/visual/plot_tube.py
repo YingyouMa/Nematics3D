@@ -191,16 +191,31 @@ class PlotTube:
     Wraps PyVista tube filtering and rendering with integrated option management.
     """
     __descriptions__ = {
-        "_raw_coords": "The N x 3 input coordinates",
-        "_calc_poly": "The generated PyVista PolyData",
-        "_calc_color": "The pointwise data of color of tube",
-        "_calc_opacity": "The pointwise data of color of tube",
-        "_calc_radius": "The pointwise data of opacity of tube",
-        "_calc_scalars": "The pointwise data of scalars of tube",
-        "_entities": "The PyVista Actor in the plotter",
-        "opts": "The OptsTube instance for configuration",
-        "_internal_owner": "The PlotFigure object which contains this tube",
-        "_internal_name_pv": "The unique id of this tube stored in plotter"
+        "_raw_coords": (
+            "The N x 3 input coordinates. "
+            "Points are ordered along polylines but may belong to multiple disconnected lines."
+        ),
+    
+        "_raw_line_index": (
+            "Optional integer array of length N specifying polyline membership for each point. "
+            "Points with the same index and appearing consecutively form a single connected polyline. "
+            "If None or constant, the input is treated as a single continuous line."
+        ),
+    
+        "_calc_poly": (
+            "The generated PyVista PolyData representing the polyline(s) "
+            "before applying the tube filter."
+        ),
+    
+        "_calc_color": "The resolved per-point RGB color array of the tube.",
+        "_calc_opacity": "The resolved per-point opacity array of the tube.",
+        "_calc_radius": "The resolved per-point radius array used for tube thickness.",
+        "_calc_scalars": "The resolved per-point scalar array used for scalar coloring.",
+    
+        "_entities": "The PyVista Actor corresponding to this tube in the plotter.",
+        "opts": "The OptsTube instance controlling rendering and geometry options.",
+        "_internal_owner": "The PlotFigure object which contains this tube.",
+        "_internal_name_pv": "The unique identifier of this tube stored in the PyVista plotter."
     }
     
     __slots__ = tuple(__descriptions__.keys())
@@ -211,12 +226,32 @@ class PlotTube:
         coords: np.ndarray,
         Figure: PlotFigure,
         opts: OptsTube = OptsTube(),
+        line_index: Sequence | None = None,
         logger = None,
         **kwargs
     ):
         
-        # Initializing internal states
-        object.__setattr__(self, "_raw_coords", np.asarray(coords))
+        try:
+            coords = np.asarray(coords, dtype=float)
+            if coords.ndim != 2 or coords.shape[1] != 3:
+                raise ValueError(f"`coords` must be an (N, 3) array. Got {coords.shape} instead.")
+        except (ValueError, TypeError) as e:
+            raise TypeError(f"Invalid `coords` input: {e}")
+        
+        object.__setattr__(self, "_raw_coords", coords)
+        
+        if line_index is not None:
+            try:
+                line_index = np.asarray(line_index, dtype=int)
+                if line_index.ndim != 1 or len(line_index) != coords.shape[0]:
+                    raise ValueError(
+                        f"`line_index` must be a ({coords.shape[0]},) array. "
+                        f"Got shape {line_index.shape} instead."
+                    )
+            except (ValueError, TypeError) as e:
+                raise TypeError(f"Invalid `line_index` input: {e}")
+        object.__setattr__(self, "_raw_line_index", line_index)
+    
         object.__setattr__(self, "_internal_owner", Figure)
 
         logger.detail('Handling explicit kwargs overrides')
@@ -236,14 +271,13 @@ class PlotTube:
         
         logger.detail('Checking if name already exists')
         name_set = set(Figure.act_get_entities_names())
-        name_input = opts.name
+        name_input = self.opts.name
         if name_input in name_set:
+            new_name = name_input
             index = 1
-            new_name = f"{name_input}_{index}"
-            while opts.name in name_set:
-                index += 1
+            while new_name in name_set:
                 new_name = f"{name_input}_{index}"
-                
+                index += 1
             opts.name = new_name
             logger.warning(f"{name_input!r} already exists in PlotFigure object! Renamed to {opts.name!r}.")
         
@@ -317,8 +351,32 @@ class PlotTube:
         Internal: Create the PyVista PolyData, apply smoothing/clipping, 
         and generate tube with dynamic or static radius.
         """
-        logger.detail("Creating a line from coordinates")
-        poly = pv.MultipleLines(self._raw_coords)
+        points = self._raw_coords
+        idx = getattr(self, "_raw_line_index", None)
+        
+        # Decide whether to treat the input as a single continuous polyline
+        is_use_multi = (idx is None) or (len(np.unique(idx)) == 1)
+        if is_use_multi:
+            poly = pv.MultipleLines(points)
+        else:
+            logger.detail('Searching run boundaries: each run corresponds to one disconnected polyline')
+            breaks = np.nonzero(idx[1:] != idx[:-1])[0] + 1
+            starts = np.r_[0, breaks]
+            ends   = np.r_[breaks, len(idx)]
+        
+            chunks = []
+            for s, e in zip(starts, ends):
+                k = e - s
+                if k < 2:
+                    msg = 'Detect one invalid line segment with only one point. Ignore it in the following.'
+                    logger.warning(msg)
+                chunks.append(np.r_[k, np.arange(s, e, dtype=np.int64)])
+        
+            if len(chunks) == 0:
+                raise ValueError("line_index produced no valid line segments (each segment needs >=2 points).")
+        
+            lines = np.concatenate(chunks).astype(np.int64)
+            poly = pv.PolyData(points, lines=lines)
         
         if self.opts.smooth_iter > 0:
             logger.detail(f"Smoothing path with {self.opts.smooth_iter} iterations")
@@ -531,7 +589,7 @@ class PlotTube:
                         self._helper_resolver_spec('radius')
         
             except:
-                logger.exception("Failed to reset value of {key!r}")
+                logger.exception(f"Failed to reset value of {key!r}")
                 logger.recovery("Ignore this modification")
                 
         if is_needs_remesh:

@@ -9,7 +9,10 @@ import pyvista as pv
 # --- 准备测试数据和函数 ---
 def get_path(offset_y=0):
     z = np.linspace(0, 10, 50)
-    return np.column_stack((np.sin(z), np.cos(z) + offset_y, z))
+    line1 = np.column_stack((np.sin(z), np.cos(z) + offset_y, z))
+    z = np.linspace(15, 20, 25)
+    line2 = np.column_stack((np.sin(z), np.cos(z) + offset_y, z))
+    return np.concatenate([line1, line2])
 
 def radius_wave(coords):
     return 0.1 + 0.2 * np.abs(np.sin(coords[:, 2]))
@@ -24,10 +27,14 @@ def opacity_func(coords):
 
 Figure = Nematics3D.PlotFigure()
 
+line_index = np.ones(75)
+line_index[-25:] = 2
+
 # --- 案例 1: 固定参数 (类似于你给的例子) ---
 tube1 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=0),  
+    line_index = line_index,
     name="solid_blue",
     color=(0,0,1), # 蓝色
     radius=0.3,
@@ -39,6 +46,7 @@ tube1 = Nematics3D.PlotTube(
 tube2 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=5),
+    line_index = line_index,
     name="functional",
     color=color_func,     # 渐变色函数
     radius=radius_wave,   # 波动半径函数
@@ -49,8 +57,9 @@ tube2 = Nematics3D.PlotTube(
 tube3 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=10),
+    line_index = line_index,
     name="manual_color",
-    color=np.random.rand(50, 3), # 随机色数组
+    color=np.random.rand(75, 3), # 随机色数组
     radius=0.15,
     opacity=1,
     shading_type='pbr',
@@ -61,6 +70,7 @@ tube3 = Nematics3D.PlotTube(
 tube4 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=15),
+    line_index = line_index,
     name="func_scalars",
     sides=20,
     color='scalars',
@@ -73,6 +83,7 @@ tube4 = Nematics3D.PlotTube(
 tube5 = Nematics3D.PlotTube(
     Figure=Figure,
     coords=get_path(offset_y=20),
+    line_index = line_index,
     name="manual_scalars2",
     sides=20,
     color="scalars",
@@ -121,5 +132,5 @@ tube2.opts.color = (1,0,0)
 tube2.opts.shading_type = 'pbr'
 tube2.opts.roughness = 0.2
 tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4)
-
+tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4, is_reset_camera=False)
 '''
