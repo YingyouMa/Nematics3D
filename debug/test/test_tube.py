@@ -112,3 +112,14 @@ tube5._helper_resolver_spec('opacity')
 tube5._helper_update_scalars()
 tube5._entities.prop.interpolation = 'phong'
 '''
+
+'''
+tube1.act_commit(scalars=lambda x: radius_wave(x)+1, opacity=0.5)
+tube1.opts.opacity = opacity_func
+
+tube2.opts.color = (1,0,0)
+tube2.opts.shading_type = 'pbr'
+tube2.opts.roughness = 0.2
+tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4)
+
+'''

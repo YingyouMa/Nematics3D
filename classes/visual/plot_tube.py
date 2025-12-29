@@ -1,7 +1,8 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 from typing import Optional, Callable, Sequence, Literal
 import numpy as np
 import pyvista as pv
+import datetime
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -134,10 +135,10 @@ class OptsTube:
     is_capping: bool = True
     smooth_iter: int = 0
     clip_geometry: list[float] | pv.PolyData | None = None
-    _is_category_locked: bool = False
+    _state_is_category_locked: bool = False
 
     # --- Internal State ---
-    _owner: object | None = field(default=None, repr=False, init=False)
+    _internal_owner: object | None = field(default=None, repr=False, init=False)
         
 
     _validators = {
@@ -175,13 +176,14 @@ class OptsTube:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
             value = self._validators[key](self, value, desc)
             
-        if getattr(self, "_is_category_locked", False) and key == "category":
+        if getattr(self, "_state_is_category_locked", False) and key == "category":
             raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
 
         object.__setattr__(self, key, value)
         
-        # if key != "_owner" and hasattr(self, "_owner") and self._owner is not None:
-        #     self._owner.act_commit(**{key: value})
+        if key != "_internal_owner" and hasattr(self, "_internal_owner") and self._internal_owner is not None:
+            self._internal_owner.act_commit(**{key: value}, is_setattr=False)
+
         
         
 class PlotTube:
@@ -197,6 +199,8 @@ class PlotTube:
         "_calc_scalars": "The pointwise data of scalars of tube",
         "_entities": "The PyVista Actor in the plotter",
         "opts": "The OptsTube instance for configuration",
+        "_internal_owner": "The PlotFigure object which contains this tube",
+        "_internal_name_pv": "The unique id of this tube stored in plotter"
     }
     
     __slots__ = tuple(__descriptions__.keys())
@@ -213,16 +217,15 @@ class PlotTube:
         
         # Initializing internal states
         object.__setattr__(self, "_raw_coords", np.asarray(coords))
-        object.__setattr__(self, "_entities", None)
-        object.__setattr__(self, "_calc_poly", None)
-        object.__setattr__(self, "_calc_color", None)
-        object.__setattr__(self, "_calc_opacity", None)
-        object.__setattr__(self, "_calc_radius", None)
-        object.__setattr__(self, "_calc_scalars", None)
+        object.__setattr__(self, "_internal_owner", Figure)
 
         logger.detail('Handling explicit kwargs overrides')
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(opts, "_owner", self)
+        object.__setattr__(opts, "_internal_owner", self)
+        
+        str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        unique_id = opts.name +str_now
+        object.__setattr__(self, "_internal_name_pv", unique_id)
         
         if not (isinstance(opts.color, str) and opts.color == 'scalars') and opts.scalars is not None:
             msg = "Color input of PlotTube is not set to 'scalars'. However, scalars is provided.\n"
@@ -247,8 +250,14 @@ class PlotTube:
 
         logger.detail("Executing initial plot")
         self._helper_resolver_init()
-        self._helper_make_figure(Figure=Figure, is_reset_camera=opts.is_reset_camera)
-      
+        self._helper_make_figure()
+        
+        Figure.obj_plotter.render()
+        Figure.obj_plotter.show(interactive_update=True)
+        object.__setattr__(self.opts, '_state_is_category_locked', True)
+        Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
+        
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
         
@@ -343,19 +352,20 @@ class PlotTube:
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)    
-    def _helper_make_figure(self, Figure: PlotFigure, is_reset_camera: bool = True, logger=None):
+    def _helper_make_figure(self, logger=None):
         """
         Creates or updates the rendering in a PyVista Plotter.
         """
         
         is_scalars = (isinstance(self.opts.color, str) and self.opts.color == 'scalars')
+        unique_id = self._internal_name_pv
         
         input_dir = {
-            "name":         self.opts.name,
+            "name":         unique_id,
             "pbr":          self.opts.shading_type == 'pbr',
             "rgb":          not is_scalars,
             "scalars":      'scalars' if is_scalars else 'rgba',
-            "reset_camera": is_reset_camera
+            "reset_camera": self.opts.is_reset_camera
             }
         if is_scalars:
             input_dir["opacity"] = "opacity"
@@ -368,7 +378,10 @@ class PlotTube:
         mesh = self._helper_build_tube_mesh()
             
         logger.detail("Visualizing the tube")
-        actor = Figure.obj_plotter.add_mesh(mesh, **input_dir)
+        plotter = self._internal_owner.obj_plotter
+        if unique_id in plotter.actors:
+            plotter.remove_actor(unique_id)
+        actor = plotter.add_mesh(mesh, **input_dir)
         
         logger.detail("Applying detailed rendering properties directly to the Actor's property object")
         
@@ -383,7 +396,7 @@ class PlotTube:
                 logger.recovery("Use `phong` in the following.")
                 shading = 'phong'
         prop.interpolation = shading
-        self.opts.shading_type = shading
+        object.__setattr__(self.opts, 'shading_type', shading)
             
         prop.ambient = self.opts.ambient
         prop.diffuse = self.opts.diffuse
@@ -398,12 +411,6 @@ class PlotTube:
         actor.visibility = self.opts.is_visible
 
         object.__setattr__(self, "_entities", actor)
-        
-        Figure.obj_plotter.render()
-        Figure.obj_plotter.show(interactive_update=True)
-        
-        self.opts._is_category_locked = True
-        Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
         
     def _helper_replace_data_pv(self, attr: str, data: np.ndarray):
@@ -420,14 +427,9 @@ class PlotTube:
     def _helper_update_rgba(self, logger=None):
         rgba = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
         self._helper_replace_data_pv('rgba', rgba)
-        
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_switch_scalars_to_rgba(self, logger=None):
-        logger.detail("Change the color from 'scalars' to current color settings")
         mapper = self._entities.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = 'direct'
-        # mapper.SetColorModeToDirectScalars()
         mapper.lookup_table = None
         mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
@@ -453,6 +455,8 @@ class PlotTube:
             custom_opac=True,
             opacity=mesh_data['opacity'])
         
+        object.__setattr__(self.opts, 'color', 'scalars')
+        
         
     @logging_and_warning_decorator()
     def act_commit(self, is_setattr=True, logger=None, **kwargs):
@@ -460,6 +464,20 @@ class PlotTube:
         is_needs_remesh = False
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
+        
+        color_method = None
+        if 'scalars' in kwargs.keys():
+            if 'color' in kwargs.keys():
+                msg = ("You are attempting to modify both 'color' and 'scalars' simultaneously."
+                       "This is a potentially confusing operation."
+                       "The values will be updated accordingly, but rendering will use 'scalars' for coloring.")
+                logger.warning(msg)
+            color_method = 'scalars'
+        elif 'color' in kwargs.keys():
+            color_method = 'color'
+        elif 'opacity' in kwargs.keys():
+            color_method = 'scalars' if self.opts.color == 'scalars' else 'color'
+
 
         for key, value in kwargs.items():
             
@@ -470,10 +488,10 @@ class PlotTube:
                 if is_setattr and key != "category":
                     object.__setattr__(self.opts, key, value)
     
-                level, attr_path_actor, doc = self.ATTR_MAP[key]
+                level, attr_path_actor, doc = ATTR_MAP[key]
     
                 # Dealing with LEVEL ACTOR (simply resetting values)
-                if level == self.LEVEL_ACTOR:
+                if level == LEVEL_ACTOR:
                     
                     if key == "category":
                         raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
@@ -503,21 +521,28 @@ class PlotTube:
                         setattr(obj, parts[-1], value)
                 
                 # Dealing with LEVEL_RECALC (resolver for color, opacity and scalars)
-                elif level == self.LEVEL_RECALC:
+                elif level == LEVEL_RECALC:
                     self._helper_resolver_spec(key)
     
-                # ==========================================
-                # 3. 处理 LEVEL_REMESH (Geometry)
-                # ==========================================
-                elif level == self.LEVEL_REMESH:
-
-    
-                    # 正常修改 sides, is_capping, smooth_iter
+                # Dealing with LEVEL_REMESH (Geometry)
+                elif level == LEVEL_REMESH:
                     is_needs_remesh = True
-    
-            # 最后处理：如果改了 remesh 级别的参数，触发重画
-                if is_needs_remesh:
-                    self.replot()
+                    if key == 'radius':
+                        self._helper_resolver_spec('radius')
         
             except:
-                pass
+                logger.exception("Failed to reset value of {key!r}")
+                logger.recovery("Ignore this modification")
+                
+        if is_needs_remesh:
+            self._helper_make_figure()
+        else:
+            if color_method == 'scalars':
+                self._helper_update_scalars()
+            elif color_method == 'color':
+                self._helper_update_rgba()
+                
+        self._internal_owner.obj_plotter.render()
+            
+                
+        
