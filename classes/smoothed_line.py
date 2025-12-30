@@ -2,25 +2,29 @@ import numpy as np
 from typing import Optional, Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev
-from dataclasses import dataclass, asdict      
+from dataclasses import dataclass, field
 import os
 import json
 
 from ..logging_decorator import logging_and_warning_decorator
 from .opts import merge_opts_all
 from ..datatypes import Number, as_Number, as_str, ColorRGB, as_ColorRGB, Vect, as_Vect, as_bool
+from .visual.plot_figure import PlotFigure
+from .visual.plot_tube import OptsTube, PlotTube
 
 
 @dataclass(slots=True)
 class OptsSmooth:
-    window_ratio: Optional[Number] = None
-    window_length: Optional[Number] = None
-    order: Number = 3
+    window_ratio: Number | None = None
+    window_length: Number | int = None
+    order: int = 3
     N_out_ratio: Number = 3.0
     mode: Literal["interp", "wrap"] = "interp"
     min_line_length: int = 50
     name: str = "smoothed_line"
     is_window_warning: bool = True
+    
+    _internal_owner: object | None = field(default=None, repr=False, init=False)
 
     __descriptions__ = {
         "window_ratio": "window ratio for smoothing: line_length / window_length",
@@ -44,9 +48,9 @@ class OptsSmooth:
             if v is None
             else as_Number(v, name=self.__descriptions__["window_length"])
         ),
-        "order": lambda self, v: as_Number(v, name=self.__descriptions__["order"]),
+        "order": lambda self, v: as_Number(v, name=self.__descriptions__["order"], is_int=True, replace=3),
         "N_out_ratio": lambda self, v: as_Number(
-            v, name=self.__descriptions__["N_out_ratio"]
+            v, name=self.__descriptions__["N_out_ratio"], replace=3
         ),
         "mode": lambda self, v: (
             v
@@ -70,8 +74,10 @@ class OptsSmooth:
         if key in self._validators:
             value = self._validators[key](self, value)
         object.__setattr__(self, key, value)
-
-
+        
+        if key != "_internal_owner" and hasattr(self, "_internal_owner") and self._internal_owner is not None:
+            self._internal_owner.act_commit(**{key: value})
+        
 class SmoothingConfigError(ValueError):
     """
     Recoverable configuration error for smoothing.
@@ -116,9 +122,8 @@ class SmoothedLine:
 
     Attributes
     ----------
-    See :attr:`SmoothedLine.__descriptions__` for a full list and explanation
-    of attributes (including both internal state such as ``_raw_coord`` and
-    mirrored options such as ``opts_window_length``).
+    See :`SmoothedLine.__descriptions__` and `SmoothOpts.__descriptions__` for 
+    a full list and explanation of attributes.
 
     Methods
     -------
@@ -148,14 +153,7 @@ class SmoothedLine:
     Notes
     -----
     - If both ``window_length`` and ``window_ratio`` are provided, ``window_ratio``
-      will be IGNORED. Warnings depend on the `is_window_warning` flag in :class:`OptsSmooth`.
-    - Option attributes (prefixed with ``opts_``) are implemented as properties
-      and automatically update final result when changed.
-    - The line will be re-smoothed if ``opts_`` attribute is assigned manualy,
-      e.g. ``tube.opts_order = 4``. For convenience, during user assignment 
-      the ``opts_`` prefix is optional:
-      e.g. ``tube.order = 4`` is automatically redirected to
-      ``tube.opts_order = 4``. 
+      will be IGNORED. Warnings depend on the `is_window_warning` flag in :class:`OptsSmooth`. 
     """
 
     __descriptions__ = {
@@ -175,23 +173,9 @@ class SmoothedLine:
             "or numerical failures), this field stores a human-readable "
             "string describing the specific reason."
         ),
-        "_initializing": (        
-            "Temporary flag used only during __init__ to bypass __setattr__ checks. "
-            "Prevents infinite recursion when setting attributes in constructor. "
-            "Should be set True at the start of __init__, and deleted (del self._initializing) "
-            "at the end. Not intended for user access."
-        ),
-        "_backup_opts": "only used in __enter__ and __exit__, which helps users modify options" ,
 
         # ==== options mirrored onto the instance ====
-        "opts_window_ratio": "Ratio used to compute window_length if not explicitly provided",
-        "opts_window_length": "Explicit smoothing window length (overrides window_ratio if set)",
-        "opts_order": "Polynomial order of Savitzky–Golay filter",
-        "opts_N_out_ratio": "Ratio between output and input number of points",
-        "opts_mode": "Smoothing mode (either 'interp' or 'wrap')",
-        "opts_min_line_length": "Minimum line length required to apply smoothing",
-        "opts_is_window_warning": "Whether present the warning when window_length and window_ratio are both input",
-        "_opts_all": "The dataclass project to store all options values"
+        "opts": "The OptsSmooth instance that controlls smoothing options."
     }
 
     __slots__ = tuple(__descriptions__.keys())
@@ -209,14 +193,9 @@ class SmoothedLine:
         if line_coord_input.ndim != 2:
             raise ValueError("line_coord_input for smoothing must be a 2D array of shape (N, D)")
 
-        # We deliberately use object.__setattr__ here to bypass the custom __setattr__.
-        # This ensures that internal state variables (e.g., _initializing, _entities,
-        # _state_is_smoothed, etc.) can be assigned without triggering the validation
-        # or auto-commit logic of __setattr__. (same below)
-        object.__setattr__(self, "_initializing", True)
-
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(self, "_opts_all", opts)
+        object.__setattr__(opts, '_internal_owner', self)
+        object.__setattr__(self, "opts", opts)
 
         object.__setattr__(self, "_raw_coord", line_coord_input)
         object.__setattr__(self, "_calc_N_init", len(self._raw_coord))
@@ -224,405 +203,123 @@ class SmoothedLine:
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
 
-        self._helper_apply_smooth(self._opts_all)
-
-        del self._initializing
+        self._helper_apply_smooth()
 
     
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_entities", [self._raw_coord])
+        object.__setattr__(self, "_entities", self._raw_coord)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
-        object.__setattr__(self, "_state_status", f"The line `{self.name}` is not smoothed, reason: {reason}.")
-
-
+        object.__setattr__(self, "_state_status", f"The line `{self.opts.name}` is not smoothed, reason: {reason}.")
+        
     @logging_and_warning_decorator()
-    def _helper_apply_smooth(self, opts, logger=None):
-
-        for k, v in asdict(opts).items():
-            if k == "name":
-                object.__setattr__(self, "name", v)
-            else:
-                object.__setattr__(self, f"opts_{k}", v)
+    def _helper_apply_smooth(self, logger=None):
                 
-        msg = f'Start to smooth line {self.name!r} with {self._calc_N_init} points.\n'
-        msg += f"window length = {opts.window_length}\n"
-        msg += f"window ratio = {opts.window_ratio}\n"
-        msg += f"minimum smoothed line length = {opts.min_line_length}"
+        msg = f'Start to smooth line {self.opts.name!r} with {self._calc_N_init} points.\n'
+        msg += f"window length = {self.opts.window_length}\n"
+        msg += f"window ratio = {self.opts.window_ratio}\n"
+        msg += f"minimum smoothed line length = {self.opts.min_line_length}"
         logger.debug(msg)
                 
-        if self._calc_N_init < self.opts_min_line_length:
-            reason = f"the minimum length of line smoothing is set to be {self.opts_min_line_length} points, while the current line has {self._calc_N_init} points"
-            logger.warning(f"{self.name!r} is not smoothed, because {reason}.")
+        if self._calc_N_init < self.opts.min_line_length:
+            reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
+            logger.warning(f"{self.opts.name!r} is not smoothed, because {reason}.")
             self._helper_fallback_no_smooth(reason)
             return
         
         try:
             logger.detail("Start to determine the smoothing window length.")
-            if self.opts_window_length is None:
-                if self.opts_window_ratio is None:
+            if self.opts.window_length is None:
+                if self.opts.window_ratio is None:
                     raise SmoothingConfigError("No input value provided for smooth window length.")
-                self.opts_window_length = (
-                    int(self._calc_N_init / self.opts_window_ratio / 2) * 2 + 1
-                )
-                self.opts_window_ratio = self._calc_N_init / self.opts_window_length
+                object.__setattr__(self.opts, 'window_length', int(self._calc_N_init / self.opts.window_ratio / 2) * 2 + 1)
+                object.__setattr__(self.opts, 'window_ratio', self._calc_N_init / self.opts.window_length)
             else:
-                if self.opts_window_ratio is not None and self.opts_is_window_warning == True:
+                if self.opts.window_ratio is not None and self.opts.is_window_warning == True:
                     logger.warning(
-                        f"Window_length is manual input as {self.opts_window_length}. window_ratio would be ignored."
+                        f"Window_length is manual input as {self.opts.window_length}. window_ratio would be ignored."
                     )     
-                self.opts_window_ratio = self._calc_N_init / self.opts_window_length
+                object.__setattr__(self.opts, 'window_ratio', self._calc_N_init / self.opts.window_length)
 
-            if self.opts_window_length >= self._calc_N_init:
+            if self.opts.window_length >= self._calc_N_init:
                 raise SmoothingConfigError(
-                    f"Filter window length {self.opts_window_length} should not be larger than line length {self._calc_N_init}"
+                    f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"
                 )
             
-            if self.opts_window_length <= self.opts_order:
+            if self.opts.window_length <= self.opts.order:
                 raise SmoothingConfigError(
-                    f"Filter window length {self.opts_window_length} should not be smaller than filter order {self.opts_order}"
+                    f"Filter window length {self.opts.window_length} should not be smaller than filter order {self.opts.order}"
                 )
                 
-            logger.debug(f"Smoothing window length is finally chosen as {opts.window_length}")
+            logger.debug(f"Smoothing window length is finally chosen as {self.opts.window_length}")
 
-            object.__setattr__(self, "_calc_N_out", int(self._calc_N_init * self.opts_N_out_ratio))
+            object.__setattr__(self, "_calc_N_out", int(self._calc_N_init * self.opts.N_out_ratio))
             logger.detail(f"Number of output points after smoothing is {self._calc_N_out}.")
 
-            # Step 1: Apply Savitzky-Golay filter to smooth the curve
+            logger.detail('Applying Savitzky-Golay filter to smooth the curve')
             line_points = savgol_filter(
                 self._raw_coord,
-                self.opts_window_length,
-                self.opts_order,
+                self.opts.window_length,
+                self.opts.order,
                 axis=0,
-                mode=self.opts_mode,
+                mode=self.opts.mode,
             )
 
-            # Step 2: Define spline parameter u
+            logger.detail('Defining spline parameter u')
             uspline = np.arange(self._calc_N_init) / self._calc_N_init
 
-            # Step 3: Fit and evaluate spline
+            logger.detail('Fitting and evaluate spline')
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            object.__setattr__(self, 
-                               "_entities", 
-                               [
-                                np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
-                                ]
-                                )
+            entity = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
+            object.__setattr__(self, "_entities", entity)
             
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
         
-        except SmoothingConfigError as e:
-            reason = str(e)
-            logger.exception(f"Smoothing aborted (manual check): {reason}")
+        except SmoothingConfigError:
+            logger.exception("Smoothing aborted (manual check)")
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
             self._helper_fallback_no_smooth(reason)
 
-        except Exception as e:
-            reason= f"{type(e).__name__}: {e}"
-            logger.exception(f"Smoothing aborted (system error): {reason}")
+        except Exception:
+            logger.exception("Smoothing aborted (system error)")
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
             self._helper_fallback_no_smooth(reason)
-
-
+    
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_commit(self, logger=None, **changes):
 
         if not changes:
             return
         
         for k, v in changes.items():
-            if k.startswith("opts_"):
-                pre = len("opts_")
-            else: 
-                pre = 0
-            setattr(self._opts_all, k[pre:], v)
+            try:
+                if k not in self.opts.__descriptions__:
+                    raise ValueError(f"Unknown attribute: {k} in class: SmoothedLine.opts")
+                object.__setattr__(self.opts, k, v)
+            except:
+                logger.exception(f"Failed to reset value of {k!r}")
+                logger.recovery("Ignore this modification")
+                
+        self._helper_apply_smooth()
 
-        self._helper_apply_smooth(self._opts_all)
-
-
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_visualize(self, 
-                      color: ColorRGB = (1,1,1), 
-                      scale_factor: Number = 1, 
+                      Figure: PlotFigure = PlotFigure(), 
                       move: Vect(3) = (0,0,0),
-                      is_new: bool = True,
-                      logger=None):
+                      logger=None,
+                      **kwargs,
+                      ):
 
-        color = as_ColorRGB(color, name="color to visualize smooth line")
-        try:
-            scale_factor = as_Number(scale_factor, name="scale_factor to visualize smooth line ")
-        except:
-            scale_factor = 1
-            logger.recovery("Set scale_factor=1 in the following")
-        try:
-            move = as_Vect(move, name="The replacement to move smooth line")
-        except:
-            move = np.array([0,0,0])
-        is_new = as_bool(is_new, name="whether to create a new figure to visualize smooth line")
-
-        from mayavi import mlab
-
-        if is_new:
-            mlab.figure()
+        move = as_Vect(move, name="The replacement to move smooth line", replace=(0,0,0))
 
         pts = np.array(self)
         pts = pts[:, :3] + move
-        mlab.points3d(*(pts.T), color=color, scale_factor=scale_factor)
-
-
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
-        """
-        Log internal filter and output parameters for inspection.
-
-        This is the standard logging interface used in this library, which
-        can be redirected to console or to a file depending on the logger
-        configuration and the behavior of ``logging_and_warning_decorator``.
-
-        All attributes listed in ``__descriptions__`` are included,
-        formatted in a single log entry with a clear separator.
-        """
-        lines = []
-        lines.append("-------------- SmoothLine Parameters --------------")
-
-        if self._state_is_smoothed:
-            lines.append(f"[`{self.name}`] smoothing parameters and results:")
-            for attr in self.__slots__:
-                desc = self.__descriptions__.get(attr, "(no description)")
-                value = getattr(self, attr, None)
-
-                if attr in ("opts_window_length", "opts_window_ratio"):
-                    lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
-                elif attr in {"_is_window_warning", "_initializing", "_back_up_opts"}:
-                    pass
-                else:
-                    lines.append(f"  {attr}: {value!r}  # {desc}")
-        else:
-            lines.append(f"{self._state_status}")
-
-        lines.append("-----------------------------------------------------")
-
-        msg = "\n".join(lines)
-
-        if is_return:
-            return msg
-        else:
-            logger.info(msg)
-
-    def __setattr__(self, key, value):
-
-        if getattr(self, "_initializing", False):
-            object.__setattr__(self, key, value)
-            return
+        PlotTube(pts, Figure, **kwargs)
         
-        if key == "name":
-            object.__setattr__(self, key, value)
-            return
-
-        pre = 0
-        if key.startswith("opts_"):
-            pre = len("opts_")
-        object.__setattr__(self, "_initializing", True)
-        try:
-            self.act_commit(**{key[pre:]: value})
-        finally:
-            if hasattr(self, "_initializing"):
-                del self._initializing
-        return
-    
-    
-    def __getattr__(self, key):
-        if not key.startswith("opts_"):
-            key = 'opts_' + key
-        return object.__getattribute__(self, key)
-
-
-    def __str__(self) -> str:
-        header = f"<{self.__class__.__name__} object>"
-        return header + "\n" + self.act_log_parameters(is_return=True)
-    
-    def __len__(self) -> int:
-        return self._calc_N_out
-    
-
-    def __repr__(self) -> str:
-        cls_name = self.__class__.__name__
-        if not self._state_is_smoothed:
-            msg = f"{cls_name}(name={self.name!r}). {self._state_status}."
-        else:
-            msg = f"{cls_name}(name={self.name!r}), # input points is {self._calc_N_init}, window_length={self.opts_window_length}"
-
-        return msg
-    
-    def __iter__(self):
-        return iter(self._entities[0])
-    
-    def __getitem__(self, idx):
-        return self._entities[0][idx]
-    
+        
     def __array__(self, dtype=None):
-        arr = self._entities[0]
+        arr = self._entities
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
- 
-    def __enter__(self):
-        object.__setattr__(self, "_backup_opts", asdict(self._opts_all))
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        for k, v in self._backup_opts.items():
-            # if k in {"_is_window_warning", 
-            #          "_initializing", 
-            #          "_back_up_opts", 
-            #          '_state_is_smoothed', 
-            #          '_state_status'}:
-            #     pass
-            setattr(self._opts_all, k, v)
-        self._helper_apply_smooth(self._opts_all)
-        if hasattr(self, "_initializing"):
-            del self._initializing
-        del self._backup_opts
-        return False  
-    
-    def __bool__(self):
-        return self._state_is_smoothed
-    
-    def act_copy(self):
-        return SmoothedLine(self._raw_coord.copy(), opts=OptsSmooth(**asdict(self._opts_all)))
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_save(self, dirpath: Optional[str]=None, logger=None):
-
-        if dirpath is None:
-            dirpath = f"save/smoothed_line/`{self.name}`"
-        dirpath = as_str(dirpath, name=f"the folder to store smoothed line ```{self.name}```")
-            
-        logger.debug(f"Start to save smoothed line ```{self.name}``` into {dirpath}")
-
-        # ---------- ensure dirpath ----------
-        os.makedirs(dirpath, exist_ok=True)
-
-        # ---------- save JSON ----------
-        json_path = os.path.join(dirpath, "info.json")
-        param_dict = {
-            "opts": asdict(self._opts_all),
-            "metadata": {
-                "name": self.name,
-                "calc_N_init": self._calc_N_init,
-                "calc_N_out": getattr(self, "_calc_N_out", None),
-                "state_is_smoothed": self._state_is_smoothed,
-                "state_status": self._state_status
-            },
-        }
         
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(param_dict, f, indent=4)
-
-        # ---------- save NumPy ----------
-        npz_path = os.path.join(dirpath, "data.npz")
-        np.savez_compressed(
-            npz_path,
-            raw_coord=self._raw_coord,
-            smooth_out=self._entities[0]
-        )
-
         
-    @classmethod
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_load(cls, dirpath: Optional[str]=None, logger=None):
-        
-        dirpath = as_str(dirpath, name="the folder to load smoothed line")
-
-        json_path = os.path.join(dirpath, "info.json")
-        npz_path = os.path.join(dirpath, f"data.npz")
-        logger.debug(f"Start to load SmoothedLine from {json_path} and {npz_path}")
-
-        if not os.path.exists(json_path) or not os.path.exists(npz_path):
-            raise FileNotFoundError(
-                f"Missing required files: {json_path} / {npz_path}"
-            )
-
-        # ---------- load JSON ----------
-        with open(json_path, "r", encoding="utf-8") as f:
-            param_dict = json.load(f)
-
-        opts = OptsSmooth(**param_dict["opts"])
-
-        # ---------- load NPZ ----------
-        data = np.load(npz_path, allow_pickle=True)
-        raw_coord = data["raw_coord"]
-        smooth_out = data["smooth_out"]
-
-        # ---------- reconstruct object ----------
-        obj = cls(raw_coord, opts=opts)
-        object.__setattr__(obj, "_entities", [smooth_out])
-        object.__setattr__(obj, "_calc_N_init", param_dict["metadata"]["calc_N_init"])
-        object.__setattr__(obj, "_calc_N_out", param_dict["metadata"]["calc_N_out"])
-        object.__setattr__(obj, "_state_is_smoothed", param_dict["metadata"]["state_is_smoothed"])
-        object.__setattr__(obj, "_state_status", param_dict["metadata"]["state_status"])
-        object.__setattr__(obj, "name", param_dict["metadata"]["name"])
-
-        return obj
-    
-    @logging_and_warning_decorator()
-    def __eq__(self, other, logger=None) -> bool:
-        """
-        Compare equality with another SmoothedLine object.
-
-        Two SmoothedLine objects are considered equal iff **all attributes**
-        in __slots__ are equal (deep equality for numpy arrays, shallow for scalars).
-
-        Parameters
-        ----------
-        other : object
-            Another object to compare against.
-
-        logger : logging.Logger, optional
-            Logger instance to record differences when not equal.
-
-        Returns
-        -------
-        bool
-            True if all attributes match, False otherwise.
-        """
-        if not isinstance(other, SmoothedLine):
-            logger.info("The other variable is not class SmoothedLine")
-            return False
-
-        all_equal = True
-        diffs = []
-
-        for attr in self.__slots__:
-            v1 = getattr(self, attr, None)
-            v2 = getattr(other, attr, None)
-
-            if attr == "_entities":
-                v1, v2 = v1[0], v2[0]
-
-            if attr == "_state_is_smoothed" and v1 != v2:
-                if v1:
-                    logger.info(f"`{self.name}` is smoothed while {other.name} is not")
-                if v2:
-                    logger.info(f"{other.name} is smoothed while `{self.name}` is not")
-                all_equal = False
-
-                pass
-
-            if isinstance(v1, np.ndarray) or isinstance(v2, np.ndarray):
-                if not (isinstance(v1, np.ndarray) and isinstance(v2, np.ndarray) and np.array_equal(v1, v2)):
-                    all_equal = False
-                    diffs.append(f"{attr}: self={np.shape(v1)}, other={np.shape(v2)} (arrays differ)")
-            else:
-                if v1 != v2:
-                    all_equal = False
-                    diffs.append(f"{attr}: self={v1!r}, other={v2!r}")
-
-        if not all_equal:
-            if len(diffs)>0:
-                logger.info(
-                    "SmoothedLine objects are not equal.\nDifferences:\n" + "\n".join(diffs)
-                )
-        else:
-            logger.info(f"SmoothedLine objects `{self.name}` and {other.name} are equal.")
-
-        return all_equal
-

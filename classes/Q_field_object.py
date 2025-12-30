@@ -328,13 +328,13 @@ class QFieldObject:
         if opts.window_length is None and opts.window_ratio is None:
             opts.window_length = self._raw_default_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += "Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
+            msg += f"Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
             logger.info(msg)
         
         if 'min_line_length' not in kwargs.keys():
             opts.min_line_length = self._raw_default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += "Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
+            msg += f"Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
             logger.info(msg)
             
         msg = "Start to smooth disclination lines in Q tensor `self.name` With paramaters: \n"
@@ -349,7 +349,7 @@ class QFieldObject:
             if line._calc_defect_num >= opts.min_line_length:
                 line.act_smooth(opts=opts)
                 num_smooth += 1
-                window_list[line.name] = line._calc_defect_coords_smooth_obj.opts_window_length
+                window_list[line.name] = line._calc_defect_coords_smooth_obj.opts.window_length
             else:
                 logger.debug(f"Line `{line.name}` is not smoothed because it is too short, with only {line._calc_defect_num} defects. ")
                 
@@ -431,7 +431,7 @@ class QFieldObject:
             min_line_length = self._raw_default_miminum_line_length_smooth
 
         if is_smooth and hasattr(self._calc_lines[0], "_calc_defect_coords_smooth_obj"):
-            _min_len_length_smooth = self._calc_lines[0]._calc_defect_coords_smooth_obj.opts_min_line_length
+            _min_len_length_smooth = self._calc_lines[0]._calc_defect_coords_smooth_obj.opts.min_line_length
             if _min_len_length_smooth > min_line_length:
                 msg = f"The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
                 msg += f"Use the larger value {_min_len_length_smooth} instead."

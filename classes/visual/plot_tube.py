@@ -519,6 +519,9 @@ class PlotTube:
     @logging_and_warning_decorator()
     def act_commit(self, is_setattr=True, logger=None, **kwargs):
         
+        if not kwargs:
+            return
+        
         is_needs_remesh = False
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))

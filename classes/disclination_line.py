@@ -319,9 +319,9 @@ class DisclinationLine:
         opts.mode = smooth_mode
         output = SmoothedLine(coords, opts=opts)
         
-        result = output._entities[0][
-            int(padding_num * output.opts_N_out_ratio) : int(
-                (-padding_num - 1) * output.opts_N_out_ratio
+        result = output._entities[
+            int(padding_num * output.opts.N_out_ratio) : int(
+                (-padding_num - 1) * output.opts.N_out_ratio
             )
         ]
         logger.detail("Checking: shifting the entire trajectory so that the first point is inside the periodic box.")
@@ -330,7 +330,7 @@ class DisclinationLine:
         self._calc_defect_coords_smooth_obj = output
         self._calc_defect_coords_smooth = result
 
-        return output._entities[0]
+        return output._entities
 
     @logging_and_warning_decorator()
     def act_visualize(
