@@ -16,16 +16,15 @@ n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-# Q.act_lines_classify()
 Q.act_lines_smooth()
-# test = Q.lines[0].smooth_obj
-# test.N_out_ratio = 1
-# test.act_visualize()
+# test = Q.lines[3].smooth_obj
+# test.opts.N_out_ratio = 1
 # with test as l:
-#     l.window_length = 5
-#     l.opts_N_out_ratio = 3
-#     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
-# Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
+#     l.act_preview()
+#     l.opts.window_length = 5
+#     l.opts.N_out_ratio = 3
+#     l.act_preview(color=(1,0,0), move=(3,0,0))
+Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
 
 # test1 = Q.lines[0].act_copy()
 # Q.lines[0].act_save()

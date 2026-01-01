@@ -1,23 +1,25 @@
 from dataclasses import dataclass, field
-from typing import Optional, Callable, Sequence, Literal
+from typing import Callable, Sequence, Literal
 import numpy as np
 import pyvista as pv
 import datetime
+import weakref
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
     as_ColorRGB_array,
-    Number,
     as_Number,
     as_str,
     as_bool,
     Vect,
-    as_Vect
+    as_Vect,
+    as_points
 )
 from .plot_figure import PlotFigure
 from ..opts import merge_opts_all
+from Nematics3D.general import pop_exclusive
 
 #! scalars_limit
 #! scalars_bar
@@ -26,6 +28,10 @@ from ..opts import merge_opts_all
 
 #! only change cmap
 
+#! info log extra attr
+#1 del
+#! orphan figure
+
 
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
 LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
@@ -33,7 +39,7 @@ LEVEL_REMESH = 2  # Needs to re-run the tube filter to rebuild the 3D mesh. (Hea
 
 ATTR_MAP = {
     # === Visibility & Global Settings ===
-    "name":                 (LEVEL_ACTOR,  None,                    "Unique identifier for the actor in the plotter."),
+    "name":                 (LEVEL_ACTOR,  None,                    "Identifier for the actor in the plotter."),
     "category":             (LEVEL_ACTOR,  None,                    "The semantic category of this plotting entity."),
     "is_visible":           (LEVEL_ACTOR,  "visibility",            "Whether the tube is visible in the scene."),
     "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",    "'phong', 'pbr' (Physical)"),
@@ -89,16 +95,17 @@ ATTR_MAP = {
                                                                     "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box).")
 }
 
-DEFAULT_VAL_DIR = {
-    'color':    (0,0,0),
-    'radius':   0.1,
-    'scalars':  0.0,
-    'opacity':  1
-    }
-
 
 @dataclass(slots=True)
 class OptsTube:
+    
+    DEFAULTS = {
+        "color": (0.0, 0.0, 0.0),
+        "opacity": 1.0,
+        "radius": 0.5,
+        "scalars": None,
+    }
+    
     # --- Visibility & Global ---
     name: str = "tube"
     category: str = 'line'
@@ -118,10 +125,10 @@ class OptsTube:
     roughness: float = 0.5
 
     # --- Shape and Color ---
-    color: ColorRGB | Callable | Sequence | Literal['scalars'] = (0,0,0)
-    opacity: float | Callable | Sequence = 1.0
+    color: ColorRGB | Callable | Sequence | Literal['scalars'] = DEFAULTS['color']
+    opacity: float | Callable | Sequence = DEFAULTS['opacity']
     scalars: Callable | Sequence | None = None
-    radius: float | Callable | Sequence = 0.1
+    radius: float | Callable | Sequence = DEFAULTS['radius']
     
     # --- Scalars (Used if color='scalars') ---
     scalars_cmap: str = "viridis"
@@ -191,12 +198,12 @@ class PlotTube:
     Wraps PyVista tube filtering and rendering with integrated option management.
     """
     __descriptions__ = {
-        "_raw_coords": (
+        "raw_coords": (
             "The N x 3 input coordinates. "
             "Points are ordered along polylines but may belong to multiple disconnected lines."
         ),
     
-        "_raw_line_index": (
+        "raw_line_index": (
             "Optional integer array of length N specifying polyline membership for each point. "
             "Points with the same index and appearing consecutively form a single connected polyline. "
             "If None or constant, the input is treated as a single continuous line."
@@ -214,47 +221,68 @@ class PlotTube:
     
         "_entities": "The PyVista Actor corresponding to this tube in the plotter.",
         "opts": "The OptsTube instance controlling rendering and geometry options.",
-        "_internal_owner": "The PlotFigure object which contains this tube.",
-        "_internal_name_pv": "The unique identifier of this tube stored in the PyVista plotter."
+        "_internal_owner_ref": ("A weak reference to the PlotFigure object associated with this tube."
+                                "To access it, use .owner or ._internal_owner."),
+        "_internal_name_pv": "The unique identifier of this tube stored in the PyVista plotter.",
+        
+        # --- user-defined attributes (extension mechanism) ---
+        "_internal_extra_attrs": (
+            "A dict storing user-registered extra attributes. "
+            "These are accessed via `tube.<name>` after calling `act_add_attr(name, doc)`."
+        ),
+        "_internal_extra_attrs_docs": (
+            "A dict storing docstrings for user-registered extra attributes."
+        ),
     }
     
     __slots__ = tuple(__descriptions__.keys())
+    
+    DEFAULT_VAL_TUBE = {
+        "color": (0.5, 0.5, 0.5),
+        "radius": 0.5,
+        "opacity": 1,
+        "scalars": None,
+    }
+    
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
-        Figure: PlotFigure,
-        opts: OptsTube = OptsTube(),
+        Figure: PlotFigure | None = None,
+        opts: OptsTube | None = None,
         line_index: Sequence | None = None,
         logger = None,
         **kwargs
     ):
         
-        try:
-            coords = np.asarray(coords, dtype=float)
-            if coords.ndim != 2 or coords.shape[1] != 3:
-                raise ValueError(f"`coords` must be an (N, 3) array. Got {coords.shape} instead.")
-        except (ValueError, TypeError) as e:
-            raise TypeError(f"Invalid `coords` input: {e}")
-        
-        object.__setattr__(self, "_raw_coords", coords)
+        object.__setattr__(self, "raw_coords", as_points(coords))
         
         if line_index is not None:
             try:
-                line_index = np.asarray(line_index, dtype=int)
-                if line_index.ndim != 1 or len(line_index) != coords.shape[0]:
-                    raise ValueError(
-                        f"`line_index` must be a ({coords.shape[0]},) array. "
-                        f"Got shape {line_index.shape} instead."
-                    )
-            except (ValueError, TypeError) as e:
-                raise TypeError(f"Invalid `line_index` input: {e}")
-        object.__setattr__(self, "_raw_line_index", line_index)
+                line_index = self._helper_check_index(line_index)
+            except:
+                logger.exception("Invalid `line_index` input")
+                logger.recovery("Set line_index=None in the following (no stop points within the tube)")
+                line_index = None
+        object.__setattr__(self, "raw_line_index", line_index)
     
-        object.__setattr__(self, "_internal_owner", Figure)
+        if Figure is not None and not isinstance(Figure, PlotFigure):
+            try:
+                raise TypeError('`Figure` for PlotTube must be PlotFigure object!')
+            except:
+                logger.exception("Check input")
+                logger.recovery("Create a new PlotFigure object and store it in self._owner")
+                Figure = PlotFigure()
+        elif Figure is None:
+            Figure = PlotFigure()
+        object.__setattr__(self, "_internal_owner_ref", weakref.ref(Figure))
 
         logger.detail('Handling explicit kwargs overrides')
+        
+        if opts is None:
+            opts = OptsTube(**self.DEFAULT_VAL_TUBE)
+                
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_internal_owner", self)
         
@@ -278,7 +306,7 @@ class PlotTube:
             while new_name in name_set:
                 new_name = f"{name_input}_{index}"
                 index += 1
-            opts.name = new_name
+            object.__setattr__(opts, 'name', new_name)
             logger.warning(f"{name_input!r} already exists in PlotFigure object! Renamed to {opts.name!r}.")
         
 
@@ -291,17 +319,67 @@ class PlotTube:
         object.__setattr__(self.opts, '_state_is_category_locked', True)
         Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
+        object.__setattr__(self, "_internal_extra_attrs", {})
+        object.__setattr__(self, "_internal_extra_attrs_docs", {})
+        
+    @property
+    def _internal_owner(self):
+        return self._internal_owner_ref()
+    
+    @property
+    def _owner(self):
+        return self._internal_owner_ref()
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_check_index(self, line_index, is_keep=False, logger=None):
+        try:
+            line_index = np.asarray(line_index, dtype=int)
+            if line_index.ndim != 1 or len(line_index) != self.raw_coords.shape[0]:
+                raise ValueError(
+                    f"`line_index` must be a ({self.raw_coords.shape[0]},) array. "
+                    f"Got shape {line_index.shape} instead."
+                )
+            return line_index
+        except (ValueError, TypeError):
+            raise
+            
+            
+    def __setattr__(self, key, value):
+    
+        extra = object.__getattribute__(self, "_internal_extra_attrs")
+        docs = object.__getattribute__(self, "_internal_extra_attrs_docs")
+        if key in docs:
+            extra[key] = value
+            return
+    
+        allowed_core = ("raw_coords", "raw_line_index")
+        if key not in allowed_core:
+            raise AttributeError(
+                f"Invalid attribute assignment: {key!r}. Only {allowed_core} can be modified directly, "
+                f"or a registered extra attribute."
+            )
+        self.act_commit(**{key: value})
+            
+            
+    def __getattr__(self, key):
+        extra = object.__getattribute__(self, "_internal_extra_attrs")
+        if key in extra:
+            return extra[key]
+        else:
+            raise AttributeError(f"{type(self).__name__!s} object has no attribute {key!r}.")
+            
+        
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
         
-        target_shape = (len(self._raw_coords),3) if attr_name=='color' else (len(self._raw_coords),)
+        target_shape = (len(self.raw_coords),3) if attr_name=='color' else (len(self.raw_coords),)
         
         try:
             if attr_input is None:
                 raise TypeError(f"Require input for {attr_name!r}. Got None instead.")
             elif callable(attr_input):
-                resolved = np.asarray(attr_input(self._raw_coords), dtype=np.float32)
+                resolved = np.asarray(attr_input(self.raw_coords), dtype=np.float32)
             else:
                 arr = np.asarray(attr_input, dtype=float)
                 if arr.shape == () and attr_name == 'color':
@@ -343,7 +421,7 @@ class PlotTube:
         if attr_name not in ['color', 'radius', 'scalars', 'opacity']:
             raise ValueError(f"Attribute resolved by `_helper_resolver_spec()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
         
-        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), DEFAULT_VAL_DIR[attr_name])
+        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), type(self).DEFAULT_VAL_TUBE[attr_name])
         
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_tube_mesh(self, logger=None):
@@ -351,8 +429,8 @@ class PlotTube:
         Internal: Create the PyVista PolyData, apply smoothing/clipping, 
         and generate tube with dynamic or static radius.
         """
-        points = self._raw_coords
-        idx = getattr(self, "_raw_line_index", None)
+        points = self.raw_coords
+        idx = getattr(self, "raw_line_index", None)
         
         # Decide whether to treat the input as a single continuous polyline
         is_use_multi = (idx is None) or (len(np.unique(idx)) == 1)
@@ -521,8 +599,40 @@ class PlotTube:
         
         if not kwargs:
             return
-        
+    
         is_needs_remesh = False
+        
+        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
+        if found:
+            try:
+                object.__setattr__(self, "raw_coords", as_points(coords))
+                is_needs_remesh = True
+            except:
+                logger.exception("Invalid input of coords for PlotTube.")
+                logger.recovery("Ignore this modification in the following")
+        
+        found, line_index = pop_exclusive(kwargs, "line_index", "raw_line_index")
+        if found:
+            if line_index is None:
+                object.__setattr__(self, "raw_line_index", line_index)
+                is_needs_remesh = True
+            else:
+                try:
+                    line_index = self._helper_check_index(line_index)
+                    object.__setattr__(self, "raw_line_index", line_index)
+                    is_needs_remesh = True
+                except:
+                    logger.exception("Invalid `line_index` input")
+                    logger.recovery("Ignore this modification in the following")
+                
+        if is_needs_remesh:
+            for attr in ['radius', 'color', 'opacity']:
+                if attr not in kwargs.keys():
+                    if attr == 'color' and isinstance(self.opts.color, str):
+                        self._helper_resolver_spec('scalars')
+                    else:
+                        self._helper_resolver_spec(attr)
+        
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
         
@@ -574,7 +684,7 @@ class PlotTube:
                     elif key in phong_params and current_shading == "pbr":
                         logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
     
-                    if attr_path_actor:
+                    if attr_path_actor and not is_needs_remesh:
                         parts = attr_path_actor.split('.')
                         obj = self._entities
                         for part in parts[:-1]:
@@ -604,6 +714,41 @@ class PlotTube:
                 self._helper_update_rgba()
                 
         self._internal_owner.obj_plotter.render()
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_add_attr(
+        self,
+        name: str,
+        doc: str,
+        default=None,
+        overwrite: bool = False,
+        logger=None,
+    ):
+
+        name = as_str(name, name='Extra attribute name for PlotTube')
+        doc = as_str(doc, name='Extra attribute doc for PlotTube')
+
+
+        if not name.isidentifier():
+            raise ValueError(f"Invalid extra attribute name {name!r}: must be a valid Python identifier.")
+
+        if hasattr(type(self), name) or (name in getattr(type(self), "__slots__", ())):
+            raise AttributeError(
+                f"Cannot register extra attribute {name!r}: it conflicts with an existing attribute of {type(self).__name__}."
+            )
+
+        docs = self._internal_extra_attrs_docs
+        data = self._internal_extra_attrs
+
+        if (name in docs) and (not overwrite):
+            raise KeyError(
+                f"Extra attribute {name!r} is already registered. Use overwrite=True to override."
+            )
+
+        docs[name] = doc
+        if overwrite or (name not in data):
+            data[name] = default
+
             
                 
         

@@ -699,6 +699,35 @@ def fit_plane(points):
     return normal_vector
 
 
+def pop_exclusive(kwargs: dict, k1: str, k2: str):
+    """
+    Pop exactly one of (k1, k2) if present.
+
+    Returns
+    -------
+    (found: bool, value: Any)
+        found is True if either key existed; value is the popped value.
+        If neither exists, found=False and value=None.
+
+    Raises
+    ------
+    TypeError
+        If both keys exist simultaneously.
+    """
+    has1 = k1 in kwargs
+    has2 = k2 in kwargs
+    if has1 and has2:
+        raise TypeError(
+            f"Ambiguous input: both {k1!r} and {k2!r} were provided. "
+            f"Please pass only one."
+        )
+    if has1:
+        return True, kwargs.pop(k1)
+    if has2:
+        return True, kwargs.pop(k2)
+    return False, None
+
+
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
 

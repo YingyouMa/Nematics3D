@@ -164,7 +164,7 @@ def as_Tensor(input_data, shape, name="input data"):
             f"{name} must be a matrix with shape {shape}. Got {input_data} instead."
         )
     else:
-        input_data = np.asarray(input_data)
+        input_data = np.asarray(input_data, dtype=float)
 
     return input_data
 
@@ -754,3 +754,12 @@ def check_bool_flags(d: dict, prefix: str = "is_"):
         if name.startswith(prefix):
             if not isinstance(value, (bool, np.bool_, Number)) or (isinstance(value, Number) and value not in (0,1)):
                 raise TypeError(f"{name} must be a bool, got {type(value)}")
+                       
+def as_points(coords, name="input data"):
+    try:
+        coords = np.asarray(coords, dtype=float)
+        if coords.ndim != 2 or coords.shape[1] != 3:
+            raise ValueError(f"{name!r} must be an (N, 3) array. Got {coords.shape} instead.")
+        return coords
+    except (ValueError, TypeError) as e:
+        raise TypeError(f"Invalid `coords` input: {e}")

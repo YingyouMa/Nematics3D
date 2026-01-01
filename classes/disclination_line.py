@@ -17,12 +17,16 @@ from ..datatypes import (
     as_dimension_info,
     boundary_periodic_size_to_flag,
     as_str,
-    as_Number
+    as_Number,
+    as_bool
 )
 from ..field import apply_linear_transform
+from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all
 from .smoothed_line import OptsSmooth, SmoothedLine
+
+# extra attr
 
 @dataclass(slots=True)
 class InputLine:
@@ -335,44 +339,21 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_visualize(
         self,
+        Figure: PlotFigure | None = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
-        scalars: Optional[np.ndarray] = None,
-        opts=OptsTube(),
+        scalars_attr: str | None = None,
+        opts: OptsTube | None = None,
         logger=None,
+        **kwargs
     ) -> None:
-        """
-        Visualize the defect line.
-
-        Parameters
-        ----------
-        is_wrap : bool, optional
-            Whether to apply periodic boundary wrapping to the defect line.
-            Default is True.
-
-        is_smooth : bool, optional
-            Whether to use the smoothed version of the defect line.
-            Default is True.
-
-        scalars : np.ndarray, optional
-            Optional scalar values for each vertex.
-            (enables gradient coloring). If provided, overrides 'color'.
-
-        opts : OptsTube, optional
-            Options controlling properties of visualized tubes.
-            See :attr:`OptsTube.__descriptions__` for definitions.
-        """
         
-        try:
-            if not isinstance(is_smooth, bool):
-                raise TypeError(
-                    f"is_smooth must be a boolean value. Got {is_smooth} instead."
-                )
-        except:
-            logger.recovery("Set is_smooth=False in the following.")
-            is_smooth = False
+        is_smooth = as_bool(
+            is_smooth, 
+            name="Whether visualize the smoothed line instead of original points",
+            replace=False)
 
-        logger.debug(f"Start to visualize line: ``{opts.name}`` with type ``{self._calc_end2end_category}``")
+        logger.debug(f"Start to visualize line: {opts.name!r} with type ``{self._calc_end2end_category}``")
 
         if is_smooth:
             if hasattr(self, "_calc_defect_coords_smooth"):
@@ -382,22 +363,20 @@ class DisclinationLine:
                 msg += "Use original data instead"
                 logger.warning(msg)
                 line_coords = self._calc_defect_coords.copy()
+                is_smooth = False
         else:
             line_coords = self._calc_defect_coords.copy()
 
         if self._calc_end2end_category == "loop":
+            logger.debug('Line {opts.name!r} is a loop. Closing the loop by appending the start point to the end.')
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
-            if scalars is not None:
-                scalars = np.concatenate((scalars, [scalars[0]]))
-
-        line_coords_all = [line_coords]
 
         if not is_wrap:
-            scalars_all = [scalars]
             line_plot = PlotTube(
-                line_coords_all,
-                scalars_all=scalars_all,
+                line_coords,
+                Figure = Figure,
                 opts=opts,
+                **kwargs
             )
         else:
             logger.debug('Start to deal with the periodic boundary condition')
@@ -429,22 +408,20 @@ class DisclinationLine:
                 offset=self._raw_grid_offset,
             )
 
-            coords_all = []
-            scalars_all = []
             logger.detail("Classifying the line into different segements due to periodic boundary conditions.")
+            line_index = np.ones(len(line_coords))
 
             for i in range(len(end_list) - 1):
-                coords_all.append(line_coords[end_list[i] : end_list[i + 1]])
-                if scalars is not None:
-                    scalars_all.append(scalars[end_list[i] : end_list[i + 1]])
-                else:
-                    scalars_all.append(None)
+                line_index[end_list[i] : end_list[i + 1]] = i
 
             logger.debug('Done!')
+            
             line_plot = PlotTube(
-                coords_all,
-                scalars_all=scalars_all,
+                line_coords,
+                line_index,
+                Figure = Figure,
                 opts=opts,
+                **kwargs
             )
 
         return line_plot

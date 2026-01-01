@@ -32,8 +32,9 @@ from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import OptsnPlane, PlotnPlane
 from .visual_mayavi.plot_scene import PlotScene, OptsScene
-from .visual_mayavi.plot_extent import PlotExtent, OptsExtent
+from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
+from .visual.plot_figure import PlotFigure
 from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
 from ..general import get_box_corners
@@ -395,20 +396,25 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
-        is_new: bool = True,
+        Figure: PlotFigure = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
         is_extent: bool = True,
-        min_line_length: Optional[int] = None,
-        lines_scalars_name: Optional[str] = None,
+        min_line_length: int | None = None,
+        # lines_scalars_name: str | None = None,
         opts_scene=OptsScene(),
-        opts_tube=OptsTube(), #!!!!!!!!!!!!!!!!!!
-        opts_extent=OptsExtent(),
+        opts_tube: OptsTube | None = None,
+        opts_extent: OptsTube | None = None,
         logger=None,
         **kwargs,
     ):
-
-        opts_extent.corners = self._calc_corners
+        
+        #!!! lines_scalars_name
+        
+        logger.detail("Dealing with the parameters")
+        
+        if opts_tube is None:
+            opts_tube = OptsTube(color='sample_far')
         
         merge = merge_opts_all(
             {
@@ -429,7 +435,8 @@ class QFieldObject:
             msg += f"Use the default value {self._raw_default_miminum_line_length_smooth}"
             logger.info(msg)
             min_line_length = self._raw_default_miminum_line_length_smooth
-
+        
+        logger.detail("Checking if some unsmoothed lines would be plotted")
         if is_smooth and hasattr(self._calc_lines[0], "_calc_defect_coords_smooth_obj"):
             _min_len_length_smooth = self._calc_lines[0]._calc_defect_coords_smooth_obj.opts.min_line_length
             if _min_len_length_smooth > min_line_length:
@@ -439,23 +446,27 @@ class QFieldObject:
                 logger.warning(msg)
 
         logger.debug(f"min_line_length = {min_line_length}")
-
+        
         lines_plot = [
             line for line in self._calc_lines if line._calc_defect_num > min_line_length
         ]
 
-        if lines_scalars_name is not None:
-            logger.info("Scalars of lines are input")
-            lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
-            lines_colors = [(1,1,1) for line in lines_plot] #!!!!!!!!!!!!!!!!!!!!!!!
-            if opts_tube.color_rule is not None:
-                logger.warning(
-                    "scalars of lines are input. Their color_input will be ignored"
-                )
-        else:
-            lines_scalars = [None for line in lines_plot]
+        # logger.detail("Searching the attributes of ")
+        # if lines_scalars_name is not None:
+        #     logger.info("Scalars of lines are input")
+        #     try:
+        #         lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
+        #         lines_colors = 'scalars'
+        #         if opts_tube.color is not 'scalars':
+        #             logger.warning(
+        #                 "scalars of lines are input. Their color_input will be ignored"
+        #             )
+        # else:
+        #     lines_scalars = [None for line in lines_plot]
+        lines_scalars = [None for line in lines_plot]
 
-        if opts_tube.color_rule == 'sample_far':   #!!!!!!!!!!!!!!!!!!!!!
+        if opts_tube.color == 'sample_far':  
+            logger.detail('Apply a variety of colors to ensure disclination lines are easily identifiable.')
             from ..general import blue_red_in_white_bg, sample_far
 
             color_map = blue_red_in_white_bg()
@@ -464,9 +475,9 @@ class QFieldObject:
                 (sample_far(len(lines_plot)) * color_map_length).astype(int)
             ]
         else:
-            lines_colors = [opts_tube.color_rule for line in lines_plot]
+            lines_colors = [opts_tube.color for line in lines_plot]
 
-        figure = self.act_add_scene(is_new, opts=opts_scene)
+        # figure = self.act_add_scene(is_new, opts=opts_scene)
 
         logger.debug("Start to draw disclination lines")
         for line, line_color, line_scalar in zip(
@@ -474,20 +485,19 @@ class QFieldObject:
         ):
             opts_tube = replace(opts_tube, name=line.name, color=line_color)
             line_visual = line.act_visualize(
+                Figure=Figure,
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
                 scalars=line_scalar,
                 opts=opts_tube,
-                logger=logger,
             )
 
-            figure.add_object(line_visual, category="lines")
-            print(self.figs[-1].objects, 'BBBBBBBBBBBBB')
-
         if is_extent:
-            extent = PlotExtent(opts_extent)
-            figure.add_object(extent, category="extent")
-            figure.scene.distance = opts_scene.distance
+            extent = PlotExtent(
+                self._calc_corners,
+                Figure=Figure,
+                opts=opts_extent, 
+                is_reset_camera=False)
 
     @logging_and_warning_decorator()
     def act_visualize_n_in_Q(
@@ -499,7 +509,7 @@ class QFieldObject:
         is_extent: bool = True,
         opts_grid=OptsPlaneGrid(),
         opts_nPlane=OptsnPlane(),
-        opts_extent=OptsExtent(),
+        opts_extent=OptsTube(),
         opts_scene=OptsScene(),
         logger=None,
         **kwargs,

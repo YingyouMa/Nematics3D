@@ -19,9 +19,14 @@ from .plot_figure_camera import FigureCamera
 
 class PlotFigure:
     
-    def __init__(self):
+    def __init__(self,
+                 plotter: pv.Plotter | None = None,
+                 name: str = 'figure'):
         
-        self.obj_plotter = pv.Plotter()
+        if plotter is None:
+            self.obj_plotter = plotter
+        else:
+            self.obj_plotter = pv.Plotter()
         self.obj_camera = FigureCamera(self.obj_plotter)
         self._entities = {}
     
@@ -40,3 +45,17 @@ class PlotFigure:
             for entity in entity_list
             ]
         return names
+    
+    def act_check_is_alive(self):
+        try:
+            plotter = self.obj_plotter
+            if plotter._closed:
+                return False
+    
+            iren = plotter.iren
+            return iren is not None and iren.initialized
+        except Exception:
+            return False
+        
+    def __bool__(self):
+        return self.act_check_is_alive()

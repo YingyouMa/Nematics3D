@@ -1,8 +1,8 @@
 import numpy as np
-from typing import Optional, Literal
+from typing import Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 import os
 import json
 
@@ -157,13 +157,10 @@ class SmoothedLine:
     """
 
     __descriptions__ = {
-        "name": "Name identifier of this line object",
-
-        # --- internal states ---
-        "_raw_coord": "Raw input line coordinates (shape: N x D)",
+        "_raw_coords": "Raw input line coordinates (shape: N x D)",
         "_calc_N_init": "Number of input points (before smoothing)",
         "_calc_N_out": "Number of output points (after smoothing)",
-        "_entities": "Whose first element is smoothed output coordinates (shape: M x D)",
+        "_entities": "The moothed output coordinates (shape: M x D)",
         "_state_is_smoothed": "Boolean flag indicating whether smoothing was applied",
         "_state_status": (
             "Status indicator of the smoothing pipeline. "
@@ -171,11 +168,10 @@ class SmoothedLine:
             "If smoothing is skipped or disabled due to internally detected "
             "conditions (e.g. line too short, invalid window size, "
             "or numerical failures), this field stores a human-readable "
-            "string describing the specific reason."
-        ),
-
-        # ==== options mirrored onto the instance ====
-        "opts": "The OptsSmooth instance that controlls smoothing options."
+            "string describing the specific reason."),
+        "opts": "The OptsSmooth instance that controlls smoothing options.",
+        "_entities_figure": "The PlotFigure object. Only used in act_preview() which helps users modify options",
+        "_internal_backup_opts": "only used in __enter__ and __exit__, "
     }
 
     __slots__ = tuple(__descriptions__.keys())
@@ -197,8 +193,8 @@ class SmoothedLine:
         object.__setattr__(opts, '_internal_owner', self)
         object.__setattr__(self, "opts", opts)
 
-        object.__setattr__(self, "_raw_coord", line_coord_input)
-        object.__setattr__(self, "_calc_N_init", len(self._raw_coord))
+        object.__setattr__(self, "_raw_coords", line_coord_input)
+        object.__setattr__(self, "_calc_N_init", len(self._raw_coords))
 
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
@@ -208,7 +204,7 @@ class SmoothedLine:
     
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_entities", self._raw_coord)
+        object.__setattr__(self, "_entities", self._raw_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
         object.__setattr__(self, "_state_status", f"The line `{self.opts.name}` is not smoothed, reason: {reason}.")
         
@@ -258,7 +254,7 @@ class SmoothedLine:
 
             logger.detail('Applying Savitzky-Golay filter to smooth the curve')
             line_points = savgol_filter(
-                self._raw_coord,
+                self._raw_coords,
                 self.opts.window_length,
                 self.opts.order,
                 axis=0,
@@ -304,22 +300,56 @@ class SmoothedLine:
         self._helper_apply_smooth()
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_visualize(self, 
-                      Figure: PlotFigure = PlotFigure(), 
-                      move: Vect(3) = (0,0,0),
-                      logger=None,
-                      **kwargs,
-                      ):
+    def act_preview(self, 
+                    move: Vect(3) = (0,0,0),
+                    is_new=False,
+                    logger=None,
+                    **kwargs,
+                    ):
 
         move = as_Vect(move, name="The replacement to move smooth line", replace=(0,0,0))
+        
+        if not is_new:
+            Figure = getattr(self, '_entities_figure', None)
+            if Figure is None or Figure.act_check_is_alive()==False:
+                Figure = PlotFigure()
+                object.__setattr__(self, '_entities_figure', Figure)
+        else:
+            Figure = PlotFigure()
+            object.__setattr__(self, '_entities_figure', Figure)
 
         pts = np.array(self)
         pts = pts[:, :3] + move
         PlotTube(pts, Figure, **kwargs)
+        
+    def act_copy(self):
+        return SmoothedLine(self._raw_coords.copy(), opts=OptsSmooth(**asdict(self.opts)))
         
         
     def __array__(self, dtype=None):
         arr = self._entities
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
         
+    def __getitem__(self, idx):
+        return self._entities[idx]
+    
+    def __iter__(self):
+        return iter(self._entities[0])
+    
+    def __bool__(self):
+        return self._state_is_smoothed
+    
+    def __len__(self) -> int:
+        return self._calc_N_out
+    
+    def __enter__(self):
+        object.__setattr__(self, "_internal_backup_opts", asdict(self.opts))
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        for k, v in self._internal_backup_opts.items():
+            setattr(self.opts, k, v)
+        self._helper_apply_smooth()
+        del self._internal_backup_opts
+        return False  
         
