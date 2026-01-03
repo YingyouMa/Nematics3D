@@ -35,10 +35,13 @@ from .visual_mayavi.plot_scene import PlotScene, OptsScene
 from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
 from .visual.plot_figure import PlotFigure
+from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth
+
+#!!! Q.default_tube_opts
 
 
 @dataclass(slots=True)
@@ -150,13 +153,13 @@ class QFieldObject:
         "_calc_interpolator": ["Interpolator object for Q field in real space / index space.", "SLOT"],
 
         # --- Visualization state ---
-        "_calc_figures": ["List of PlotScene objects created for visualization.", "SLOT"],
+        "_entities_figures": ["FigureManager project to manage PlotFigure objects created for visualization.", "SLOT"],
 
         # --- Public properties (semantic) ---
         "S": ["Property accessor: scalar order parameter field S. This equals _raw_S", "PROPERTY"],
         "n": ["Property accessor: director field n. This equals _raw_n", "PROPERTY"],
         "lines": ["Property accessor: classified disclination lines. This equals _calc_lines", "PROPERTY"],
-        "figs": ["Property accessor: visualization scenes/figures. This equals _calc_figures", "PROPERTY"],
+        "figs": ["Property accessor: visualization scenes/figures. This equals _entities_figures", "PROPERTY"],
     }
 
     __slots__ = tuple(
@@ -228,7 +231,7 @@ class QFieldObject:
             self._calc_grid_index, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
 
-        self._calc_figures = []
+        self._entities_figures = FigureManager()
         
         logger.debug("Generating the coorners of Q.")
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
@@ -396,13 +399,14 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
-        Figure: PlotFigure = None,
+        figure: PlotFigure | str | int | None = None,
+        name : str | None = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
         is_extent: bool = True,
         min_line_length: int | None = None,
         # lines_scalars_name: str | None = None,
-        opts_scene=OptsScene(),
+        # opts_scene=OptsScene(),
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
         logger=None,
@@ -413,18 +417,44 @@ class QFieldObject:
         
         logger.detail("Dealing with the parameters")
         
+        try:
+            if isinstance(figure, (str, int)):
+                figure = self.figs[figure]
+            elif figure is None:
+                figure = PlotFigure()
+            elif isinstance(figure, PlotFigure):
+                pass
+            else:
+                raise ValueError(
+                    "`figure` input must be either index in FigureManager (str or int) "
+                    "or a valid PlotFigure object, or None (creating a new figure) "
+                    "Got type {type(figure)!r} insdead."
+                    )
+        except:
+            logger.exception("Could not find figure in FigureManager.")
+            logger.recovery("Create a new figure instead.")
+            figure = PlotFigure()
+            
+        if name is None:
+            name = "Disclination lines"
+        figure.name = name
+            
+        self.figs.act_add_figure(figure)
+            
         if opts_tube is None:
             opts_tube = OptsTube(color='sample_far')
+        if opts_extent is None:
+            opts_extent = OptsTube()
         
         merge = merge_opts_all(
             {
-                "scene_": opts_scene, 
+                #"scene_": opts_scene, 
                 "line_": opts_tube,
                 "extent_": opts_extent
             },
             kwargs, type(self).__name__)
 
-        opts_scene = merge["scene_"]
+        # opts_scene = merge["scene_"]
         opts_tube = merge["line_"]
         opts_extent = merge["extent_"]
 
@@ -485,7 +515,7 @@ class QFieldObject:
         ):
             opts_tube = replace(opts_tube, name=line.name, color=line_color)
             line_visual = line.act_visualize(
-                Figure=Figure,
+                figure=figure,
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
                 scalars=line_scalar,
@@ -495,7 +525,7 @@ class QFieldObject:
         if is_extent:
             extent = PlotExtent(
                 self._calc_corners,
-                Figure=Figure,
+                figure=figure,
                 opts=opts_extent, 
                 is_reset_camera=False)
 
@@ -566,12 +596,12 @@ class QFieldObject:
 
     def act_add_scene(self, is_new=True, opts=OptsScene):
         figure = PlotScene(is_new=is_new, opts=opts)
-        if is_new or (not is_new and len(self._calc_figures) == 0):
-            self._calc_figures.append(figure)
+        if is_new or (not is_new and len(self._entities_figures) == 0):
+            self._entities_figures.append(figure)
         return figure
 
     def act_reset_figures(self):
-        self._calc_figures = []
+        self._entities_figures = []
         
     @property
     def lines(self):
@@ -579,7 +609,7 @@ class QFieldObject:
     
     @property
     def figs(self):
-        return self._calc_figures
+        return self._entities_figures
     
     @property
     def S(self):

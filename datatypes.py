@@ -763,3 +763,34 @@ def as_points(coords, name="input data"):
         return coords
     except (ValueError, TypeError) as e:
         raise TypeError(f"Invalid `coords` input: {e}")
+
+
+class _UnsetType:
+    """
+    Internal sentinel type representing an explicit "unset" state.
+
+    This type is used to distinguish between:
+    - a value that has not been provided by the user (UNSET), and
+    - a value that is explicitly provided as None or another valid value.
+
+    It is intentionally designed to be:
+    - state-less (no attributes),
+    - identity-based (checked via `is UNSET`),
+    - type-identifiable (usable in type annotations),
+    - and safe against accidental mutation.
+    """
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        # Provide a concise and readable representation for debugging,
+        # logging, and error messages.
+        return "UNSET"
+
+
+# The single, canonical instance used throughout the codebase to denote
+# an "unset" value. Identity comparison (`is UNSET`) should always be used.
+UNSET = _UnsetType()
+
+# Public alias for the sentinel's type, intended for use in type annotations,
+# e.g. `float | Unset`. Users should not instantiate this type directly.
+Unset = _UnsetType

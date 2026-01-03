@@ -1,4 +1,6 @@
 import numpy as np
+from typing import Mapping, Any
+from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -18,14 +20,14 @@ class PlotExtent(PlotTube):
     tube rendering and update pipeline.
     """
     
-    DEFAULT_VAL_TUBE = {
-        "color":   (0.0, 0.0, 0.0),  # black
-        "radius":  0.15,             # thinner than PlotTube default
-        "opacity": 1.0,              # fully opaque
-        "scalars": None,             # no scalars by default
-    }
+    _OPTS_DEFAULT_EXTENT = MappingProxyType({
+        "color":    (0.0, 0.0, 0.0),  # black
+        "radius":   0.35,             # thinner than PlotTube default
+        "name":     'extent',
+        "category": 'extent'
+    })
 
-    _EDGES = [
+    _EDGES = (
         (0, 1),
         (0, 2),
         (0, 3),
@@ -38,14 +40,17 @@ class PlotExtent(PlotTube):
         (3, 6),
         (5, 7),
         (6, 7),
-    ]
+    )
+    
+    __slots__ = ()
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         corners: Tensor,
-        Figure: PlotFigure | None = None,
+        figure: PlotFigure | None = None,
         opts: OptsTube | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs
     ):
@@ -54,28 +59,30 @@ class PlotExtent(PlotTube):
         ----------
         corners : (8, 3) array-like
             Coordinates of the eight corners defining the extent.
-        Figure : PlotFigure, optional
+        figure : PlotFigure, optional
             Target figure.
         opts : OptsTube, optional
             Rendering options. Defaults are overridden for extent style.
         """
     
         corners = as_Tensor(corners, (8,3), name='The original 8 corner points defining the extent.')
-
         coords, line_index = self._helper_build_edges_from_corners(corners)
-
+        
         if opts is None:
-            opts = OptsTube(
-                name = "extent",
-                category = "extent"
-                )
-
+            opts = OptsTube()
+        
+        user_override = {} if opts_defaults_override is None else dict(opts_defaults_override)
+        extent_override = {
+            **self._OPTS_DEFAULT_EXTENT,  # lower priority
+            **user_override,             # higher priority
+        }
+        
         super().__init__(
             coords=coords,
-            Figure=Figure,
+            figure=figure,
             opts=opts,
             line_index=line_index,
-            logger=logger,
+            opts_defaults_override=extent_override,
             **kwargs
         )
 

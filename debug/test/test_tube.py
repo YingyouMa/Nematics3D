@@ -25,14 +25,14 @@ def opacity_func(coords):
     opacity = np.abs(np.sin(coords[:, 2]))
     return opacity
 
-Figure = Nematics3D.PlotFigure()
+figure = Nematics3D.PlotFigure()
 
 line_index = np.ones(75)
 line_index[-25:] = 2
 
 # --- 案例 1: 固定参数 (类似于你给的例子) ---
 tube1 = Nematics3D.PlotTube(
-    Figure=Figure,
+    figure=figure,
     coords=get_path(offset_y=0),  
     line_index = line_index,
     name="solid_blue",
@@ -44,7 +44,7 @@ tube1 = Nematics3D.PlotTube(
 
 # --- 案例 2: 函数驱动 (一次性传入函数) ---
 tube2 = Nematics3D.PlotTube(
-    Figure=Figure,
+    figure=figure,
     coords=get_path(offset_y=5),
     line_index = line_index,
     name="functional",
@@ -55,7 +55,7 @@ tube2 = Nematics3D.PlotTube(
 
 # --- 案例 3: 手动模式 + 透明度 ---
 tube3 = Nematics3D.PlotTube(
-    Figure=Figure,
+    figure=figure,
     coords=get_path(offset_y=10),
     line_index = line_index,
     name="manual_color",
@@ -68,7 +68,7 @@ tube3 = Nematics3D.PlotTube(
 )
 
 tube4 = Nematics3D.PlotTube(
-    Figure=Figure,
+    figure=figure,
     coords=get_path(offset_y=15),
     line_index = line_index,
     name="func_scalars",
@@ -81,7 +81,7 @@ tube4 = Nematics3D.PlotTube(
 )
 
 tube5 = Nematics3D.PlotTube(
-    Figure=Figure,
+    figure=figure,
     coords=get_path(offset_y=20),
     line_index = line_index,
     name="manual_scalars2",
@@ -131,6 +131,6 @@ tube1.opts.opacity = opacity_func
 tube2.opts.color = (1,0,0)
 tube2.opts.shading_type = 'pbr'
 tube2.opts.roughness = 0.2
-tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4)
+
 tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4, is_reset_camera=False)
 '''

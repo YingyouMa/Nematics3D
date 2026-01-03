@@ -1,9 +1,10 @@
-from dataclasses import dataclass, field
-from typing import Callable, Sequence, Literal
+from dataclasses import dataclass, field, fields
+from typing import Callable, Sequence, Literal, Any, Mapping
 import numpy as np
 import pyvista as pv
 import datetime
 import weakref
+from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -15,7 +16,9 @@ from Nematics3D.datatypes import (
     as_bool,
     Vect,
     as_Vect,
-    as_points
+    as_points,
+    UNSET,
+    Unset
 )
 from .plot_figure import PlotFigure
 from ..opts import merge_opts_all
@@ -31,6 +34,8 @@ from Nematics3D.general import pop_exclusive
 #! info log extra attr
 #1 del
 #! orphan figure
+
+#! @coords
 
 
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
@@ -96,90 +101,174 @@ ATTR_MAP = {
 }
 
 
+
+# --- Type aliases ---
+ColorMode = ColorRGB | Callable | Sequence | Literal["scalars"]
+OpacityMode = float | Callable | Sequence
+RadiusMode = float | Callable | Sequence
+ScalarsMode = Callable | Sequence | None
+ClipGeometryLike = list[float] | pv.PolyData | None
+
 @dataclass(slots=True)
 class OptsTube:
-    
-    DEFAULTS = {
-        "color": (0.0, 0.0, 0.0),
-        "opacity": 1.0,
-        "radius": 0.5,
-        "scalars": None,
-    }
+    """
+    Options for rendering a tube-like polyline object.
+
+    This class supports a two-phase lifecycle:
+      (1) Configuration phase: many fields may remain UNSET.
+      (2) Finalization phase: act_finalize() replaces UNSET fields using defaults,
+          validates them, and freezes the opts for use by an owner.
+    """
+
+    # -------------------------------------------------------------------------
+    # Frozen defaults (read-only, global baseline)
+    #
+    # - Must contain ALL public fields that are expected to be finalized.
+    # - Should be treated as immutable. MappingProxyType prevents accidental edits.
+    # - act_finalize() will fill UNSET fields from the provided defaults mapping
+    #   first, then fall back to this frozen table.
+    # -------------------------------------------------------------------------
+    _DEFAULTS_FROZEN = MappingProxyType({
+        # --- Visibility & Global ---
+        "name":                 "tube",
+        "category":             "line",
+        "is_visible":           True,
+        "shading_type":         "phong",
+        "is_reset_camera":      True,
+
+        # --- Phong Lighting ---
+        "ambient":              0.0,
+        "diffuse":              1.0,
+        "specular":             1.0,
+        "specular_pow":         10.0,
+        "specular_color":       (1.0, 1.0, 1.0),
+
+        # --- PBR Lighting ---
+        "metallic":             0.0,
+        "roughness":            0.5,
+
+        # --- Shape & Color ---
+        "color":                (0.5, 0.5, 0.5),
+        "opacity":              1.0,
+        "radius":               0.5,
+        "scalars":              None,
+
+        # --- Scalars (used if color == "scalars") ---
+        "scalars_cmap":         "viridis",
+        "scalars_clim":         None,
+        "is_scalar_bar":        True,
+        "scalar_bar_title":     "scalars",
+
+        # --- Geometry & Clipping ---
+        "sides":                6,
+        "is_capping":           True,
+        "smooth_iter":          0,
+        "clip_geometry":        None,
+    })
     
     # --- Visibility & Global ---
-    name: str = "tube"
-    category: str = 'line'
-    is_visible: bool = True
-    shading_type: str = "phong"
-    is_reset_camera: bool = True
+    name: str | Unset = UNSET
+    category: str | Unset = UNSET
+    is_visible: bool | Unset = UNSET
+    shading_type: Literal["phong", "pbr"] | Unset = UNSET
+    is_reset_camera: bool | Unset = UNSET
 
     # --- Phong Lighting ---
-    ambient: float = 0.0
-    diffuse: float = 1.0
-    specular: float = 1.0
-    specular_pow: float = 10.0
-    specular_color: ColorRGB = (1.0, 1.0, 1.0)
+    ambient: float | Unset = UNSET
+    diffuse: float | Unset = UNSET
+    specular: float | Unset = UNSET
+    specular_pow: float | Unset = UNSET
+    specular_color: ColorRGB | Unset = UNSET
 
     # --- PBR Lighting ---
-    metallic: float = 0.0
-    roughness: float = 0.5
+    metallic: float | Unset = UNSET
+    roughness: float | Unset = UNSET
 
-    # --- Shape and Color ---
-    color: ColorRGB | Callable | Sequence | Literal['scalars'] = DEFAULTS['color']
-    opacity: float | Callable | Sequence = DEFAULTS['opacity']
-    scalars: Callable | Sequence | None = None
-    radius: float | Callable | Sequence = DEFAULTS['radius']
-    
-    # --- Scalars (Used if color='scalars') ---
-    scalars_cmap: str = "viridis"
-    scalars_clim: Vect(2) | None = None
-    is_scalar_bar: bool = True
-    scalar_bar_title: str = 'scalars'
-    
+    # --- Shape & Color ---
+    color: ColorMode | Unset = UNSET
+    opacity: OpacityMode | Unset = UNSET
+    scalars: ScalarsMode | Unset = UNSET
+    radius: RadiusMode | Unset = UNSET
+
+    # --- Scalars (used if color == "scalars") ---
+    scalars_cmap: str | Unset = UNSET
+    scalars_clim: Vect(2) | None | Unset = UNSET
+    is_scalar_bar: bool | Unset = UNSET
+    scalar_bar_title: str | Unset = UNSET
 
     # --- Geometry & Clipping ---
-    sides: int = 6
-    is_capping: bool = True
-    smooth_iter: int = 0
-    clip_geometry: list[float] | pv.PolyData | None = None
-    _state_is_category_locked: bool = False
+    sides: int | Unset = UNSET
+    is_capping: bool | Unset = UNSET
+    smooth_iter: int | Unset = UNSET
+    clip_geometry: ClipGeometryLike | Unset = UNSET
 
-    # --- Internal State ---
+    # --- Internal State (not part of defaults/finalization) ---
+    _state_is_category_locked: bool = field(default=False, init=False, repr=False)
+    _state_functioning: bool = field(default=False, init=False, repr=False)
+    _defaults: dict[str, Any] = field(init=False, repr=False)
+
     _internal_owner: object | None = field(default=None, repr=False, init=False)
-        
-
+    
+    
     _validators = {
+        "name": lambda self, v, d: as_str(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["name"]),
+        "category": lambda self, v, d: as_str(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["category"]),
+        "is_visible": lambda self, v, d: as_bool(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["is_visible"]),
+        "shading_type": lambda self, v, d: as_str(
+            v, name=d,
+            replace=OptsTube._DEFAULTS_FROZEN["shading_type"],
+            pool=("phong", "pbr"),
+        ),
+        "is_reset_camera": lambda self, v, d: as_bool(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["is_reset_camera"]),
+    
+        "ambient": lambda self, v, d: as_Number(
+            v, name=d, value_range=(0, 1), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["ambient"]
+        ),
+        "diffuse": lambda self, v, d: as_Number(
+            v, name=d, value_range=(0, 1), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["diffuse"]
+        ),
+        "specular": lambda self, v, d: as_Number(
+            v, name=d, value_range=(0, 1), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["specular"]
+        ),
+        "specular_pow": lambda self, v, d: as_Number(
+            v, name=d, value_range=(1, 100), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["specular_pow"]
+        ),
+        "specular_color": lambda self, v, d: as_ColorRGB(
+            v, name=d, replace=OptsTube._DEFAULTS_FROZEN["specular_color"]
+        ),
+    
+        "metallic": lambda self, v, d: as_Number(
+            v, name=d, value_range=(0, 1), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["metallic"]
+        ),
+        "roughness": lambda self, v, d: as_Number(
+            v, name=d, value_range=(0, 1), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["roughness"]
+        ),
+    
+        "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["scalars_cmap"]),
+        "scalars_clim": lambda self, v, d: (
+            v if v is None else as_Vect(v, name=d, dim=2, replace=OptsTube._DEFAULTS_FROZEN["scalars_clim"])
+        ),
+        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["is_scalar_bar"]),
+        "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["scalar_bar_title"]),
+    
+        "sides": lambda self, v, d: as_Number(
+            v, name=d, is_int=True, value_range=(3, 128), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["sides"]
+        ),
+        "is_capping": lambda self, v, d: as_bool(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["is_capping"]),
+        "smooth_iter": lambda self, v, d: as_Number(
+            v, name=d, is_int=True, value_range=(0, 1000), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["smooth_iter"]
+    )}
+    
+    
+    def __post_init__(self):
+        # Instance-level copy (mutable), useful for debugging or transitional logic.
+        # The canonical baseline remains _DEFAULTS_FROZEN.
+        object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
         
-        "name": lambda self, v, d: as_str(v, name=d, replace='tube'),
-        "category": lambda self, v, d: as_str(v, name=d, replace='line'),
-        "is_visible": lambda self, v, d: as_bool(v, name=d, replace=True),
-        "shading_type": lambda self, v, d: as_str(v, name=d, replace='phong', pool=('phong', 'pbr')),
-        "is_reset_camera": lambda self, v, d: as_bool(v, name=d, replace=True),
-        
-        "ambient": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.0),
-        "diffuse": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=1.0),
-        "specular": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.0),
-        "specular_pow": lambda self, v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True, replace=10.0),
-        "specular_color": lambda self, v, d: as_ColorRGB(v, name=d, replace=(1.0, 1.0, 1.0)),
-        
-        "metallic": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.0),
-        "roughness": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True, replace=0.5),
-        
-        # color, opacity, scalars, radius
-        
-        "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace='viridis'),
-        "scalars_clim": lambda self, v, d: v if v is None else as_Vect(v, name=d, dim=2, replace=None),
-        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=True),
-        "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace='scalars'),
-        
-        "sides": lambda self, v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True, replace=6),
-        "is_capping": lambda self, v, d: as_bool(v, name=d, replace=True),
-        "smooth_iter": lambda self, v, d: as_Number(v, name=d, is_int=True, value_range=(0, 1000), bounded=True, replace=0),
-    }
 
     def __setattr__(self, key, value):
 
-        if key in self._validators:
+        if value is not UNSET and key in self._validators:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
             value = self._validators[key](self, value, desc)
             
@@ -188,8 +277,36 @@ class OptsTube:
 
         object.__setattr__(self, key, value)
         
-        if key != "_internal_owner" and hasattr(self, "_internal_owner") and self._internal_owner is not None:
+        if key != "_internal_owner" and getattr(self, "_state_functioning", False) and self._internal_owner is not None:
             self._internal_owner.act_commit(**{key: value}, is_setattr=False)
+            
+            
+    def act_finalize(self, defaults: Mapping[str, Any] | None = None):
+        """
+        Resolve all UNSET fields using:
+          1) the provided `defaults` mapping (higher priority), then
+          2) the class-level `_DEFAULTS_FROZEN` mapping.
+
+        This must be called before visualization. After finalization, the opts
+        should be treated as ready-to-use (no more defaults resolution).
+        """
+        if getattr(self, "_state_functioning", False):
+            raise RuntimeError("OptsTube has already been finalized.")
+
+        defaults = {} if defaults is None else dict(defaults)
+
+        for f in fields(self):
+            k = f.name
+            if k.startswith("_"):
+                continue  # internal fields are not finalized
+
+            if getattr(self, k) is UNSET:
+                v = defaults.get(k, self._DEFAULTS_FROZEN.get(k, UNSET))
+                if v is UNSET:
+                    raise KeyError(f"Missing default for field {k!r}.")
+                setattr(self, k, v)  # runs validators
+
+        object.__setattr__(self, "_state_functioning", True)
 
         
         
@@ -220,7 +337,12 @@ class PlotTube:
         "_calc_scalars": "The resolved per-point scalar array used for scalar coloring.",
     
         "_entities": "The PyVista Actor corresponding to this tube in the plotter.",
+        
+        
         "opts": "The OptsTube instance controlling rendering and geometry options.",
+        "opts_defaults": "The default option settings for tube visualization",
+        
+        
         "_internal_owner_ref": ("A weak reference to the PlotFigure object associated with this tube."
                                 "To access it, use .owner or ._internal_owner."),
         "_internal_name_pv": "The unique identifier of this tube stored in the PyVista plotter.",
@@ -237,24 +359,31 @@ class PlotTube:
     
     __slots__ = tuple(__descriptions__.keys())
     
-    DEFAULT_VAL_TUBE = {
-        "color": (0.5, 0.5, 0.5),
-        "radius": 0.5,
-        "opacity": 1,
-        "scalars": None,
-    }
-    
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
-        Figure: PlotFigure | None = None,
-        opts: OptsTube | None = None,
+        figure: PlotFigure | None = None,
+        opts: OptsTube = OptsTube(),
         line_index: Sequence | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
         logger = None,
         **kwargs
     ):
+        
+        if opts_defaults_override is None:
+            opts_defaults_override = {}
+        opts_defaults = dict(OptsTube._DEFAULTS_FROZEN)
+        for k, v in opts_defaults_override.items():
+            if k not in opts_defaults:
+                raise KeyError(
+                    f"Invalid key {k!r} in opts_defaults_override; "
+                    f"not a valid OptsTube option."
+                )
+            opts_defaults[k] = v
+        object.__setattr__(self, "opts_defaults", opts_defaults)
+        
         
         object.__setattr__(self, "raw_coords", as_points(coords))
         
@@ -267,38 +396,26 @@ class PlotTube:
                 line_index = None
         object.__setattr__(self, "raw_line_index", line_index)
     
-        if Figure is not None and not isinstance(Figure, PlotFigure):
+        if figure is not None and not isinstance(figure, PlotFigure):
             try:
-                raise TypeError('`Figure` for PlotTube must be PlotFigure object!')
+                raise TypeError('`figure` for PlotTube must be PlotFigure object!')
             except:
                 logger.exception("Check input")
                 logger.recovery("Create a new PlotFigure object and store it in self._owner")
-                Figure = PlotFigure()
-        elif Figure is None:
-            Figure = PlotFigure()
-        object.__setattr__(self, "_internal_owner_ref", weakref.ref(Figure))
+                figure = PlotFigure()
+        elif figure is None:
+            figure = PlotFigure()
+        object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
 
         logger.detail('Handling explicit kwargs overrides')
         
-        if opts is None:
-            opts = OptsTube(**self.DEFAULT_VAL_TUBE)
-                
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_internal_owner", self)
-        
-        str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        unique_id = opts.name +str_now
-        object.__setattr__(self, "_internal_name_pv", unique_id)
-        
-        if not (isinstance(opts.color, str) and opts.color == 'scalars') and opts.scalars is not None:
-            msg = "Color input of PlotTube is not set to 'scalars'. However, scalars is provided.\n"
-            msg += "The scalars data will be ignored unless color='scalars' is explicitly specified."
-            logger.warning(msg)
         
         object.__setattr__(self, "opts", opts)
         
         logger.detail('Checking if name already exists')
-        name_set = set(Figure.act_get_entities_names())
+        name_set = set(figure.act_get_entities_names())
         name_input = self.opts.name
         if name_input in name_set:
             new_name = name_input
@@ -311,13 +428,22 @@ class PlotTube:
         
 
         logger.detail("Executing initial plot")
+        self.opts.act_finalize(self.opts_defaults)
+        str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        unique_id = opts.name + str_now
+        object.__setattr__(self, "_internal_name_pv", unique_id)
+        
+        if not (isinstance(opts.color, str) and opts.color == 'scalars') and opts.scalars not in (None, UNSET):
+            msg = "Color input of PlotTube is not set to 'scalars'. However, scalars is provided.\n"
+            msg += "The scalars data will be ignored unless color='scalars' is explicitly specified."
+            logger.warning(msg)
         self._helper_resolver_init()
         self._helper_make_figure()
         
-        Figure.obj_plotter.render()
-        Figure.obj_plotter.show(interactive_update=True)
+        figure._obj_plotter.render()
+        figure._obj_plotter.show(interactive_update=True)
         object.__setattr__(self.opts, '_state_is_category_locked', True)
-        Figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
+        figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
         object.__setattr__(self, "_internal_extra_attrs", {})
         object.__setattr__(self, "_internal_extra_attrs_docs", {})
@@ -421,7 +547,7 @@ class PlotTube:
         if attr_name not in ['color', 'radius', 'scalars', 'opacity']:
             raise ValueError(f"Attribute resolved by `_helper_resolver_spec()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
         
-        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), type(self).DEFAULT_VAL_TUBE[attr_name])
+        self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), self.opts_defaults[attr_name])
         
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_tube_mesh(self, logger=None):
@@ -514,7 +640,7 @@ class PlotTube:
         mesh = self._helper_build_tube_mesh()
             
         logger.detail("Visualizing the tube")
-        plotter = self._internal_owner.obj_plotter
+        plotter = self._internal_owner._obj_plotter
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
         actor = plotter.add_mesh(mesh, **input_dir)
@@ -713,7 +839,7 @@ class PlotTube:
             elif color_method == 'color':
                 self._helper_update_rgba()
                 
-        self._internal_owner.obj_plotter.render()
+        self._internal_owner._obj_plotter.render()
         
     @logging_and_warning_decorator(start_finish_level=5)
     def act_add_attr(

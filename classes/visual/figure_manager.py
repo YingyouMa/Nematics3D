@@ -2,6 +2,8 @@ from collections import OrderedDict
 from typing import Union
 
 from Nematics3D.datatypes import as_str
+from Nematics3D.logging_decorator import logging_and_warning_decorator
+from .plot_figure import PlotFigure
 
 class FigureManager:
     
@@ -12,6 +14,30 @@ class FigureManager:
         self._entities = OrderedDict()
         self._state_active_name = None
         
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_check_figure_name(self, name: str, logger=None):
+        
+        name_set = set(self._entities.keys())
+        name_input = name
+        if name_input in name_set:
+            new_name = name_input
+            index = 1
+            while new_name in name_set:
+                new_name = f"{name_input}_{index}"
+                index += 1
+            logger.warning(f"{name_input!r} already exists in FigureManager! Renamed to {new_name!r}.")
+            name = new_name
+        return name
+    
+    def act_add_figure(self, figure: PlotFigure):
+        if any(figure is x for x in self._entities.values()):
+            return
+        
+        name = self._helper_check_figure_name(figure.name)
+        figure.name = name
+        self._entities[name] = figure
+        figure._state_is_name_locked = True
+        
     def act_set_active(self, id_fig: str):
         if isinstance(id_fig, str):
             name = id_fig
@@ -19,14 +45,13 @@ class FigureManager:
                 if self._entities[name].act_check_is_alive():
                     self._state_active_name = name
                 else:
-                    raise RuntimeError(f"Figure {name!r} is not alive.")
+                    raise RuntimeError(f"figure {name!r} is not alive.")
             else:
                 raise KeyError(f'{name} does not exist in FigureManager {self.name}')
         elif isinstance(id_fig, int):
             self._state_active_name = list(self._entities.keys())[id_fig]
         else:
             raise TypeError("`id_fig` is used to identify the figure. It must be either the name or the index of a figure. Got {type(id_fig!r)} instead.")
-            
     
     @property
     def active_name(self):
@@ -51,7 +76,7 @@ class FigureManager:
                 name = names[key]
             except IndexError:
                 raise KeyError(
-                    f"Figure index {key} out of range for FigureManager "
+                    f"figure index {key} out of range for FigureManager "
                     f"(size={len(names)})"
                 ) from None
             return self._entities[name]

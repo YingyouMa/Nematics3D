@@ -339,7 +339,7 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_visualize(
         self,
-        Figure: PlotFigure | None = None,
+        figure: PlotFigure | None = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
         scalars_attr: str | None = None,
@@ -374,7 +374,7 @@ class DisclinationLine:
         if not is_wrap:
             line_plot = PlotTube(
                 line_coords,
-                Figure = Figure,
+                figure = figure,
                 opts=opts,
                 **kwargs
             )
@@ -418,8 +418,8 @@ class DisclinationLine:
             
             line_plot = PlotTube(
                 line_coords,
-                line_index,
-                Figure = Figure,
+                line_index=line_index,
+                figure=figure,
                 opts=opts,
                 **kwargs
             )
