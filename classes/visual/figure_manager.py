@@ -36,7 +36,7 @@ class FigureManager:
         name = self._helper_check_figure_name(figure.name)
         figure.name = name
         self._entities[name] = figure
-        figure._state_is_name_locked = True
+        figure.opts._state_is_name_locked = True
         
     def act_set_active(self, id_fig: str):
         if isinstance(id_fig, str):

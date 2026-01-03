@@ -2,7 +2,7 @@ from dataclasses import fields, is_dataclass, replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 
-@logging_and_warning_decorator()
+@logging_and_warning_decorator(start_finish_level=5)
 def merge_opts(opts, kwargs, prefix="", logger=None):
     """
     Update a dataclass instance `opts` with values from `kwargs` whose
@@ -45,8 +45,12 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
                 updates[name] = val
                 kwargs.pop(key)  # consume the key
             else:
-                raise AttributeError(f"Invalid option '{key}' for {type(opts).__name__}")
-
+                try:
+                    raise AttributeError(f"Invalid option '{key}' for {type(opts).__name__}")
+                except:
+                    logger.exception("Please check input.")
+                    logger.recovery("Ignore this key in the following.")
+                    kwargs.pop(key)
 
     return replace(opts, **updates), kwargs
 

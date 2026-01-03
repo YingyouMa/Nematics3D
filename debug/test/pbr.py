@@ -155,7 +155,9 @@ def main() -> None:
     ]
 
     pl.show(title="PyVista PBR Tube Lighting Demo", interactive_update=True)
+    
+    return pl
 
 
 if __name__ == "__main__":
-    main()
+    pl = main()

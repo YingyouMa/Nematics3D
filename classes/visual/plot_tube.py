@@ -365,7 +365,7 @@ class PlotTube:
         self,
         coords: np.ndarray,
         figure: PlotFigure | None = None,
-        opts: OptsTube = OptsTube(),
+        opts: OptsTube | None = None,
         line_index: Sequence | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger = None,
@@ -409,6 +409,8 @@ class PlotTube:
 
         logger.detail('Handling explicit kwargs overrides')
         
+        if opts is None:
+            opts = OptsTube()
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_internal_owner", self)
         
@@ -440,8 +442,8 @@ class PlotTube:
         self._helper_resolver_init()
         self._helper_make_figure()
         
-        figure._obj_plotter.render()
-        figure._obj_plotter.show(interactive_update=True)
+        figure.pl.render()
+        figure.pl.show(interactive_update=True)
         object.__setattr__(self.opts, '_state_is_category_locked', True)
         figure._helper_register_entity(self, self.opts.category, self.opts.is_reset_camera)
         
@@ -640,7 +642,7 @@ class PlotTube:
         mesh = self._helper_build_tube_mesh()
             
         logger.detail("Visualizing the tube")
-        plotter = self._internal_owner._obj_plotter
+        plotter = self._internal_owner.pl
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
         actor = plotter.add_mesh(mesh, **input_dir)
@@ -839,7 +841,7 @@ class PlotTube:
             elif color_method == 'color':
                 self._helper_update_rgba()
                 
-        self._internal_owner._obj_plotter.render()
+        self._internal_owner.pl.render()
         
     @logging_and_warning_decorator(start_finish_level=5)
     def act_add_attr(
