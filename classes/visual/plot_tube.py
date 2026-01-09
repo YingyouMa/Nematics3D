@@ -37,6 +37,8 @@ from Nematics3D.general import pop_exclusive
 
 #! @coords
 
+#! test
+
 
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
 LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
@@ -256,8 +258,8 @@ class OptsTube:
         ),
         "is_capping": lambda self, v, d: as_bool(v, name=d, replace=OptsTube._DEFAULTS_FROZEN["is_capping"]),
         "smooth_iter": lambda self, v, d: as_Number(
-            v, name=d, is_int=True, value_range=(0, 1000), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["smooth_iter"]
-    )}
+            v, name=d, is_int=True, value_range=(0, 1000), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["smooth_iter"]),
+    }
     
     
     def __post_init__(self):

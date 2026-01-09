@@ -3,6 +3,8 @@ import time
 from typing import Optional, Union
 from dataclasses import replace, dataclass, asdict, field
 
+import pyvista as pv
+
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
@@ -20,7 +22,8 @@ from ..datatypes import (
     DimensionFlagInput,
     as_dimension_info,
     check_bool_flags,
-    as_str
+    as_str,
+    UNSET
 )
 from ..field import (
     Q_diagonalize,
@@ -31,10 +34,9 @@ from ..field import (
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual_mayavi.plot_n_plane import OptsnPlane, PlotnPlane
-from .visual_mayavi.plot_scene import PlotScene, OptsScene
 from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
-from .visual.plot_figure import PlotFigure
+from .visual.plot_figure import PlotFigure, OptsFigure
 from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
@@ -399,14 +401,13 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
-        figure: PlotFigure | str | int | None = None,
-        name : str | None = None,
+        figure: PlotFigure | str | int | pv.Plotter | None = None,
         is_wrap: bool = True,
         is_smooth: bool = True,
         is_extent: bool = True,
         min_line_length: int | None = None,
         # lines_scalars_name: str | None = None,
-        # opts_scene=OptsScene(),
+        opts_figure: OptsFigure | None = None,
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
         logger=None,
@@ -417,48 +418,52 @@ class QFieldObject:
         
         logger.detail("Dealing with the parameters")
         
-        try:
-            if isinstance(figure, (str, int)):
-                figure = self.figs[figure]
-            elif figure is None:
-                figure = PlotFigure()
-            elif isinstance(figure, PlotFigure):
-                pass
-            else:
-                raise ValueError(
-                    "`figure` input must be either index in FigureManager (str or int) "
-                    "or a valid PlotFigure object, or None (creating a new figure) "
-                    "Got type {type(figure)!r} insdead."
-                    )
-        except:
-            logger.exception("Could not find figure in FigureManager.")
-            logger.recovery("Create a new figure instead.")
-            figure = PlotFigure()
-            
-        if name is None:
-            name = "Disclination lines"
-        figure.name = name
-            
-        self.figs.act_add_figure(figure)
-            
         if opts_tube is None:
             opts_tube = OptsTube(color='sample_far')
         if opts_extent is None:
             opts_extent = OptsTube()
+        if opts_figure is None:
+            opts_figure = OptsFigure()
         
         merge = merge_opts_all(
             {
-                #"scene_": opts_scene, 
+                "figure_": opts_figure, 
                 "line_": opts_tube,
                 "extent_": opts_extent
             },
             kwargs, type(self).__name__)
 
-        # opts_scene = merge["scene_"]
+        opts_figure = merge["figure_"]
         opts_tube = merge["line_"]
         opts_extent = merge["extent_"]
 
         check_bool_flags(locals())
+        
+        try:
+            if isinstance(figure, (str, int)):
+                figure = self.figs[figure]
+                opts_figure.name = UNSET
+                figure.act_commit(**asdict(opts_figure))
+            elif figure is None:
+                figure = PlotFigure(opts=opts_figure, name='disclination lines')
+            elif isinstance(figure, PlotFigure):
+                opts_figure.name = UNSET
+                figure.act_commit(**asdict(opts_figure))
+            elif isinstance(figure, pv.Plotter):
+                figure = PlotFigure(plotter=figure, opts=opts_figure, name='disclination lines')
+            else:
+                raise ValueError(
+                    "`figure` input must be either index in FigureManager (str or int) "
+                    "or a valid PlotFigure object, or a valid pyvista plotter object, "
+                    "or None (creating a new figure) "
+                    "Got type {type(figure)!r} insdead."
+                    )
+        except:
+            logger.exception("Could not find figure in FigureManager.")
+            logger.recovery("Create a new figure instead.")
+            figure = PlotFigure(opts=opts_figure, name='disclination lines')
+
+        self.figs.act_add_figure(figure)
 
         if min_line_length is None:
             msg = "No minimum line length has been provided for the plotted lines. "
@@ -540,7 +545,7 @@ class QFieldObject:
         opts_grid=OptsPlaneGrid(),
         opts_nPlane=OptsnPlane(),
         opts_extent=OptsTube(),
-        opts_scene=OptsScene(),
+        opts_scene=OptsFigure(), #!!!!!
         logger=None,
         **kwargs,
     ):
@@ -594,11 +599,12 @@ class QFieldObject:
         if opts_scene.distance != None:
             figure.scene.distance = opts_scene.distance
 
-    def act_add_scene(self, is_new=True, opts=OptsScene):
-        figure = PlotScene(is_new=is_new, opts=opts)
-        if is_new or (not is_new and len(self._entities_figures) == 0):
-            self._entities_figures.append(figure)
-        return figure
+    def act_add_scene(self, is_new=True, opts=OptsFigure()): #!!!!!!!!!!!
+        # figure = PlotScene(is_new=is_new, opts=opts)
+        # if is_new or (not is_new and len(self._entities_figures) == 0):
+        #     self._entities_figures.append(figure)
+        # return figure
+        return 0
 
     def act_reset_figures(self):
         self._entities_figures = []

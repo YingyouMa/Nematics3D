@@ -30,7 +30,7 @@ Q.act_lines_smooth()
 #     l.opts.N_out_ratio = 3
 #     l.act_preview(color=(1,0,0), move=(3,0,0))
 Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
-Q.act_visualize_disclination_lines(is_wrap=True, line_shading_type='pbr')
+Q.act_visualize_disclination_lines(is_wrap=True, line_shading_type='pbr', figure_azimuth=0, figure_elevation=45)
 
 # test1 = Q.lines[0].act_copy()
 # Q.lines[0].act_save()

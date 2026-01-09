@@ -33,8 +33,8 @@ class FigureManager:
         if any(figure is x for x in self._entities.values()):
             return
         
-        name = self._helper_check_figure_name(figure.name)
-        figure.name = name
+        name = self._helper_check_figure_name(figure.opts.name)
+        figure.opts.name = name
         self._entities[name] = figure
         figure.opts._state_is_name_locked = True
         
