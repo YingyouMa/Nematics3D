@@ -421,6 +421,7 @@ class DisclinationLine:
                 line_index=line_index,
                 figure=figure,
                 opts=opts,
+                name=self.name,
                 **kwargs
             )
 

@@ -878,6 +878,11 @@ class PlotTube:
         docs[name] = doc
         if overwrite or (name not in data):
             data[name] = default
+            
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}({self.opts.name!r})"
+        return msg 
 
             
                 

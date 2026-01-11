@@ -398,3 +398,12 @@ class PlotFigure:
 
     def __bool__(self):
         return self.act_check_is_alive()
+    
+    def __getitem__(self, name: str):
+        mapping = {
+            entity.opts.name: entity
+            for entity_list in self._entities.values()
+            for entity in entity_list
+            }
+        
+        return mapping.get(name)

@@ -10,7 +10,7 @@ from .classes.graph import Graph
 from .classes.Q_field_object import QFieldObject
 from .classes.visual.plot_tube import PlotTube
 from .classes.visual.plot_figure import PlotFigure
-from .classes.visual_mayavi.plot_scene import PlotScene
+from .classes.visual.plot_sphere import PlotSphere
 from .classes.visual.plot_extent import PlotExtent
 from .classes.plane_grid import PlaneGrid
 from .classes.visual_mayavi.plot_n_plane import PlotnPlane
