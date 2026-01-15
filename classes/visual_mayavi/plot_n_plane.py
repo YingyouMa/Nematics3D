@@ -160,18 +160,13 @@ class PlotnPlane:
 
         self._opts_all_nPlane = opts_nPlane
 
-        self._entities_plane = [
-            PlaneGrid(
-                opts=opts_grid,
-                logger=logger,
-            )
-        ]
+        self._entities_plane = PlaneGrid(opts=opts_grid)
 
-        plane_grid = self._entities_plane[0]
+        plane_grid = self._entities_plane
 
         QInterpolator = self._raw_QInterpolator
         is_n_defect = opts_nPlane.is_n_defect
-        corners_limit = plane_grid.opts_corners_limit
+        corners_limit = plane_grid.opts.corners_limit
         colors = opts_nPlane.colors
         opacity = opts_nPlane.opacity
         opacity_defect = opts_nPlane.opacity_defect
@@ -184,19 +179,22 @@ class PlotnPlane:
 
             axis_both = np.array(
                 [
-                    plane_grid.opts_axis1,
-                    np.cross(plane_grid.opts_normal, plane_grid.opts_axis1),
+                    plane_grid.opts.axis1,
+                    np.cross(plane_grid.opts.normal, plane_grid.opts.axis1),
                 ]
             )
 
-            grid_all = self._entities_plane[0]._entities_grid_all[0]
-            shape_all = np.shape(grid_all)[:2]
+            grid_all = self._entities_plane._entities_grid_all
+            print(np.shape(grid_all))
+            # shape_all = np.shape(grid_all)[:2]
+            num_n = np.shape(grid_all)[0]
             grid_all_flatten = np.reshape(grid_all, (-1, 3))
             
             logger.detail("Interpolating ...")
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
-            n_all = np.reshape(n_all, (*shape_all, 1, 3))
+            # n_all = np.reshape(n_all, (*shape_all, 1, 3))
+            n_all = np.reshape(n_all, (num_n, 1, 3))
             
             logger.detail("Detecting the defects and surrounding directors ...")
             defect_plane_index = defect_detect(n_all, planes=(False, False, True))
@@ -207,19 +205,19 @@ class PlotnPlane:
             
             logger.detail("Spliting the directors by whether they surround defects ...")
             bulk_index, defect_vicinity_index = split_points(
-                self._entities_plane[0]._entities_grid_int[0], defect_vicinity_index
+                self._entities_plane._entities_grid_int, defect_vicinity_index
             )
 
             defect_vicinity = (
                 np.einsum("ai, ib -> ab", defect_vicinity_index, axis_both)
-                * plane_grid.opts_spacing
+                * plane_grid.opts.spacing
                 + plane_grid._calc_offset_real
             )
             
 
             bulk = (
                 np.einsum("ai, ib -> ab", bulk_index, axis_both)
-                * plane_grid.opts_spacing
+                * plane_grid.opts.spacing
                 + plane_grid._calc_offset_real
                 
             )
@@ -229,9 +227,9 @@ class PlotnPlane:
             bulk = select_grid_in_box(bulk, corners_limit)
 
         else:
-            bulk = plane_grid._entities_grid[0]
+            bulk = plane_grid._entities_grid
 
-        grid = plane_grid._entities_grid[0]
+        grid = plane_grid._entities_grid
         self._calc_num_points = np.shape(grid)[0]
 
         self._calc_colors_func = self._helper_colors_check(colors)
@@ -258,17 +256,17 @@ class PlotnPlane:
             self._calc_n.append(output[1])
 
         self.opts_radius = radius
-        self.opts_axis1 = plane_grid.opts_axis1
-        self.opts_normal = plane_grid.opts_normal
-        self.opts_origin = plane_grid.opts_origin
-        self.opts_shape = plane_grid.opts_shape
-        self.opts_size = plane_grid.opts_size
+        self.opts_axis1 = plane_grid.opts.axis1
+        self.opts_normal = plane_grid.opts.normal
+        self.opts_origin = plane_grid.opts.origin
+        self.opts_shape = plane_grid.opts.shape
+        self.opts_size = plane_grid.opts.size
         self.opts_corners_limit = corners_limit
         self.opts_is_n_defect = is_n_defect
         self.opts_opacity_defect = opacity_defect
         self.opts_length = length
-        self._raw_grid_offset = plane_grid.opts_grid_offset
-        self._raw_grid_transform = plane_grid.opts_grid_transform
+        self._raw_grid_offset = plane_grid.opts.grid_offset
+        self._raw_grid_transform = plane_grid.opts.grid_transform
 
     def _helper_n_visualize_each(self, data, opacity_func, length, radius):
 

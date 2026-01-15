@@ -402,6 +402,7 @@ class QFieldObject:
     def act_visualize_disclination_lines(
         self,
         figure: PlotFigure | str | int | pv.Plotter | None = None,
+        is_new: bool = False,
         is_wrap: bool = True,
         is_smooth: bool = True,
         is_extent: bool = True,
@@ -410,6 +411,7 @@ class QFieldObject:
         opts_figure: OptsFigure | None = None,
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
+        name_fallback = "disclination line",
         logger=None,
         **kwargs,
     ):
@@ -439,31 +441,37 @@ class QFieldObject:
 
         check_bool_flags(locals())
         
-        try:
-            if isinstance(figure, (str, int)):
-                figure = self.figs[figure]
-                opts_figure.name = UNSET
-                figure.act_commit(**asdict(opts_figure))
-            elif figure is None:
-                figure = PlotFigure(opts=opts_figure, name='disclination lines')
-            elif isinstance(figure, PlotFigure):
-                opts_figure.name = UNSET
-                figure.act_commit(**asdict(opts_figure))
-            elif isinstance(figure, pv.Plotter):
-                figure = PlotFigure(plotter=figure, opts=opts_figure, name='disclination lines')
-            else:
-                raise ValueError(
-                    "`figure` input must be either index in FigureManager (str or int) "
-                    "or a valid PlotFigure object, or a valid pyvista plotter object, "
-                    "or None (creating a new figure) "
-                    "Got type {type(figure)!r} insdead."
-                    )
-        except:
-            logger.exception("Could not find figure in FigureManager.")
-            logger.recovery("Create a new figure instead.")
-            figure = PlotFigure(opts=opts_figure, name='disclination lines')
-
-        self.figs.act_add_figure(figure)
+        if is_new:
+            if figure is not None:
+                logger.warning("is_new=True was specified while figure is not None."
+                               "The figure argument will be ignored and a new figure will be created.")
+            figure = PlotFigure(opts=opts_figure)
+        else:
+            try:
+                if isinstance(figure, (str, int)):
+                    figure = self.figs[figure]
+                    figure.act_commit(opts_figure.act_asdict())
+                elif figure is None:
+                    figure_active = self.figs[self.figs._state_active_name]
+                    if figure_active:
+                        figure = figure_active
+                    else:
+                        figure = PlotFigure(opts=opts_figure)
+                elif isinstance(figure, PlotFigure):
+                    figure.act_commit(opts_figure.act_asdict())
+                elif isinstance(figure, pv.Plotter):
+                    figure = PlotFigure(plotter=figure, opts=opts_figure)
+                else:
+                    raise ValueError(
+                        "`figure` input must be either index in FigureManager (str or int) "
+                        "or a valid PlotFigure object, or a valid pyvista plotter object, "
+                        "or None (creating a new figure) "
+                        "Got type {type(figure)!r} insdead."
+                        )
+            except:
+                logger.exception("Could not find figure in FigureManager.")
+                logger.recovery("Create a new figure instead.")
+                figure = PlotFigure(opts=opts_figure)
 
         if min_line_length is None:
             msg = "No minimum line length has been provided for the plotted lines. "
@@ -534,6 +542,12 @@ class QFieldObject:
                 opts=opts_extent, 
                 is_reset_camera=False)
 
+
+        if figure.opts.name is UNSET:
+            figure.opts.name = name_fallback
+        self.figs.act_add_figure(figure)
+        self.figs.act_set_active(figure.opts.name)
+
     @logging_and_warning_decorator()
     def act_visualize_n_in_Q(
         self,
@@ -550,7 +564,7 @@ class QFieldObject:
         **kwargs,
     ):
 
-        opts_extent.corners = self._calc_corners
+        # opts_extent.corners = self._calc_corners
         opts_grid.corners_limit = self._calc_corners
         
         merge = merge_opts_all(
@@ -586,18 +600,16 @@ class QFieldObject:
             logger=logger,
         )
         
-        print(self.figs[-1].objects, 'CCCCCCCCCCCC')
-        print(figure.objects, 'DDDDDDDDDDD')
-        figure.add_object(nPlane, category="nPlanes")
-        print(self.figs[-1].objects, 'BBBBBBBBBBBBB')
+        # figure.add_object(nPlane, category="nPlanes")
+
 
         if is_extent:
             extent = PlotExtent(opts_extent)
             figure.add_object(extent, category="extent")
             figure.scene.distance = opts_scene.distance
 
-        if opts_scene.distance != None:
-            figure.scene.distance = opts_scene.distance
+        # if opts_scene.distance != None:
+        #     figure.scene.distance = opts_scene.distance
 
     def act_add_scene(self, is_new=True, opts=OptsFigure()): #!!!!!!!!!!!
         # figure = PlotScene(is_new=is_new, opts=opts)

@@ -509,7 +509,9 @@ class PlotSphere:
             poly.point_data['rgba'] = rgba_values 
             
         logger.detail("Applying sphere filter with dynamic radius scaling")
-        unit_sphere = pv.Sphere(theta_resolution=self.opts.resolution, phi_resolution=self.opts.resolution)
+        unit_sphere = pv.Sphere(theta_resolution=self.opts.resolution, 
+                                phi_resolution=self.opts.resolution, 
+                                radius=1.0)
         mesh = poly.glyph(geom=unit_sphere, scale="radius", orient=False)
 
         if self.opts.clip_geometry is not None:

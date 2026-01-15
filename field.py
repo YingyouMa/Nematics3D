@@ -267,6 +267,63 @@ def generate_coordinate_grid(
     return grid, grid_int, steps
 
 
+def generate_fixed_step_grid(
+    size1: float,
+    size2: float,
+    step1: float,
+    step2: float,
+) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
+    """
+    Generate a 2D coordinate grid with fixed step sizes.
+
+    Parameters
+    ----------
+    size1, size2 : float
+        Extent of the domain along axis-1 and axis-2.
+        The grid starts at 0 and does not exceed the given size.
+
+    step1, step2 : float
+        Fixed step size along each axis.
+
+    Returns
+    -------
+    grid : np.ndarray
+        Continuous coordinate grid of shape (n1, n2, 2),
+        where grid[i, j] = (x, y).
+
+    grid_int : np.ndarray
+        Integer index grid of shape (n1, n2, 2),
+        where grid_int[i, j] = (i, j).
+
+    size_eff : tuple of float
+        The effective sizes (size1_eff, size2_eff) actually covered
+        by the grid, computed as:
+            size*_eff = (n* - 1) * step*
+    """
+    # number of points (include 0)
+    n1 = int(np.floor(size1 / step1)) + 1
+    n2 = int(np.floor(size2 / step2)) + 1
+
+    # continuous coordinates
+    axis1 = np.arange(n1) * step1
+    axis2 = np.arange(n2) * step2
+
+    mesh = np.meshgrid(axis1, axis2, indexing="ij")
+    grid = np.stack(mesh, axis=-1)  # (n1, n2, 2)
+
+    # integer index grid
+    mesh_int = np.meshgrid(
+        np.arange(n1), np.arange(n2), indexing="ij"
+    )
+    grid_int = np.stack(mesh_int, axis=-1)
+
+    # effective sizes actually covered
+    size1_eff = (n1 - 1) * step1
+    size2_eff = (n2 - 1) * step2
+
+    return grid, grid_int, (size1_eff, size2_eff)
+
+
 def apply_linear_transform(
     points: np.ndarray,
     transform: Optional[np.ndarray] = None,

@@ -39,19 +39,11 @@ class FigureManager:
         figure.opts._state_is_name_locked = True
         
     def act_set_active(self, id_fig: str):
-        if isinstance(id_fig, str):
-            name = id_fig
-            if name in self._entities:
-                if self._entities[name].act_check_is_alive():
-                    self._state_active_name = name
-                else:
-                    raise RuntimeError(f"figure {name!r} is not alive.")
-            else:
-                raise KeyError(f'{name} does not exist in FigureManager {self.name}')
-        elif isinstance(id_fig, int):
-            self._state_active_name = list(self._entities.keys())[id_fig]
+        figure = self[id_fig]
+        if figure:
+            self._state_active_name = figure.opts.name
         else:
-            raise TypeError("`id_fig` is used to identify the figure. It must be either the name or the index of a figure. Got {type(id_fig!r)} instead.")
+            raise KeyError("This figure is deleted and could not be set to active figure.")
     
     @property
     def active_name(self):
@@ -67,8 +59,10 @@ class FigureManager:
     def __contains__(self, name: str):
         return name in self._entities
 
-    def __getitem__(self, key: Union[str, int]):
-        if isinstance(key, str):
+    def __getitem__(self, key: Union[str, int, None]):
+        if key is None:
+            return None
+        elif isinstance(key, str):
             return self._entities[key]
         elif isinstance(key, int):
             names = list(self._entities.keys())

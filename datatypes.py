@@ -143,8 +143,16 @@ def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, l
     input_data = np.asarray(input_data)
 
     if is_norm:
-        if np.linalg.norm(input_data) < 1e-3:
+        if np.linalg.norm(input_data) >= 1e-3:
             input_data = input_data / np.linalg.norm(input_data)
+        else:
+            try:
+                raise ValueError(f"The norm of input vector {input_data} is below the normalization threshold 1e-3.")
+            except ValueError:
+                logger.exception("Normalization is skipped to avoid numerical instability.")
+                logger.recovery("Subsequent processing is still performed using the unnormalized vector. "
+                                "Please check the input data. If this behavior is intentional, consider "
+                                "rescaling the vector before passing it in.")
 
     return input_data
 

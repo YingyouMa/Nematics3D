@@ -30,7 +30,7 @@ Q.act_lines_smooth()
 #     l.opts.N_out_ratio = 3
 #     l.act_preview(color=(1,0,0), move=(3,0,0))
 Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
-Q.act_visualize_disclination_lines(is_wrap=True, line_shading_type='pbr', figure_azimuth=0, figure_elevation=45)
+Q.act_visualize_disclination_lines(is_new=True, is_wrap=True, line_shading_type='pbr', figure_azimuth=0, figure_elevation=45)
 
 # test1 = Q.lines[0].act_copy()
 # Q.lines[0].act_save()
@@ -68,8 +68,8 @@ Q.act_visualize_disclination_lines(is_wrap=True, line_shading_type='pbr', figure
 # Q.act_lines_smooth(window_length=21, min_line_length=40)
 # Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4)
     
-# trans = 7.5
-# spacing = 2.5
+trans = 7.5
+spacing = 2.5
 # Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
 #                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
 #                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=False, is_extent=False, n_is_n_defect=True)

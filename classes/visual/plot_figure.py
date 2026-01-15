@@ -26,7 +26,7 @@ opts_bg = {"bg_color", "bg_opacity"}
 
 @dataclass(slots=True)
 class OptsFigure:
-    name: str = "figure"
+    name: str | Unset = UNSET
     azimuth: float | Unset = UNSET
     elevation: float | Unset = UNSET
     roll: float | Unset = UNSET
@@ -392,7 +392,7 @@ class PlotFigure:
                 return False
 
             iren = plotter.iren
-            return iren is not None and iren.initialized
+            return iren is not None and bool(iren.initialized)
         except Exception:
             return False
 
