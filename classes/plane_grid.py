@@ -169,17 +169,17 @@ class PlaneGrid:
         "opts_defaults": "Some default option settings for the 2D plane grid",
 
         # ========== generated grids ==========
-        "_entities_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
-        "_entities_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 × num2 × 3)",
-        "_entities_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 × num2 × 3)",
+        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
+        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 × num2 × 3)",
+        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 × num2 × 3)",
 
         # ========== calc (derived quantities) ==========
         "_calc_axis2": "The second in-plane axis which normal to both axis1 and normal.",
         "_calc_offset_real": "Offset vector applied to center the plane grid at the specified origin (3-vector) in lattice units",
-        "_calc_box_mask": "the flag indicating whether point in self._entities_grid_all is inside the corners limit",
+        "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
         
         # ========== visualization / diagnostic ==========
-        "_entities_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
+        "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
         
         "_internal_owner_ref": ("A weak reference to the object associated with this grid."
                                 "To access it, use .owner or ._internal_owner."),
@@ -214,7 +214,7 @@ class PlaneGrid:
                 )
         
         object.__setattr__(self, "opts", opts)
-        self._entities_fig_demo = None
+        self._entity_fig_demo = None
 
         self.act_commit()
     
@@ -300,9 +300,9 @@ class PlaneGrid:
         logger.debug(f"Select the grids inside the corners limit {corners_limit}.")
         grid_select, mask = select_grid_in_box(grid, corners_limit, is_return_mask=True)
 
-        self._entities_grid = grid_select
-        self._entities_grid_all = np.reshape(grid, (*target_shape, 3))
-        self._entities_grid_int = grid_int
+        self._entity_grid = grid_select
+        self._entity_grid_all = np.reshape(grid, (*target_shape, 3))
+        self._entity_grid_int = grid_int
         self._calc_offset_real = offset
         self._calc_axis2 = axis2
         self._calc_box_mask = mask
@@ -312,10 +312,10 @@ class PlaneGrid:
             self.opts.size_extra = size2 if self.opts.size_extra is not None else None
             self.opts.axis1 = axis1
             
-        if self._entities_fig_demo:
-            self._entities_fig_demo['grid'].raw_coords = self._entities_grid
-            self._entities_fig_demo['origin'].raw_coords = self.opts.origin
-            # self._entities_fig_demo['grid_extent'].raw_coords = 
+        if self._entity_fig_demo:
+            self._entity_fig_demo['grid'].raw_coords = self._entity_grid
+            self._entity_fig_demo['origin'].raw_coords = self.opts.origin
+            # self._entity_fig_demo['grid_extent'].raw_coords = 
             
         if hasattr(self, "_internal_owner_ref") and self.owner:
             self.owner._helper_commit()
@@ -331,17 +331,17 @@ class PlaneGrid:
         return msg
     
     def __iter__(self):
-        return iter(self._entities_grid)
+        return iter(self._entity_grid)
     
     def __getitem__(self, idx):
-        return self._entities_grid[idx]
+        return self._entity_grid[idx]
     
     def __array__(self, dtype=None):
-        arr = self._entities_grid
+        arr = self._entity_grid
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
     
     def __call__(self):
-        return self._entities_grid
+        return self._entity_grid
     
     def act_debug_plot(self,
                        opts_extent: OptsTube | None = None,
@@ -377,12 +377,12 @@ class PlaneGrid:
         opts_origin = merge["origin_"]
         
         figure = PlotFigure(opts=opts_figure)
-        PlotSphere(coords=self._entities_grid, opts=opts_points, figure=figure)
+        PlotSphere(coords=self._entity_grid, opts=opts_points, figure=figure)
         PlotSphere(coords=self.opts.origin, opts=opts_origin, figure=figure)
         if self.opts.corners_limit is not None:
             PlotExtent(corners=self.opts.corners_limit, opts=opts_extent, figure=figure)
             
-        self._entities_fig_demo = figure
+        self._entity_fig_demo = figure
             
         return figure
     

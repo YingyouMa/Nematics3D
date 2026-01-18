@@ -77,6 +77,8 @@ testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origi
 testnPlane = Nematics3D.DirectorPlane(Q._calc_interpolator, grid=testGrid)
 
 testnPlane.act_visualize(figure=figure)
+figure.act_view_yz()
+figure.opts.azimuth = 90
 
 
 # Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,

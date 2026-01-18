@@ -1,6 +1,7 @@
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field
 import numpy as np
 import pyvista as pv
+import vtk
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -16,6 +17,7 @@ from Nematics3D.datatypes import (
 )
 from ..opts import merge_opts_all
 from ..class_function import cover_value
+from .pick_manager import PickManager
 
 #!!! property act_view
 #!!! load save 
@@ -133,8 +135,16 @@ class PlotFigure:
 
     __descriptions__ = {
         "opts": "The OptsFigure object controlling the options beyond specific actors (glyphs)",
-        "_entities_plotter": "The underlying PyVista Plotter instance that owns the VTK rendering pipeline. ",
-        "_entities": "A registry (dict) for objects attached to this figure.",
+        "_entity_plotter": "The underlying PyVista Plotter instance that owns the VTK rendering pipeline. ",
+        "_entity": "A registry (dict) for objects attached to this figure.",
+        "_entity_overlay": (
+            "A foreground VTK renderer (layer=1) sharing the main camera. "
+            "Actors added to this renderer are drawn after the main scene and "
+            "are not occluded by 3D geometry in the base layer."
+        ),
+        
+        "_entity_pick_manager": "The PickManager instance attached to this figure. ",
+
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
@@ -166,8 +176,8 @@ class PlotFigure:
                     logger.recovery("Create a new figure instead.")
                     plotter = pv.Plotter(window_size=self.opts.size_init)
 
-        object.__setattr__(self, "_entities_plotter", plotter)
-        object.__setattr__(self, "_entities", {})
+        object.__setattr__(self, "_entity_plotter", plotter)
+        object.__setattr__(self, "_entity", {})
 
         self._helper_sync_from_plotter(is_allow_cover_target_set=False)
         self.act_commit(is_init=True, opts=self.opts)
@@ -177,6 +187,24 @@ class PlotFigure:
             self._helper_sync_from_plotter()
 
         self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
+        
+        # --- Create overlay renderer (layer=1) at initialization ---
+        overlay = self._helper_init_overlay_renderer()
+        object.__setattr__(self, "_entity_overlay", overlay)
+        
+        pm = PickManager(self)
+        object.__setattr__(self, "_entity_pick_manager", pm)
+        self.pl.enable_point_picking(
+            callback = self.pick_manager._helper_callback,
+            left_clicking=True,
+            pickable_window=True,
+            use_picker=True,
+            show_point=False,
+            picker="cell",
+            tolerance=0.03,
+            show_message=False,
+        )
+        
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_commit(self, 
@@ -245,7 +273,88 @@ class PlotFigure:
 
     @property
     def pl(self):
-        return self._entities_plotter
+        return self._entity_plotter
+    
+    @property
+    def pick_manager(self):
+        return self._entity_pick_manager
+    
+    
+    def act_get_entity_names(self):
+        names = [
+            entity.opts.name
+            for entity_list in self._entity.values()
+            for entity in entity_list
+        ]
+        return names
+
+    def act_check_is_alive(self):
+        try:
+            if len(self.pl.renderer.actors) == 0:
+                return True
+            
+            if self.pl._closed:
+                return False
+            
+            return True if self.pl.render_window.GetGenericWindowId() else False
+
+            # iren = plotter.iren
+            # return iren is not None and bool(iren.initialized)
+        except Exception:
+            return False
+
+    def __bool__(self):
+        return self.act_check_is_alive()
+    
+    def __getitem__(self, name: str):
+        mapping = {
+            entity.opts.name: entity
+            for entity_list in self._entity.values()
+            for entity in entity_list
+            }
+        
+        return mapping.get(name)
+    
+    
+    
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_init_overlay_renderer(self, logger=None) -> vtk.vtkRenderer:
+        """
+        Initialize a foreground overlay renderer (layer=1) that shares the main camera.
+
+        Notes
+        -----
+        - The overlay renderer is drawn after the main renderer, so its actors
+          are not occluded by the 3D geometry from the base layer.
+        - The overlay renderer is non-interactive and shares the main camera.
+        """
+        rw = self.pl.render_window
+
+        # Ensure we have at least two layers.
+        rw.SetNumberOfLayers(2)
+
+        # Main renderer in layer 0.
+        self.pl.renderer.SetLayer(0)
+
+        overlay = vtk.vtkRenderer()
+        overlay.SetLayer(1)
+        overlay.SetInteractive(False)
+        overlay.SetActiveCamera(self.pl.renderer.GetActiveCamera())
+
+        rw.AddRenderer(overlay)
+
+        return overlay
+    
+    
+    
+    
+    # -------------------------------
+    # Functions about camera settings
+    # -------------------------------
+
+
+
 
     def _helper_sync_from_plotter(self, is_allow_cover_target_set=True):
 
@@ -373,44 +482,11 @@ class PlotFigure:
     def _helper_register_entity(
         self, entity_instance, entity_category, is_reset_camera
     ):
-        if entity_category in self._entities.keys():
-            self._entities[entity_category].append(entity_instance)
+        if entity_category in self._entity.keys():
+            self._entity[entity_category].append(entity_instance)
         else:
-            self._entities[entity_category] = [entity_instance]
+            self._entity[entity_category] = [entity_instance]
         if is_reset_camera:
             self._helper_sync_from_plotter()
 
-    def act_get_entities_names(self):
-        names = [
-            entity.opts.name
-            for entity_list in self._entities.values()
-            for entity in entity_list
-        ]
-        return names
 
-    def act_check_is_alive(self):
-        try:
-            if len(self.pl.renderer.actors) == 0:
-                return True
-            
-            if self.pl._closed:
-                return False
-            
-            return True if self.pl.render_window.GetGenericWindowId() else False
-
-            # iren = plotter.iren
-            # return iren is not None and bool(iren.initialized)
-        except Exception:
-            return False
-
-    def __bool__(self):
-        return self.act_check_is_alive()
-    
-    def __getitem__(self, name: str):
-        mapping = {
-            entity.opts.name: entity
-            for entity_list in self._entities.values()
-            for entity in entity_list
-            }
-        
-        return mapping.get(name)

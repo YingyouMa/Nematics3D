@@ -274,7 +274,7 @@ class OptsTube:
             value = self._validators[key](self, value, desc)
             
         if getattr(self, "_state_is_category_locked", False) and key == "category":
-            raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
+            raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entity")
 
         object.__setattr__(self, key, value)
         
@@ -320,17 +320,15 @@ class PlotTube:
             "If None or constant, the input is treated as a single continuous line."
         ),
     
-        "_calc_poly": (
-            "The generated PyVista PolyData representing the polyline(s) "
-            "before applying the tube filter."
-        ),
+        "_calc_poly": "The generated PyVista PolyData representing the polyline(s) ",
+        "_calc_mesh": "The generated PyVista surface mesh representing the tube ",
     
         "_calc_color": "The resolved per-point RGB color array of the tube.",
         "_calc_opacity": "The resolved per-point opacity array of the tube.",
         "_calc_radius": "The resolved per-point radius array used for tube thickness.",
         "_calc_scalars": "The resolved per-point scalar array used for scalar coloring.",
     
-        "_entities": "The PyVista Actor corresponding to this tube in the plotter.",
+        "_entity": "The PyVista Actor corresponding to this tube in the plotter.",
         
         
         "opts": "The OptsTube instance controlling rendering and geometry options.",
@@ -410,7 +408,7 @@ class PlotTube:
         object.__setattr__(self, "opts", opts)
         
         logger.detail('Checking if name already exists')
-        name_set = set(figure.act_get_entities_names())
+        name_set = set(figure.act_get_entity_names())
         name_input = self.opts.name
         if name_input in name_set:
             new_name = name_input
@@ -606,6 +604,7 @@ class PlotTube:
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
         object.__setattr__(self, "_calc_poly", poly)
+        object.__setattr__(self, "_calc_mesh", mesh)
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)    
@@ -634,10 +633,17 @@ class PlotTube:
         logger.detail("Creating tube mesh")
         mesh = self._helper_build_tube_mesh()
             
-        logger.detail("Visualizing the tube")
+        logger.detail("Removing the existing actor")
         plotter = self._internal_owner.pl
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
+        old_actor = getattr(self, "_entity", None)
+        if old_actor is not None:
+            pm = getattr(self._internal_owner, "_entity_pick_manager", None)
+            if pm is not None:
+                pm.act_unregister(old_actor)
+            
+        logger.detail("Visualizing the tube")
         actor = plotter.add_mesh(mesh, **input_dir)
         
         logger.detail("Applying detailed rendering properties directly to the Actor's property object")
@@ -667,11 +673,12 @@ class PlotTube:
             
         actor.visibility = self.opts.is_visible
 
-        object.__setattr__(self, "_entities", actor)
+        object.__setattr__(self, "_entity", actor)
+        self._helper_register_pick(actor)
         
         
     def _helper_replace_data_pv(self, attr: str, data: np.ndarray):
-        mesh = self._entities.mapper.dataset
+        mesh = self._entity.mapper.dataset
         mesh_data = mesh.point_data
         if attr in self._calc_poly.point_data:
             del self._calc_poly.point_data[attr]
@@ -684,7 +691,7 @@ class PlotTube:
     def _helper_update_rgba(self, logger=None):
         rgba = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
         self._helper_replace_data_pv('rgba', rgba)
-        mapper = self._entities.mapper
+        mapper = self._entity.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = 'direct'
         mapper.lookup_table = None
@@ -698,7 +705,7 @@ class PlotTube:
         self._helper_replace_data_pv('scalars', self._calc_scalars)
         self._helper_replace_data_pv('opacity', self._calc_opacity)
         
-        mapper = self._entities.mapper
+        mapper = self._entity.mapper
         mesh_data = mapper.dataset.point_data
 
         if "__custom_rgba" in mesh_data.keys():
@@ -786,11 +793,11 @@ class PlotTube:
                 if level == LEVEL_ACTOR:
                     
                     if key == "category":
-                        raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
+                        raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entity")
                     
                     if key == "name":
                         msg = "Changing 'name' of PlotTube object is not recommended because: \n"
-                        msg += "1) There is no guarantee that name collisions will be avoided in PlotFigure._entities; and\n"
+                        msg += "1) There is no guarantee that name collisions will be avoided in PlotFigure._entity; and\n"
                         msg += "2) The corresponding actor name stored in the PyVista renderer cannot be updated accordingly."
                         logger.warning(msg)
                     
@@ -807,7 +814,7 @@ class PlotTube:
     
                     if attr_path_actor and not is_needs_remesh:
                         parts = attr_path_actor.split('.')
-                        obj = self._entities
+                        obj = self._entity
                         for part in parts[:-1]:
                             obj = getattr(obj, part)
                         setattr(obj, parts[-1], value)
@@ -870,8 +877,22 @@ class PlotTube:
         if overwrite or (name not in data):
             data[name] = default
             
+
+    def _helper_register_pick(self, actor):
+
+        fig = self._internal_owner
+        if fig is None:
+            return
+
+        pm = getattr(fig, "_entity_pick_manager", None)
+        if pm is None:
+            return
+
+        pm.act_register(actor=actor, owner=self)            
+
+            
     def act_remove(self):
-        self.owner.pl.remove_actor(self._entities)
+        self.owner.pl.remove_actor(self._entity)
             
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

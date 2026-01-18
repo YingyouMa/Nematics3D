@@ -155,13 +155,13 @@ class QFieldObject:
         "_calc_interpolator": ["Interpolator object for Q field in real space / index space.", "SLOT"],
 
         # --- Visualization state ---
-        "_entities_figures": ["FigureManager project to manage PlotFigure objects created for visualization.", "SLOT"],
+        "_entity_figures": ["FigureManager project to manage PlotFigure objects created for visualization.", "SLOT"],
 
         # --- Public properties (semantic) ---
         "S": ["Property accessor: scalar order parameter field S. This equals _raw_S", "PROPERTY"],
         "n": ["Property accessor: director field n. This equals _raw_n", "PROPERTY"],
         "lines": ["Property accessor: classified disclination lines. This equals _calc_lines", "PROPERTY"],
-        "figs": ["Property accessor: visualization scenes/figures. This equals _entities_figures", "PROPERTY"],
+        "figs": ["Property accessor: visualization scenes/figures. This equals _entity_figures", "PROPERTY"],
     }
 
     __slots__ = tuple(
@@ -233,7 +233,7 @@ class QFieldObject:
             self._calc_grid_index, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
 
-        self._entities_figures = FigureManager()
+        self._entity_figures = FigureManager()
         
         logger.debug("Generating the coorners of Q.")
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
@@ -613,13 +613,13 @@ class QFieldObject:
 
     def act_add_scene(self, is_new=True, opts=OptsFigure()): #!!!!!!!!!!!
         # figure = PlotScene(is_new=is_new, opts=opts)
-        # if is_new or (not is_new and len(self._entities_figures) == 0):
-        #     self._entities_figures.append(figure)
+        # if is_new or (not is_new and len(self._entity_figures) == 0):
+        #     self._entity_figures.append(figure)
         # return figure
         return 0
 
     def act_reset_figures(self):
-        self._entities_figures = []
+        self._entity_figures = []
         
     @property
     def lines(self):
@@ -627,7 +627,7 @@ class QFieldObject:
     
     @property
     def figs(self):
-        return self._entities_figures
+        return self._entity_figures
     
     @property
     def S(self):
