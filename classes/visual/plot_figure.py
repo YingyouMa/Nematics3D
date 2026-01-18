@@ -182,10 +182,22 @@ class PlotFigure:
         self._helper_sync_from_plotter(is_allow_cover_target_set=False)
         self.act_commit(is_init=True, opts=self.opts)
         self.opts._helper_sync = self._helper_sync_from_opts
-
+        
+        def _on_interaction_start(obj, event):
+            pm = getattr(self, "_entity_pick_manager", None)
+            if pm is not None:
+                pm._helper_hide_marker_label_during_interaction()
+            self.pl.render()
+        
         def _on_interaction_end(obj, event):
             self._helper_sync_from_plotter()
-
+            pm = getattr(self, "_entity_pick_manager", None)
+            if pm is not None:
+                pm._helper_show_marker_label_after_interaction()
+            self.pl.render()
+    
+    
+        self.pl.iren.add_observer("StartInteractionEvent", _on_interaction_start)
         self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
         
         # --- Create overlay renderer (layer=1) at initialization ---
@@ -201,7 +213,7 @@ class PlotFigure:
             use_picker=True,
             show_point=False,
             picker="cell",
-            tolerance=0.03,
+            tolerance=0.003,
             show_message=False,
         )
         

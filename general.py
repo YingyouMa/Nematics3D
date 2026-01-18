@@ -743,6 +743,33 @@ def pop_exclusive(kwargs: dict, k1: str, k2: str):
     return False, None
 
 
+def find_nearest_point(query_pt, coords):
+    """
+    Find the nearest point in coords to query_pt (Euclidean).
+
+    Parameters
+    ----------
+    query_pt : array-like, shape (3,)
+        Query point in world coordinates.
+    coords : array-like, shape (N, 3)
+        Candidate points.
+
+    Returns
+    -------
+    nearest : np.ndarray, shape (3,)
+        The nearest point in coords.
+    """
+    q = np.asarray(query_pt, dtype=float).reshape(3,)
+    pts = np.asarray(coords, dtype=float)
+    if pts.ndim != 2 or pts.shape[1] != 3:
+        raise ValueError(f"`coords` must be (N,3). Got shape={pts.shape}.")
+
+    d = pts - q
+    d2 = np.einsum("ij,ij->i", d, d)
+    idx = int(np.argmin(d2))
+    return pts[idx]
+
+
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
 

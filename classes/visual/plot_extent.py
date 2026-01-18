@@ -89,6 +89,12 @@ class PlotExtent(PlotTube):
             **kwargs
         )
 
+        self._entity.pickable = False
+        fig = getattr(self, "owner", None)
+        if fig:
+            pm = fig.pick_manager
+            pm.act_unregister(self._entity)
+
         self.act_add_attr(
             name="_raw_corners",
             doc="The original 8 corner points defining the extent.",
