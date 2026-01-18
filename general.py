@@ -387,59 +387,102 @@ def get_square(size_list, num_list, origin_list=[[0, 0, 0]], dim=3):
 
 @logging_and_warning_decorator()
 def select_grid_in_box(
-    grid: np.ndarray, corners_limit: Optional[np.ndarray] = None, logger=None
+    grid: np.ndarray,
+    corners_limit: np.ndarray | None,
+    is_return_mask: bool = False,
+    logger=None,
 ):
     """
-    Select points from a 3D grid that lie inside a rectangular box defined by four corner points.
+    Filter a set of 3D points by an oriented rectangular box, with an optional membership mask.
+
+    The box is specified by four corner points:
+      - corners_limit[0] is the origin corner O
+      - corners_limit[1], corners_limit[2], corners_limit[3] define three edge directions
+        (via vectors e1 = P1-O, e2 = P2-O, e3 = P3-O)
+    A point x is considered inside the box if its projections onto the unit edge directions
+    lie within [0, |ei|] (up to a small tolerance).
 
     Parameters
     ----------
-    grid : np.ndarray of shape (N, 3)
-        Input set of 3D points.
+    grid : np.ndarray, shape (N, 3)
+        Input 3D point cloud.
 
-    corners_limit : np.ndarray of shape (>=4, 3), optional
-        Defines the bounding box. The first row is taken as the origin corner, and
-        rows [1], [2], [3] define the three edges emanating from that corner.
-        If None, the function simply returns the input grid.
+    corners_limit : np.ndarray | None, shape (>=4, 3)
+        Oriented box definition. If None, no spatial filtering is applied.
+
+    is_return_mask : bool, default False
+        If True, also return a boolean mask of shape (N,) indicating membership in the box
+        relative to the original input `grid`.
 
     Returns
     -------
-    np.ndarray of shape (M, 3)
-        Subset of input grid points that lie within the box (M ≤ N).
+    grid_selected : np.ndarray, shape (M, 3)
+        Points inside the box (or the original `grid` if corners_limit is None).
+        M <= N.
+
+    mask : np.ndarray, shape (N,), dtype bool
+        Returned only if is_return_mask is True.
+        - If corners_limit is None: mask is all True (no filtering).
+        - If grid is empty: mask is an empty boolean array.
+        - Otherwise: True where the corresponding original point lies in the box.
 
     Notes
     -----
-    - The check is performed in the coordinate system defined by the box edges.
-    - A small tolerance (1e-9) is used to include points very close to the box faces.
-    - If no points are found inside, a warning is issued (if logger is provided).
+    - The membership check is performed in the local coordinate system spanned by the box edges.
+    - A tolerance of 1e-9 is used to include points extremely close to box faces.
+    - Warnings are emitted when:
+        (a) `grid` is empty;
+        (b) no points fall inside the box (when corners_limit is not None).
     """
 
     grid = np.asarray(grid)
+    n = grid.shape[0] if grid.ndim >= 1 else 0
 
-    if corners_limit is None or len(grid) == 0:
-        return grid
-    elif np.shape(corners_limit)[1] != 3 or np.shape(corners_limit)[0] < 4:
+    # Prepare a mask in all exit paths when the caller requests it.
+    if n == 0:
+        logger.warning("Input `grid` is empty; returning an empty selection.")
+        mask_empty = np.zeros((0,), dtype=bool)
+        return (grid, mask_empty) if is_return_mask else grid
+
+    if corners_limit is None:
+        mask_all = np.ones((n,), dtype=bool)
+        return (grid, mask_all) if is_return_mask else grid
+
+    corners_limit = np.asarray(corners_limit)
+    if corners_limit.ndim != 2 or corners_limit.shape[1] != 3 or corners_limit.shape[0] < 4:
         raise ValueError(
-            f"The shape of corners must be (>=4, 3). Got {np.shape(corners_limit)} instead."
+            f"`corners_limit` must have shape (>=4, 3). Got {corners_limit.shape} instead."
         )
 
+    # Define edge directions and extents from the origin corner.
     axes = [corners_limit[i] - corners_limit[0] for i in range(1, 4)]
     lengths = [np.linalg.norm(axis) for axis in axes]
+
+    # Guard against degenerate boxes (zero-length edges).
+    if any(L <= 0.0 for L in lengths):
+        raise ValueError(
+            f"Degenerate `corners_limit`: box edge length(s) must be positive. Got lengths={lengths}."
+        )
+
     unit_axes = [axis / L for axis, L in zip(axes, lengths)]
 
+    # Project points into the box coordinate system.
     rel = grid - corners_limit[0]
     coords = np.stack([rel @ u for u in unit_axes], axis=1)
 
     tol = 1e-9
-    mask = np.all((coords >= -tol) & (coords <= np.array(lengths) + tol), axis=1)
+    bounds = np.array(lengths, dtype=coords.dtype)
+    mask = np.all((coords >= -tol) & (coords <= bounds + tol), axis=1)
 
-    grid = grid[mask]
-    if len(grid) == 0:
-        msg = "No grid found in this box with corners_limit:\n"
-        msg += f"{corners_limit}"
-        logger.warning(msg)
+    grid_selected = grid[mask]
+    if grid_selected.shape[0] == 0 and logger is not None:
+        logger.warning(
+            "No points from `grid` fall inside the specified box defined by `corners_limit`:\n"
+            f"{corners_limit}"
+        )
 
-    return grid
+    return (grid_selected, mask) if is_return_mask else grid_selected
+
 
 
 def split_points(
@@ -548,56 +591,28 @@ def split_points(
 
     return only_in_points1, also_in_points2
 
+def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarray:
+    """
+    Return a boolean mask indicating whether each row in points1 appears in points2.
 
-@logging_and_warning_decorator()
-def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
-    if colors is None:
-        colors = np.ones((num_points, 3))
-    elif callable(colors):
-        colors = colors(data)
-    elif isinstance(colors, (list, tuple, np.ndarray)):
-        colors = np.asarray(colors)
-        if np.size(colors) == 3:
-            colors = as_ColorRGB(colors)
-            colors = [colors for i in range(num_points)]
-        else:
-            if np.shape(colors) != (num_points, 3):
-                msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
-                msg += "In the following, set directors to be white."
-                logger.warning(msg)
-                colors = [(1, 1, 1) for i in range(num_points)]
-            else:
-                colors = [(color) for color in colors]
-    return colors
+    Requirements:
+    - points1 and points2 must have the same shape[1] (same number of columns).
+    - Exact match (no tolerance) semantics.
+    """
+    a = np.ascontiguousarray(points1)
+    b = np.ascontiguousarray(points2)
 
+    if a.ndim != 2 or b.ndim != 2:
+        raise ValueError(f"points1 and points2 must be 2D arrays. Got {a.ndim=} and {b.ndim=}.")
+    if a.shape[1] != b.shape[1]:
+        raise ValueError(f"points1 and points2 must have the same number of columns. Got {a.shape[1]=} vs {b.shape[1]=}.")
 
-@logging_and_warning_decorator()
-def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
-    if opacity is None:
-        opacity = np.ones(num_points)
-    elif isinstance(opacity, (int, float)):
-        if opacity > 1 or opacity < 0:
-            msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-        else:
-            opacity = np.zeros(num_points) + opacity
-    elif callable(opacity):
-        opacity = opacity(data)
-    else:
-        opacity = np.asarray(opacity)
-        if np.max(opacity) > 1 or np.min(opacity) < 0:
-            msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-        elif len(opacity) != num_points:
-            msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
-            msg += "In the following, set opacity of directors as 1."
-            logger.warning(msg)
-            opacity = np.ones(num_points)
-    return opacity
+    row_dtype = np.dtype((np.void, a.dtype.itemsize * a.shape[1]))
+    a_view = a.view(row_dtype).ravel()
+    b_view = b.view(row_dtype).ravel()
+
+    return np.isin(a_view, b_view).reshape(-1)
+
 
 
 def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) ) -> Tensor((3,3)):
@@ -849,3 +864,53 @@ def pop_exclusive(kwargs: dict, k1: str, k2: str):
 #     curvatures = dT_ds_size / tangents_size[:, 0]
 
 #     return curvatures
+
+# @logging_and_warning_decorator()
+# def calc_colors(colors, num_points, data: Optional[np.ndarray] = None, logger=None):
+#     if colors is None:
+#         colors = np.ones((num_points, 3))
+#     elif callable(colors):
+#         colors = colors(data)
+#     elif isinstance(colors, (list, tuple, np.ndarray)):
+#         colors = np.asarray(colors)
+#         if np.size(colors) == 3:
+#             colors = as_ColorRGB(colors)
+#             colors = [colors for i in range(num_points)]
+#         else:
+#             if np.shape(colors) != (num_points, 3):
+#                 msg = f"The array-like input of colors must be in shape {(num_points, 3)}. Got {np.shape(colors)} instead.\n"
+#                 msg += "In the following, set directors to be white."
+#                 logger.warning(msg)
+#                 colors = [(1, 1, 1) for i in range(num_points)]
+#             else:
+#                 colors = [(color) for color in colors]
+#     return colors
+
+
+# @logging_and_warning_decorator()
+# def calc_opacity(opacity, num_points, data: Optional[np.ndarray] = None, logger=None):
+#     if opacity is None:
+#         opacity = np.ones(num_points)
+#     elif isinstance(opacity, (int, float)):
+#         if opacity > 1 or opacity < 0:
+#             msg = f"opacity must be in [0,1]. Got {opacity} insetad.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#         else:
+#             opacity = np.zeros(num_points) + opacity
+#     elif callable(opacity):
+#         opacity = opacity(data)
+#     else:
+#         opacity = np.asarray(opacity)
+#         if np.max(opacity) > 1 or np.min(opacity) < 0:
+#             msg = f"opacity must be in [0,1]. Got ({np.min(opacity), np.max(opacity)}) insetad.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#         elif len(opacity) != num_points:
+#             msg = f"The array-like input of opacity must be in length {num_points}. Got {len(opacity)} instead.\n"
+#             msg += "In the following, set opacity of directors as 1."
+#             logger.warning(msg)
+#             opacity = np.ones(num_points)
+#     return opacity

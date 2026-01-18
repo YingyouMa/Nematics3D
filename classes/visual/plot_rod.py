@@ -21,20 +21,18 @@ from Nematics3D.datatypes import (
     Unset
 )
 from .plot_figure import PlotFigure
-from ..opts import merge_opts_all
+from ..opts import merge_opts_all, build_defaults_with_override
 from Nematics3D.general import pop_exclusive
-
-
 
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
 LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
-LEVEL_REMESH = 2  # Needs to re-run the points filter to rebuild the 3D mesh. (Heaviest)
+LEVEL_REMESH = 2  # Needs to re-run the rod filter to rebuild the 3D mesh. (Heaviest)
 
 ATTR_MAP = {
     # === Visibility & Global Settings ===
     "name":                 (LEVEL_ACTOR,  None,                    "Identifier for the actor in the plotter."),
     "category":             (LEVEL_ACTOR,  None,                    "The semantic category of this plotting entity."),
-    "is_visible":           (LEVEL_ACTOR,  "visibility",            "Whether the points is visible in the scene."),
+    "is_visible":           (LEVEL_ACTOR,  "visibility",            "Whether the rod is visible in the scene."),
     "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",    "'phong', 'pbr' (Physical)"),
     "is_reset_camera":      (LEVEL_ACTOR,  None,                    "Whether to reset the camera settings for each (re-)plot."),
 
@@ -50,24 +48,32 @@ ATTR_MAP = {
     "roughness":            (LEVEL_ACTOR,  "prop.roughness",        "PBR surface roughness (0-1). Needs PBR enabled."),
 
     # === Shape and Color Control ===
-    "color":                (LEVEL_RECALC, None,                    ("Determines point colors. Options: "
-                                                                    "1) ColorRGB for all points (e.g. (1,0,0))"
+    "function_by":          (LEVEL_RECALC, None,                    ("Specifies which data field is used as the input to the mapping function"
+                                                                    "This should be either 'coords', 'c' or 'orient', 'o'.")),
+    
+    "color":                (LEVEL_RECALC, None,                    ("Determines rod colors. Options: "
+                                                                    "1) ColorRGB for all rods (e.g. (1,0,0))"
                                                                     "2) Function (mapping function), "
                                                                     "3) color data set manually, "
                                                                     "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim).")),
     
-    "opacity":              (LEVEL_RECALC, None,                    ("Determines point transparency. Options: "
-                                                                    "1) float 0-1 for all points, "
+    "opacity":              (LEVEL_RECALC, None,                    ("Determines rod transparency. Options: "
+                                                                    "1) float 0-1 for all rods, "
                                                                     "2) Function (mapping function), "
                                                                     "3) opacity data set manually.")),
     
-    "scalars":              (LEVEL_RECALC, None,                    ("Determines point scalars. Options: "
+    "scalars":              (LEVEL_RECALC, None,                    ("Determines rod scalars. Options: "
                                                                     "1) Function (mapping function), "
                                                                     "2) scalars data set manually, "
                                                                     "3) None (No scalars)")),
     
-    "radius":               (LEVEL_REMESH, None,                    ("Determines sphere size. Options: "
-                                                                    "1) float for all points, "
+    "radius":               (LEVEL_REMESH, None,                    ("Determines rod thickness. Options: "
+                                                                    "1) float for all rods, "
+                                                                    "2) Function (mapping function), "
+                                                                    "3) radius data set manually.")),
+    
+    "length":               (LEVEL_REMESH, None,                    ("Determines rod length. Options: "
+                                                                    "1) float for all rods, "
                                                                     "2) Function (mapping function), "
                                                                     "3) radius data set manually.")),
     
@@ -78,8 +84,7 @@ ATTR_MAP = {
     "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
 
     # === Geometry & Topology (LEVEL_REMESH) ===
-    "resolution":           (LEVEL_REMESH, None,                    "The subdivision level of the sphere mesh. "
-                                                                    "A higher value produces a smoother surface by increasing the number of polygonal faces"),
+    "sides":                (LEVEL_REMESH, None,                    "Number of facets around the rod (higher = smoother)."),
     
     # === Advanced Spatial Clipping ===
     "clip_geometry":        (LEVEL_REMESH, None,                    "Define clipping boundary. Can be: "
@@ -87,67 +92,25 @@ ATTR_MAP = {
                                                                     "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box).")
 }
 
+
 # --- Type aliases ---
 ColorMode = ColorRGB | Callable | Sequence | Literal["scalars"]
 OpacityMode = float | Callable | Sequence
 RadiusMode = float | Callable | Sequence
 ScalarsMode = Callable | Sequence | None
+LengthMode = float | Callable | Sequence
 ClipGeometryLike = list[float] | pv.PolyData | None
 
 @dataclass(slots=True)
-class OptsSphere:
+class OptsRod:
     """
-    Options for rendering a sphere object.
+    Options for rendering a tube-like polyline object.
 
     This class supports a two-phase lifecycle:
       (1) Configuration phase: many fields may remain UNSET.
       (2) Finalization phase: act_finalize() replaces UNSET fields using defaults,
           validates them, and freezes the opts for use by an owner.
     """
-
-    # -------------------------------------------------------------------------
-    # Frozen defaults (read-only, global baseline)
-    #
-    # - Must contain ALL public fields that are expected to be finalized.
-    # - Should be treated as immutable. MappingProxyType prevents accidental edits.
-    # - act_finalize() will fill UNSET fields from the provided defaults mapping
-    #   first, then fall back to this frozen table.
-    # -------------------------------------------------------------------------
-    _DEFAULTS_FROZEN = MappingProxyType({
-        # --- Visibility & Global ---
-        "name":                 "sphere",
-        "category":             "point",
-        "is_visible":           True,
-        "shading_type":         "phong",
-        "is_reset_camera":      True,
-
-        # --- Phong Lighting ---
-        "ambient":              0.0,
-        "diffuse":              1.0,
-        "specular":             1.0,
-        "specular_pow":         10.0,
-        "specular_color":       (1.0, 1.0, 1.0),
-
-        # --- PBR Lighting ---
-        "metallic":             0.0,
-        "roughness":            0.5,
-
-        # --- Shape & Color ---
-        "color":                (0.5, 0.5, 0.5),
-        "opacity":              1.0,
-        "radius":               0.5,
-        "scalars":              None,
-
-        # --- Scalars (used if color == "scalars") ---
-        "scalars_cmap":         "viridis",
-        "scalars_clim":         None,
-        "is_scalar_bar":        True,
-        "scalar_bar_title":     "scalars",
-
-        # --- Geometry & Clipping ---
-        "resolution":           30,
-        "clip_geometry":        None,
-    })
     
     # --- Visibility & Global ---
     name: str | Unset = UNSET
@@ -168,10 +131,12 @@ class OptsSphere:
     roughness: float | Unset = UNSET
 
     # --- Shape & Color ---
+    function_by: str | Unset = UNSET
     color: ColorMode | Unset = UNSET
     opacity: OpacityMode | Unset = UNSET
     scalars: ScalarsMode | Unset = UNSET
     radius: RadiusMode | Unset = UNSET
+    length: LengthMode | Unset = UNSET
 
     # --- Scalars (used if color == "scalars") ---
     scalars_cmap: str | Unset = UNSET
@@ -180,9 +145,9 @@ class OptsSphere:
     scalar_bar_title: str | Unset = UNSET
 
     # --- Geometry & Clipping ---
-    resolution: int | Unset = UNSET
+    sides: int | Unset = UNSET
     clip_geometry: ClipGeometryLike | Unset = UNSET
-    
+
     # --- Internal State (not part of defaults/finalization) ---
     _state_is_category_locked: bool = field(default=False, init=False, repr=False)
     _state_functioning: bool = field(default=False, init=False, repr=False)
@@ -190,56 +155,87 @@ class OptsSphere:
 
     _internal_owner: object | None = field(default=None, repr=False, init=False)
     
+    
     _validators = {
-        "name": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["name"]),
-        "category": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["category"]),
-        "is_visible": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_visible"]),
-        "shading_type": lambda self, v, d: as_str(
-            v, name=d,
-            replace=OptsSphere._DEFAULTS_FROZEN["shading_type"],
-            pool=("phong", "pbr"),
-        ),
-        "is_reset_camera": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_reset_camera"]),
+        "name": lambda self, v, d: as_str(v, name=d),
+        "category": lambda self, v, d: as_str(v, name=d),
+        "is_visible": lambda self, v, d: as_bool(v, name=d),
+        "shading_type": lambda self, v, d: as_str(v, name=d,pool=("phong", "pbr")),
+        "is_reset_camera": lambda self, v, d: as_bool(v, name=d),
     
-        "ambient": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["ambient"]
-        ),
-        "diffuse": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["diffuse"]
-        ),
-        "specular": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["specular"]
-        ),
-        "specular_pow": lambda self, v, d: as_Number(
-            v, name=d, value_range=(1, 100), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["specular_pow"]
-        ),
-        "specular_color": lambda self, v, d: as_ColorRGB(
-            v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["specular_color"]
-        ),
+        "ambient": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "diffuse": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "specular": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "specular_pow": lambda self, v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
+        "specular_color": lambda self, v, d: as_ColorRGB(v, name=d),
+        
+        "function_by": lambda self, v, d: as_str(v, name=d, pool=("o", "orient", "c", "coords")),
     
-        "metallic": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["metallic"]
-        ),
-        "roughness": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["roughness"]
-        ),
+        "metallic": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "roughness": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "scalars_cmap": lambda self, v, d: as_str(v, name=d),
+        "scalars_clim": lambda self, v, d: v if v is None else as_Vect(v, name=d, dim=2),
+        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d),
+        "scalar_bar_title": lambda self, v, d: as_str(v, name=d),
     
-        "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["scalars_cmap"]),
-        "scalars_clim": lambda self, v, d: (
-            v if v is None else as_Vect(v, name=d, dim=2, replace=OptsSphere._DEFAULTS_FROZEN["scalars_clim"])
-        ),
-        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_scalar_bar"]),
-        "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["scalar_bar_title"]),
+        "sides": lambda self, v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True),
+        }
     
-        "resolution": lambda self, v, d: as_Number(
-            v, name=d, is_int=True, value_range=(3, np.inf), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["resolution"]),
-    }
+    
 
+    # -------------------------------------------------------------------------
+    # Frozen defaults (read-only, global baseline)
+    #
+    # - Must contain ALL public fields that are expected to be finalized.
+    # - Should be treated as immutable. MappingProxyType prevents accidental edits.
+    # - act_finalize() will fill UNSET fields from the provided defaults mapping
+    #   first, then fall back to this frozen table.
+    # -------------------------------------------------------------------------
+    _DEFAULTS_FROZEN = MappingProxyType({
+        # --- Visibility & Global ---
+        "name":                 "rod",
+        "category":             "rod",
+        "is_visible":           True,
+        "shading_type":         "phong",
+        "is_reset_camera":      True,
+
+        # --- Phong Lighting ---
+        "ambient":              0.0,
+        "diffuse":              1.0,
+        "specular":             1.0,
+        "specular_pow":         10.0,
+        "specular_color":       (1.0, 1.0, 1.0),
+
+        # --- PBR Lighting ---
+        "metallic":             0.0,
+        "roughness":            0.5,
+
+        # --- Shape & Color ---
+        "function_by":          'orient',
+        "color":                (0.5, 0.5, 0.5),
+        "opacity":              1.0,
+        "radius":               0.5,
+        "scalars":              None,
+        "length":               3,
+
+        # --- Scalars (used if color == "scalars") ---
+        "scalars_cmap":         "viridis",
+        "scalars_clim":         None,
+        "is_scalar_bar":        True,
+        "scalar_bar_title":     "scalars",
+
+        # --- Geometry & Clipping ---
+        "sides":                12,
+        "clip_geometry":        None,
+    })
+    
+    
     def __post_init__(self):
         # Instance-level copy (mutable), useful for debugging or transitional logic.
         # The canonical baseline remains _DEFAULTS_FROZEN.
         object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
         
+
     def __setattr__(self, key, value):
 
         if value is not UNSET and key in self._validators:
@@ -254,6 +250,7 @@ class OptsSphere:
         if key != "_internal_owner" and getattr(self, "_state_functioning", False) and self._internal_owner is not None:
             self._internal_owner.act_commit(**{key: value}, is_setattr=False)
             
+            
     def act_finalize(self, defaults: Mapping[str, Any] | None = None):
         """
         Resolve all UNSET fields using:
@@ -264,7 +261,7 @@ class OptsSphere:
         should be treated as ready-to-use (no more defaults resolution).
         """
         if getattr(self, "_state_functioning", False):
-            raise RuntimeError("OptsSphere has already been finalized.")
+            raise RuntimeError("OptsRod has already been finalized.")
 
         defaults = {} if defaults is None else dict(defaults)
 
@@ -281,44 +278,39 @@ class OptsSphere:
 
         object.__setattr__(self, "_state_functioning", True)
         
-
-class PlotSphere:
+class PlotRod:
     """
-    Wraps PyVista sphere filtering and rendering with integrated option management.
+    Wraps PyVista tube filtering and rendering with integrated option management.
     """
     __descriptions__ = {
         "raw_coords": "The N x 3 input coordinates. ",
-    
+        "raw_orient": "The N x 3 input orientations. ",
         "_calc_poly": (
-            "The generated PyVista PolyData representing the points "
-            "before applying the sphere filter."
-        ),
-        
-        "_calc_mesh": (
-            "The generated mesh where each point is represented by a 3D shpere (glyph) "
-            "before applying the sphere filter."
+            "The generated PyVista PolyData representing the polyline(s) "
+            "before applying the tube filter."
         ),
     
-        "_calc_color": "The resolved per-point RGB color array of the points.",
-        "_calc_opacity": "The resolved per-point opacity array of the points.",
-        "_calc_radius": "The resolved per-point radius array used for points radii.",
+        "_calc_color": "The resolved per-point RGB color array of the tube.",
+        "_calc_opacity": "The resolved per-point opacity array of the tube.",
+        "_calc_radius": "The resolved per-point radius array used for tube thickness.",
         "_calc_scalars": "The resolved per-point scalar array used for scalar coloring.",
+        "_calc_length": "The resolved per-point length array used for scalar coloring.",
     
-        "_entities": "The PyVista Actor corresponding to these oints in the plotter.",
+        "_entities": "The PyVista Actor corresponding to this tube in the plotter.",
         
         
-        "opts": "The OptsSphere instance controlling rendering and geometry options.",
-        "opts_defaults": "The default option settings for sphere visualization",
+        "opts": "The OptsRod instance controlling rendering and geometry options.",
+        "opts_defaults": "The default option settings for tube visualization",
         
         
-        "_internal_owner_ref": ("A weak reference to the PlotFigure object associated with these points."
+        "_internal_owner_ref": ("A weak reference to the PlotFigure object associated with this tube."
                                 "To access it, use .owner or ._internal_owner."),
-        "_internal_name_pv": "The unique identifier of these points stored in the PyVista plotter.",
+        "_internal_name_pv": "The unique identifier of this tube stored in the PyVista plotter.",
         
         # --- user-defined attributes (extension mechanism) ---
         "_internal_extra_attrs": (
             "A dict storing user-registered extra attributes. "
-            "These are accessed via `points.<name>` after calling `act_add_attr(name, doc)`."
+            "These are accessed via `tube.<name>` after calling `act_add_attr(name, doc)`."
         ),
         "_internal_extra_attrs_docs": (
             "A dict storing docstrings for user-registered extra attributes."
@@ -331,52 +323,50 @@ class PlotSphere:
     def __init__(
         self,
         coords: np.ndarray,
+        orient: np.ndarray,
         figure: PlotFigure | None = None,
-        opts: OptsSphere | None = None,
+        opts: OptsRod | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger = None,
         **kwargs
     ):
         
-        if opts_defaults_override is None:
-            opts_defaults_override = {}
-        opts_defaults = dict(OptsSphere._DEFAULTS_FROZEN)
-        for k, v in opts_defaults_override.items():
-            if k not in opts_defaults:
-                raise KeyError(
-                    f"Invalid key {k!r} in opts_defaults_override; "
-                    f"not a valid OptsSphere option."
-                )
-            opts_defaults[k] = v
+        opts_defaults = build_defaults_with_override(
+                            OptsRod._DEFAULTS_FROZEN,
+                            opts_defaults_override,
+                            name="OptsRod",
+                        )
         object.__setattr__(self, "opts_defaults", opts_defaults)
-            
-        object.__setattr__(self, "raw_coords", as_points(coords))
         
+        object.__setattr__(self, "raw_coords", as_points(coords))
+        object.__setattr__(self, "raw_orient", as_points(orient))
+    
         if figure is not None:
             try:
                 if not isinstance(figure, PlotFigure):
-                    raise TypeError('`figure` for PlotSphere must be PlotFigure object!')
+                    raise TypeError('`figure` for PlotRod must be PlotFigure object!')
                 else:
                     if not figure:
                         raise RuntimeError("The plotting window has been closed. Cannot update an inactive plotter.") 
             except (TypeError, RuntimeError):
-                logger.exception("Invalid or inactive plotter detected.")
-                logger.recovery("Create a new PlotFigure object and store it in self._owner")
+                logger.exception("Check input")
+                logger.recovery("Create a new PlotFigure object and store it in self.owner")
                 figure = PlotFigure()
         elif figure is None:
             figure = PlotFigure()
         object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
-        
+
         logger.detail('Handling explicit kwargs overrides')
         
         if opts is None:
-            opts = OptsSphere()
+            opts = OptsRod()
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_internal_owner", self)
         
         object.__setattr__(self, "opts", opts)
         
         logger.detail('Checking if name already exists')
+        
         name_set = set(figure.act_get_entities_names())
         name_input = self.opts.name
         if name_input in name_set:
@@ -387,7 +377,8 @@ class PlotSphere:
                 index += 1
             object.__setattr__(opts, 'name', new_name)
             logger.warning(f"{name_input!r} already exists in PlotFigure object! Renamed to {opts.name!r}.")
-            
+        
+
         logger.detail("Executing initial plot")
         self.opts.act_finalize(self.opts_defaults)
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
@@ -395,7 +386,7 @@ class PlotSphere:
         object.__setattr__(self, "_internal_name_pv", unique_id)
         
         if not (isinstance(opts.color, str) and opts.color == 'scalars') and opts.scalars not in (None, UNSET):
-            msg = "Color input of PlotSphere is not set to 'scalars'. However, scalars is provided.\n"
+            msg = "Color input of PlotRod is not set to 'scalars'. However, scalars is provided.\n"
             msg += "The scalars data will be ignored unless color='scalars' is explicitly specified."
             logger.warning(msg)
         self._helper_resolver_init()
@@ -416,8 +407,7 @@ class PlotSphere:
     @property
     def owner(self):
         return self._internal_owner_ref()
-            
-            
+    
     def __setattr__(self, key, value):
     
         extra = object.__getattribute__(self, "_internal_extra_attrs")
@@ -426,7 +416,7 @@ class PlotSphere:
             extra[key] = value
             return
     
-        allowed_core = ("raw_coords")
+        allowed_core = ("raw_coords", "raw_orient")
         if key not in allowed_core:
             raise AttributeError(
                 f"Invalid attribute assignment: {key!r}. Only {allowed_core} can be modified directly, "
@@ -447,11 +437,16 @@ class PlotSphere:
         
         target_shape = (len(self.raw_coords),3) if attr_name=='color' else (len(self.raw_coords),)
         
+        if self.opts.function_by in ["o", "orient"]:
+            data = self.raw_orient
+        elif self.opts.function_by in ["c", "coords"]:
+            data = self.raw_coords
+        
         try:
             if attr_input is None:
                 raise TypeError(f"Require input for {attr_name!r}. Got None instead.")
             elif callable(attr_input):
-                resolved = np.asarray(attr_input(self.raw_coords), dtype=np.float32)
+                resolved = np.asarray(attr_input(data), dtype=np.float32)
             else:
                 arr = np.asarray(attr_input, dtype=float)
                 if arr.shape == () and attr_name == 'color':
@@ -464,7 +459,7 @@ class PlotSphere:
                 )
                 
             if attr_name == 'color':
-                resolved = as_ColorRGB_array(resolved, name='The pairwise color data of sphere', replace=default_val)
+                resolved = as_ColorRGB_array(resolved, name='The pairwise color data of tube', replace=default_val)
     
     
         except:
@@ -472,51 +467,82 @@ class PlotSphere:
             resolved = np.full(target_shape, default_val, dtype=np.float32)
             logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
             object.__setattr__(self.opts, attr_name, default_val)
-              
+        
+        if attr_name != "length":
+            resolved = np.repeat(resolved, 2, axis=0)
+            
         object.__setattr__(self, '_calc_'+attr_name, resolved)
-            
-            
+        
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_init(self, logger=None):
-        logger.detail("Resolving data for color, opacity and radius")
+        logger.detail("Resolving data for color, opacity, radius and length")
         self._helper_resolver_spec('opacity')
         self._helper_resolver_spec('radius')
+        self._helper_resolver_spec('length')
         
         if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
             self._helper_resolver_spec('scalars')
         else:
             self._helper_resolver_spec('color')
-
+            
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_spec(self, attr_name, logger=None):
         
-        if attr_name not in ['color', 'radius', 'scalars', 'opacity']:
-            raise ValueError(f"Attribute resolved by `_helper_resolver_spec()` must be in ['color', 'radius', 'scalars', 'opacity']. Got {attr_name} instead.")
+        if attr_name not in ['color', 'radius', 'scalars', 'opacity', 'length']:
+            raise ValueError("Attribute resolved by `_helper_resolver_spec()` must be in ['color', 'radius', 'scalars', 'opacity', 'length']."
+                             f"Got {attr_name} instead.")
         
         self._helper_resolver_generic(attr_name, getattr(self.opts, attr_name), self.opts_defaults[attr_name])
         
     @logging_and_warning_decorator(start_finish_level=5)    
-    def _helper_build_sphere_mesh(self, logger=None):
+    def _helper_build_tube_mesh(self, logger=None):
         
         points = self.raw_coords
-        poly = pv.PolyData(points)
+        length = self._calc_length.reshape(-1, 1)
+        orient = self.raw_orient
+        
+        orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
+        mask = orient_norm.squeeze() > 1e-5
+        if not np.all(mask):
+            n_bad = np.count_nonzero(~mask)
+            logger.warning(
+                f"{n_bad} rod(s) have near-zero orientation norm (<= 1e-5). "
+                "Their directions are left unnormalized, which may lead to degenerate or invisible rods."
+            )
+        orient[mask] /= orient_norm[mask]
+        
+        n_rods = points.shape[0]
+        half = 0.5 * length
+        p_minus = points - half * orient
+        p_plus  = points + half * orient
+        endpoints = np.empty((2 * n_rods, 3), dtype=p_minus.dtype)
+        endpoints[0::2] = p_minus
+        endpoints[1::2] = p_plus
+        
+        lines = np.empty((n_rods, 3), dtype=np.int64)
+        lines[:, 0] = 2
+        lines[:, 1] = 2 * np.arange(n_rods)
+        lines[:, 2] = 2 * np.arange(n_rods) + 1
+        
+        poly = pv.PolyData(endpoints, lines=lines.ravel())
 
-        poly.point_data['radius'] = self._calc_radius 
+        poly.point_data['radius'] = self._calc_radius
         if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
             poly.point_data['opacity'] = self._calc_opacity
             poly.point_data['scalars'] = self._calc_scalars
         else:
             rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values 
+            poly.point_data['rgba'] = rgba_values
             
-        logger.detail("Applying sphere filter with dynamic radius scaling")
-        unit_sphere = pv.Sphere(theta_resolution=self.opts.resolution, 
-                                phi_resolution=self.opts.resolution, 
-                                radius=1.0)
-        mesh = poly.glyph(geom=unit_sphere, scale="radius", orient=False)
+        logger.detail("Applying tube filter with dynamic radius scaling")
+        mesh = poly.tube(
+            scalars='radius', 
+            n_sides=self.opts.sides, 
+            absolute=True 
+        )
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to sphere mesh")
+            logger.detail("Applying spatial clipping to tube mesh")
             if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):
@@ -548,10 +574,10 @@ class PlotSphere:
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
             input_dir["clim"] = self.opts.scalars_clim
             
-        logger.detail("Creating sphere mesh")
-        mesh = self._helper_build_sphere_mesh()
+        logger.detail("Creating tube mesh")
+        mesh = self._helper_build_tube_mesh()
             
-        logger.detail("Visualizing the sphere")
+        logger.detail("Visualizing the tube")
         plotter = self._internal_owner.pl
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
@@ -630,6 +656,7 @@ class PlotSphere:
         
         object.__setattr__(self.opts, 'color', 'scalars')
         
+        
     @logging_and_warning_decorator()
     def act_commit(self, is_setattr=True, logger=None, **kwargs):
         
@@ -644,11 +671,20 @@ class PlotSphere:
                 object.__setattr__(self, "raw_coords", as_points(coords))
                 is_needs_remesh = True
             except:
-                logger.exception("Invalid input of coords for PlotSphere.")
+                logger.exception("Invalid input of coords for PlotRod.")
+                logger.recovery("Ignore this modification in the following")
+                
+        found, orient = pop_exclusive(kwargs, "orient", "raw_orient")
+        if found:
+            try:
+                object.__setattr__(self, "raw_orient", as_points(orient))
+                is_needs_remesh = True
+            except:
+                logger.exception("Invalid input of orient for PlotRod.")
                 logger.recovery("Ignore this modification in the following")
                 
         if is_needs_remesh:
-            for attr in ['radius', 'color', 'opacity']:
+            for attr in ['radius', 'color', 'opacity', 'length']:
                 if attr not in kwargs.keys():
                     if attr == 'color' and isinstance(self.opts.color, str):
                         self._helper_resolver_spec('scalars')
@@ -676,7 +712,7 @@ class PlotSphere:
             
             try:
                 if key not in ATTR_MAP:
-                        raise ValueError(f"Unknown attribute: {key} in class: PlotSphere.opts")
+                        raise ValueError(f"Unknown attribute: {key} in class: PlotRod.opts")
                         
                 if is_setattr and key != "category":
                     object.__setattr__(self.opts, key, value)
@@ -690,7 +726,7 @@ class PlotSphere:
                         raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entities")
                     
                     if key == "name":
-                        msg = "Changing 'name' of PlotSphere object is not recommended because: \n"
+                        msg = "Changing 'name' of PlotRod object is not recommended because: \n"
                         msg += "1) There is no guarantee that name collisions will be avoided in PlotFigure._entities; and\n"
                         msg += "2) The corresponding actor name stored in the PyVista renderer cannot be updated accordingly."
                         logger.warning(msg)
@@ -747,8 +783,8 @@ class PlotSphere:
         logger=None,
     ):
 
-        name = as_str(name, name='Extra attribute name for PlotSphere')
-        doc = as_str(doc, name='Extra attribute doc for PlotSphere')
+        name = as_str(name, name='Extra attribute name for PlotRod')
+        doc = as_str(doc, name='Extra attribute doc for PlotRod')
 
 
         if not name.isidentifier():

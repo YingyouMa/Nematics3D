@@ -766,6 +766,8 @@ def check_bool_flags(d: dict, prefix: str = "is_"):
 def as_points(coords, name="input data"):
     try:
         coords = np.asarray(coords, dtype=float)
+        if coords.ndim == 1:
+            coords = np.asarray([coords], dtype=float)
         if coords.ndim != 2 or coords.shape[1] != 3:
             raise ValueError(f"{name!r} must be an (N, 3) array. Got {coords.shape} instead.")
         return coords

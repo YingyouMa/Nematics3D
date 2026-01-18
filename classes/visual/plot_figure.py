@@ -37,7 +37,7 @@ class OptsFigure:
     bg_opacity: float | Unset = UNSET
     
     _state_is_name_locked: bool = False
-    _on_change: callable = field(default=None, repr=False, compare=False)
+    _helper_sync: callable = field(default=None, repr=False, compare=False)
 
     __descriptions__ = {
         "name": "The name of figure",
@@ -115,12 +115,15 @@ class OptsFigure:
             and (key in opts_cam or key in opts_bg)
             and not np.allclose(old_value, value, atol=1e-7)
         ):
-            if self._on_change:
-                self._on_change()
+            if self._helper_sync:
+                self._helper_sync()
                 
-    def act_asdict(self):
+    def act_asdict(self, is_include_UNSET=False):
         result = {}
         for key in self.__descriptions__.keys():
+            value = getattr(self, key, UNSET)
+            if not is_include_UNSET and value is UNSET:
+                continue
             result[key] = getattr(self, key)
         return result
             
@@ -166,9 +169,9 @@ class PlotFigure:
         object.__setattr__(self, "_entities_plotter", plotter)
         object.__setattr__(self, "_entities", {})
 
-        self._helper_sync_from_plotter(is_cover_set=False)
+        self._helper_sync_from_plotter(is_allow_cover_target_set=False)
         self.act_commit(is_init=True, opts=self.opts)
-        self.opts._on_change = self._helper_sync_from_opts
+        self.opts._helper_sync = self._helper_sync_from_opts
 
         def _on_interaction_end(obj, event):
             self._helper_sync_from_plotter()
@@ -203,7 +206,7 @@ class PlotFigure:
             
         merged_opts = opts | kwargs
         if not merged_opts:
-            logger.warning("No configuration provided for commit.")
+            logger.debug("No configuration provided for commit.")
             return
 
         for key, value in merged_opts.items():
@@ -244,10 +247,10 @@ class PlotFigure:
     def pl(self):
         return self._entities_plotter
 
-    def _helper_sync_from_plotter(self, is_cover_set=True):
+    def _helper_sync_from_plotter(self, is_allow_cover_target_set=True):
 
-        cb = self.opts._on_change
-        self.opts._on_change = None
+        cb = self.opts._helper_sync
+        self.opts._helper_sync = None
 
         camera = self.pl.camera
         temp = self._helper_convert_pos_to_spherical(
@@ -264,9 +267,9 @@ class PlotFigure:
             "bg_opacity":   self.pl.background_color.opacity / 255.0,
         }
 
-        cover_value(self.opts, is_cover_set=is_cover_set, **alter)
+        cover_value(self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter)
 
-        self.opts._on_change = cb
+        self.opts._helper_sync = cb
 
     def _helper_sync_from_opts(self, is_cam=True, is_bg=False):
         if is_cam:
@@ -387,12 +390,16 @@ class PlotFigure:
 
     def act_check_is_alive(self):
         try:
-            plotter = self._entities_plotter
-            if plotter._closed:
+            if len(self.pl.renderer.actors) == 0:
+                return True
+            
+            if self.pl._closed:
                 return False
+            
+            return True if self.pl.render_window.GetGenericWindowId() else False
 
-            iren = plotter.iren
-            return iren is not None and bool(iren.initialized)
+            # iren = plotter.iren
+            # return iren is not None and bool(iren.initialized)
         except Exception:
             return False
 

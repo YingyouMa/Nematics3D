@@ -21,9 +21,10 @@ from Nematics3D.datatypes import (
     Unset
 )
 from .plot_figure import PlotFigure
-from ..opts import merge_opts_all
+from ..opts import merge_opts_all, build_defaults_with_override
 from Nematics3D.general import pop_exclusive
 
+#!!! remove replace
 #! scalars_limit
 #! scalars_bar
 #! clip_geometry
@@ -121,52 +122,6 @@ class OptsTube:
       (2) Finalization phase: act_finalize() replaces UNSET fields using defaults,
           validates them, and freezes the opts for use by an owner.
     """
-
-    # -------------------------------------------------------------------------
-    # Frozen defaults (read-only, global baseline)
-    #
-    # - Must contain ALL public fields that are expected to be finalized.
-    # - Should be treated as immutable. MappingProxyType prevents accidental edits.
-    # - act_finalize() will fill UNSET fields from the provided defaults mapping
-    #   first, then fall back to this frozen table.
-    # -------------------------------------------------------------------------
-    _DEFAULTS_FROZEN = MappingProxyType({
-        # --- Visibility & Global ---
-        "name":                 "tube",
-        "category":             "line",
-        "is_visible":           True,
-        "shading_type":         "phong",
-        "is_reset_camera":      True,
-
-        # --- Phong Lighting ---
-        "ambient":              0.0,
-        "diffuse":              1.0,
-        "specular":             1.0,
-        "specular_pow":         10.0,
-        "specular_color":       (1.0, 1.0, 1.0),
-
-        # --- PBR Lighting ---
-        "metallic":             0.0,
-        "roughness":            0.5,
-
-        # --- Shape & Color ---
-        "color":                (0.5, 0.5, 0.5),
-        "opacity":              1.0,
-        "radius":               0.5,
-        "scalars":              None,
-
-        # --- Scalars (used if color == "scalars") ---
-        "scalars_cmap":         "viridis",
-        "scalars_clim":         None,
-        "is_scalar_bar":        True,
-        "scalar_bar_title":     "scalars",
-
-        # --- Geometry & Clipping ---
-        "sides":                6,
-        "is_capping":           True,
-        "smooth_iter":          0,
-        "clip_geometry":        None,
-    })
     
     # --- Visibility & Global ---
     name: str | Unset = UNSET
@@ -261,10 +216,54 @@ class OptsTube:
             v, name=d, is_int=True, value_range=(0, 1000), bounded=True, replace=OptsTube._DEFAULTS_FROZEN["smooth_iter"]),
     }
     
+    # -------------------------------------------------------------------------
+    # Frozen defaults (read-only, global baseline)
+    #
+    # - Must contain ALL public fields that are expected to be finalized.
+    # - Should be treated as immutable. MappingProxyType prevents accidental edits.
+    # - act_finalize() will fill UNSET fields from the provided defaults mapping
+    #   first, then fall back to this frozen table.
+    # -------------------------------------------------------------------------
+    _DEFAULTS_FROZEN = MappingProxyType({
+        # --- Visibility & Global ---
+        "name":                 "tube",
+        "category":             "line",
+        "is_visible":           True,
+        "shading_type":         "phong",
+        "is_reset_camera":      True,
+
+        # --- Phong Lighting ---
+        "ambient":              0.0,
+        "diffuse":              1.0,
+        "specular":             1.0,
+        "specular_pow":         10.0,
+        "specular_color":       (1.0, 1.0, 1.0),
+
+        # --- PBR Lighting ---
+        "metallic":             0.0,
+        "roughness":            0.5,
+
+        # --- Shape & Color ---
+        "color":                (0.5, 0.5, 0.5),
+        "opacity":              1.0,
+        "radius":               0.5,
+        "scalars":              None,
+
+        # --- Scalars (used if color == "scalars") ---
+        "scalars_cmap":         "viridis",
+        "scalars_clim":         None,
+        "is_scalar_bar":        True,
+        "scalar_bar_title":     "scalars",
+
+        # --- Geometry & Clipping ---
+        "sides":                12,
+        "is_capping":           True,
+        "smooth_iter":          0,
+        "clip_geometry":        None,
+    })
+    
     
     def __post_init__(self):
-        # Instance-level copy (mutable), useful for debugging or transitional logic.
-        # The canonical baseline remains _DEFAULTS_FROZEN.
         object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
         
 
@@ -284,14 +283,7 @@ class OptsTube:
             
             
     def act_finalize(self, defaults: Mapping[str, Any] | None = None):
-        """
-        Resolve all UNSET fields using:
-          1) the provided `defaults` mapping (higher priority), then
-          2) the class-level `_DEFAULTS_FROZEN` mapping.
-
-        This must be called before visualization. After finalization, the opts
-        should be treated as ready-to-use (no more defaults resolution).
-        """
+        
         if getattr(self, "_state_functioning", False):
             raise RuntimeError("OptsTube has already been finalized.")
 
@@ -374,16 +366,11 @@ class PlotTube:
         **kwargs
     ):
         
-        if opts_defaults_override is None:
-            opts_defaults_override = {}
-        opts_defaults = dict(OptsTube._DEFAULTS_FROZEN)
-        for k, v in opts_defaults_override.items():
-            if k not in opts_defaults:
-                raise KeyError(
-                    f"Invalid key {k!r} in opts_defaults_override; "
-                    f"not a valid OptsTube option."
-                )
-            opts_defaults[k] = v
+        opts_defaults = build_defaults_with_override(
+                            OptsTube._DEFAULTS_FROZEN,
+                            opts_defaults_override,
+                            name="OptsTube",
+                        )
         object.__setattr__(self, "opts_defaults", opts_defaults)
         
         
@@ -398,10 +385,14 @@ class PlotTube:
                 line_index = None
         object.__setattr__(self, "raw_line_index", line_index)
     
-        if figure is not None and not isinstance(figure, PlotFigure):
+        if figure is not None:
             try:
-                raise TypeError('`figure` for PlotTube must be PlotFigure object!')
-            except:
+                if not isinstance(figure, PlotFigure):
+                    raise TypeError('`figure` for PlotTube must be PlotFigure object!')
+                else:
+                    if not figure:
+                        raise RuntimeError("The plotting window has been closed. Cannot update an inactive plotter.") 
+            except (TypeError, RuntimeError):
                 logger.exception("Check input")
                 logger.recovery("Create a new PlotFigure object and store it in self._owner")
                 figure = PlotFigure()
@@ -457,7 +448,7 @@ class PlotTube:
         return self._internal_owner_ref()
     
     @property
-    def _owner(self):
+    def owner(self):
         return self._internal_owner_ref()
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -878,6 +869,9 @@ class PlotTube:
         docs[name] = doc
         if overwrite or (name not in data):
             data[name] = default
+            
+    def act_remove(self):
+        self.owner.pl.remove_actor(self._entities)
             
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

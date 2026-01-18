@@ -185,16 +185,15 @@ class PlotnPlane:
             )
 
             grid_all = self._entities_plane._entities_grid_all
-            print(np.shape(grid_all))
-            # shape_all = np.shape(grid_all)[:2]
-            num_n = np.shape(grid_all)[0]
+            shape_all = np.shape(grid_all)[:2]
+            # num_n = np.shape(grid_all)[0]
             grid_all_flatten = np.reshape(grid_all, (-1, 3))
             
             logger.detail("Interpolating ...")
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
-            # n_all = np.reshape(n_all, (*shape_all, 1, 3))
-            n_all = np.reshape(n_all, (num_n, 1, 3))
+            n_all = np.reshape(n_all, (*shape_all, 1, 3))
+            # n_all = np.reshape(n_all, (num_n, 1, 3))
             
             logger.detail("Detecting the defects and surrounding directors ...")
             defect_plane_index = defect_detect(n_all, planes=(False, False, True))

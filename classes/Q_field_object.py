@@ -466,7 +466,7 @@ class QFieldObject:
                         "`figure` input must be either index in FigureManager (str or int) "
                         "or a valid PlotFigure object, or a valid pyvista plotter object, "
                         "or None (creating a new figure) "
-                        "Got type {type(figure)!r} insdead."
+                        "Got type {type(figure)!r} instead."
                         )
             except:
                 logger.exception("Could not find figure in FigureManager.")

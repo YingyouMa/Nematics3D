@@ -162,104 +162,110 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
     return results
 
 
-
-def register_opts_aliases(cls):
+@logging_and_warning_decorator(start_finish_level=5)
+def build_defaults_with_override(
+    defaults_frozen: dict,
+    defaults_override: dict | None = None,
+    *,
+    name: str = "input",
+    logger = None
+):
     """
-    Class decorator to register alias properties without the ``opts_`` prefix.
+    Build a mutable defaults dictionary from a frozen defaults mapping,
+    with validated overrides.
 
-    This function scans all properties defined in the class whose names start 
-    with ``opts_`` and automatically creates new properties with the same 
-    getter, setter, and deleter, but without the prefix.
+    Parameters
+    ----------
+    defaults_frozen : dict
+        Immutable (or treated-as-immutable) default values.
+    defaults_override : dict or None, optional
+        Override values for defaults. Keys must already exist in defaults_frozen.
+    name : str, default "options"
+        Name used in error messages for clarity.
 
-    Example:
-        >>> @register_opts_aliases
-        ... class SceneWrapper:
-        ...     @property
-        ...     def opts_fgcolor(self):
-        ...         return (1, 1, 1)
-        ...
-        ...     @opts_fgcolor.setter
-        ...     def opts_fgcolor(self, value):
-        ...         pass
-        ...
-        >>> wrapper = SceneWrapper()
-        >>> wrapper.fgcolor        # Equivalent to wrapper.opts_fgcolor
-        >>> wrapper.fgcolor = (0,0,0)  # Equivalent to wrapper.opts_fgcolor = (0,0,0)
+    Returns
+    -------
+    defaults : dict
+        A new dictionary containing defaults with applied overrides.
 
-    Args:
-        cls (type): The class to decorate.
-
-    Returns:
-        type: The same class with additional alias properties.
+    Raises
+    ------
+    KeyError
+        If defaults_override contains keys not present in defaults_frozen.
     """
-    for name, attr in list(cls.__dict__.items()):
-        if isinstance(attr, property) and name.startswith("opts_"):
-            alias = name[len("opts_"):]
-            if not hasattr(cls, alias):
-                setattr(cls, alias, property(attr.fget, attr.fset, attr.fdel, attr.__doc__))
-    return cls
 
+    if defaults_override is None:
+        defaults_override = {}
 
-def auto_opts_tubes(bindings: dict):
-    def decorator(cls):
-        for name, path in bindings.items():
-            if name.startswith("_"):
-                raise AttributeError(
-                    f"Invalid binding for '{name}': internal fields cannot be exposed."
+    defaults = dict(defaults_frozen)
+
+    for k, v in defaults_override.items():
+        if k not in defaults:
+            try:
+                raise KeyError(
+                    f"Invalid key {k!r} in defaults_override; "
+                    f"not a valid {name} option with default value."
                 )
+            except KeyError:
+                logger.exception("Check input.")
+                logger.recovery("This key will be ignored.")
+                continue
+        defaults[k] = v
 
-            key = name[len("opts_") :]
-
-            attrs = path.split(".")
-
-            def getter(self, _key=key):
-                return getattr(self._opts_all, _key)
-            
-            def setter(self, value, _attrs=attrs, _key=key, _name=name):
-
-                setattr(self._opts_all, _key, value)
-                processed = getattr(self._opts_all, _key)
-
-                for item in self._entities:
-                    target = item._entities[0]
-                    for attr in _attrs[:-1]:
-                        target = getattr(target, attr)
-                    setattr(target, _attrs[-1], processed)
-
-            setattr(cls, name, property(getter, setter))
+    return defaults
 
 
-        return cls
-    return decorator
+# @logging_and_warning_decorator(start_finish_level=5)
+# def merge_opts_with_kwargs(
+#     opts,
+#     kwargs: dict,
+#     *,
+#     opts_type,
+#     logger=None,
+# ):
+#     """
+#     Merge an optional options object with keyword arguments.
 
-def auto_opts_tubes_each(bindings: dict):
-    def decorator(cls):
-        for name, path in bindings.items():
-            if name.startswith("_"):
-                raise AttributeError(
-                    f"Invalid binding for '{name}': internal fields cannot be exposed."
-                )
+#     Parameters
+#     ----------
+#     opts : object or None
+#         Options object to be merged. If provided, must be an instance of opts_type
+#         and implement `act_asdict()`.
+#     kwargs : dict
+#         Keyword-based configuration. Takes precedence over opts on overlap.
+#     opts_type : type
+#         Expected type of the opts object.
 
-            key = name[len("opts_") :]
+#     Returns
+#     -------
+#     merged_opts : dict
+#         Merged configuration dictionary, where kwargs override opts.
+#     """
 
-            attrs = path.split(".")
+#     if opts is not None:
+#         if not isinstance(opts, opts_type):
+#             try:
+#                 raise TypeError(
+#                     f"`opts` must be {opts_type.__name__} object. "
+#                     f"Got type={type(opts)} instead."
+#                 )
+#             except:
+#                 logger.exception("Check input.")
+#                 logger.recovery("Ignoring `opts` and using `kwargs` only.")
+#                 opts_dict = {}
+#         else:
+#             opts_dict = opts.act_asdict()
+#             overlap = opts_dict.keys() & kwargs.keys()
+#             if overlap:
+#                 logger.warning(
+#                     f"Overlapping configuration detected: {list(overlap)}. "
+#                     f"The values in **kwargs will take precedence over `opts`.",
+#                 )
+#     else:
+#         opts_dict = {}
 
-            def getter(self, _key=key):
-                return getattr(self._opts_all, _key)
-            
-            def setter(self, value, _attrs=attrs, _key=key, _name=name):
-
-                setattr(self._opts_all, _key, value)
-                processed = getattr(self._opts_all, _key)
-                
-                target = self._entities[0]
-                for attr in _attrs[:-1]:
-                    target = getattr(target, attr)
-                setattr(target, _attrs[-1], processed)
-
-            setattr(cls, name, property(getter, setter))
+#     return opts_dict | kwargs
 
 
-        return cls
-    return decorator
+
 

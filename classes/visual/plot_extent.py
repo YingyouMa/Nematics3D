@@ -10,6 +10,9 @@ from Nematics3D.datatypes import (
 from .plot_tube import PlotTube, OptsTube
 from .plot_figure import PlotFigure
 
+#!!! setattr raw_corners
+#!!! plane_grid
+
 
 class PlotExtent(PlotTube):
     """

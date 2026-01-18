@@ -300,23 +300,22 @@ def generate_fixed_step_grid(
         by the grid, computed as:
             size*_eff = (n* - 1) * step*
     """
-    # number of points (include 0)
+    # number of grid points (including 0)
     n1 = int(np.floor(size1 / step1)) + 1
     n2 = int(np.floor(size2 / step2)) + 1
-
-    # continuous coordinates
-    axis1 = np.arange(n1) * step1
-    axis2 = np.arange(n2) * step2
-
-    mesh = np.meshgrid(axis1, axis2, indexing="ij")
-    grid = np.stack(mesh, axis=-1)  # (n1, n2, 2)
-
+    
     # integer index grid
-    mesh_int = np.meshgrid(
-        np.arange(n1), np.arange(n2), indexing="ij"
-    )
-    grid_int = np.stack(mesh_int, axis=-1)
-
+    axis1_int = np.arange(n1)
+    axis2_int = np.arange(n2)
+    
+    mesh_int = np.meshgrid(axis1_int, axis2_int, indexing="ij")
+    grid_int = np.stack(mesh_int, axis=-1)  # (n1, n2, 2)
+    
+    # continuous coordinate grid (mapped from integer indices)
+    grid = grid_int.astype(float)
+    grid[..., 0] *= step1
+    grid[..., 1] *= step2
+    
     # effective sizes actually covered
     size1_eff = (n1 - 1) * step1
     size2_eff = (n2 - 1) * step2
