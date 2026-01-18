@@ -323,7 +323,7 @@ class DisclinationLine:
         opts.mode = smooth_mode
         output = SmoothedLine(coords, opts=opts)
         
-        result = output._entities[
+        result = output._entity[
             int(padding_num * output.opts.N_out_ratio) : int(
                 (-padding_num - 1) * output.opts.N_out_ratio
             )
@@ -334,7 +334,7 @@ class DisclinationLine:
         self._calc_defect_coords_smooth_obj = output
         self._calc_defect_coords_smooth = result
 
-        return output._entities
+        return output._entity
 
     @logging_and_warning_decorator()
     def act_visualize(

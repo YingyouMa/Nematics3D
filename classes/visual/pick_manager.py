@@ -24,7 +24,7 @@ class OptsPickManager:
     
     _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
     
-    _descriptions = {
+    __descriptions__ = {
         "double_click_threshold":       ("The maximum time interval (in seconds)"
                                          " between two consecutive clicks to be registered as a double-click."),
         "marker_proximity_threshold":   ("The minimum distance (in meters) required between two markers"
@@ -44,7 +44,7 @@ class OptsPickManager:
     
     def __setattr__(self, key, value):
         if key in self._validators:
-            desc = f'{key!r}: {self._descriptions.get(key)[2]}'
+            desc = f'{key!r}: {self.__descriptions__.get(key)[2]}'
             value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
         

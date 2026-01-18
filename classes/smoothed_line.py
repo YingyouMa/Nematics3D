@@ -8,21 +8,21 @@ import json
 
 from ..logging_decorator import logging_and_warning_decorator
 from .opts import merge_opts_all
-from ..datatypes import Number, as_Number, as_str, ColorRGB, as_ColorRGB, Vect, as_Vect, as_bool
+from ..datatypes import Number, as_Number, as_str, ColorRGB, as_ColorRGB, Vect, as_Vect, as_bool, UNSET, Unset
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import OptsTube, PlotTube
 
 
 @dataclass(slots=True)
 class OptsSmooth:
-    window_ratio: Number | None = None
-    window_length: Number | int = None
-    order: int = 3
-    N_out_ratio: Number = 3.0
-    mode: Literal["interp", "wrap"] = "interp"
-    min_line_length: int = 50
-    name: str = "smoothed_line"
-    is_window_warning: bool = True
+    window_ratio: Number | None | Unset = None
+    window_length: Number | int | Unset = None
+    order: int | Unset = 3
+    N_out_ratio: Number | Unset = 3.0
+    mode: Literal["interp", "wrap"] | Unset = "interp"
+    min_line_length: int | Unset = 50
+    name: str | Unset = "smoothed_line"
+    is_window_warning: bool | Unset = True
     
     _internal_owner: object | None = field(default=None, repr=False, init=False)
 
@@ -160,7 +160,7 @@ class SmoothedLine:
         "_raw_coords": "Raw input line coordinates (shape: N x D)",
         "_calc_N_init": "Number of input points (before smoothing)",
         "_calc_N_out": "Number of output points (after smoothing)",
-        "_entities": "The moothed output coordinates (shape: M x D)",
+        "_entity": "The moothed output coordinates (shape: M x D)",
         "_state_is_smoothed": "Boolean flag indicating whether smoothing was applied",
         "_state_status": (
             "Status indicator of the smoothing pipeline. "
@@ -170,7 +170,7 @@ class SmoothedLine:
             "or numerical failures), this field stores a human-readable "
             "string describing the specific reason."),
         "opts": "The OptsSmooth instance that controlls smoothing options.",
-        "_entities_figure": "The PlotFigure object. Only used in act_preview() which helps users modify options",
+        "_entity_figure": "The PlotFigure object. Only used in act_preview() which helps users modify options",
         "_internal_backup_opts": "only used in __enter__ and __exit__, "
     }
 
@@ -204,7 +204,7 @@ class SmoothedLine:
     
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_entities", self._raw_coords)
+        object.__setattr__(self, "_entity", self._raw_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
         object.__setattr__(self, "_state_status", f"The line `{self.opts.name}` is not smoothed, reason: {reason}.")
         
@@ -267,7 +267,7 @@ class SmoothedLine:
             logger.detail('Fitting and evaluate spline')
             tck = splprep(line_points.T, u=uspline, s=0)[0]
             entity = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
-            object.__setattr__(self, "_entities", entity)
+            object.__setattr__(self, "_entity", entity)
             
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
@@ -310,13 +310,13 @@ class SmoothedLine:
         move = as_Vect(move, name="The replacement to move smooth line", replace=(0,0,0))
         
         if not is_new:
-            Figure = getattr(self, '_entities_figure', None)
+            Figure = getattr(self, '_entity_figure', None)
             if Figure is None or Figure.act_check_is_alive()==False:
                 Figure = PlotFigure()
-                object.__setattr__(self, '_entities_figure', Figure)
+                object.__setattr__(self, '_entity_figure', Figure)
         else:
             Figure = PlotFigure()
-            object.__setattr__(self, '_entities_figure', Figure)
+            object.__setattr__(self, '_entity_figure', Figure)
 
         pts = np.array(self)
         pts = pts[:, :3] + move
@@ -327,14 +327,14 @@ class SmoothedLine:
         
         
     def __array__(self, dtype=None):
-        arr = self._entities
+        arr = self._entity
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
         
     def __getitem__(self, idx):
-        return self._entities[idx]
+        return self._entity[idx]
     
     def __iter__(self):
-        return iter(self._entities[0])
+        return iter(self._entity[0])
     
     def __bool__(self):
         return self._state_is_smoothed

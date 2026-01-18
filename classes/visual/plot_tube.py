@@ -24,7 +24,6 @@ from .plot_figure import PlotFigure
 from ..opts import merge_opts_all, build_defaults_with_override
 from Nematics3D.general import pop_exclusive
 
-#!!! remove replace
 #! scalars_limit
 #! scalars_bar
 #! clip_geometry
