@@ -1,11 +1,75 @@
 import weakref
 import time
 import vtk
-import pyvista as pv
 import numpy as np
+from dataclasses import dataclass, field
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import find_nearest_point
+from Nematics3D.general import find_nearest_point, closest_point_on_polyline
+from Nematics3D.datatypes import (
+    as_Number,
+    ColorRGB,
+    as_ColorRGB,
+    )
+from ..opts import merge_opts_all
+
+
+@dataclass(slots=True)
+class OptsPickManager:
+    double_click_threshold: float = 0.3
+    marker_proximity_threshold: float = 0.5
+    marker_size: int = 14
+    marker_color: ColorRGB = (1, 1, 0)
+    font_size: int = 14
+    
+    _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
+    
+    _descriptions = {
+        "double_click_threshold":       ("The maximum time interval (in seconds)"
+                                         " between two consecutive clicks to be registered as a double-click."),
+        "marker_proximity_threshold":   ("The minimum distance (in meters) required between two markers"
+                                         " to distinguish them as separate locations."),
+        "marker_size":                  "Screen-space size (in pixels) of the marker point.",
+        "marker_color":                 "RGB color of the marker point",
+        "font_size":                    "Font size (in pixels) of the numeric label on top of the marker."
+        }
+    
+    _validators = {
+        "double_click_threshold": lambda v, d: as_Number(v, name=d, replace=0.3),
+        "marker_proximity_threshold": lambda v, d: as_Number(v, name=d, replace=0.5),
+        "marker_size": lambda v, d: as_Number(v, name=d, replace=14),
+        "marker_color": lambda v, d: as_ColorRGB(v, name=d, replace=(0.8, 0.8, 0)),
+        "font_size": lambda v, d: as_Number(v, name=d, replace=14),
+        }
+    
+    def __setattr__(self, key, value):
+        if key in self._validators:
+            desc = f'{key!r}: {self._descriptions.get(key)[2]}'
+            value = self._validators[key](value, desc)
+        object.__setattr__(self, key, value)
+        
+        owner = getattr(self, "_internal_owner_ref", None)
+        if owner:
+            owner = owner()
+            markers = owner._entity_markers
+            
+            if key == "marker_size":
+                for pack in markers:
+                    pack["actor"].GetProperty().SetPointSize(value)
+                    
+            if key == "marker_color":
+                for pack in markers:
+                    pack["actor"].GetProperty().SetColor(*value)
+                    
+            if key == "font_size":
+                for pack in markers:
+                    pack["text_actor"].GetTextProperty().SetFontSize(value)
+            
+            owner.owner.pl.render()
+                
+            
+    
+
 
 
 class PickManager:
@@ -20,6 +84,7 @@ class PickManager:
     """
 
     __descriptions__ = {
+        "opts": "The OptsPickManager instance controlling behavior.",
         "_internal_owner_ref": (
             "A weak reference to the PlotFigure that owns this pick manager."
         ),
@@ -34,9 +99,9 @@ class PickManager:
         ),
     }
 
-    __slots__ = tuple(__descriptions__.keys())
+    __slots__ = tuple(__descriptions__.keys())+ ("__weakref__",)
     
-    def __init__(self, figure, logger=None):
+    def __init__(self, figure, opts: OptsPickManager | None = None, **kwargs):
 
         object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
         object.__setattr__(self, "_internal_registry", {})
@@ -44,9 +109,15 @@ class PickManager:
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
         object.__setattr__(self, "_entity_markers", [])
+        
+        if opts is None:
+            opts = OptsPickManager()
+        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
+        object.__setattr__(opts, "_internal_owner_ref", weakref.ref(self))
+        object.__setattr__(self, "opts", opts)
 
     @property
-    def figure(self):
+    def owner(self):
         return self._internal_owner_ref()
 
     # ---------------------------------------------------------------------
@@ -79,7 +150,7 @@ class PickManager:
         is_double = (
             last_t is not None
             and (actor is last_a)
-            and ((now - last_t) <= 0.30)
+            and ((now - last_t) <= self.opts.double_click_threshold)
         )
 
         # Always update last-click state after printing.
@@ -95,15 +166,15 @@ class PickManager:
         resolved = self._helper_resolve_marker_pos(owner, point)
         if resolved is None:
             return
+        print(f"picked point: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
         
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
         # World-space threshold (tune as needed)
-        thr = 0.5
+        thr = self.opts.marker_proximity_threshold
         if nearest_pack is not None and nearest_d2 is not None and nearest_d2 <= thr:
             self._helper_remove_marker_pack(nearest_pack)
 
-            # Clear state to avoid chained double-click detections.
             object.__setattr__(self, "_state_last_click_time", None)
             object.__setattr__(self, "_state_last_click_actor", None)
             return
@@ -119,7 +190,7 @@ class PickManager:
     # ---------------------------------------------------------------------
     def _helper_create_marker_pack(self):
 
-        fig = self.figure
+        fig = self.owner
         if fig is None:
             return None
 
@@ -147,8 +218,8 @@ class PickManager:
         actor.SetMapper(mapper)
         actor.GetProperty().SetRepresentationToPoints()
         actor.GetProperty().SetRenderPointsAsSpheres(True)
-        actor.GetProperty().SetPointSize(14)  # fixed for now
-        actor.GetProperty().SetColor(*pv.Color("yellow").float_rgb)
+        actor.GetProperty().SetPointSize(self.opts.marker_size)  # fixed for now
+        actor.GetProperty().SetColor(*self.opts.marker_color)
         actor.GetProperty().LightingOff()
         actor.PickableOff()
         actor.SetVisibility(False)
@@ -156,7 +227,7 @@ class PickManager:
 
         text = vtk.vtkTextActor()
         text.GetTextProperty().SetColor(0.0, 0.0, 0.0)  # black digits
-        text.GetTextProperty().SetFontSize(14)          # tune with point size
+        text.GetTextProperty().SetFontSize(self.opts.font_size)          # tune with point size
         text.GetTextProperty().BoldOn()
         text.GetTextProperty().SetJustificationToCentered()
         text.GetTextProperty().SetVerticalJustificationToCentered()
@@ -180,7 +251,7 @@ class PickManager:
         if pack is None:
             return
 
-        fig = self.figure
+        fig = self.owner
         if fig is None:
             return
 
@@ -210,7 +281,7 @@ class PickManager:
 
     def _helper_remove_marker_pack(self, pack):
 
-        fig = self.figure
+        fig = self.owner
         if fig is None:
             return
 
@@ -294,7 +365,7 @@ class PickManager:
         name = type(owner).__name__
     
         if name in ("PlotTube",):
-            return p
+            return closest_point_on_polyline(p, owner.raw_coords)
     
         if name in ("PlotSphere", "PlotRod"):
             return find_nearest_point(p, owner.raw_coords)

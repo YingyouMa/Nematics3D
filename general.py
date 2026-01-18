@@ -770,6 +770,51 @@ def find_nearest_point(query_pt, coords):
     return pts[idx]
 
 
+def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.ndarray:
+    """
+    Compute the closest point on a polyline to a specific query point in 3D.
+
+    The algorithm treats the polyline as a series of independent segments,
+    projects the query point onto each segment, clips the projection to the
+    segment boundaries, and identifies the globally closest result.
+
+    Parameters
+    ----------
+    query_pt : (3,) array
+        Coordinates of the query point (x, y, z).
+    poly_pts : (N, 3) array
+        Ordered vertices defining the polyline.
+
+    Returns
+    -------
+    closest : (3,) array
+        The coordinates of the point on the polyline closest to query_pt.
+    """
+    q = np.asarray(query_pt, dtype=float)
+    pts = np.asarray(poly_pts, dtype=float)
+
+    if pts.shape[0] == 1:
+        return pts[0].copy()
+
+    a = pts[:-1]
+    b = pts[1:]
+    ab = b - a
+    aq = q - a
+
+    ab2 = np.einsum("ij,ij->i", ab, ab)
+    ab2 = np.where(ab2 <= 1e-30, 1e-30, ab2)
+
+    t = np.einsum("ij,ij->i", aq, ab) / ab2
+    t = np.clip(t, 0.0, 1.0)
+
+    proj = a + ab * t[:, None]
+    diff = proj - q
+    d2 = np.einsum("ij,ij->i", diff, diff)
+
+    idx = int(np.argmin(d2))
+    return proj[idx]
+
+
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
 

@@ -256,19 +256,3 @@ class DirectorPlane:
     def plane(self):
         return self._entity_plane
     
-            
-
-            # defect_vicinity = (
-            #     np.einsum("ai, ib -> ab", defect_vicinity_index, step_both)
-            #     + plane_grid._calc_offset_real
-            # )
-    
-            # defect_vicinity = apply_linear_transform(
-            #     defect_vicinity,
-            #     transform=plane_grid.opts.grid_transform,
-            #     offset=plane_grid.opts.grid_offset,
-            # )
-            
-            # defect_vicinity = select_grid_in_box(
-            #     defect_vicinity, plane_grid.opts.corners_limit
-            # )

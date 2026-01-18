@@ -191,48 +191,30 @@ class OptsSphere:
     _internal_owner: object | None = field(default=None, repr=False, init=False)
     
     _validators = {
-        "name": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["name"]),
-        "category": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["category"]),
-        "is_visible": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_visible"]),
-        "shading_type": lambda self, v, d: as_str(
-            v, name=d,
-            replace=OptsSphere._DEFAULTS_FROZEN["shading_type"],
-            pool=("phong", "pbr"),
-        ),
-        "is_reset_camera": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_reset_camera"]),
+        "name": lambda v, d: as_str(v, name=d),
+        "category": lambda v, d: as_str(v, name=d),
+        "is_visible": lambda v, d: as_bool(v, name=d),
+        "shading_type": lambda v, d: as_str(v, name=d, pool=("phong", "pbr")),
+        "is_reset_camera": lambda v, d: as_bool(v, name=d),
     
-        "ambient": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["ambient"]
-        ),
-        "diffuse": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["diffuse"]
-        ),
-        "specular": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["specular"]
-        ),
-        "specular_pow": lambda self, v, d: as_Number(
-            v, name=d, value_range=(1, 100), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["specular_pow"]
-        ),
-        "specular_color": lambda self, v, d: as_ColorRGB(
-            v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["specular_color"]
-        ),
+        "ambient": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "diffuse": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "specular": lambda v, d: as_Number(v, name=d, value_range=(0, 1)),
+        "specular_pow": lambda v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
+        "specular_color": lambda v, d: as_ColorRGB(v, name=d),
     
-        "metallic": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["metallic"]
-        ),
-        "roughness": lambda self, v, d: as_Number(
-            v, name=d, value_range=(0, 1), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["roughness"]
-        ),
+        "metallic": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "roughness": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
     
-        "scalars_cmap": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["scalars_cmap"]),
-        "scalars_clim": lambda self, v, d: (
-            v if v is None else as_Vect(v, name=d, dim=2, replace=OptsSphere._DEFAULTS_FROZEN["scalars_clim"])
+        "scalars_cmap": lambda v, d: as_str(v, name=d),
+        "scalars_clim": lambda v, d: (
+            v if v is None else as_Vect(v, name=d, dim=2)
         ),
-        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["is_scalar_bar"]),
-        "scalar_bar_title": lambda self, v, d: as_str(v, name=d, replace=OptsSphere._DEFAULTS_FROZEN["scalar_bar_title"]),
+        "is_scalar_bar": lambda v, d: as_bool(v, name=d),
+        "scalar_bar_title": lambda v, d: as_str(v, name=d),
     
-        "resolution": lambda self, v, d: as_Number(
-            v, name=d, is_int=True, value_range=(3, np.inf), bounded=True, replace=OptsSphere._DEFAULTS_FROZEN["resolution"]),
+        "resolution": lambda v, d: as_Number(
+            v, name=d, is_int=True, value_range=(3, np.inf), bounded=True),
     }
 
     def __post_init__(self):
@@ -244,7 +226,7 @@ class OptsSphere:
 
         if value is not UNSET and key in self._validators:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
-            value = self._validators[key](self, value, desc)
+            value = self._validators[key](value, desc)
             
         if getattr(self, "_state_is_category_locked", False) and key == "category":
             raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entity")

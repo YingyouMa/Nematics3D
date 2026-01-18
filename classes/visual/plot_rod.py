@@ -157,28 +157,28 @@ class OptsRod:
     
     
     _validators = {
-        "name": lambda self, v, d: as_str(v, name=d),
-        "category": lambda self, v, d: as_str(v, name=d),
-        "is_visible": lambda self, v, d: as_bool(v, name=d),
-        "shading_type": lambda self, v, d: as_str(v, name=d,pool=("phong", "pbr")),
-        "is_reset_camera": lambda self, v, d: as_bool(v, name=d),
+        "name": lambda v, d: as_str(v, name=d),
+        "category": lambda v, d: as_str(v, name=d),
+        "is_visible": lambda v, d: as_bool(v, name=d),
+        "shading_type": lambda v, d: as_str(v, name=d,pool=("phong", "pbr")),
+        "is_reset_camera": lambda v, d: as_bool(v, name=d),
     
-        "ambient": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "diffuse": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "specular": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "specular_pow": lambda self, v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
-        "specular_color": lambda self, v, d: as_ColorRGB(v, name=d),
+        "ambient": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "diffuse": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "specular": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "specular_pow": lambda v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
+        "specular_color": lambda v, d: as_ColorRGB(v, name=d),
         
-        "function_by": lambda self, v, d: as_str(v, name=d, pool=("o", "orient", "c", "coords")),
+        "function_by": lambda v, d: as_str(v, name=d, pool=("o", "orient", "c", "coords")),
     
-        "metallic": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "roughness": lambda self, v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "scalars_cmap": lambda self, v, d: as_str(v, name=d),
-        "scalars_clim": lambda self, v, d: v if v is None else as_Vect(v, name=d, dim=2),
-        "is_scalar_bar": lambda self, v, d: as_bool(v, name=d),
-        "scalar_bar_title": lambda self, v, d: as_str(v, name=d),
+        "metallic": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "roughness": lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "scalars_cmap": lambda v, d: as_str(v, name=d),
+        "scalars_clim": lambda v, d: v if v is None else as_Vect(v, name=d, dim=2),
+        "is_scalar_bar": lambda v, d: as_bool(v, name=d),
+        "scalar_bar_title": lambda v, d: as_str(v, name=d),
     
-        "sides": lambda self, v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True),
+        "sides": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True),
         }
     
     
@@ -240,7 +240,7 @@ class OptsRod:
 
         if value is not UNSET and key in self._validators:
             desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
-            value = self._validators[key](self, value, desc)
+            value = self._validators[key](value, desc)
             
         if getattr(self, "_state_is_category_locked", False) and key == "category":
             raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entity")
