@@ -2,7 +2,9 @@ import numpy as np
 from typing import Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields
+from types import MappingProxyType
+from typing import Mapping, Any
 import os
 import json
 
@@ -15,68 +17,111 @@ from .visual.plot_tube import OptsTube, PlotTube
 
 @dataclass(slots=True)
 class OptsSmooth:
-    window_ratio: Number | None | Unset = None
-    window_length: Number | int | Unset = None
-    order: int | Unset = 3
-    N_out_ratio: Number | Unset = 3.0
-    mode: Literal["interp", "wrap"] | Unset = "interp"
-    min_line_length: int | Unset = 50
-    name: str | Unset = "smoothed_line"
-    is_window_warning: bool | Unset = True
+    window_ratio: Number | None | Unset = UNSET
+    window_length: int | None | Unset = UNSET
+    order: int | Unset = UNSET
+    N_out_ratio: Number | Unset = UNSET
+    mode: Literal["interp", "wrap"] | Unset = UNSET
+    min_line_length: int | Unset = UNSET
+    name: str | Unset = UNSET
+    is_window_warning: bool | Unset = UNSET
     
     _internal_owner: object | None = field(default=None, repr=False, init=False)
+    _state_functioning: bool = field(default=False, init=False, repr=False)
 
     __descriptions__ = {
-        "window_ratio": "window ratio for smoothing: line_length / window_length",
-        "window_length": "explicit window length for smoothing",
-        "order": "smoothing polynomial order",
-        "N_out_ratio": "ratio between output and input #points in smoothing",
-        "mode": "smoothing mode (interp or wrap)",
-        "min_line_length": "minimum line length to be smoothed",
-        "name": "name identifier of the line",
-        "is_window_warning" : "whether present the warning when window_length and window_ratio are both input"
+        "name":                 "name identifier of the line",
+        "window_ratio":         "window ratio for smoothing: line_length / window_length",
+        "window_length":        "explicit window length for smoothing",
+        "order":                "smoothing polynomial order",
+        "N_out_ratio":          "ratio between output and input #points in smoothing",
+        "mode":                 "smoothing mode (interp or wrap)",
+        "min_line_length":      "minimum line length to be smoothed",
+        "is_window_warning" :   "whether present the warning when window_length and window_ratio are both input"
     }
 
     _validators = {
-        "window_ratio": lambda self, v: (
-            None
-            if v is None
-            else as_Number(v, name=self.__descriptions__["window_ratio"])
-        ),
-        "window_length": lambda self, v: (
-            None
-            if v is None
-            else as_Number(v, name=self.__descriptions__["window_length"])
-        ),
-        "order": lambda self, v: as_Number(v, name=self.__descriptions__["order"], is_int=True, replace=3),
-        "N_out_ratio": lambda self, v: as_Number(
-            v, name=self.__descriptions__["N_out_ratio"], replace=3
-        ),
-        "mode": lambda self, v: (
-            v
-            if v in ("interp", "wrap")
-            else (_ for _ in ()).throw(
-                ValueError(
-                    f"{self.__descriptions__['mode']} must be 'interp' or 'wrap', got {v!r}"
-                )
-            )
-        ),
-        "min_line_length": lambda self, v: as_Number(
-            v, name=self.__descriptions__['min_line_length'], is_int = True
-            ),
-        "name": lambda self, v: as_str(v, name=self.__descriptions__["name"]),
-        "is_window_warning": lambda self, v: v if isinstance(v, bool) else (_ for _ in ()).throw(
-            TypeError(f"{self.__descriptions__['is_window_warning']} must be a bool, got {v}")
-        )
+        "name":                 lambda v, d: None if v is None else as_Number(v, name=d),
+        "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
+        "window_length":        lambda v, d: as_Number(v, name=d),
+        "order":                lambda v, d: as_Number(v, name=d, is_int=True),
+        "N_out_ratio":          lambda v, d: as_Number(v, name=d),
+        "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
+        "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True),
+        "is_window_warning":    lambda v, d: as_bool(v, name=d)
     }
+    
+    _DEFAULTS_FROZEN = MappingProxyType({
+        "name":                 "smoothed_line",
+        "window_ratio":         None,
+        "window_length":        None,
+        "order":                3,
+        "N_out_ratio":          3,
+        "mode":                 "interp",
+        "min_line_length":      50,
+        "is_window_warning":    True
+    })
 
-    def __setattr__(self, key, value):
-        if key in self._validators:
-            value = self._validators[key](self, value)
-        object.__setattr__(self, key, value)
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __setattr__(self, key, value, logger=None):
+            
+        if value is not UNSET:
+            if key in self._validators:
+                desc = f'{key!r}: {self.__descriptions__.get(key)}'
+                try:
+                    value = self._validators[key](value, desc)
+                    object.__setattr__(self, key, value)
+                except:
+                    logger.exception(f"Assignment to {key!r} failed")
+                    if getattr(self, "_state_functioning", False):
+                        logger.recovery("Automatically ignore this modification")
+                    else:
+                        logger.recovery("Reset this assignment to UNSET.")
+                        object.__setattr__(self, key, UNSET)
+            else:
+                object.__setattr__(self, key, value)
+        else:
+            if getattr(self, "_state_functioning", False):
+                try:
+                    raise TypeError("Attribute could not be set as UNSET after first functioning!")
+                except TypeError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this modification")
+                    return
+            else:
+                object.__setattr__(self, key, value)
         
-        if key != "_internal_owner" and hasattr(self, "_internal_owner") and self._internal_owner is not None:
-            self._internal_owner.act_commit(**{key: value})
+        if key != "_internal_owner" and getattr(self, "_state_functioning", False) and self._internal_owner is not None:
+            self._internal_owner.act_commit(**{key: value}, is_setattr=False)
+            
+    def act_finalize(self, defaults: Mapping[str, Any] | None = None):
+
+        if getattr(self, "_state_functioning", False):
+            raise RuntimeError("This Opts has already been finalized.")
+
+        defaults = {} if defaults is None else dict(defaults)
+
+        for f in fields(self):
+            k = f.name
+            if k.startswith("_"):
+                continue  
+
+            if getattr(self, k) is UNSET:
+                v = defaults.get(k, self._DEFAULTS_FROZEN.get(k, UNSET))
+                if v is UNSET:
+                    raise KeyError(f"Missing default for field {k!r}.")
+                setattr(self, k, v)  
+
+        object.__setattr__(self, "_state_functioning", True)
+        
+    def act_asdict(self, is_include_UNSET=False):
+        result = {}
+        for key in self.__descriptions__.keys():
+            value = getattr(self, key, UNSET)
+            if not is_include_UNSET and value is UNSET:
+                continue
+            result[key] = getattr(self, key)
+        return result
         
 class SmoothingConfigError(ValueError):
     """
@@ -198,7 +243,8 @@ class SmoothedLine:
 
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
-
+        
+        self.opts.act_finalize()
         self._helper_apply_smooth()
 
     

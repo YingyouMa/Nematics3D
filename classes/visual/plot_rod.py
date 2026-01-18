@@ -236,16 +236,37 @@ class OptsRod:
         object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
         
 
-    def __setattr__(self, key, value):
-
-        if value is not UNSET and key in self._validators:
-            desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
-            value = self._validators[key](value, desc)
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __setattr__(self, key, value, logger=None):
             
         if getattr(self, "_state_is_category_locked", False) and key == "category":
             raise AttributeError("Modification of 'category' is not allowed, because it is used as the key in dir: PlotFigure._entity")
-
-        object.__setattr__(self, key, value)
+            
+        if value is not UNSET:
+            if key in self._validators:
+                desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
+                try:
+                    value = self._validators[key](value, desc)
+                    object.__setattr__(self, key, value)
+                except:
+                    logger.exception(f"Assignment to {key!r} failed")
+                    if getattr(self, "_state_functioning", False):
+                        logger.recovery("Automatically ignore this modification")
+                    else:
+                        logger.recovery("Reset this assignment to UNSET.")
+                        object.__setattr__(self, key, UNSET)
+            else:
+                object.__setattr__(self, key, value)
+        else:
+            if getattr(self, "_state_functioning", False):
+                try:
+                    raise TypeError("Attribute could not be set as UNSET after first functioning!")
+                except TypeError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this modification")
+                    return
+            else:
+                object.__setattr__(self, key, value)
         
         if key != "_internal_owner" and getattr(self, "_state_functioning", False) and self._internal_owner is not None:
             self._internal_owner.act_commit(**{key: value}, is_setattr=False)
