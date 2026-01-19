@@ -160,7 +160,6 @@ class SmoothedLine:
         
     @logging_and_warning_decorator()    
     def act_commit(self, 
-                   is_setattr: bool = True,
                    opts: OptsSmooth | None = None,
                    logger=None, 
                    **kwargs):
@@ -186,7 +185,6 @@ class SmoothedLine:
                         is_allow_unset_source=False,
                         **opts.act_asdict()
                         )
-            self.opts.act_finalize()
         
         self._helper_apply()
         

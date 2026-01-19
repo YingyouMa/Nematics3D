@@ -181,7 +181,7 @@ def as_Tensor(input_data, shape, name="input data"):
 ColorRGB = Tuple[float, float, float]
 
 @logging_and_warning_decorator(start_finish_level=5)
-def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, replace=(0,0,0), logger=None):
+def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, replace=None, logger=None):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -210,7 +210,7 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
     
     replace : ColorRGB, optional
         Recover the input_data to this replace value if the input_data is illegal.
-        Defaults to (0,0,0), black.
+        Defaults to None, no recovery.
         
 
     Returns
@@ -241,19 +241,22 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
             or not all(isinstance(x, numbers.Real) for x in input_data)
         ):
             raise ValueError(
-                f"{name} is ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
+                f"{name} should be ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
             )
     
         input_data = np.asarray(input_data)
     
         if np.max(input_data) > 1 or np.min(input_data) < 0:
             raise ValueError(
-                f"{name} is ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
+                f"{name} should be ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
             )
     except:
-        logger.exception("Please check data type.")
-        logger.recovery(f"Set color={replace} in the following.")
-        input_data = (0,0,0)
+        if replace:
+            logger.exception("Please check data type.")
+            logger.recovery(f"Set color={replace} in the following.")
+            input_data = replace
+        else:
+            raise
     
         if is_norm:
             if np.sum(input_data) < 1e-3:
@@ -268,7 +271,7 @@ def as_ColorRGB_array(
     name="input data",
     is_norm=False,
     norm_order=2,
-    replace=(0, 0, 0),
+    replace=None,
     logger=None,
 ):
     """
@@ -311,32 +314,35 @@ def as_ColorRGB_array(
         input_data = input_data.astype(float)
 
     except Exception:
-        logger.exception("Please check color array values.")
-        logger.recovery(f"Set color array to {replace} in the following.")
-
-        # --- Recovery: broadcast replace to (N, 3) ---
-        replace_arr = np.asarray(replace, dtype=float)
-
-        if replace_arr.ndim == 1:
-            if replace_arr.shape != (3,):
-                raise ValueError(
-                    f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}."
-                )
-            # (3,) -> (N, 3)
-            input_data = np.tile(replace_arr, (N, 1))
-        
-        elif replace_arr.ndim == 2:
-            if replace_arr.shape != (N, 3):
-                raise ValueError(
-                    f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}, "
-                    f"expected (N, 3) with N={N}."
-                )
-            input_data = replace_arr
-        
+        if replace is None:
+            raise
         else:
-            raise ValueError(
-                f"replace must be shape (3,) or (N, 3). Got array with ndim={replace_arr.ndim}."
-            )
+            logger.exception("Please check color array values.")
+            logger.recovery(f"Set color array to {replace} in the following.")
+    
+            # --- Recovery: broadcast replace to (N, 3) ---
+            replace_arr = np.asarray(replace, dtype=float)
+    
+            if replace_arr.ndim == 1:
+                if replace_arr.shape != (3,):
+                    raise ValueError(
+                        f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}."
+                    )
+                # (3,) -> (N, 3)
+                input_data = np.tile(replace_arr, (N, 1))
+            
+            elif replace_arr.ndim == 2:
+                if replace_arr.shape != (N, 3):
+                    raise ValueError(
+                        f"replace must be shape (3,) or (N, 3). Got shape {replace_arr.shape}, "
+                        f"expected (N, 3) with N={N}."
+                    )
+                input_data = replace_arr
+            
+            else:
+                raise ValueError(
+                    f"replace must be shape (3,) or (N, 3). Got array with ndim={replace_arr.ndim}."
+                )
 
     # ---------- Row-wise normalization ----------
     if is_norm:

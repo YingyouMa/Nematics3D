@@ -315,12 +315,15 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def act_lines_smooth(
         self,
-        opts=OptsSmooth(),
+        opts: OptsSmooth | None = None,
         logger=None,
         **kwargs,
     ):
         
         logger.detail("Start to smoothen disclination lines.")
+        
+        if opts is None:
+            opts = OptsSmooth()
         
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.is_window_warning = False

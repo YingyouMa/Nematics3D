@@ -16,10 +16,9 @@ class OptsBase:
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
 
-    __descriptions__: ClassVar[Mapping[str, str]] = MappingProxyType({})
-    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = MappingProxyType(
-        {}
-    )
+    __descriptions__: ClassVar[Mapping[str, str]] = {}
+    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {}
+    
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({})
 
     # ---------------------------------------------------------------------
@@ -57,7 +56,7 @@ class OptsBase:
                 - after functioning: ignore the modification
         - After functioning, propagate to owner via owner.act_commit(..., is_setattr=False).
         """
-        is_final = bool(getattr(self, "_state_is_functioning", False))
+        is_final = bool(getattr(self, "_state_is_functioning", False)) and getattr(self, "_internal_owner_ref", None) is not None
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
@@ -78,7 +77,6 @@ class OptsBase:
             desc = f"{key!r}: {self.__class__.__descriptions__[key]}"
             try:
                 value2 = self.__class__._validators[key](value, desc)
-                object.__setattr__(self, key, value2)
                 value = value2
             except Exception:
                 logger.exception(f"Assignment to {key!r} failed")
@@ -90,18 +88,23 @@ class OptsBase:
                     object.__setattr__(self, key, UNSET)
                     value = UNSET
         else:
-            object.__setattr__(self, key, value)
+            if key.startswith("_"):
+                object.__setattr__(self, key, value)
+            elif not is_final:
+                object.__setattr__(self, key, value)
+                
 
         # --- owner commit (only after functioning) ---
         if (
             (not key.startswith("_"))
             and is_final
-            and getattr(self, "_internal_owner_ref", None) is not None
         ):
             owner = self._internal_owner_ref()
             if owner is not None:
-                owner.act_commit(**{key: value}, is_setattr=False)
-
+                owner.act_commit(**{key: value})
+                return value
+                
+        object.__setattr__(self, key, value)
         return value
 
     # ---------------------------------------------------------------------
