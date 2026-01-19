@@ -2,6 +2,7 @@ from dataclasses import dataclass, field, fields
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping
 import weakref
+from contextlib import contextmanager
 
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET
@@ -25,7 +26,7 @@ class OptsBase:
     # Basic core: assignment with validation + lifecycle rule + owner commit
     # ---------------------------------------------------------------------
     @logging_and_warning_decorator(start_finish_level=5)
-    def setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
+    def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
         """
         Core assignment routine.
 
@@ -106,7 +107,7 @@ class OptsBase:
     # ---------------------------------------------------------------------
     # Basic core: finalize (fill UNSET by defaults then freeze state)
     # ---------------------------------------------------------------------
-    def finalize_basic(self, defaults: Mapping[str, Any] | None = None) -> None:
+    def _helper_finalize_basic(self, defaults: Mapping[str, Any] | None = None) -> None:
         """
         Fill all UNSET public fields and mark this opts as functioning.
 
@@ -144,7 +145,7 @@ class OptsBase:
     # ---------------------------------------------------------------------
     # Basic core: export to dict
     # ---------------------------------------------------------------------
-    def asdict_basic(self, *, is_include_UNSET: bool = False) -> dict[str, Any]:
+    def _helper_asdict_basic(self, *, is_include_UNSET: bool = False) -> dict[str, Any]:
         """
         Export options to a dict, following `__descriptions__` key order.
 
@@ -166,3 +167,12 @@ class OptsBase:
                 continue
             result[k] = v
         return result
+    
+    @contextmanager
+    def _helper_internal_update(self):
+        state_current = getattr(self, '_state_is_functioning', False)
+        object.__setattr__(self, "_state_is_functioning", False)
+        try:
+            yield
+        finally:
+            object.__setattr__(self, "_state_is_functioning", state_current)

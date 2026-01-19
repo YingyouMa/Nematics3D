@@ -7,27 +7,28 @@ from types import MappingProxyType
 from typing import Mapping, Any
 import os
 import json
+import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
+from Nematics3D.general import pop_exclusive
 from .opts import merge_opts_all, build_defaults_with_override
+from .opts_base import OptsBase
 from ..datatypes import Number, as_Number, as_str, ColorRGB, as_ColorRGB, Vect, as_Vect, as_bool, UNSET, Unset
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import OptsTube, PlotTube
+from .class_function import cover_value
 
 
 @dataclass(slots=True)
-class OptsSmooth:
-    window_ratio: Number | None | Unset = UNSET
-    window_length: int | None | Unset = UNSET
-    order: int | Unset = UNSET
-    N_out_ratio: Number | Unset = UNSET
-    mode: Literal["interp", "wrap"] | Unset = UNSET
-    min_line_length: int | Unset = UNSET
-    name: str | Unset = UNSET
-    is_window_warning: bool | Unset = UNSET
-    
-    _internal_owner: object | None = field(default=None, repr=False, init=False)
-    _state_functioning: bool = field(default=False, init=False, repr=False)
+class OptsSmooth(OptsBase):
+    name:                       str | Unset                         = UNSET
+    window_ratio:               Number | None | Unset               = UNSET
+    window_length:              int | None | Unset                  = UNSET
+    order:                      int | Unset                         = UNSET
+    N_out_ratio:                Number | Unset                      = UNSET
+    mode:                       Literal["interp", "wrap"] | Unset   = UNSET
+    min_line_length:            int | Unset                         = UNSET
+    is_window_warning:          bool | Unset                        = UNSET
 
     __descriptions__ = {
         "name":                 "name identifier of the line",
@@ -64,64 +65,13 @@ class OptsSmooth:
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __setattr__(self, key, value, logger=None):
-            
-        if value is not UNSET:
-            if key in self._validators:
-                desc = f'{key!r}: {self.__descriptions__.get(key)}'
-                try:
-                    value = self._validators[key](value, desc)
-                    object.__setattr__(self, key, value)
-                except:
-                    logger.exception(f"Assignment to {key!r} failed")
-                    if getattr(self, "_state_functioning", False):
-                        logger.recovery("Automatically ignore this modification")
-                    else:
-                        logger.recovery("Reset this assignment to UNSET.")
-                        object.__setattr__(self, key, UNSET)
-            else:
-                object.__setattr__(self, key, value)
-        else:
-            if getattr(self, "_state_functioning", False):
-                try:
-                    raise TypeError("Attribute could not be set as UNSET after first functioning!")
-                except TypeError:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignore this modification")
-                    return
-            else:
-                object.__setattr__(self, key, value)
-        
-        if key != "_internal_owner" and getattr(self, "_state_functioning", False) and self._internal_owner is not None:
-            self._internal_owner.act_commit(**{key: value}, is_setattr=False)
+        self._helper_setattr_basic(key, value)
             
     def act_finalize(self, defaults: Mapping[str, Any] | None = None):
-
-        if getattr(self, "_state_functioning", False):
-            raise RuntimeError("This Opts has already been finalized.")
-
-        defaults = {} if defaults is None else dict(defaults)
-
-        for f in fields(self):
-            k = f.name
-            if k.startswith("_"):
-                continue  
-
-            if getattr(self, k) is UNSET:
-                v = defaults.get(k, self._DEFAULTS_FROZEN.get(k, UNSET))
-                if v is UNSET:
-                    raise KeyError(f"Missing default for field {k!r}.")
-                setattr(self, k, v)  
-
-        object.__setattr__(self, "_state_functioning", True)
+        self._helper_finalize_basic(defaults)
         
     def act_asdict(self, is_include_UNSET=False):
-        result = {}
-        for key in self.__descriptions__.keys():
-            value = getattr(self, key, UNSET)
-            if not is_include_UNSET and value is UNSET:
-                continue
-            result[key] = getattr(self, key)
-        return result
+        return self._helper_asdict_basic(is_include_UNSET=is_include_UNSET)
         
 class SmoothingConfigError(ValueError):
     """
@@ -135,74 +85,9 @@ class SmoothingConfigError(ValueError):
 
 
 class SmoothedLine:
-    """
-    Smooth and resample a polyline using Savitzky–Golay filtering
-    and parametric B-spline interpolation.
-
-    Workflow
-    --------
-    1. Apply **Savitzky–Golay filter** to locally smooth the input coordinates.
-    2. Perform **parametric B-spline interpolation** (`scipy.interpolate.splprep`
-       with ``s=0``) on the smoothed points.
-    3. Evaluate the spline at a uniformly spaced parameter grid (`splev`)
-       to produce a resampled output line with higher or lower resolution.
-
-    Parameters
-    ----------
-    line_coord_input : np.ndarray
-        Input line coordinates of shape (N, D), where N is the number of points
-        and D is the dimension (2D or 3D typically).
-
-    opts : OptsSmooth, optional
-        Options controlling the smoothing and resampling procedure.
-        See :attr:`OptsSmooth.__descriptions__` for definitions.
-
-    logger : logging.Logger, optional
-        Logger instance for warnings and information messages.
-        If None, falls back to global logging configuration.
-
-    **kwargs
-        Extra keyword arguments to override fields in `opts`.
-        Keys must match attributes of :class:`OptsSmooth`.
-
-    Attributes
-    ----------
-    See :`SmoothedLine.__descriptions__` and `SmoothOpts.__descriptions__` for 
-    a full list and explanation of attributes.
-
-    Methods
-    -------
-    _helper_apply_smooth(opts, logger=None)
-        Internal method that performs smoothing and resampling.
-        Not intended for direct user calls. Use :meth:`act_commit` or re-initialize instead.
-
-    act_commit()
-        Commit changes to options and reapply smoothing.
-
-    act_log_parameters()
-        Log or return a formatted summary of parameters and results.
-
-    act_visualize()
-        Visualize smoothed lines by points    
-
-    Python Special Methods
-    ----------------------
-    - ``len(line)`` → number of output points
-    - ``iter(line)`` → iterate over smoothed points
-    - ``line[i]`` → get the i-th point
-    - ``np.array(line)`` → convert to NumPy array of points
-    - ``str(line)`` → formatted summary of parameters. (e.g., ``print(line)``)
-    - ``repr(line)`` → short identifier for debugging. (e.g., just type ``line`` in an interactive shell)
-    - ``with line: ...`` → context manager for safe temporary option changes
-
-    Notes
-    -----
-    - If both ``window_length`` and ``window_ratio`` are provided, ``window_ratio``
-      will be IGNORED. Warnings depend on the `is_window_warning` flag in :class:`OptsSmooth`. 
-    """
 
     __descriptions__ = {
-        "_raw_coords": "Raw input line coordinates (shape: N x D)",
+        "raw_coords": "Raw input line coordinates (shape: N x D)",
         "_calc_N_init": "Number of input points (before smoothing)",
         "_calc_N_out": "Number of output points (after smoothing)",
         "_entity": "The moothed output coordinates (shape: M x D)",
@@ -220,13 +105,13 @@ class SmoothedLine:
         "_internal_backup_opts": "only used in __enter__ and __exit__, "
     }
 
-    __slots__ = tuple(__descriptions__.keys())
+    __slots__ = tuple(__descriptions__.keys()) + ('__weakref__' ,)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         line_coord_input: np.ndarray,
-        opts: OptsSmooth = OptsSmooth(),
+        opts: OptsSmooth | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -239,32 +124,75 @@ class SmoothedLine:
                         )
         object.__setattr__(self, "opts_defaults", opts_defaults)
         
+        if opts is None:
+            opts = OptsSmooth()
+        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
+        object.__setattr__(opts, '_internal_owner_ref', weakref.ref(self))
+        object.__setattr__(self, "opts", opts)
+        
         line_coord_input = np.asarray(line_coord_input)
         if line_coord_input.ndim != 2:
             raise ValueError("line_coord_input for smoothing must be a 2D array of shape (N, D)")
 
-        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(opts, '_internal_owner', self)
-        object.__setattr__(self, "opts", opts)
-
-        object.__setattr__(self, "_raw_coords", line_coord_input)
-        object.__setattr__(self, "_calc_N_init", len(self._raw_coords))
+        object.__setattr__(self, "raw_coords", line_coord_input)
+        object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
         
-        self.opts.act_finalize()
-        self._helper_apply_smooth()
+        self.act_commit()
+        
+    def __setattr__(self, key, value):
+
+        allowed_core = ("raw_coords", "coords")
+        if key not in allowed_core:
+            raise AttributeError(
+                f"Invalid attribute assignment: {key!r}. Only {allowed_core} can be modified directly, "
+            )
+        self.act_commit(**{key: value})
 
     
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_entity", self._raw_coords)
+        object.__setattr__(self, "_entity", self.raw_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
         object.__setattr__(self, "_state_status", f"The line `{self.opts.name}` is not smoothed, reason: {reason}.")
         
+    @logging_and_warning_decorator()    
+    def act_commit(self, 
+                   is_setattr: bool = True,
+                   opts: OptsSmooth | None = None,
+                   logger=None, 
+                   **kwargs):
+        
+        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
+        if found:
+            try:
+                if coords.ndim == 2:
+                    object.__setattr__(self, "raw_coords", coords)
+                else:
+                    raise ValueError("line_coord_input for smoothing must be a 2D array of shape (N, D)")
+            except ValueError:
+                logger.exception("Check input")
+                logger.recovery("Automatically ignore this modification.")
+        
+        if opts is None:
+            opts = OptsSmooth()
+        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
+        
+        with self.opts._helper_internal_update():
+            cover_value(self.opts,
+                        is_allow_cover_target_set=True,
+                        is_allow_unset_source=False,
+                        **opts.act_asdict()
+                        )
+            self.opts.act_finalize()
+        
+        self._helper_apply()
+        
+        
     @logging_and_warning_decorator()
-    def _helper_apply_smooth(self, logger=None):
+    def _helper_apply(self, logger=None):
                 
         msg = f'Start to smooth line {self.opts.name!r} with {self._calc_N_init} points.\n'
         msg += f"window length = {self.opts.window_length}\n"
@@ -308,7 +236,7 @@ class SmoothedLine:
 
             logger.detail('Applying Savitzky-Golay filter to smooth the curve')
             line_points = savgol_filter(
-                self._raw_coords,
+                self.raw_coords,
                 self.opts.window_length,
                 self.opts.order,
                 axis=0,
@@ -326,33 +254,15 @@ class SmoothedLine:
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
         
-        except SmoothingConfigError:
+        except SmoothingConfigError as e:
             logger.exception("Smoothing aborted (manual check)")
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
-            self._helper_fallback_no_smooth(reason)
+            self._helper_fallback_no_smooth(str(e))
 
         except Exception:
             logger.exception("Smoothing aborted (system error)")
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
             self._helper_fallback_no_smooth("system error")
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_commit(self, logger=None, is_setattr=True, **changes):
-
-        if not changes:
-            return
-        
-        for k, v in changes.items():
-            try:
-                if k not in self.opts.__descriptions__:
-                    raise ValueError(f"Unknown attribute: {k} in class: SmoothedLine.opts")
-                if is_setattr:
-                    object.__setattr__(self.opts, k, v)
-            except:
-                logger.exception(f"Failed to reset value of {k!r}")
-                logger.recovery("Ignore this modification")
-                
-        self._helper_apply_smooth()
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_preview(self, 
@@ -378,7 +288,7 @@ class SmoothedLine:
         PlotTube(pts, Figure, **kwargs)
         
     def act_copy(self):
-        return SmoothedLine(self._raw_coords.copy(), opts=OptsSmooth(**self.opts.act_asdict()))
+        return SmoothedLine(self.raw_coords.copy(), opts=OptsSmooth(**self.opts.act_asdict()))
         
         
     def __array__(self, dtype=None):
@@ -389,7 +299,7 @@ class SmoothedLine:
         return self._entity[idx]
     
     def __iter__(self):
-        return iter(self._entity[0])
+        return iter(self._entity)
     
     def __bool__(self):
         return self._state_is_smoothed
@@ -404,7 +314,7 @@ class SmoothedLine:
     def __exit__(self, exc_type, exc_val, exc_tb):
         for k, v in self._internal_backup_opts.items():
             setattr(self.opts, k, v)
-        self._helper_apply_smooth()
+        self._helper_apply()
         del self._internal_backup_opts
         return False  
         

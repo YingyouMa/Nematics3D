@@ -1,9 +1,12 @@
 from ..datatypes import UNSET
+from ..logging_decorator import logging_and_warning_decorator
 
+@logging_and_warning_decorator(start_finish_level=5)
 def cover_value(
     obj,
     is_allow_cover_target_set: bool = True,
     is_allow_unset_source: bool = False,
+    logger=None,
     **kwargs,
 ):
     """
@@ -31,5 +34,10 @@ def cover_value(
         # Target-side constraint: whether existing values may be overwritten
         if not is_allow_cover_target_set and getattr(obj, key) is not UNSET:
             continue
-
-        setattr(obj, key, value)
+        
+        try:
+            setattr(obj, key, value)
+        except:
+            logger.exception("Check input.")
+            logger.recovery("Automatically ignore this modification")
+            

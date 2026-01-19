@@ -437,7 +437,7 @@ class PlotRod:
             extra[key] = value
             return
     
-        allowed_core = ("raw_coords", "raw_orient")
+        allowed_core = ("raw_coords", "coords", "raw_orient", "orient")
         if key not in allowed_core:
             raise AttributeError(
                 f"Invalid attribute assignment: {key!r}. Only {allowed_core} can be modified directly, "
