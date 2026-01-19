@@ -41,69 +41,15 @@ from Nematics3D.general import pop_exclusive
 #! color invalid
 
 
+
+
+
+
+
+
 LEVEL_ACTOR  = 0  # Only changes GPU/Rendering state. (Fastest)
 LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
 LEVEL_REMESH = 2  # Needs to re-run the tube filter to rebuild the 3D mesh. (Heaviest)
-
-ATTR_MAP = {
-    # === Visibility & Global Settings ===
-    "name":                 (LEVEL_ACTOR,  None,                    "Identifier for the actor in the plotter."),
-    "category":             (LEVEL_ACTOR,  None,                    "The semantic category of this plotting entity."),
-    "is_visible":           (LEVEL_ACTOR,  "visibility",            "Whether the tube is visible in the scene."),
-    "shading_type":         (LEVEL_ACTOR,  "prop.interpolation",    "'phong', 'pbr' (Physical)"),
-    "is_reset_camera":      (LEVEL_ACTOR,  None,                    "Whether to reset the camera settings for each (re-)plot."),
-
-    # === Lighting - Phong ===
-    "ambient":              (LEVEL_ACTOR,  "prop.ambient",          "Reflected light from environment (0-1)."),
-    "diffuse":              (LEVEL_ACTOR,  "prop.diffuse",          "Standard matte reflection (0-1)."),
-    "specular":             (LEVEL_ACTOR,  "prop.specular",         "Glossy highlight strength (0-1)."),
-    "specular_pow":         (LEVEL_ACTOR,  "prop.specular_power",   "Focus of gloss (1-100). Higher = shinier/smaller spot."),
-    "specular_color":       (LEVEL_ACTOR,  "prop.specular_color",   "The color of the glossy highlight (RGB). Usually white [1,1,1]."),
-    
-    # === Lighting - PBR ===
-    "metallic":             (LEVEL_ACTOR,  "prop.metallic",         "PBR metallic effect (0-1). Needs PBR enabled."),
-    "roughness":            (LEVEL_ACTOR,  "prop.roughness",        "PBR surface roughness (0-1). Needs PBR enabled."),
-
-    # === Shape and Color Control ===
-    "color":                (LEVEL_RECALC, None,                    ("Determines point colors. Options: "
-                                                                    "1) ColorRGB for entire tube (e.g. (1,0,0))"
-                                                                    "2) Function (mapping function), "
-                                                                    "3) color data set manually, "
-                                                                    "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim).")),
-    
-    "opacity":              (LEVEL_RECALC, None,                    ("Determines point transparency. Options: "
-                                                                    "1) float 0-1 for entire tube, "
-                                                                    "2) Function (mapping function), "
-                                                                    "3) opacity data set manually.")),
-    
-    "scalars":              (LEVEL_RECALC, None,                    ("Determines point scalars. Options: "
-                                                                    "1) Function (mapping function), "
-                                                                    "2) scalars data set manually, "
-                                                                    "3) None (No scalars)")),
-    
-    "radius":               (LEVEL_REMESH, None,                    ("Determines tube thickness. Options: "
-                                                                    "1) float for entire tube, "
-                                                                    "2) Function (mapping function), "
-                                                                    "3) radius data set manually.")),
-    
-    # === Scalars Control (Needs color_rule='scalars') ===
-    "scalars_cmap":         (LEVEL_RECALC, None,                    "Colormap name (e.g., 'viridis') used if color is set to scalar."),
-    "scalars_clim":         (LEVEL_RECALC, None,                    "Color limits [min, max] for scalar mapping."),
-    "is_scalar_bar":        (LEVEL_ACTOR,  None,                    "Whether to display the color legend (scalar bar)."),
-    "scalar_bar_title":     (LEVEL_ACTOR,  None,                    "Title for the scalar bar (e.g., 'Stress (MPa)')."),
-
-    # === Geometry & Topology (LEVEL_REMESH) ===
-    "sides":                (LEVEL_REMESH, None,                    "Number of facets around the tube (higher = smoother)."),
-    "is_capping":           (LEVEL_REMESH, None,                    "Whether to close the ends of the tube."),
-    "smooth_iter":          (LEVEL_REMESH, None,                    "Path smoothing iterations to remove jagged edges."),
-    
-    # === Advanced Spatial Clipping ===
-    "clip_geometry":        (LEVEL_REMESH, None,                    "Define clipping boundary. Can be: "
-                                                                    "1) List of 6 floats [xmin, xmax...] for axis-aligned box, "
-                                                                    "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box).")
-}
-
-
 
 # --- Type aliases ---
 ColorMode = ColorRGB | Callable | Sequence | Literal["scalars"]
@@ -162,9 +108,66 @@ class OptsTube:
     # --- Internal State (not part of defaults/finalization) ---
     _state_is_category_locked: bool = field(default=False, init=False, repr=False)
     _state_functioning: bool = field(default=False, init=False, repr=False)
-    _defaults: dict[str, Any] = field(init=False, repr=False)
 
     _internal_owner: object | None = field(default=None, repr=False, init=False)
+    
+    __descriptions__ = {
+        # === Visibility & Global Settings ===
+        "name":                 "Identifier for the actor in the plotter.",
+        "category":             "The semantic category of this plotting entity.",
+        "is_visible":           "Whether the tube is visible in the scene.",
+        "shading_type":         "'phong', 'pbr' (Physical)",
+        "is_reset_camera":      "Whether to reset the camera settings for each (re-)plot.",
+    
+        # === Lighting - Phong ===
+        "ambient":              "Reflected light from environment (0-1).",
+        "diffuse":              "Standard matte reflection (0-1).",
+        "specular":             "Glossy highlight strength (0-1).",
+        "specular_pow":         "Focus of gloss (1-100). Higher = shinier/smaller spot.",
+        "specular_color":       "The color of the glossy highlight (RGB). Usually white [1,1,1].",
+        
+        # === Lighting - PBR ===
+        "metallic":             "PBR metallic effect (0-1). Needs PBR enabled.",
+        "roughness":            "PBR surface roughness (0-1). Needs PBR enabled.",
+    
+        # === Shape and Color Control ===
+        "color":                ("Determines point colors. Options: "
+                                "1) ColorRGB for entire tube (e.g. (1,0,0))"
+                                "2) Function (mapping function), "
+                                "3) color data set manually, "
+                                "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim)."),
+        
+        "opacity":              ("Determines point transparency. Options: "
+                                "1) float 0-1 for entire tube, "
+                                "2) Function (mapping function), "
+                                "3) opacity data set manually."),
+        
+        "scalars":              ("Determines point scalars. Options: "
+                                "1) Function (mapping function), "
+                                "2) scalars data set manually, "
+                                "3) None (No scalars)"),
+        
+        "radius":               ("Determines tube thickness. Options: "
+                                "1) float for entire tube, "
+                                "2) Function (mapping function), "
+                                "3) radius data set manually."),
+        
+        # === Scalars Control (Needs color_rule='scalars') ===
+        "scalars_cmap":         "Colormap name (e.g., 'viridis') used if color is set to scalar.",
+        "scalars_clim":         "Color limits [min, max] for scalar mapping.",
+        "is_scalar_bar":        "Whether to display the color legend (scalar bar).",
+        "scalar_bar_title":     "Title for the scalar bar (e.g., 'Stress (MPa)').",
+    
+        # === Geometry & Topology (LEVEL_REMESH) ===
+        "sides":                "Number of facets around the tube (higher = smoother).",
+        "is_capping":           "Whether to close the ends of the tube.",
+        "smooth_iter":          "Path smoothing iterations to remove jagged edges.",
+        
+        # === Advanced Spatial Clipping ===
+        "clip_geometry":        "(INVALID FOR NOW!!!) Define clipping boundary. Can be: "
+                                "1) List of 6 floats [xmin, xmax...] for axis-aligned box, "
+                                "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box)."
+    }
     
     
     _validators = {
@@ -195,6 +198,31 @@ class OptsTube:
         ),
         "is_capping": lambda v, d: as_bool(v, name=d),
         "smooth_iter": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(0, 1000), bounded=True),
+    }
+    
+    _commit_level = {
+        "color":                LEVEL_RECALC,
+        "opacity":              LEVEL_RECALC,
+        "scalars":              LEVEL_RECALC,
+        "radius":               LEVEL_REMESH,
+        "scalars_cmap":         LEVEL_RECALC,
+        "scalars_clim":         LEVEL_RECALC,
+        "sides":                LEVEL_REMESH,
+        "is_capping":           LEVEL_REMESH,
+        "smooth_iter":          LEVEL_REMESH,
+        "clip_geometry":        LEVEL_REMESH,
+    }
+    
+    _actor_attr = {
+        "is_visible":           "visibility",
+        "shading_type":         "prop.interpolation",
+        "ambient":              "prop.ambient",          
+        "diffuse":              "prop.diffuse",          
+        "specular":             "prop.specular",         
+        "specular_pow":         "prop.specular_power",   
+        "specular_color":       "prop.specular_color",   
+        "metallic":             "prop.metallic",         
+        "roughness":            "prop.roughness",
     }
     
     # -------------------------------------------------------------------------
@@ -242,10 +270,6 @@ class OptsTube:
         "smooth_iter":          0,
         "clip_geometry":        None,
     })
-    
-    
-    def __post_init__(self):
-        object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
         
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -256,7 +280,7 @@ class OptsTube:
             
         if value is not UNSET:
             if key in self._validators:
-                desc = f'{key!r}: {ATTR_MAP.get(key)[2]}'
+                desc = f'{key!r}: {self.__descriptions__.get(key)}'
                 try:
                     value = self._validators[key](value, desc)
                     object.__setattr__(self, key, value)
@@ -287,7 +311,7 @@ class OptsTube:
     def act_finalize(self, defaults: Mapping[str, Any] | None = None):
         
         if getattr(self, "_state_functioning", False):
-            raise RuntimeError("OptsTube has already been finalized.")
+            raise RuntimeError("Opts has already been finalized.")
 
         defaults = {} if defaults is None else dict(defaults)
 
@@ -783,13 +807,14 @@ class PlotTube:
         for key, value in kwargs.items():
             
             try:
-                if key not in ATTR_MAP:
+                if key not in self.opts.__descriptions__.keys():
                         raise ValueError(f"Unknown attribute: {key} in class: PlotTube.opts")
                         
                 if is_setattr and key != "category":
                     object.__setattr__(self.opts, key, value)
-    
-                level, attr_path_actor, doc = ATTR_MAP[key]
+                
+                level = self.opts._commit_level.get(key, LEVEL_ACTOR)
+                attr_path_actor = self.opts._actor_attr.get(key, None)
     
                 # Dealing with LEVEL ACTOR (simply resetting values)
                 if level == LEVEL_ACTOR:

@@ -9,7 +9,7 @@ import os
 import json
 
 from ..logging_decorator import logging_and_warning_decorator
-from .opts import merge_opts_all
+from .opts import merge_opts_all, build_defaults_with_override
 from ..datatypes import Number, as_Number, as_str, ColorRGB, as_ColorRGB, Vect, as_Vect, as_bool, UNSET, Unset
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import OptsTube, PlotTube
@@ -41,10 +41,10 @@ class OptsSmooth:
     }
 
     _validators = {
-        "name":                 lambda v, d: None if v is None else as_Number(v, name=d),
+        "name":                 lambda v, d: as_str(v, name=d),
         "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
-        "window_length":        lambda v, d: as_Number(v, name=d),
-        "order":                lambda v, d: as_Number(v, name=d, is_int=True),
+        "window_length":        lambda v, d: None if v is None else as_Number(v, name=d),
+        "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
         "N_out_ratio":          lambda v, d: as_Number(v, name=d),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
         "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True),
@@ -215,6 +215,7 @@ class SmoothedLine:
             "or numerical failures), this field stores a human-readable "
             "string describing the specific reason."),
         "opts": "The OptsSmooth instance that controlls smoothing options.",
+        "opts_defaults": "The default option settings for smoothing",
         "_entity_figure": "The PlotFigure object. Only used in act_preview() which helps users modify options",
         "_internal_backup_opts": "only used in __enter__ and __exit__, "
     }
@@ -226,9 +227,17 @@ class SmoothedLine:
         self,
         line_coord_input: np.ndarray,
         opts: OptsSmooth = OptsSmooth(),
+        opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
     ):
+        
+        opts_defaults = build_defaults_with_override(
+                            opts._DEFAULTS_FROZEN,
+                            opts_defaults_override,
+                            name="OptsSmooth",
+                        )
+        object.__setattr__(self, "opts_defaults", opts_defaults)
         
         line_coord_input = np.asarray(line_coord_input)
         if line_coord_input.ndim != 2:
@@ -273,7 +282,8 @@ class SmoothedLine:
             logger.detail("Start to determine the smoothing window length.")
             if self.opts.window_length is None:
                 if self.opts.window_ratio is None:
-                    raise SmoothingConfigError("No input value provided for smooth window length.")
+                    reason = "No input value provided for smooth window length."
+                    raise SmoothingConfigError(reason)
                 object.__setattr__(self.opts, 'window_length', int(self._calc_N_init / self.opts.window_ratio / 2) * 2 + 1)
                 object.__setattr__(self.opts, 'window_ratio', self._calc_N_init / self.opts.window_length)
             else:
@@ -284,14 +294,12 @@ class SmoothedLine:
                 object.__setattr__(self.opts, 'window_ratio', self._calc_N_init / self.opts.window_length)
 
             if self.opts.window_length >= self._calc_N_init:
-                raise SmoothingConfigError(
-                    f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"
-                )
+                reason = f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"
+                raise SmoothingConfigError(reason)
             
             if self.opts.window_length <= self.opts.order:
-                raise SmoothingConfigError(
-                    f"Filter window length {self.opts.window_length} should not be smaller than filter order {self.opts.order}"
-                )
+                reason = f"Filter window length {self.opts.window_length} should not be smaller than filter order {self.opts.order}"
+                raise SmoothingConfigError(reason)
                 
             logger.debug(f"Smoothing window length is finally chosen as {self.opts.window_length}")
 
@@ -326,10 +334,10 @@ class SmoothedLine:
         except Exception:
             logger.exception("Smoothing aborted (system error)")
             logger.recovery("Fallback applied: smoothing disabled; using raw coordinates.")
-            self._helper_fallback_no_smooth(reason)
+            self._helper_fallback_no_smooth("system error")
     
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_commit(self, logger=None, **changes):
+    def act_commit(self, logger=None, is_setattr=True, **changes):
 
         if not changes:
             return
@@ -338,7 +346,8 @@ class SmoothedLine:
             try:
                 if k not in self.opts.__descriptions__:
                     raise ValueError(f"Unknown attribute: {k} in class: SmoothedLine.opts")
-                object.__setattr__(self.opts, k, v)
+                if is_setattr:
+                    object.__setattr__(self.opts, k, v)
             except:
                 logger.exception(f"Failed to reset value of {k!r}")
                 logger.recovery("Ignore this modification")
@@ -369,7 +378,7 @@ class SmoothedLine:
         PlotTube(pts, Figure, **kwargs)
         
     def act_copy(self):
-        return SmoothedLine(self._raw_coords.copy(), opts=OptsSmooth(**asdict(self.opts)))
+        return SmoothedLine(self._raw_coords.copy(), opts=OptsSmooth(**self.opts.act_asdict()))
         
         
     def __array__(self, dtype=None):
@@ -389,7 +398,7 @@ class SmoothedLine:
         return self._calc_N_out
     
     def __enter__(self):
-        object.__setattr__(self, "_internal_backup_opts", asdict(self.opts))
+        object.__setattr__(self, "_internal_backup_opts", self.opts.act_asdict())
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):

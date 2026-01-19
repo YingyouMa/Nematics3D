@@ -324,6 +324,14 @@ class QFieldObject:
         
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.is_window_warning = False
+        
+        if opts.min_line_length is UNSET:
+            opts.min_line_length = self._raw_default_miminum_line_length_smooth
+            msg = "No input value provided for minimum smoothed line length. \n"
+            msg += f"Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
+            logger.info(msg)
+        
+        opts.act_finalize()
 
         if opts.window_length is not None and opts.window_ratio is not None:
             msg = f"``window_length`` of smoothing disclination lines is manual input as {opts.window_length}.\n"
@@ -337,12 +345,6 @@ class QFieldObject:
             msg += f"Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
             logger.info(msg)
         
-        if 'min_line_length' not in kwargs.keys():
-            opts.min_line_length = self._raw_default_miminum_line_length_smooth
-            msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
-            logger.info(msg)
-            
         msg = "Start to smooth disclination lines in Q tensor `self.name` With paramaters: \n"
         msg += f"window length = {opts.window_length}\n"
         msg += f"window ratio = {opts.window_ratio}\n"
