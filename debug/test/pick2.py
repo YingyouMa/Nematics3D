@@ -49,7 +49,7 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
 
 
 class SingleSilhouette:
-    def __init__(self, pl: pv.Plotter, *, color="black", line_width=6, opacity=1.0):
+    def __init__(self, pl: pv.Plotter, *, color="black", line_width=6):
         self.pl = pl
 
         self._sil = vtk.vtkPolyDataSilhouette()
@@ -62,7 +62,7 @@ class SingleSilhouette:
         self.actor.SetMapper(self._mapper)
         self.actor.GetProperty().SetColor(pv.Color(color).float_rgb)
         self.actor.GetProperty().SetLineWidth(line_width)
-        self.actor.GetProperty().SetOpacity(opacity)
+        self.actor.GetProperty().SetOpacity(1.0)
         self.actor.GetProperty().LightingOff()
         self.actor.SetPickable(False)
         self.actor.SetVisibility(False)
@@ -70,7 +70,6 @@ class SingleSilhouette:
         pl.renderer.AddActor(self.actor)
 
     def show_for(self, polydata: pv.PolyData):
-        # silhouette 对 triangulated surface 更可靠
         surf = polydata.extract_surface().triangulate().clean()
 
         self._sil.SetCamera(self.pl.renderer.GetActiveCamera())
@@ -78,11 +77,30 @@ class SingleSilhouette:
         self._sil.Update()
 
         self.actor.SetVisibility(True)
-        self.pl.camera.reset_clipping_range()
         self.pl.render()
 
     def hide(self):
         self.actor.SetVisibility(False)
+        self.pl.render()
+        
+    @property
+    def color(self):
+        """RGB color of the silhouette (tuple of floats)."""
+        return self.actor.GetProperty().GetColor()
+
+    @color.setter
+    def color(self, value):
+        self.actor.GetProperty().SetColor(pv.Color(value).float_rgb)
+        self.pl.render()
+
+    @property
+    def line_width(self):
+        """Line width of the silhouette."""
+        return self.actor.GetProperty().GetLineWidth()
+
+    @line_width.setter
+    def line_width(self, value: float):
+        self.actor.GetProperty().SetLineWidth(float(value))
         self.pl.render()
 
 

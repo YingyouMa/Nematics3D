@@ -11,13 +11,13 @@ class FigureManager:
                  name: str = "figures"):
         
         self.name = name
-        self._entities = OrderedDict()
+        self._entity = OrderedDict()
         self._state_active_name = None
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_figure_name(self, name: str, logger=None):
         
-        name_set = set(self._entities.keys())
+        name_set = set(self._entity.keys())
         name_input = name
         if name_input in name_set:
             new_name = name_input
@@ -30,18 +30,17 @@ class FigureManager:
         return name
     
     def act_add_figure(self, figure: PlotFigure):
-        if any(figure is x for x in self._entities.values()):
+        if any(figure is x for x in self._entity.values()):
             return
         
-        name = self._helper_check_figure_name(figure.opts.name)
-        figure.opts.name = name
-        self._entities[name] = figure
-        figure.opts._state_is_name_locked = True
+        name = self._helper_check_figure_name(figure.name)
+        figure.name = name
+        self._entity[name] = figure
         
     def act_set_active(self, id_fig: str):
         figure = self[id_fig]
         if figure:
-            self._state_active_name = figure.opts.name
+            self._state_active_name = figure.name
         else:
             raise KeyError("This figure is deleted and could not be set to active figure.")
     
@@ -51,21 +50,21 @@ class FigureManager:
     
     
     def __len__(self) -> int:
-        return len(self._entities)
+        return len(self._entity)
 
     def __iter__(self):
-        return iter(self._entities.values())
+        return iter(self._entity.values())
 
     def __contains__(self, name: str):
-        return name in self._entities
+        return name in self._entity
 
     def __getitem__(self, key: Union[str, int, None]):
         if key is None:
             return None
         elif isinstance(key, str):
-            return self._entities[key]
+            return self._entity[key]
         elif isinstance(key, int):
-            names = list(self._entities.keys())
+            names = list(self._entity.keys())
             try:
                 name = names[key]
             except IndexError:
@@ -73,7 +72,7 @@ class FigureManager:
                     f"figure index {key} out of range for FigureManager "
                     f"(size={len(names)})"
                 ) from None
-            return self._entities[name]
+            return self._entity[name]
         else:
             raise TypeError(
                 f"`key` must be str or int for FigureManager indexing, "
@@ -84,5 +83,5 @@ class FigureManager:
     
     
     def act_ensure_alive(self, name: str):
-        fig = self._entities[name]
+        fig = self._entity[name]
         

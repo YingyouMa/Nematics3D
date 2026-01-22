@@ -814,6 +814,8 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
     idx = int(np.argmin(d2))
     return proj[idx]
 
+def is_given_str(a, b):
+    return True if isinstance(a, str) and a==b else False
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist

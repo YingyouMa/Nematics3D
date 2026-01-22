@@ -37,7 +37,7 @@ tube1 = Nematics3D.PlotSphere(
     name="solid_blue",
     color=(0,0,1), # 蓝色
     radius=0.3,
-    resolution=12,
+    sides=12,
 )
 
 # --- 案例 2: 函数驱动 (一次性传入函数) ---
@@ -67,7 +67,7 @@ tube4 = Nematics3D.PlotSphere(
     figure=figure,
     coords=get_path(offset_y=15),
     name="func_scalars",
-    resolution=20,
+    sides=20,
     color='scalars',
     radius=0.25,
     opacity=opacity_func,     
@@ -79,7 +79,7 @@ tube5 = Nematics3D.PlotSphere(
     figure=figure,
     coords=get_path(offset_y=20),
     name="manual_scalars2",
-    resolution=20,
+    sides=20,
     color="scalars",
     radius=0.25,
     opacity=1,     
@@ -126,5 +126,5 @@ tube2.opts.color = (1,0,0)
 tube2.opts.shading_type = 'pbr'
 tube2.opts.roughness = 0.2
 
-tube2.act_commit(color=(0,1,0), opacity=0.8, resolution=4, is_reset_camera=False)
+tube2.act_commit(color=(0,1,0), opacity=0.8, sides=4, is_reset_camera=False)
 '''

@@ -287,7 +287,7 @@ def as_ColorRGB_array(
     # ---------- Structural check (NOT recoverable) ----------
     if not isinstance(input_data, (list, tuple, np.ndarray)):
         raise ValueError(
-            f"{name} must be an array-like with shape (N, 3). Got {type(input_data)}."
+            f"{name} must be an array-like with shape (N, 3). Got {type(input_data).__name__}."
         )
 
     input_data = np.asarray(input_data)
@@ -360,7 +360,7 @@ def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
     
     try:
         if not isinstance(input_data, str):
-            raise TypeError(f"{name!r} should be str. Got {input_data} with type {type(input_data)} instead")
+            raise TypeError(f"{name!r} should be str. Got {input_data} with type {type(input_data).__name__} instead")
         elif pool and input_data not in pool:
             raise ValueError(f"{name!r} must be in {pool}. Got {input_data} instead.")
     except (TypeError, ValueError):
@@ -748,7 +748,7 @@ def as_bool(input_data, name="input data", replace=None, logger=None) -> bool:
         # --- Everything else is invalid ---
         raise TypeError(
             f"{name} must be boolean or in (0,1). "
-            f"Got {input_data} with dtype={getattr(input_data, 'dtype', type(input_data))}"
+            f"Got {input_data} with dtype={getattr(input_data, 'dtype', type(input_data).__name__)}"
         )
 
     except TypeError:

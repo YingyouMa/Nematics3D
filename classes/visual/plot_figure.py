@@ -2,140 +2,84 @@ from dataclasses import dataclass, field
 import numpy as np
 import pyvista as pv
 import vtk
+from pyvistaqt import BackgroundPlotter
+from types import MappingProxyType
+from typing import Mapping, Any
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
     as_Number,
-    as_str,
-    as_bool,
     Vect,
     as_Vect,
     UNSET,
     Unset,
 )
-from ..opts import merge_opts_all
+from ..host_base import OptsBase, HostBase
 from ..class_function import cover_value
 from .pick_manager import PickManager
+from .qt.console import ScopedConsoleDock
+from PyQt5 import QtCore
 
 #!!! property act_view
 #!!! load save 
+#!!! overlay blanket
+#!!! name figure manager owner
 
-opts_cam = {"azimuth", "elevation", "roll", "distance", "focal_point"}
-opts_bg = {"bg_color", "bg_opacity"}
+# opts_cam = {"azimuth", "elevation", "roll", "distance", "focal_point"}
+# opts_bg = {"bg_color", "bg_opacity"}
 
-
-@dataclass(slots=True)
-class OptsFigure:
-    name: str | Unset = UNSET
-    azimuth: float | Unset = UNSET
-    elevation: float | Unset = UNSET
-    roll: float | Unset = UNSET
-    distance: float | Unset = UNSET
-    focal_point: Vect(3) | Unset = UNSET
-    size_init: Vect(2) = (1920, 1080)
-    bg_color: ColorRGB | Unset = UNSET
-    bg_opacity: float | Unset = UNSET
-    
-    _state_is_name_locked: bool = False
-    _helper_sync: callable = field(default=None, repr=False, compare=False)
+@dataclass(slots=True, repr=False)
+class OptsFigure(OptsBase):
+    azimuth:                float | Unset       = UNSET
+    elevation:              float | Unset       = UNSET
+    roll:                   float | Unset       = UNSET
+    distance:               float | Unset       = UNSET
+    focal_point:            Vect(3) | Unset     = UNSET
+    size:                   Vect(2) | Unset     = UNSET
+    bg_color:               ColorRGB | Unset    = UNSET
+    bg_opacity:             float | Unset       = UNSET
 
     __descriptions__ = {
-        "name": "The name of figure",
-        "azimuth": "The azimuthal angle (degrees) of the camera around the focal point.",
-        "elevation": "The elevation angle (degrees) of the camera relative to the focal plane.",
-        "roll": "The rotation (degrees) of the camera about the direction of projection.",
-        "distance": "The distance from the camera position to the focal point.",
-        "focal_point": "The point the camera is looking at (x, y, z).",
-        "size_init": "The window size of figure (ONLY valid during initialization)",
-        "bg_color": "The background color of figure",
-        "bg_opacity": "The background opacity of figure",
+        **(OptsBase.__descriptions__),
+        "azimuth":          "The azimuthal angle (degrees) of the camera around the focal point.",
+        "elevation":        "The elevation angle (degrees) of the camera relative to the focal plane.",
+        "roll":             "The rotation (degrees) of the camera about the direction of projection.",
+        "distance":         "The distance from the camera position to the focal point.",
+        "focal_point":      "The point the camera is looking at (x, y, z).",
+        "size":             "The window size of figure",
+        "bg_color":         "The background color of figure",
+        "bg_opacity":       "The background opacity of figure",
     }
 
     _validators = {
-        "name": lambda self, v: as_str(
-            v, name=self.__descriptions__["name"], replace="figure"
-        ),
-        "azimuth": lambda self, v: as_Number(
-            v, name=self.__descriptions__["azimuth"], value_range=(0, 360)
-        ),
-        "elevation": lambda self, v: as_Number(
-            v,
-            name=self.__descriptions__["elevation"],
-            value_range=(-90, 90),
-        ),
-        "roll": lambda self, v: as_Number(
-            v, name=self.__descriptions__["roll"], value_range=(-180, 180)
-        ),
-        "distance": lambda self, v: as_Number(
-            v, name=self.__descriptions__["distance"], value_range=(0, np.inf)
-        ),
-        "focal_point": lambda self, v: as_Vect(
-            v, name=self.__descriptions__["focal_point"], dim=3
-        ),
-        "size_init": lambda self, v: as_Vect(
-            v, name=self.__descriptions__["size_init"], dim=2, replace=(1920, 1080)
-        ),
-        "bg_color": lambda self, v: as_ColorRGB(
-            v, name=self.__descriptions__["bg_color"], replace=(0, 0, 0)
-        ),
-        "bg_opacity": lambda self, v: as_Number(
-            v,
-            name=self.__descriptions__["bg_opacity"],
-            value_range=(0, 1),
-            bounded=True,
-            replace=0,
-        ),
+        **(OptsBase._validators),
+        "azimuth":          lambda v, d: as_Number(v, name=d, value_range=(0, 360)),
+        "elevation":        lambda v, d: as_Number(v, name=d, value_range=(-90, 90)),
+        "roll":             lambda v, d: as_Number(v, name=d, value_range=(-180, 180)),
+        "distance":         lambda v, d: as_Number(v, name=d, value_range=(0, np.inf)),
+        "focal_point":      lambda v, d: as_Vect(v, name=d, dim=3),
+        "size":             lambda v, d: as_Vect(v, name=d, dim=2),
+        "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
+        "bg_opacity":       lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
     }
-
-    @logging_and_warning_decorator(start_finish_level=0)
-    def __setattr__(self, key, value, logger=None):
-
-        if key == "name" and getattr(self, "_state_is_name_locked", False):
-            raise AttributeError(
-                f"Name of PlotFigure {self.name!r} could not be modified"
-                " because it is used as the key in figure manager"
-            )
-
-        if value is not UNSET and key in self._validators:
-            old_value = getattr(self, key, None)
-            try:
-                value = self._validators[key](self, value)
-            except:
-                logger.exception("Wrong settings for figure camera.")
-                logger.recovery("Automatically ignore this modification.")
-                value = old_value
-        else:
-            old_value = None
-
-        object.__setattr__(self, key, value)
-
-        if (
-            old_value is not None
-            and old_value is not UNSET
-            and (key in opts_cam or key in opts_bg)
-            and not np.allclose(old_value, value, atol=1e-7)
-        ):
-            if self._helper_sync:
-                self._helper_sync()
-                
-    def act_asdict(self, is_include_UNSET=False):
-        result = {}
-        for key in self.__descriptions__.keys():
-            value = getattr(self, key, UNSET)
-            if not is_include_UNSET and value is UNSET:
-                continue
-            result[key] = getattr(self, key)
-        return result
+    
+    _DEFAULTS_FROZEN = MappingProxyType({
+        **(OptsBase._DEFAULTS_FROZEN),
+        "tag":              "figure options",
+        "size":             (2542, 1305),
+        "bg_color":         (1,1,1),
+        "bg_opacity":       0
+    })
             
 
 
-class PlotFigure:
+class PlotFigure(HostBase):
 
     __descriptions__ = {
-        "opts": "The OptsFigure object controlling the options beyond specific actors (glyphs)",
-        "_entity_plotter": "The underlying PyVista Plotter instance that owns the VTK rendering pipeline. ",
+        "raw_name": "The name identifier of the figure",
+        "_entity_plotter": "The underlying PyVista BackgroundPlotter instance that owns the VTK rendering pipeline. ",
         "_entity": "A registry (dict) for objects attached to this figure.",
         "_entity_overlay": (
             "A foreground VTK renderer (layer=1) sharing the main camera. "
@@ -144,44 +88,54 @@ class PlotFigure:
         ),
         
         "_entity_pick_manager": "The PickManager instance attached to this figure. ",
+        "_entity_console": "The ScopedConsoleDock instance attached to this figure. "
 
     }
+    
 
-    __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
+    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         plotter: pv.Plotter | None = None,
         opts: OptsFigure | None = None,
+        name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
     ):
-
-        if opts is None:
-            opts = OptsFigure()
-        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(self, "opts", opts)
-
+        
+        super().__init__(
+            OptsFigure,
+            opts,
+            opts_defaults_override,
+            **kwargs
+            )
+        self._helper_name_set(name, is_init=True, replace='figure')
+        self.opts.act_finalize(is_allow_UNSET=True)
+        
+        logger.detail("Resovle the input plotter")
         if plotter is None:
-            plotter = pv.Plotter(window_size=self.opts.size_init)
+            plotter = BackgroundPlotter()
         else:
-            if not isinstance(plotter, pv.Plotter):
+            if not isinstance(plotter, BackgroundPlotter):
                 try:
                     raise TypeError(
-                        "`plotter` for PlotFigure must be PyVista plotter object, or None."
+                        "`plotter` for PlotFigure must be PyVista BackgroundPlotter object, or None."
                     )
                 except:
                     logger.exception("Check input")
                     logger.recovery("Create a new figure instead.")
-                    plotter = pv.Plotter(window_size=self.opts.size_init)
-
+                    plotter = BackgroundPlotter()
+        
+        plotter.app_window.setWindowTitle(self.name)
+        plotter.resize(*self.opts.size)
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", {})
 
-        self._helper_sync_from_plotter(is_allow_cover_target_set=False)
-        self.act_commit(is_init=True, opts=self.opts)
-        self.opts._helper_sync = self._helper_sync_from_opts
+        self._helper_sync_from_plotter(is_allow_cover_target_set=False, is_only_camera=True)
+        self._helper_commit_apply()
         
         def _on_interaction_start(obj, event):
             pm = getattr(self, "_entity_pick_manager", None)
@@ -217,71 +171,31 @@ class PlotFigure:
             show_message=False,
         )
         
+        main_window = self.pl.app_window
+        console = ScopedConsoleDock(parent=main_window)
+        main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
+        
+        object.__setattr__(self, "_entity_console", console)
+        
+    
+    @property
+    def console(self):
+        return self._entity_console
+        
+        
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_commit(self, 
-                   is_init: bool = False, 
-                   opts: OptsFigure | None = None,
-                   logger=None, 
-                   **kwargs):
+    def _helper_commit_apply(self, **kwargs):
         
-        if opts is not None:
-            if not isinstance(opts, OptsFigure):
-                try:
-                    raise TypeError(f"`opts` must be OptsFigure object. Got type={type(opts)} instead")
-                except:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignoring `opts` and using `kwargs` only.")
-                    opts = {}
-            else:
-                opts = opts.act_asdict()
-                overlap = opts.keys() & kwargs.keys()
-                if overlap:
-                    logger.warning(
-                        f"Overlapping configuration detected: {list(overlap)}. "
-                        f"The values in **kwargs will take precedence over `opts`.",
+        with self.opts._helper_internal_update():
+            cover_value(self.opts,
+                        is_allow_cover_target_set=True,
+                        is_allow_unset_source=False,
+                        **kwargs
                         )
-        else:
-            opts = {}
-            
-        merged_opts = opts | kwargs
-        if not merged_opts:
-            logger.debug("No configuration provided for commit.")
-            return
-
-        for key, value in merged_opts.items():
-
-            try:
-
-                if key.startswith("_"):
-                    if not is_init:
-                        msg = (
-                            "Attributes prefixed with `_` are not intended to be modified manually."
-                            "If you are certain about the consequences, modify it via explicit direct assignment."
-                        )
-                        raise AttributeError(msg)
-                    continue
-
-                if key not in OptsFigure.__descriptions__:
-                    raise AttributeError(
-                        f"Unknown attribute: {key} in class: PlotFigure.opts"
-                    )
-
-                if key == "size_init" and not is_init:
-                    raise AttributeError(
-                        f"The figure {self.opts.name!r} is already initialized."
-                        " The size could not be changed."
-                    )
-
-                if not is_init:
-                    if value is not UNSET:
-                        object.__setattr__(self.opts, key, value)
-
-            except:
-                logger.exception("Wrong setting.")
-                logger.recovery("Automatically ignore this modification.")
-
-        self._helper_sync_from_opts(is_cam=True, is_bg=True)
+        
+        self._helper_sync_from_opts()
+        
 
     @property
     def pl(self):
@@ -294,7 +208,7 @@ class PlotFigure:
     
     def act_get_entity_names(self):
         names = [
-            entity.opts.name
+            entity.name
             for entity_list in self._entity.values()
             for entity in entity_list
         ]
@@ -320,7 +234,7 @@ class PlotFigure:
     
     def __getitem__(self, name: str):
         mapping = {
-            entity.opts.name: entity
+            entity.name: entity
             for entity_list in self._entity.values()
             for entity in entity_list
             }
@@ -368,11 +282,10 @@ class PlotFigure:
 
 
 
-    def _helper_sync_from_plotter(self, is_allow_cover_target_set=True):
-
-        cb = self.opts._helper_sync
-        self.opts._helper_sync = None
-
+    def _helper_sync_from_plotter(self, 
+                                  is_allow_cover_target_set=True,
+                                  is_only_camera=False):
+        
         camera = self.pl.camera
         temp = self._helper_convert_pos_to_spherical(
             camera.position, camera.focal_point, camera.up
@@ -387,13 +300,22 @@ class PlotFigure:
             "bg_color":     self.pl.background_color.float_rgb,
             "bg_opacity":   self.pl.background_color.opacity / 255.0,
         }
+        
+        if not is_only_camera:
+            size = self.pl.size()
+            alter = {
+                **alter,
+                "bg_color":     self.pl.background_color.float_rgb,
+                "bg_opacity":   self.pl.background_color.opacity / 255.0,
+                "size":         (size.width(), size.height())
+                }
+        
+        with self.opts._helper_internal_update():
+            cover_value(self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter)
 
-        cover_value(self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter)
 
-        self.opts._helper_sync = cb
-
-    def _helper_sync_from_opts(self, is_cam=True, is_bg=False):
-        if is_cam:
+    def _helper_sync_from_opts(self):
+        
             camera = self.pl.camera
             pos, focal, up = self._helper_convert_spherical_to_pos(
                 self.opts.azimuth,
@@ -407,10 +329,11 @@ class PlotFigure:
             camera.up = up
             self.pl.render()
 
-        if is_bg:
             rgba = np.r_[self.opts.bg_color, [self.opts.bg_opacity]] * 255
             rgba = rgba.astype(int)
             self.pl.background_color = rgba
+            
+            self.pl.resize(*self.opts.size)
 
     @staticmethod
     def _helper_convert_pos_to_spherical(position, focal_point, view_up):
@@ -500,5 +423,15 @@ class PlotFigure:
             self._entity[entity_category] = [entity_instance]
         if is_reset_camera:
             self._helper_sync_from_plotter()
+            
+            
+    @property
+    def name(self):
+        return self.raw_name
+            
+    @name.setter
+    def name(self, value: str):
+        self._helper_name_set(value, is_init=False)
+        self.pl.window().setWindowTitle(self.name)
 
 

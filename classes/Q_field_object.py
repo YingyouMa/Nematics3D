@@ -348,7 +348,7 @@ class QFieldObject:
             msg += f"Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
             logger.info(msg)
         
-        msg = "Start to smooth disclination lines in Q tensor `self.name` With paramaters: \n"
+        msg = f"Start to smooth disclination lines in Q tensor {self.name!r} With paramaters: \n"
         msg += f"window length = {opts.window_length}\n"
         msg += f"window ratio = {opts.window_ratio}\n"
         msg += f"minimum smoothed line length = {opts.min_line_length}"
@@ -412,7 +412,6 @@ class QFieldObject:
         is_smooth: bool = True,
         is_extent: bool = True,
         min_line_length: int | None = None,
-        # lines_scalars_name: str | None = None,
         opts_figure: OptsFigure | None = None,
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
@@ -463,7 +462,7 @@ class QFieldObject:
                     else:
                         figure = PlotFigure(opts=opts_figure)
                 elif isinstance(figure, PlotFigure):
-                    figure.act_commit(opts_figure.act_asdict())
+                    figure.act_commit(opts_figure)
                 elif isinstance(figure, pv.Plotter):
                     figure = PlotFigure(plotter=figure, opts=opts_figure)
                 else:
@@ -479,10 +478,10 @@ class QFieldObject:
                 figure = PlotFigure(opts=opts_figure)
 
         if min_line_length is None:
-            msg = "No minimum line length has been provided for the plotted lines. "
-            msg += f"Use the default value {self._raw_default_miminum_line_length_smooth}"
-            logger.info(msg)
-            min_line_length = self._raw_default_miminum_line_length_smooth
+            logger.info("No minimum line length has been provided for the plotted lines. "
+                        f"Use the default value {self._raw_default_miminum_line_length_visual}"
+                        )
+            min_line_length = self._raw_default_miminum_line_length_visual
         
         logger.detail("Checking if some unsmoothed lines would be plotted")
         if is_smooth and hasattr(self._calc_lines[0], "_calc_defect_coords_smooth_obj"):
@@ -531,7 +530,7 @@ class QFieldObject:
         for line, line_color, line_scalar in zip(
             lines_plot, lines_colors, lines_scalars
         ):
-            opts_tube = replace(opts_tube, name=line.name, color=line_color)
+            opts_tube = replace(opts_tube, color=line_color)
             line_visual = line.act_visualize(
                 figure=figure,
                 is_wrap=is_wrap,
@@ -548,10 +547,10 @@ class QFieldObject:
                 is_reset_camera=False)
 
 
-        if figure.opts.name is UNSET:
-            figure.opts.name = name_fallback
+        if figure.name is None:
+            figure.name = name_fallback
         self.figs.act_add_figure(figure)
-        self.figs.act_set_active(figure.opts.name)
+        self.figs.act_set_active(figure.name)
 
     @logging_and_warning_decorator()
     def act_visualize_n_in_Q(
@@ -564,7 +563,7 @@ class QFieldObject:
         opts_grid=OptsPlaneGrid(),
         opts_nPlane=OptsnPlane(),
         opts_extent=OptsTube(),
-        opts_scene=OptsFigure(), #!!!!!
+        opts_scene=None, #!!!!!
         logger=None,
         **kwargs,
     ):
@@ -616,7 +615,7 @@ class QFieldObject:
         # if opts_scene.distance != None:
         #     figure.scene.distance = opts_scene.distance
 
-    def act_add_scene(self, is_new=True, opts=OptsFigure()): #!!!!!!!!!!!
+    def act_add_scene(self, is_new=True, opts=None): #!!!!!!!!!!!
         # figure = PlotScene(is_new=is_new, opts=opts)
         # if is_new or (not is_new and len(self._entity_figures) == 0):
         #     self._entity_figures.append(figure)

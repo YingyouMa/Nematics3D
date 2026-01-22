@@ -163,48 +163,25 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
 
 
 @logging_and_warning_decorator(start_finish_level=5)
-def build_defaults_with_override(
-    defaults_frozen: dict,
-    defaults_override: dict | None = None,
+def build_dict_override(
+    dict_origin: dict,
+    dict_override: dict | None = None,
     *,
     name: str = "input",
     logger = None
 ):
-    """
-    Build a mutable defaults dictionary from a frozen defaults mapping,
-    with validated overrides.
 
-    Parameters
-    ----------
-    defaults_frozen : dict
-        Immutable (or treated-as-immutable) default values.
-    defaults_override : dict or None, optional
-        Override values for defaults. Keys must already exist in defaults_frozen.
-    name : str, default "options"
-        Name used in error messages for clarity.
+    if dict_override is None:
+        dict_override = {}
 
-    Returns
-    -------
-    defaults : dict
-        A new dictionary containing defaults with applied overrides.
+    defaults = dict(dict_origin)
 
-    Raises
-    ------
-    KeyError
-        If defaults_override contains keys not present in defaults_frozen.
-    """
-
-    if defaults_override is None:
-        defaults_override = {}
-
-    defaults = dict(defaults_frozen)
-
-    for k, v in defaults_override.items():
+    for k, v in dict_override.items():
         if k not in defaults:
             try:
                 raise KeyError(
-                    f"Invalid key {k!r} in defaults_override; "
-                    f"not a valid {name} option with default value."
+                    f"Invalid key {k!r} in dict_origin; "
+                    f"not a valid {name} option."
                 )
             except KeyError:
                 logger.exception("Check input.")

@@ -8,7 +8,8 @@ from types import MappingProxyType
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_fixed_step_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
-from .opts import merge_opts_all, build_defaults_with_override
+from .opts import merge_opts_all, build_dict_override
+from .host_base import OptsBase, HostBase
 from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Tensor, as_str, UNSET, Unset
 from .class_function import cover_value
 
@@ -23,150 +24,78 @@ from .visual.plot_sphere import PlotSphere, OptsSphere
 #!!! axis normal figdemo
 
 # --- Plane Options ---
-@dataclass(slots=True)
-class OptsPlaneGrid:
-    name: str | Unset = UNSET
-    normal: Vect(3) | Unset = UNSET
-    spacing: Number | Unset = UNSET
-    spacing_extra: Number | Unset = UNSET
-    size: Number | Unset = UNSET
-    size_extra: Number | Unset = UNSET
-    shape: Literal["circle", "rectangle"] | Unset = UNSET #!!!!!!!!!
-    origin: Vect(3) | Unset = UNSET
-    alignment: Literal["center", "bottom-left"] | Unset = UNSET
-    axis1: Vect(3) | None | Unset = UNSET
-    corners_limit: Tensor((8, 3)) | None | UNSET = UNSET
-    grid_offset: Vect(3) | Unset = UNSET
-    grid_transform: Tensor((3, 3)) | Unset = UNSET
-    
-    _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
-    _state_is_syncro: bool = field(default=False, init=False, repr=False)
-    _state_functioning: bool = field(default=False, init=False, repr=False)
-    _defaults: dict[str, Any] = field(init=False, repr=False)
+@dataclass(slots=True, repr=False)
+class OptsPlaneGrid(OptsBase):
+    normal:                 Vect(3) | Unset                             = UNSET
+    spacing:                Number | Unset                              = UNSET
+    spacing_extra:          Number | Unset                              = UNSET
+    size:                   Number | Unset                              = UNSET
+    size_extra:             Number | Unset                              = UNSET
+    shape:                  Literal["circle", "rectangle"] | Unset      = UNSET #!!!!!!!!!
+    origin:                 Vect(3) | Unset                             = UNSET
+    alignment:              Literal["center", "bottom-left"] | Unset    = UNSET
+    axis1:                  Vect(3) | None | Unset                      = UNSET
+    corners_limit:          Tensor((8, 3)) | None | UNSET               = UNSET
+    grid_offset:            Vect(3) | Unset                             = UNSET
+    grid_transform:         Tensor((3, 3)) | Unset                      = UNSET
 
     __descriptions__ = {
-        "name": "name of this 2D grid",
-        "normal": "normal of plane",
-        "spacing": "grid spacing along axis1",
-        "spacing_extra": "grid spacing along axis2",
-        "size": "size of plane",
-        "size_extra": "size of plane along axis2",
-        "origin": "origin of plane",
-        "alignment": "Grid reference point to be placed at 'origin' ('center' for geometric middle, 'bottom-left' for the first grid point [0,0])",
-        "axis1": "first in-plane axis",
-        "corners_limit": "bounding box corners (8×3 array)",
-        "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
-        "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
-        "shape": "plane shape (circle or rectangle) NOT VALID IN CURRENT VERSION",
+        **(OptsBase.__descriptions__),
+        "normal":           "normal of plane",
+        "spacing":          "grid spacing along axis1",
+        "spacing_extra":    "grid spacing along axis2",
+        "size":             "size of plane",
+        "size_extra":       "size of plane along axis2",
+        "origin":           "origin of plane",
+        "alignment":        "Grid reference point to be placed at 'origin' ('center' for geometric middle, 'bottom-left' for the first grid point [0,0])",
+        "axis1":            "first in-plane axis",
+        "corners_limit":    "bounding box corners (8×3 array)",
+        "grid_offset":      "grid translation offset to map lattice indices to real-space coordinates",
+        "grid_transform":   "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
+        "shape":            "plane shape (circle or rectangle) NOT VALID IN CURRENT VERSION",
     }
 
     _validators = {
-        "name": lambda self, v, d: as_str(v, name=d),
-        "normal": lambda self, v, d: as_Vect(v, name=d, is_norm=True),
-        "spacing": lambda self, v, d: as_Number(v, name=d),
-        "spacing_extra": lambda self, v, d: None if v is None else as_Number(v, name=d),
-        "size": lambda self, v, d: as_Number(v, name=d),
-        "size_extra": lambda self, v, d: None if v is None else as_Number(v, name=d),
-        "corners_limit": lambda self, v, d: as_Tensor(v, (8, 3), name=d),
-        "origin": lambda self, v, d: as_Vect(v, name=d),
-        "alignment": lambda self, v, d: as_str(
-            v, name=d,
-            pool=("center", "bottom-left"),
-        ),
-        "axis1": lambda self, v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
-        "grid_offset": lambda self, v, d: as_Vect(v, name=d),
-        "grid_transform": lambda self, v, d: as_Tensor(v, (3, 3), name=d),
+        **(OptsBase._validators),
+        "normal":           lambda v, d: as_Vect(v, name=d, is_norm=True),
+        "spacing":          lambda v, d: as_Number(v, name=d),
+        "spacing_extra":    lambda v, d: None if v is None else as_Number(v, name=d),
+        "size":             lambda v, d: as_Number(v, name=d),
+        "size_extra":       lambda v, d: None if v is None else as_Number(v, name=d),
+        "shape":            lambda v, d: as_str(
+                                v, name=d,
+                                pool=("circle", "rectangle"),
+                                ),
+        "corners_limit":    lambda v, d: as_Tensor(v, (8, 3), name=d),
+        "origin":           lambda v, d: as_Vect(v, name=d),
+        "alignment":        lambda v, d: as_str(
+                                v, name=d,
+                                pool=("center", "bottom-left"),
+                                ),
+        "axis1":            lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
+        "grid_offset":      lambda v, d: as_Vect(v, name=d),
+        "grid_transform":   lambda v, d: as_Tensor(v, (3, 3), name=d),
     }
     
     _DEFAULTS_FROZEN = MappingProxyType({
-        "name":                 "2d grid",
-        "shape":                "rectangle",
-        "spacing_extra":        None,
-        "size_extra":           None,
-        "origin":               (0,0,0),
-        "alignment":            "center",
-        "axis1":                None,
-        "corners_limit":        None,
-        "grid_offset":          (0,0,0),
-        "grid_transform":       np.diag((1,1,1))
+        **(OptsBase._DEFAULTS_FROZEN),
+        "tag":              "plane grid options",
+        "shape":            "rectangle",
+        "spacing_extra":    None,
+        "size_extra":       None,
+        "origin":           (0,0,0),
+        "alignment":        "center",
+        "axis1":            None,
+        "corners_limit":    None,
+        "grid_offset":      (0,0,0),
+        "grid_transform":   np.diag((1,1,1))
     })
     
-    def __post_init__(self):
-        object.__setattr__(self, "_defaults", dict(self._DEFAULTS_FROZEN))
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def __setattr__(self, key, value, logger=None):
-        if value is not UNSET and key in self._validators:
-            desc = f'{key!r}: {self.__descriptions__.get(key)}'
-            try:
-                value = self._validators[key](self, value, desc)
-                object.__setattr__(self, key, value)
-            except:
-                logger.exception(f"Assignment to {key!r} failed")
-                if self._state_functioning:
-                    logger.recovery("Automatically ignore this modification")
-                else:
-                    logger.recovery("Reset this assignment to UNSET.")
-                    object.__setattr__(self, key, UNSET)
-        else:
-            object.__setattr__(self, key, value)
-                    
-        if not key.startswith("_") and getattr(self, '_state_is_syncro', False):
-            if hasattr(self, "_internal_owner_ref") and self._internal_owner_ref is not None:
-                owner = self._internal_owner_ref()
-                owner.act_commit()
-                    
-    @contextmanager
-    def _helper_internal_update(self):
-        state_current = getattr(self, '_state_is_syncro', False)
-        object.__setattr__(self, "_state_is_syncro", False)
-        try:
-            yield
-        finally:
-            object.__setattr__(self, "_state_is_syncro", state_current)
-            
-    def act_asdict(self, is_include_UNSET=False):
-        result = {}
-        for key in self.__descriptions__.keys():
-            value = getattr(self, key, UNSET)
-            if not is_include_UNSET and value is UNSET:
-                continue
-            result[key] = getattr(self, key)
-        return result
-    
-    def act_finalize(self, defaults: Mapping[str, Any] | None = None):
-        """
-        Resolve all UNSET fields using:
-          1) the provided `defaults` mapping (higher priority), then
-          2) the class-level `_DEFAULTS_FROZEN` mapping.
 
-        This must be called before visualization. After finalization, the opts
-        should be treated as ready-to-use (no more defaults resolution).
-        """
-        if getattr(self, "_state_functioning", False):
-            raise RuntimeError("OptsTube has already been finalized.")
-
-        defaults = {} if defaults is None else dict(defaults)
-
-        for f in fields(self):
-            k = f.name
-            if k.startswith("_"):
-                continue  # internal fields are not finalized
-
-            if getattr(self, k) is UNSET:
-                v = defaults.get(k, self._DEFAULTS_FROZEN.get(k, UNSET))
-                if v is UNSET:
-                    raise KeyError(f"Missing default for field {k!r}.")
-                setattr(self, k, v)  # runs validators
-
-        object.__setattr__(self, "_state_functioning", True)
-
-class PlaneGrid:
+class PlaneGrid(HostBase):
     
     __descriptions__ = {
-        # ========== options mirrored onto the instance ==========
-        "opts": "Dataclass OptsPlaneGrid storing all user-specified and default options for the plane grid",
-        "opts_defaults": "Some default option settings for the 2D plane grid",
+        **dict(HostBase.__descriptions__),
 
         # ========== generated grids ==========
         "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
@@ -180,65 +109,52 @@ class PlaneGrid:
         
         # ========== visualization / diagnostic ==========
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
-        
-        "_internal_owner_ref": ("A weak reference to the object associated with this grid."
-                                "To access it, use .owner or ._internal_owner."),
     }
 
-    __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
+    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
 
     def __init__(self,
+                 name: str = '2D grid',
                  opts: OptsPlaneGrid | None = None,
                  opts_defaults_override: Mapping[str, Any] | None = None,
                  **kwargs):
         
-        opts_defaults = build_defaults_with_override(
-                            OptsTube._DEFAULTS_FROZEN,
-                            opts_defaults_override,
-                            name="OptsPlaneGrid",
-                        )
-        object.__setattr__(self, "opts_defaults", opts_defaults)
-        
-        if opts is None:
-            opts = OptsPlaneGrid()
-        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
+        self._helper_name_set(name, is_init=False, replace='2D grid')
+        object.__setattr__(self, '_entity_fig_demo', None)
+
+        super().__init__(
+            OptsPlaneGrid,
+            opts,
+            opts_defaults_override,
+            **kwargs
+            )
 
         for name, value in {
-            "normal": opts.normal,
-            "spacing": opts.spacing,
-            "size": opts.size,
+            "normal": self.opts.normal,
+            "spacing": self.opts.spacing,
+            "size": self.opts.size,
         }.items():
             if value is UNSET:
                 raise ValueError(
                     f"Missing required variable {name} to generate plane_grid"
                 )
         
-        object.__setattr__(self, "opts", opts)
         self._entity_fig_demo = None
 
-        self.act_commit()
+        self.opts.act_finalize()
+        self._helper_commit_apply()
     
     @logging_and_warning_decorator()
-    def act_commit(self, 
-                   opts: OptsPlaneGrid | None = None, 
-                   logger=None, 
-                   **kwargs):
+    def _helper_commit_apply(self, logger=None, **kwargs):
+
+        with self.opts._helper_internal_update():
+            cover_value(self.opts,
+                        is_allow_cover_target_set=True,
+                        is_allow_unset_source=False,
+                        **kwargs
+                        )
         
-        if opts is None:
-            opts = OptsPlaneGrid()
-        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        cover_value(self.opts,
-                    is_allow_cover_target_set=True,
-                    is_allow_unset_source=False,
-                    **opts.act_asdict()
-                    )
-        
-        if not self.opts._state_functioning:
-            self.opts.act_finalize()
-            
-        object.__setattr__(self.opts, "_internal_owner_ref", weakref.ref(self))
-        object.__setattr__(self.opts, "_state_is_syncro", True)
-        
+
         logger.debug("Start to generate a new 2D grid.")
 
         space1 = self.opts.spacing
@@ -385,14 +301,6 @@ class PlaneGrid:
         self._entity_fig_demo = figure
             
         return figure
-    
-    @property
-    def _internal_owner(self):
-        return self._internal_owner_ref()
-    
-    @property
-    def owner(self):
-        return self._internal_owner_ref()
         
         
     # @logging_and_warning_decorator()

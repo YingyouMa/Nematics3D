@@ -1,5 +1,4 @@
 import numpy as np
-from typing import Optional
 from dataclasses import dataclass, field, asdict
 import os
 import json
@@ -30,11 +29,11 @@ from .smoothed_line import OptsSmooth, SmoothedLine
 
 @dataclass(slots=True)
 class InputLine:
-    defect_indices: Optional[DefectIndex] = None
+    defect_indices: DefectIndex | None = None
     box_size_periodic_index: DimensionPeriodicInput = False 
     grid_offset: Vect(3) = (0,0,0)
     grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
-    name: Optional[str] = None
+    name: str | None = None
 
     __descriptions__ = {
         "defect_indices": "indices of defect points in the Q array",
@@ -142,8 +141,6 @@ class DisclinationLine:
         **kwargs
     ):
         
-        self._descriptions = self.__class__.__descriptions__.copy()        
-        
         inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
         if inputValue.defect_indices is None:
             raise ValueError("No defects are input into disclination line")
@@ -202,7 +199,7 @@ class DisclinationLine:
     @logging_and_warning_decorator()
     def act_smooth(
         self,
-        opts: OptsSmooth = OptsSmooth(),
+        opts: OptsSmooth | None = None,
         padding_num: int = 50,
         head_padding_extra: int = 5,
         logger=None,
@@ -267,11 +264,12 @@ class DisclinationLine:
         """
 
         from ..field import unwrap_trajectory, shift_to_box
-        from .smoothed_line import SmoothedLine
+        
+        if opts is None:
+            opts = OptsSmooth()
 
         coords = self._calc_defect_coords.copy()
         
-        opts.name = self.name
         logger.debug(f"Smoothing line ``{self.name}``, with type ``{self._calc_end2end_category}``")
 
         if self._calc_end2end_category == "loop":
@@ -321,7 +319,7 @@ class DisclinationLine:
         logger.debug("Start to smooth line")
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
         opts.mode = smooth_mode
-        output = SmoothedLine(coords, opts=opts)
+        output = SmoothedLine(coords, opts=opts, name=self.name)
         
         result = output._entity[
             int(padding_num * output.opts.N_out_ratio) : int(
@@ -353,7 +351,7 @@ class DisclinationLine:
             name="Whether visualize the smoothed line instead of original points",
             replace=False)
 
-        logger.debug(f"Start to visualize line: {opts.name!r} with type ``{self._calc_end2end_category}``")
+        logger.debug(f"Start to visualize line: {self.name!r} with type ``{self._calc_end2end_category}``")
 
         if is_smooth:
             if hasattr(self, "_calc_defect_coords_smooth"):
@@ -368,7 +366,7 @@ class DisclinationLine:
             line_coords = self._calc_defect_coords.copy()
 
         if self._calc_end2end_category == "loop":
-            logger.debug('Line {opts.name!r} is a loop. Closing the loop by appending the start point to the end.')
+            logger.debug('Line {self.name!r} is a loop. Closing the loop by appending the start point to the end.')
             line_coords = np.concatenate((line_coords, [line_coords[0]]))
 
         if not is_wrap:
@@ -376,6 +374,8 @@ class DisclinationLine:
                 line_coords,
                 figure = figure,
                 opts=opts,
+                name=self.name,
+                category="disclination lines",
                 **kwargs
             )
         else:
@@ -422,6 +422,7 @@ class DisclinationLine:
                 figure=figure,
                 opts=opts,
                 name=self.name,
+                category="disclination lines",
                 **kwargs
             )
 
@@ -431,160 +432,160 @@ class DisclinationLine:
         desc = as_str(desc, name="The description of ``extra`` attribute for DisclinationLine")
         self._descriptions["extra"] = desc
     
-    @logging_and_warning_decorator()
-    def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
-        """
-        Log parameters for inspection.
+    # @logging_and_warning_decorator()
+    # def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
+    #     """
+    #     Log parameters for inspection.
 
-        This is the standard logging interface used in this library, which
-        can be redirected to console or to a file depending on the logger
-        configuration and the behavior of ``logging_and_warning_decorator``.
+    #     This is the standard logging interface used in this library, which
+    #     can be redirected to console or to a file depending on the logger
+    #     configuration and the behavior of ``logging_and_warning_decorator``.
 
-        All attributes listed in ``__descriptions__`` are included,
-        formatted in a single log entry with a clear separator.
-        """
-        lines = []
-        lines.append("-------------- DisclinationLine Parameters --------------")
+    #     All attributes listed in ``__descriptions__`` are included,
+    #     formatted in a single log entry with a clear separator.
+    #     """
+    #     lines = []
+    #     lines.append("-------------- DisclinationLine Parameters --------------")
         
-        lines.append(f"[{self.name}] parameters:")
-        for attr in self.__slots__:
-            if attr == "_descriptions":
-                continue
-            if attr == "extra" and not hasattr(self, attr):
-                continue
-            desc = self._descriptions.get(attr, "(no description)")
-            value = getattr(self, attr, None)
-            lines.append(f"  {attr}: {value!r}  # {desc}")
-        lines.append("-----------------------------------------------------")
+    #     lines.append(f"[{self.name}] parameters:")
+    #     for attr in self.__slots__:
+    #         if attr == "_descriptions":
+    #             continue
+    #         if attr == "extra" and not hasattr(self, attr):
+    #             continue
+    #         desc = self._descriptions.get(attr, "(no description)")
+    #         value = getattr(self, attr, None)
+    #         lines.append(f"  {attr}: {value!r}  # {desc}")
+    #     lines.append("-----------------------------------------------------")
 
-        msg = "\n".join(lines)
+    #     msg = "\n".join(lines)
 
-        if is_return:
-            return msg
-        else:
-            logger.info(msg)
+    #     if is_return:
+    #         return msg
+    #     else:
+    #         logger.info(msg)
             
-    @logging_and_warning_decorator()
-    def act_save(
-        self,
-        dirpath: Optional[str] = None,
-        logger=None,
-    ) -> None:
+    # @logging_and_warning_decorator()
+    # def act_save(
+    #     self,
+    #     dirpath: str | None = None,
+    #     logger=None,
+    # ) -> None:
         
-        # ---------- sanitize inputs ----------
+    #     # ---------- sanitize inputs ----------
 
-        if dirpath is None:
-             dirpath = os.path.join("save", "disclination_line", str(self.name))
+    #     if dirpath is None:
+    #          dirpath = os.path.join("save", "disclination_line", str(self.name))
 
-        dirpath = as_str(
-            dirpath,
-            name=f"the folder to store disclination line ``{getattr(self, 'name', None)}``"
-        )
+    #     dirpath = as_str(
+    #         dirpath,
+    #         name=f"the folder to store disclination line ``{getattr(self, 'name', None)}``"
+    #     )
 
-        logger.debug(f"Start to save disclination line ``{self.name}`` into {dirpath}")
+    #     logger.debug(f"Start to save disclination line ``{self.name}`` into {dirpath}")
 
-        # ---------- ensure folder ----------
-        os.makedirs(dirpath, exist_ok=True)
+    #     # ---------- ensure folder ----------
+    #     os.makedirs(dirpath, exist_ok=True)
 
-        # ---------- compose JSON payload ----------
-        json_payload = {
-            "raw": {
-                "box_size_periodic_index": np.asarray(getattr(self, "_raw_box_size_periodic_index", None)).tolist(),
-                "grid_offset": np.asarray(getattr(self, "_raw_grid_offset", None)).tolist(),
-                "grid_transform": np.asarray(getattr(self, "_raw_grid_transform", None)).tolist()
-            },
-            "metadata": {
-                "name": getattr(self, "name", None),
-                "category": getattr(self, "_calc_end2end_category", None),
-                "defect_num": int(getattr(self, "_calc_defect_num", 0)),
-                "box_size_periodic_coord": getattr(self, "_calc_box_size_periodic_coord", None).tolist()
-            },
-            "smooth": {
-                "exists": hasattr(self, "_calc_defect_coords_smooth"),
-            },
-        }
+    #     # ---------- compose JSON payload ----------
+    #     json_payload = {
+    #         "raw": {
+    #             "box_size_periodic_index": np.asarray(getattr(self, "_raw_box_size_periodic_index", None)).tolist(),
+    #             "grid_offset": np.asarray(getattr(self, "_raw_grid_offset", None)).tolist(),
+    #             "grid_transform": np.asarray(getattr(self, "_raw_grid_transform", None)).tolist()
+    #         },
+    #         "metadata": {
+    #             "name": getattr(self, "name", None),
+    #             "category": getattr(self, "_calc_end2end_category", None),
+    #             "defect_num": int(getattr(self, "_calc_defect_num", 0)),
+    #             "box_size_periodic_coord": getattr(self, "_calc_box_size_periodic_coord", None).tolist()
+    #         },
+    #         "smooth": {
+    #             "exists": hasattr(self, "_calc_defect_coords_smooth"),
+    #         },
+    #     }
         
-        if hasattr(self, "_calc_defect_coords_smooth"):
-            logger.debug("Start to store smoothed coordinates")
-            smooth_dirpath = dirpath + "/smoothed_line/"
-            self._calc_defect_coords_smooth_obj.act_save(dirpath=smooth_dirpath)
+    #     if hasattr(self, "_calc_defect_coords_smooth"):
+    #         logger.debug("Start to store smoothed coordinates")
+    #         smooth_dirpath = dirpath + "/smoothed_line/"
+    #         self._calc_defect_coords_smooth_obj.act_save(dirpath=smooth_dirpath)
 
-        json_path = os.path.join(dirpath, "info.json")
-        logger.debug(f"Dtart to write JSON to {json_path}")
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(json_payload, f, indent=4)
+    #     json_path = os.path.join(dirpath, "info.json")
+    #     logger.debug(f"Dtart to write JSON to {json_path}")
+    #     with open(json_path, "w", encoding="utf-8") as f:
+    #         json.dump(json_payload, f, indent=4)
 
-        # ---------- compose NPZ arrays ----------
-        npz_path = os.path.join(dirpath, "data.npz")
-        logger.debug(f"Start to write NPZ to {npz_path}")
-        arrays = {}
-        arrays["defect_indices"] = np.asarray(self._raw_defect_indices)
-        arrays["defect_coords"] = np.asarray(self._calc_defect_coords)
-        if hasattr(self, "_calc_defect_coords_smooth"):
-            arrays["defect_coords_smooth"] = np.asarray(self._calc_defect_coords_smooth)
+    #     # ---------- compose NPZ arrays ----------
+    #     npz_path = os.path.join(dirpath, "data.npz")
+    #     logger.debug(f"Start to write NPZ to {npz_path}")
+    #     arrays = {}
+    #     arrays["defect_indices"] = np.asarray(self._raw_defect_indices)
+    #     arrays["defect_coords"] = np.asarray(self._calc_defect_coords)
+    #     if hasattr(self, "_calc_defect_coords_smooth"):
+    #         arrays["defect_coords_smooth"] = np.asarray(self._calc_defect_coords_smooth)
         
-        np.savez_compressed(npz_path, **arrays)
+    #     np.savez_compressed(npz_path, **arrays)
 
-    @classmethod
-    @logging_and_warning_decorator()
-    def act_load(
-        cls,
-        dirpath: str,
-        logger=None,
-    ) -> "DisclinationLine":
+    # @classmethod
+    # @logging_and_warning_decorator()
+    # def act_load(
+    #     cls,
+    #     dirpath: str,
+    #     logger=None,
+    # ) -> "DisclinationLine":
 
-        dirpath = as_str(dirpath, name="the folder to load disclination line")
+    #     dirpath = as_str(dirpath, name="the folder to load disclination line")
 
-        json_path = os.path.join(dirpath, "info.json")
-        npz_path = os.path.join(dirpath, "data.npz")
-        logger.debug(f"Start to load DisclinationLine from {json_path} and {npz_path}")
+    #     json_path = os.path.join(dirpath, "info.json")
+    #     npz_path = os.path.join(dirpath, "data.npz")
+    #     logger.debug(f"Start to load DisclinationLine from {json_path} and {npz_path}")
 
-        if not os.path.exists(json_path) or not os.path.exists(npz_path):
-            raise FileNotFoundError(f"Missing required files: {json_path} / {npz_path}")
+    #     if not os.path.exists(json_path) or not os.path.exists(npz_path):
+    #         raise FileNotFoundError(f"Missing required files: {json_path} / {npz_path}")
 
-        # ---------- read JSON ----------
-        with open(json_path, "r", encoding="utf-8") as f:
-            meta = json.load(f)
+    #     # ---------- read JSON ----------
+    #     with open(json_path, "r", encoding="utf-8") as f:
+    #         meta = json.load(f)
 
-        name = meta.get("metadata", {}).get("name", None)
-        category = meta.get("metadata", {}).get("category")
-        raw = meta.get("raw", {}) or {}
+    #     name = meta.get("metadata", {}).get("name", None)
+    #     category = meta.get("metadata", {}).get("category")
+    #     raw = meta.get("raw", {}) or {}
 
-        # ---------- read NPZ ----------
-        data = np.load(npz_path, allow_pickle=True)
-        if "defect_indices" not in data.files:
-            raise ValueError("NPZ missing required array 'defect_indices'.")
+    #     # ---------- read NPZ ----------
+    #     data = np.load(npz_path, allow_pickle=True)
+    #     if "defect_indices" not in data.files:
+    #         raise ValueError("NPZ missing required array 'defect_indices'.")
 
-        defect_indices = np.asarray(data["defect_indices"])
-        defect_coords_smooth = (
-            np.asarray(data["defect_coords_smooth"]) if "defect_coords_smooth" in data.files else None
-        )
+    #     defect_indices = np.asarray(data["defect_indices"])
+    #     defect_coords_smooth = (
+    #         np.asarray(data["defect_coords_smooth"]) if "defect_coords_smooth" in data.files else None
+    #     )
 
-        # ---------- reconstruct InputLine ----------
-        box_size_periodic_index = np.asarray(raw.get("box_size_periodic_index"))
-        grid_offset = np.asarray(raw.get("grid_offset"))
-        grid_transform = np.asarray(raw.get("grid_transform"))
+    #     # ---------- reconstruct InputLine ----------
+    #     box_size_periodic_index = np.asarray(raw.get("box_size_periodic_index"))
+    #     grid_offset = np.asarray(raw.get("grid_offset"))
+    #     grid_transform = np.asarray(raw.get("grid_transform"))
 
-        input_value = InputLine(
-            defect_indices=defect_indices,
-            box_size_periodic_index=box_size_periodic_index,
-            grid_offset=grid_offset,
-            grid_transform=grid_transform,
-            name=name,
-        )
+    #     input_value = InputLine(
+    #         defect_indices=defect_indices,
+    #         box_size_periodic_index=box_size_periodic_index,
+    #         grid_offset=grid_offset,
+    #         grid_transform=grid_transform,
+    #         name=name,
+    #     )
 
-        # ---------- construct object (will compute derived fields) ----------
-        obj = cls(inputValue=input_value, is_sorted=True)
-        object.__setattr__(obj, "_calc_end2end_category", category)
+    #     # ---------- construct object (will compute derived fields) ----------
+    #     obj = cls(inputValue=input_value, is_sorted=True)
+    #     object.__setattr__(obj, "_calc_end2end_category", category)
 
-        if defect_coords_smooth is not None:
-            logger.debug("Start to load smoothed coordinates")
-            smooth_dirpath = dirpath + "/smoothed_line/"
-            object.__setattr__(obj, "_calc_defect_coords_smooth", defect_coords_smooth)
-            smoothObj = SmoothedLine.act_load(smooth_dirpath, logger=logger)
-            object.__setattr__(obj, "_calc_defect_coords_smooth_obj", smoothObj)
+    #     if defect_coords_smooth is not None:
+    #         logger.debug("Start to load smoothed coordinates")
+    #         smooth_dirpath = dirpath + "/smoothed_line/"
+    #         object.__setattr__(obj, "_calc_defect_coords_smooth", defect_coords_smooth)
+    #         smoothObj = SmoothedLine.act_load(smooth_dirpath, logger=logger)
+    #         object.__setattr__(obj, "_calc_defect_coords_smooth_obj", smoothObj)
 
-        return obj
+    #     return obj
             
     def __str__(self) -> str:
         header = f"<{self.__class__.__name__} object>"
@@ -608,123 +609,123 @@ class DisclinationLine:
         arr = self._raw_defect_indices
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
     
-    @logging_and_warning_decorator()
-    def act_copy(self, logger=None) -> "DisclinationLine":
-        """
-        Create a deep copy of this DisclinationLine.
+    # @logging_and_warning_decorator()
+    # def act_copy(self, logger=None) -> "DisclinationLine":
+    #     """
+    #     Create a deep copy of this DisclinationLine.
 
-        - Rebuilds a new instance from InputLine with copied raw inputs.
-        - Overwrites derived arrays with value-equal copies to avoid floating diffs.
-        - If smoothed results exist, copies both the array and the SmoothedLine object.
+    #     - Rebuilds a new instance from InputLine with copied raw inputs.
+    #     - Overwrites derived arrays with value-equal copies to avoid floating diffs.
+    #     - If smoothed results exist, copies both the array and the SmoothedLine object.
 
-        Returns
-        -------
-        DisclinationLine
-            An independent copy of the current object.
-        """
-        logger.debug(f"Start to copy DisclinationLine(name={self.name!r}")
+    #     Returns
+    #     -------
+    #     DisclinationLine
+    #         An independent copy of the current object.
+    #     """
+    #     logger.debug(f"Start to copy DisclinationLine(name={self.name!r}")
         
-        defect_indices = np.array(self._raw_defect_indices, copy=True)
-        box_size_periodic_index = np.array(self._raw_box_size_periodic_index, copy=True)
-        grid_offset = np.array(self._raw_grid_offset, copy=True)
-        grid_transform = np.array(self._raw_grid_transform, copy=True)
-        name = getattr(self, "name", None)
+    #     defect_indices = np.array(self._raw_defect_indices, copy=True)
+    #     box_size_periodic_index = np.array(self._raw_box_size_periodic_index, copy=True)
+    #     grid_offset = np.array(self._raw_grid_offset, copy=True)
+    #     grid_transform = np.array(self._raw_grid_transform, copy=True)
+    #     name = getattr(self, "name", None)
 
-        input_value = InputLine(
-            defect_indices=defect_indices,
-            box_size_periodic_index=box_size_periodic_index,
-            grid_offset=grid_offset,
-            grid_transform=grid_transform,
-            name=name,
-        )
+    #     input_value = InputLine(
+    #         defect_indices=defect_indices,
+    #         box_size_periodic_index=box_size_periodic_index,
+    #         grid_offset=grid_offset,
+    #         grid_transform=grid_transform,
+    #         name=name,
+    #     )
 
-        new_obj = type(self)(inputValue=input_value, is_sorted=True)
-        object.__setattr__(new_obj, "_calc_end2end_category", self._calc_end2end_category)
+    #     new_obj = type(self)(inputValue=input_value, is_sorted=True)
+    #     object.__setattr__(new_obj, "_calc_end2end_category", self._calc_end2end_category)
 
-        logger.debug("Start to copy smooth line")
-        if hasattr(self, "_calc_defect_coords_smooth"):
-            object.__setattr__(
-                new_obj, "_calc_defect_coords_smooth",
-                np.array(self._calc_defect_coords_smooth, copy=True)
-            )
-        if hasattr(self, "_calc_defect_coords_smooth_obj"):
-            smooth_copy = self._calc_defect_coords_smooth_obj.act_copy()
-            object.__setattr__(new_obj, "_calc_defect_coords_smooth_obj", smooth_copy)
+    #     logger.debug("Start to copy smooth line")
+    #     if hasattr(self, "_calc_defect_coords_smooth"):
+    #         object.__setattr__(
+    #             new_obj, "_calc_defect_coords_smooth",
+    #             np.array(self._calc_defect_coords_smooth, copy=True)
+    #         )
+    #     if hasattr(self, "_calc_defect_coords_smooth_obj"):
+    #         smooth_copy = self._calc_defect_coords_smooth_obj.act_copy()
+    #         object.__setattr__(new_obj, "_calc_defect_coords_smooth_obj", smooth_copy)
 
-        return new_obj
+    #     return new_obj
     
-    @logging_and_warning_decorator()
-    def __eq__(self, other, logger=None) -> bool:
-        """
-        Compare equality with another DisclinationLine object.
+    # @logging_and_warning_decorator()
+    # def __eq__(self, other, logger=None) -> bool:
+    #     """
+    #     Compare equality with another DisclinationLine object.
 
-        Two DisclinationLine objects are considered equal iff all attributes
-        in __slots__ are equal (deep equality for numpy arrays; for the
-        smoothed-line object, delegate to its __eq__ when available).
+    #     Two DisclinationLine objects are considered equal iff all attributes
+    #     in __slots__ are equal (deep equality for numpy arrays; for the
+    #     smoothed-line object, delegate to its __eq__ when available).
 
-        Parameters
-        ----------
-        other : object
-            Another object to compare against.
+    #     Parameters
+    #     ----------
+    #     other : object
+    #         Another object to compare against.
 
-        logger : logging.Logger, optional
-            Logger instance to record differences when not equal.
+    #     logger : logging.Logger, optional
+    #         Logger instance to record differences when not equal.
 
-        Returns
-        -------
-        bool
-            True if all attributes match, False otherwise.
-        """
-        if not isinstance(other, DisclinationLine):
-            logger.info("The other variable is not class DisclinationLine")
-            return False
+    #     Returns
+    #     -------
+    #     bool
+    #         True if all attributes match, False otherwise.
+    #     """
+    #     if not isinstance(other, DisclinationLine):
+    #         logger.info("The other variable is not class DisclinationLine")
+    #         return False
 
-        diffs = []
+    #     diffs = []
 
-        for attr in self.__slots__:
-            has1 = hasattr(self, attr)
-            has2 = hasattr(other, attr)
+    #     for attr in self.__slots__:
+    #         has1 = hasattr(self, attr)
+    #         has2 = hasattr(other, attr)
 
-            if has1 != has2:
-                diffs.append(f"{attr}: presence mismatch (self={has1}, other={has2})")
-                continue
+    #         if has1 != has2:
+    #             diffs.append(f"{attr}: presence mismatch (self={has1}, other={has2})")
+    #             continue
 
-            if not has1 and not has2:
-                continue
+    #         if not has1 and not has2:
+    #             continue
 
-            v1 = getattr(self, attr)
-            v2 = getattr(other, attr)
+    #         v1 = getattr(self, attr)
+    #         v2 = getattr(other, attr)
 
-            if isinstance(v1, np.ndarray) or isinstance(v2, np.ndarray):
-                if not (isinstance(v1, np.ndarray) and isinstance(v2, np.ndarray) and np.array_equal(v1, v2)):
-                    s1 = None if not isinstance(v1, np.ndarray) else np.shape(v1)
-                    s2 = None if not isinstance(v2, np.ndarray) else np.shape(v2)
-                    diffs.append(f"{attr}: arrays differ (self.shape={s1}, other.shape={s2})")
-                continue
+    #         if isinstance(v1, np.ndarray) or isinstance(v2, np.ndarray):
+    #             if not (isinstance(v1, np.ndarray) and isinstance(v2, np.ndarray) and np.array_equal(v1, v2)):
+    #                 s1 = None if not isinstance(v1, np.ndarray) else np.shape(v1)
+    #                 s2 = None if not isinstance(v2, np.ndarray) else np.shape(v2)
+    #                 diffs.append(f"{attr}: arrays differ (self.shape={s1}, other.shape={s2})")
+    #             continue
 
-            if attr == "_calc_defect_coords_smooth_obj":
-                equal = (v1 == v2)
-                if not equal:
-                    diffs.append(f"{attr}: SmoothedLine objects differ")
-                continue
+    #         if attr == "_calc_defect_coords_smooth_obj":
+    #             equal = (v1 == v2)
+    #             if not equal:
+    #                 diffs.append(f"{attr}: SmoothedLine objects differ")
+    #             continue
 
-            if v1 != v2:
-                diffs.append(f"{attr}: self={v1!r}, other={v2!r}")
+    #         if v1 != v2:
+    #             diffs.append(f"{attr}: self={v1!r}, other={v2!r}")
 
-        if diffs:
-            logger.info("DisclinationLine objects are not equal.\nDifferences:\n" + "\n".join(diffs))
-            return False
-        else:
-            logger.info("DisclinationLine objects are equal.")
-            return True
+    #     if diffs:
+    #         logger.info("DisclinationLine objects are not equal.\nDifferences:\n" + "\n".join(diffs))
+    #         return False
+    #     else:
+    #         logger.info("DisclinationLine objects are equal.")
+    #         return True
     
     @property
     def smooth(self):
-        return self._calc_defect_coords_smooth
+        return getattr(self, "_calc_defect_coords_smooth", None)
     
     @property
     def smooth_obj(self):
-        return self._calc_defect_coords_smooth_obj
+        return getattr(self, "_calc_defect_coords_smooth_obj", None)
     
     @property
     def category(self):

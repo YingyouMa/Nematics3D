@@ -24,10 +24,9 @@ class PlotExtent(PlotTube):
     """
     
     _OPTS_DEFAULT_EXTENT = MappingProxyType({
-        "color":    (0.0, 0.0, 0.0),  # black
-        "radius":   0.35,             # thinner than PlotTube default
-        "name":     'extent',
-        "category": 'extent'
+        "color":        (0.0, 0.0, 0.0),  # black
+        "radius":       0.35,             # thinner than PlotTube default
+        "is_pickable":  False,
     })
 
     _EDGES = (
@@ -51,6 +50,8 @@ class PlotExtent(PlotTube):
     def __init__(
         self,
         corners: Tensor,
+        name: str = "extent",
+        category: str ="extent",
         figure: PlotFigure | None = None,
         opts: OptsTube | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
@@ -66,34 +67,23 @@ class PlotExtent(PlotTube):
             Target figure.
         opts : OptsTube, optional
             Rendering options. Defaults are overridden for extent style.
-        """
-    
+        """    
         corners = as_Tensor(corners, (8,3), name='The original 8 corner points defining the extent.')
         coords, line_index = self._helper_build_edges_from_corners(corners)
-        
-        if opts is None:
-            opts = OptsTube()
-        
-        user_override = {} if opts_defaults_override is None else dict(opts_defaults_override)
-        extent_override = {
-            **self._OPTS_DEFAULT_EXTENT,  # lower priority
-            **user_override,             # higher priority
-        }
+
+        opts_defaults_override = {} if opts_defaults_override is None else opts_defaults_override 
+        opts_defaults_override = self._OPTS_DEFAULT_EXTENT | opts_defaults_override
         
         super().__init__(
             coords=coords,
             figure=figure,
+            name=name,
+            category=category,
             opts=opts,
             line_index=line_index,
-            opts_defaults_override=extent_override,
+            opts_defaults_override=opts_defaults_override,
             **kwargs
         )
-
-        self._entity.pickable = False
-        fig = getattr(self, "owner", None)
-        if fig:
-            pm = fig.pick_manager
-            pm.act_unregister(self._entity)
 
         self.act_add_attr(
             name="_raw_corners",

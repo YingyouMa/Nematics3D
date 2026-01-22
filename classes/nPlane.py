@@ -7,18 +7,19 @@ from Nematics3D.field import Q_diagonalize, n_color_immerse, apply_linear_transf
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, mark_points_membership
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import as_bool
+from Nematics3D.datatypes import as_bool, as_str
 from .visual.plot_figure import PlotFigure, OptsFigure
 from .visual.plot_sphere import PlotSphere, OptsSphere
 from .visual.plot_rod import PlotRod, OptsRod
 from .opts import merge_opts_all
 from .plane_grid import PlaneGrid, OptsPlaneGrid
 
+#!!! class name
 
 class DirectorPlane:
 
     __descriptions__ = {
-        "name": "Name identifier of this n-plane object",
+        "name": "The name identifier of this n-plane object",
         "_raw_QInterpolator": "Interpolator object for Q-tensor field (class Interpolator)",
         "_entity_plane": "The PlaneGrid entity (coordinates of 2D lattice)",
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
@@ -35,17 +36,29 @@ class DirectorPlane:
     def __init__(
         self,
         QInterpolator: Interpolator,
-        name: str = "defect plane",
+        name: str = "n plane",
         grid: PlaneGrid | None = None,
         opts_grid: OptsPlaneGrid | None = None,
         logger=None,
         **kwargs,
     ):
         
+        name = as_str(name, name="The name identifier of this n-plane object", replace="n plane")
         self.name = name
         
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
+        elif not isinstance(opts_grid, OptsPlaneGrid):
+            try:
+                raise TypeError(
+                        f"opts must be an instance of {OptsPlaneGrid.__name__}, "
+                        f"got {type(opts_grid).__name__}"
+                    )
+            except TypeError:
+                logger.exception("Check input.")
+                logger.recovery("Automatically ignore this input")
+                opts_grid = OptsPlaneGrid()
+        
         opts_grid = merge_opts_all({"": opts_grid}, kwargs, type(self).__name__)[""]
 
         if grid is None:
@@ -180,19 +193,13 @@ class DirectorPlane:
         is_defect = as_bool(is_defect, replace=True)
 
         if opts_nb is None:
-            opts_nb = OptsRod(color=n_color_immerse, 
-                              opacity=0.2, 
-                              name="n bulk",
-                              category=f"plane {self.name!r}")
+            opts_nb = OptsRod(color=n_color_immerse, opacity=0.2)
         if opts_nd is None:
-            opts_nd = OptsRod(color=n_color_immerse, 
-                              name="n near defect",
-                              category=f"plane {self.name!r}")
+            opts_nd = OptsRod(color=n_color_immerse)
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_defect is None:
-            opts_defect = OptsSphere(name="defects",
-                                     category=f"plane {self.name!r}")
+            opts_defect = OptsSphere()
 
         merge = merge_opts_all(
             {
@@ -214,7 +221,7 @@ class DirectorPlane:
             if figure is None:
                 figure = PlotFigure(opts=opts_figure)
             elif isinstance(figure, PlotFigure):
-                figure.act_commit(opts_figure.act_asdict())
+                figure.act_commit(opts_figure)
             elif isinstance(figure, pv.Plotter):
                 figure = PlotFigure(plotter=figure, opts=opts_figure)
             else:
@@ -232,6 +239,8 @@ class DirectorPlane:
         visual_nb = PlotRod(
             coords=self._entity_plane()[~self._calc_is_near_defect],
             orient=self._calc_n[~self._calc_is_near_defect],
+            name="n bulk",
+            category=f"plane {self.name!r}",
             opts=opts_nb,
             figure=figure,
         )
@@ -242,12 +251,18 @@ class DirectorPlane:
             visual_nd = PlotRod(
                 coords=self._entity_plane()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
+                name="n near defect",
+                category=f"plane {self.name!r}",
                 opts=opts_nd,
                 figure=figure,
             )
             self._entity_visual_nd = visual_nd
 
-            visual_defect = PlotSphere(coords=self._calc_defect_pos, opts=opts_defect, figure=figure)
+            visual_defect = PlotSphere(coords=self._calc_defect_pos, 
+                                       name="defects",
+                                       category=f"plane {self.name!r}",
+                                       opts=opts_defect, 
+                                       figure=figure)
             self._entity_visual_defect = visual_defect
             if not is_defect:
                 visual_defect.opts.is_visible = False

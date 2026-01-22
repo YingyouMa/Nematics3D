@@ -12,15 +12,19 @@ from Nematics3D.datatypes import (
     as_ColorRGB,
     )
 from ..opts import merge_opts_all
+from .qt.silhouette import SingleSilhouette
 
 
 @dataclass(slots=True)
 class OptsPickManager:
-    double_click_threshold: float = 0.3
-    marker_proximity_threshold: float = 0.5
-    marker_size: int = 14
-    marker_color: ColorRGB = (1, 1, 0)
-    font_size: int = 14
+    double_click_threshold:             float = 0.3
+    marker_proximity_threshold:         float = 0.5
+    marker_size:                        int = 14
+    marker_color:                       ColorRGB = (1, 1, 0)
+    marker_font_size:                   int = 14
+    sil_color:                          ColorRGB = (0,0,0)
+    sil_opacity:                        float = 0.8
+    sil_width:                          float = 6
     
     _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
     
@@ -31,15 +35,21 @@ class OptsPickManager:
                                          " to distinguish them as separate locations."),
         "marker_size":                  "Screen-space size (in pixels) of the marker point.",
         "marker_color":                 "RGB color of the marker point",
-        "font_size":                    "Font size (in pixels) of the numeric label on top of the marker."
+        "marker_font_size":             "Font size (in pixels) of the numeric label on top of the marker.",
+        "sil_color":                    "RGB color of silhouette.",
+        "sil_opacity":                  "Opacity of silhouette.",
+        "sil_width":                    "Line width of silhouette."
         }
     
     _validators = {
-        "double_click_threshold": lambda v, d: as_Number(v, name=d, replace=0.3),
-        "marker_proximity_threshold": lambda v, d: as_Number(v, name=d, replace=0.5),
-        "marker_size": lambda v, d: as_Number(v, name=d, replace=14),
-        "marker_color": lambda v, d: as_ColorRGB(v, name=d, replace=(0.8, 0.8, 0)),
-        "font_size": lambda v, d: as_Number(v, name=d, replace=14),
+        "double_click_threshold":       lambda v, d: as_Number(v, name=d, replace=0.3),
+        "marker_proximity_threshold":   lambda v, d: as_Number(v, name=d, replace=0.5),
+        "marker_size":                  lambda v, d: as_Number(v, name=d, replace=14),
+        "marker_color":                 lambda v, d: as_ColorRGB(v, name=d, replace=(1, 1, 0)),
+        "marker_font_size":             lambda v, d: as_Number(v, name=d, replace=14),
+        "sil_color":                    lambda v, d: as_ColorRGB(v, name=d, replace=(0, 0, 0)),
+        "sil_opacity":                  lambda v, d: as_Number(v, name=d, value_range=(0,1)),
+        "sil_width":                    lambda v, d: as_Number(v, name=d, value_range=(0,np.inf)),
         }
     
     def __setattr__(self, key, value):
@@ -61,9 +71,17 @@ class OptsPickManager:
                 for pack in markers:
                     pack["actor"].GetProperty().SetColor(*value)
                     
-            if key == "font_size":
+            if key == "marker_font_size":
                 for pack in markers:
                     pack["text_actor"].GetTextProperty().SetFontSize(value)
+                    
+            for glyph in owner._internal_active_glyphs:
+                if key == "sil_color":
+                    glyph._entity_silhouette.prop.color = value
+                if key == "sil_opacity":
+                    glyph._entity_silhouette.prop.opacity = value
+                if key == "sil_width":
+                    glyph._entity_silhouette.prop.line_width = value
             
             owner.owner.pl.render()
                 
@@ -75,7 +93,7 @@ class OptsPickManager:
 class PickManager:
     """
     A minimal pick manager supporting:
-      - Single click: print owner.opts.name only
+      - Single click: print owner.name only
       - Double click (time-based):
           * If a marker is near the picked point -> delete the nearest marker (no new marker)
           * Else -> add a new numbered marker at the resolved position
@@ -89,7 +107,8 @@ class PickManager:
             "A weak reference to the PlotFigure that owns this pick manager."
         ),
         "_internal_registry": "A registry dict: actor -> visual object",
-
+        "_internal_active_glyphs": "Set of currently active glyphs (multi-selection).",
+        
         "_state_pick_count": "Monotonic counter for marker numbering (never decreases).",
         "_state_last_click_time": "Last click timestamp (monotonic time) for double-click detection.",
         "_state_last_click_actor": "Last clicked actor for double-click detection.",
@@ -109,6 +128,7 @@ class PickManager:
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
         object.__setattr__(self, "_entity_markers", [])
+        object.__setattr__(self, "_internal_active_glyphs", [])
         
         if opts is None:
             opts = OptsPickManager()
@@ -159,14 +179,24 @@ class PickManager:
 
         # Single click: print only.
         if not is_double:
-            print(owner.opts.name)
+            self.owner.console.println(owner.name)
+            if owner._entity_silhouette.visibility:
+                owner.act_dehighlight()
+                self._internal_active_glyphs.remove(owner)
+            else:
+                owner.act_highlight(
+                    color=self.opts.sil_color,
+                    opacity=self.opts.sil_opacity,
+                    width=self.opts.sil_width
+                    )
+                self._internal_active_glyphs.append(owner)
             return
 
         # Double click: delete nearest marker if close; otherwise add a new marker.
         resolved = self._helper_resolve_marker_pos(owner, point)
         if resolved is None:
             return
-        print(f"picked point: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
+        self.owner.console.println(f"picked point #{self._state_pick_count+1}: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
         
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
@@ -227,7 +257,7 @@ class PickManager:
 
         text = vtk.vtkTextActor()
         text.GetTextProperty().SetColor(0.0, 0.0, 0.0)  # black digits
-        text.GetTextProperty().SetFontSize(self.opts.font_size)          # tune with point size
+        text.GetTextProperty().SetFontSize(self.opts.marker_font_size)          # tune with point size
         text.GetTextProperty().BoldOn()
         text.GetTextProperty().SetJustificationToCentered()
         text.GetTextProperty().SetVerticalJustificationToCentered()
@@ -371,3 +401,20 @@ class PickManager:
             return find_nearest_point(p, owner.raw_coords)
     
         return None
+    
+    def _helper_get_silhouette_for_actor(self, actor) -> SingleSilhouette | None:
+        sil = self._entity_silhouettes.get(actor, None)
+        if sil is not None:
+            return sil
+
+        overlay = self._entity_overlay
+
+        # 这里先写死描边样式；如果你想用 opts 管控，后面我再给 opts 的改法
+        sil = SingleSilhouette(
+            self.owner.pl,
+            color="black",
+            line_width=6,
+            renderer=overlay,
+        )
+        self._entity_silhouettes[actor] = sil
+        return sil
