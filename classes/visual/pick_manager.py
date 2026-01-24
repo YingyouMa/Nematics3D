@@ -12,7 +12,6 @@ from Nematics3D.datatypes import (
     as_ColorRGB,
     )
 from ..opts import merge_opts_all
-from .qt.silhouette import SingleSilhouette
 
 
 @dataclass(slots=True)
@@ -24,7 +23,7 @@ class OptsPickManager:
     marker_font_size:                   int = 14
     sil_color:                          ColorRGB = (0,0,0)
     sil_opacity:                        float = 0.8
-    sil_width:                          float = 6
+    sil_width:                          float = 3
     
     _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
     
@@ -176,20 +175,21 @@ class PickManager:
         # Always update last-click state after printing.
         object.__setattr__(self, "_state_last_click_time", now)
         object.__setattr__(self, "_state_last_click_actor", actor)
+        
+        if owner in self._internal_active_glyphs:
+            owner.act_dehighlight()
+            self._internal_active_glyphs.remove(owner)
+        else:
+            owner.act_highlight(
+                color=self.opts.sil_color,
+                opacity=self.opts.sil_opacity,
+                width=self.opts.sil_width
+                )
+            self._internal_active_glyphs.append(owner)
 
         # Single click: print only.
         if not is_double:
             self.owner.console.println(owner.name)
-            if owner._entity_silhouette.visibility:
-                owner.act_dehighlight()
-                self._internal_active_glyphs.remove(owner)
-            else:
-                owner.act_highlight(
-                    color=self.opts.sil_color,
-                    opacity=self.opts.sil_opacity,
-                    width=self.opts.sil_width
-                    )
-                self._internal_active_glyphs.append(owner)
             return
 
         # Double click: delete nearest marker if close; otherwise add a new marker.
@@ -401,20 +401,4 @@ class PickManager:
             return find_nearest_point(p, owner.raw_coords)
     
         return None
-    
-    def _helper_get_silhouette_for_actor(self, actor) -> SingleSilhouette | None:
-        sil = self._entity_silhouettes.get(actor, None)
-        if sil is not None:
-            return sil
 
-        overlay = self._entity_overlay
-
-        # 这里先写死描边样式；如果你想用 opts 管控，后面我再给 opts 的改法
-        sil = SingleSilhouette(
-            self.owner.pl,
-            color="black",
-            line_width=6,
-            renderer=overlay,
-        )
-        self._entity_silhouettes[actor] = sil
-        return sil

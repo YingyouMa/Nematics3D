@@ -2,8 +2,7 @@ import numpy as np
 import time
 from typing import Optional, Union
 from dataclasses import replace, dataclass, asdict, field
-
-import pyvista as pv
+from pyvistaqt import BackgroundPlotter
 
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
@@ -275,6 +274,9 @@ class QFieldObject:
                 
             logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
         
+        
+        self.act_add_interpolator()
+        
           
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
@@ -406,7 +408,7 @@ class QFieldObject:
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
-        figure: PlotFigure | str | int | pv.Plotter | None = None,
+        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
         is_new: bool = False,
         is_wrap: bool = True,
         is_smooth: bool = True,
@@ -415,7 +417,7 @@ class QFieldObject:
         opts_figure: OptsFigure | None = None,
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
-        name_fallback = "disclination line",
+        title: str = "disclination lines",
         logger=None,
         **kwargs,
     ):
@@ -454,28 +456,28 @@ class QFieldObject:
             try:
                 if isinstance(figure, (str, int)):
                     figure = self.figs[figure]
-                    figure.act_commit(opts_figure.act_asdict())
+                    figure.act_commit(opts_figure)
                 elif figure is None:
                     figure_active = self.figs[self.figs._state_active_name]
                     if figure_active:
                         figure = figure_active
                     else:
-                        figure = PlotFigure(opts=opts_figure)
+                        figure = PlotFigure(opts=opts_figure, name=title)
                 elif isinstance(figure, PlotFigure):
                     figure.act_commit(opts_figure)
-                elif isinstance(figure, pv.Plotter):
-                    figure = PlotFigure(plotter=figure, opts=opts_figure)
+                elif isinstance(figure, BackgroundPlotter):
+                    figure = PlotFigure(plotter=figure, opts=opts_figure, name=title)
                 else:
                     raise ValueError(
                         "`figure` input must be either index in FigureManager (str or int) "
-                        "or a valid PlotFigure object, or a valid pyvista plotter object, "
+                        "or a valid PlotFigure object, or a valid pyvistaqt BackgroundPlotter object, "
                         "or None (creating a new figure) "
                         "Got type {type(figure)!r} instead."
                         )
             except:
                 logger.exception("Could not find figure in FigureManager.")
                 logger.recovery("Create a new figure instead.")
-                figure = PlotFigure(opts=opts_figure)
+                figure = PlotFigure(opts=opts_figure, name=title)
 
         if min_line_length is None:
             logger.info("No minimum line length has been provided for the plotted lines. "
@@ -547,9 +549,9 @@ class QFieldObject:
                 is_reset_camera=False)
 
 
-        if figure.name is None:
-            figure.name = name_fallback
-        self.figs.act_add_figure(figure)
+        if figure.name.startswith(figure._DEFAULT_NAME):
+            figure.name = title
+        self.figs.act_register(figure, is_contain_ok=True)
         self.figs.act_set_active(figure.name)
 
     @logging_and_warning_decorator()

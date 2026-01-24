@@ -231,24 +231,25 @@ class PlotGlyph(HostBase):
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **dict(HostBase.__descriptions__),
         
-        "_raw_category":            "The category of the glyph, used in the classfication of PlotFigure",
-        "raw_coords":               "The N x 3 input coordinates of each glyph",
+        "raw_category":                 "The category of the glyph, used in the classfication of PlotFigure",
+        "raw_coords":                   "The N x 3 input coordinates of each glyph",
         
-        "_calc_poly":               "The generated PyVista PolyData",
-        # "_calc_mesh":               "The generated PyVista surface mesh",
+        "_calc_poly":                   "The generated PyVista PolyData",
         
-        "_calc_color":              "The resolved per-point RGB color array of the glyph.",
-        "_calc_opacity":            "The resolved per-point opacity array of the glyph.",
-        "_calc_radius":             "The resolved per-point radius array used for glyph thickness.",
-        "_calc_scalars":            "The resolved per-point scalar array used for scalar coloring.",
+        "_calc_color":                  "The resolved per-point RGB color array of the glyph.",
+        "_calc_opacity":                "The resolved per-point opacity array of the glyph.",
+        "_calc_radius":                 "The resolved per-point radius array used for glyph thickness.",
+        "_calc_scalars":                "The resolved per-point scalar array used for scalar coloring.",
         
-        "_entity":                  "The PyVista Actor corresponding to this object in the plotter.",
-        "_entity_silhouette":       "The PyVista Actor as the silhouette of this object to highlight.",
-        "_internal_name_pv":        "The unique identifier of this glyph stored in the PyVista plotter.",
-        "_internal_resolver_source": "Field used to drive visual variations (e.g. color, opacity)"
+        "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
+        "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
+        "_internal_name_pv":            "The unique identifier of this glyph stored in the PyVista plotter.",
+        "_internal_resolver_source":    "Field used to drive visual variations (e.g. color, opacity)",
+        
+        "_internal_owner_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
+                                         "To access it, use .owner or ._internal_owner."),
         }
-    
-    __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
+
     
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -257,6 +258,7 @@ class PlotGlyph(HostBase):
         opts_type: Type[OptsBase],
         category: str,
         name: str,
+        name_replace: str,
         opts: OptsGlyph | None = None ,
         figure: PlotFigure | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
@@ -267,7 +269,7 @@ class PlotGlyph(HostBase):
         coords = as_points(coords, name="The positions of PlotGlyph") 
         object.__setattr__(self, "raw_coords", coords)
         category = as_str(category, name="The category of the glyph")
-        object.__setattr__(self, "_raw_category", category)
+        object.__setattr__(self, "raw_category", category)
         
         object.__setattr__(self, "_internal_resolver_source", "raw_coords")
         
@@ -275,6 +277,8 @@ class PlotGlyph(HostBase):
             opts_type,
             opts,
             opts_defaults_override,
+            name=name,
+            name_replace=name_replace,
             **kwargs
             )
         
@@ -293,17 +297,14 @@ class PlotGlyph(HostBase):
         elif figure is None:
             figure = PlotFigure()
         object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
-        
-        
-        logger.detail('Checking if name already exists ...')
-        self._helper_name_set(name, is_init=False)
             
 
         logger.detail("Examining the options before plotting ...")
         self.opts.act_finalize(self.opts_defaults)
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        unique_id = name + str_now
+        unique_id = self.name + str_now
         object.__setattr__(self, "_internal_name_pv", unique_id)
+        
         
         if not (isinstance(self.opts.color, str) and self.opts.color == 'scalars') and self.opts.scalars not in (None, UNSET):
             msg = "Color input of PlotGlyph is not set to 'scalars'. However, scalars is provided.\n"
@@ -314,46 +315,21 @@ class PlotGlyph(HostBase):
         figure = self.owner
         figure.pl.render()
         figure.pl.show()
-        figure._helper_register_entity(self, self._raw_category, self.opts.is_reset_camera)
-    
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_name_set_check(self, name, is_init, 
-                               replace="glyph", 
-                               name_name="The name of the glpyh",
-                               logger=None):
-        try:
-            name = as_str(name, name=name_name)
-        except:
-            logger.exception("Invalid name.")
-            if is_init:
-                logger.recovery(f"Automatically change name into {replace}")
-                name = replace
-            else:
-                logger.recovery("Ignore this modification.")
-                return
+        figure.act_register(self)
         
-        figure = self.owner
-        name_set = set(figure.act_get_entity_names())
-        name_input = name
-        if name_input in name_set:
-            new_name = name_input
-            index = 1
-            while new_name in name_set:
-                new_name = f"{name_input}_{index}"
-                index += 1
-            logger.warning(f"{name_input!r} already exists in PlotFigure object! Renamed to {new_name!r}.")
-            name = new_name
         
-        return name
+        
     
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_glyph_basic(self, key, value, allowed_extra=[], logger=None):
-        allowed_core = ['name', "raw_coords", "coords"] + list(allowed_extra)
-        self._helper_setattr_basic(key, value, allowed_core=allowed_core)
+        allowed_extra = ['raw_category', 'category', "raw_coords", "coords"] + list(allowed_extra)
+        self._helper_setattr_basic(key, value, allowed_extra=allowed_extra)
         
         
+    # ----------------------------------------------------------------------------------------------------
+    # Resolver function: to resolve point-wise properties (color, opacity, etc) for each inidividual glyph
+    # ----------------------------------------------------------------------------------------------------
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
@@ -388,13 +364,18 @@ class PlotGlyph(HostBase):
     
         except:
             logger.exception(f"Failed to resolve {attr_name!r}")
-            if self.opts._state_is_functioning:
+            if getattr(self, "_entity", None):
                 logger.recovery("Automatically ignore this modification.")
                 is_set_success = False
             else:
-                resolved = np.full(target_shape, default_val, dtype=np.float32)
-                logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
-                object.__setattr__(self.opts, attr_name, default_val)
+                if attr_name=="scalars" and default_val is None:
+                    default_val = lambda x: np.linalg.norm(x, axis=-1)
+                    resolved = default_val(self.raw_coords)
+                    logger.recovery(f"Reset {attr_name!r} to default: the distance of each point to origin.")
+                else:
+                    resolved = np.full(target_shape, default_val, dtype=np.float32)
+                    logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
+                    object.__setattr__(self.opts, attr_name, default_val)
                 object.__setattr__(self, '_calc_'+attr_name, resolved)
     
         return is_set_success
@@ -421,6 +402,15 @@ class PlotGlyph(HostBase):
             attr_value = getattr(self.opts, attr_name)
         
         return self._helper_resolver_generic(attr_name, attr_value, self.opts_defaults[attr_name])
+    
+    
+    # ----------------------------------------------------------------------------------------------------
+    # Create the mesh and actor.
+    # ----------------------------------------------------------------------------------------------------
+    
+    
+    def _helper_build_mesh(self):
+        raise NotImplementedError(...)
     
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_make_figure(self, logger=None):
@@ -491,12 +481,19 @@ class PlotGlyph(HostBase):
 
         object.__setattr__(self, "_entity", actor)
         self._helper_register_pick(actor)
+        
+        self._helper_add_silhouette()
+        
+    
+    def _helper_add_silhouette(self):
+    
+        plotter = self.owner.pl
 
-        logger.detail("Creating a separate silhouette actor (default invisible)")
-        silhouette_id = f"{unique_id}__silhouette"
+        silhouette_id = f"{self._internal_name_pv}__silhouette"
         if silhouette_id in plotter.actors:
-            plotter.remove_actor(silhouette_id)  
+            plotter.remove_actor(silhouette_id) 
             
+        mesh = self._entity.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
             
         actor_silhouette = plotter.add_silhouette(
@@ -509,6 +506,13 @@ class PlotGlyph(HostBase):
         actor_silhouette.pickable = False
         
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
+        
+        
+        
+
+    # ----------------------------------------------------------------------------------------------------
+    # The functios to update the given point-wise data values
+    # ----------------------------------------------------------------------------------------------------
         
         
     def _helper_replace_data_pv(self, attr: str, data: np.ndarray):
@@ -555,10 +559,15 @@ class PlotGlyph(HostBase):
         
         object.__setattr__(self.opts, 'color', 'scalars')
             
+        
+    # ----------------------------------------------------------------------------------------------------
+    # The register and un-register of glyphs onto PlotFigure instance
+    # ----------------------------------------------------------------------------------------------------
+
 
     def _helper_register_pick(self, actor):
 
-        fig = self._internal_owner
+        fig = self.owner
         if fig is None:
             return
         pm = getattr(fig, "_entity_pick_manager", None)
@@ -566,12 +575,31 @@ class PlotGlyph(HostBase):
             return
         pm.act_register(actor=actor, owner=self)   
         
+    def act_remove(self):
+        self.owner.pl.remove_actor(self._entity)
+        self.owner.pick_manager._internal_registry.pop(self._entity)
+        
+        
+    # ----------------------------------------------------------------------------------------------------
+    # The functions to apply modications.
+    # ----------------------------------------------------------------------------------------------------
+        
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_prep(self, opts, logger=None, **kwargs):
+    def _helper_commit_pre_opts(self, logger=None, **kwargs):
+        
+        kwargs = super()._helper_commit_pre_opts(**kwargs)
+        
+        found, category, kwargs = pop_exclusive(kwargs, "name", "raw_category")
+        if found:
+            try:
+                category = as_str(category, name=self.__descriptions__["raw_category"])
+            except:
+                logger.exception("Check input.")
+                logger.recovery("Automatically ignore this modification.")
         
         is_needs_remesh = False
         
-        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
+        found, coords, kwargs = pop_exclusive(kwargs, "coords", "raw_coords")
         if found:
             try:
                 object.__setattr__(self, "raw_coords", as_points(coords))
@@ -580,15 +608,27 @@ class PlotGlyph(HostBase):
                 logger.exception("Invalid input of coords for PlotGlyph.")
                 logger.recovery("Ignore this modification in the following")
                 
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         
         return is_needs_remesh, kwargs
     
     
+    def act_commit(self, opts=None, **kwargs):
+        is_needs_remesh, kwargs = self._helper_commit_pre_opts(**kwargs)
+        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
+        self._helper_commit_apply(is_needs_remesh, **kwargs)
+    
+    
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_apply(self, is_needs_remesh, attr_resolve_extra=[], logger=None, **kwargs):
+    def _helper_commit_apply(self, 
+                             is_needs_remesh, 
+                             attr_resolve_extra=[], 
+                             is_radius=True,
+                             logger=None, **kwargs):
         
         attr_resolve = ['radius', 'color', 'opacity'] + list(attr_resolve_extra)
+
+        if not is_radius:
+            attr_resolve.remove('radius')
         
         if is_needs_remesh:
             for attr in attr_resolve:
@@ -664,7 +704,7 @@ class PlotGlyph(HostBase):
                                     attr_value=kwargs.get('scalars')
                                     )
                             else:
-                                self._helper_resolver_spec('scalars')
+                                is_set_success = self._helper_resolver_spec('scalars')
                         else:
                             is_set_success = self._helper_resolver_spec(key, attr_value=value)
                     else:
@@ -721,11 +761,6 @@ class PlotGlyph(HostBase):
     def act_dehighlight(self):
         self._entity_silhouette.visibility = False
             
-        
-
-            
-    def act_remove(self):
-        self.owner.pl.remove_actor(self._entity)
             
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

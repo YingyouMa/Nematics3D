@@ -114,20 +114,22 @@ class PlaneGrid(HostBase):
     __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
 
     def __init__(self,
-                 name: str = '2D grid',
+                 name: str | None = None,
+                 name_replace: str = "2d grid",
                  opts: OptsPlaneGrid | None = None,
                  opts_defaults_override: Mapping[str, Any] | None = None,
                  **kwargs):
-        
-        self._helper_name_set(name, is_init=False, replace='2D grid')
-        object.__setattr__(self, '_entity_fig_demo', None)
 
         super().__init__(
             OptsPlaneGrid,
             opts,
             opts_defaults_override,
+            name=name,
+            name_replace=name_replace,
             **kwargs
             )
+        
+        object.__setattr__(self, '_entity_fig_demo', None)
 
         for name, value in {
             "normal": self.opts.normal,

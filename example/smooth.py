@@ -12,7 +12,7 @@ n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-pts = Q.lines[0]._raw_defect_indices[:200]
+pts = Q.lines[0]._raw_defect_indices[:1000]
 
 # ----------------------------
 # 2) Plotter + actors

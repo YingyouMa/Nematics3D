@@ -87,14 +87,15 @@ class PlotTube(PlotGlyph):
         **kwargs
     ):
     
-        name = name_replace if name is None else as_str(name, name="The name of this PlotTube object", replace=name_replace)
         category = as_str(category, name="The category of the PlotTube object", replace="tube")
+        object.__setattr__(self, 'raw_category', category)
 
         super().__init__(
             coords=coords,
             opts_type=OptsTube,
             category=category,
             name=name,
+            name_replace='line',
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
@@ -200,17 +201,13 @@ class PlotTube(PlotGlyph):
         object.__setattr__(self, "_calc_poly", poly)
         object.__setattr__(self, "_calc_mesh", mesh)
         return mesh
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_commit_pre_opts(self, logger=None, **kwargs):
         
+        is_needs_remesh, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-    @logging_and_warning_decorator()
-    def act_commit(self,
-                   opts: OptsTube | None = None, 
-                   logger=None, 
-                   **kwargs):
-        
-        is_needs_remesh = False
-        
-        found, line_index = pop_exclusive(kwargs, "line_index", "raw_line_index")
+        found, line_index, kwargs = pop_exclusive(kwargs, "line_index", "raw_line_index")
         if found:
             if line_index is None:
                 object.__setattr__(self, "raw_line_index", line_index)
@@ -223,10 +220,6 @@ class PlotTube(PlotGlyph):
                 except:
                     logger.exception("Invalid `line_index` input")
                     logger.recovery("Ignore this modification in the following")
-        
-        is_needs_remesh_coord, kwargs = self._helper_commit_prep(opts, **kwargs)
-        
-        is_needs_remesh = is_needs_remesh or is_needs_remesh_coord
+                    
+        return is_needs_remesh, kwargs
 
-
-        self._helper_commit_apply(is_needs_remesh, attr_resolve_extra=[], **kwargs)

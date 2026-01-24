@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping, Type
 import weakref
@@ -7,6 +7,7 @@ import numpy as np
 
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
+from Nematics3D.general import pop_exclusive
 from .opts import merge_opts_all, build_dict_override
 
 
@@ -20,7 +21,7 @@ class OptsBase:
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
-        "tag":                  "name identifier of this smoothing options",
+        "tag":                  "name identifier of the option settings",
         }
     
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -28,7 +29,7 @@ class OptsBase:
         }
     
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
-        "tag":                  "glyph options"
+        "tag":                  "options"
         })
 
     # ---------------------------------------------------------------------
@@ -104,11 +105,7 @@ class OptsBase:
 
         defaults_dict = {} if defaults is None else dict(defaults)
 
-        for f in fields(self):
-            k = f.name
-            if k.startswith("_"):
-                continue
-
+        for k in self.__descriptions__.keys():
             if getattr(self, k) is UNSET:
                 v = defaults_dict.get(k, self.__class__._DEFAULTS_FROZEN.get(k, UNSET))
                 if v is UNSET and not is_allow_UNSET:
@@ -204,12 +201,12 @@ class OptsBase:
 class HostBase:
     
     __descriptions__: ClassVar[Mapping[str, str]] = {
-        "raw_name":                 "The name of the host object",
+        "raw_name":                 "The name identifier of the host object",
         
         "opts":                     "The Opts instance controlling options.",
-        "opts_defaults":            "The default option settings for glyph visualization",
+        "opts_defaults":            "The default option settings.",
         
-        "_internal_owner_ref":      ("A weak reference to the PlotFigure object associated with this object."
+        "_internal_owner_ref":      ("A weak reference to the owner object associated with this instance."
                                      "To access it, use .owner or ._internal_owner."),
         "_internal_extra_attrs":    (
             "A dict storing user-registered extra attributes. "
@@ -220,15 +217,20 @@ class HostBase:
         ),
         }
     
+    
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         opts_type: Type[OptsBase],
         opts: OptsBase | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
+        name : str | None = None,
+        name_replace: str = "unnamed",
         logger = None,
         **kwargs
             ):    
+        
+        self.__descriptions__["raw_name"] = f"The name identifier of the {type(self).__name__} instance"
         
         logger.detail("Dealing with basic attributes and input")
         object.__setattr__(self, "_internal_extra_attrs", {})
@@ -250,6 +252,10 @@ class HostBase:
                             name=type(opts).__name__,
                         )
         object.__setattr__(self, "opts_defaults", opts_defaults)
+        
+        name = as_str(name, name=self.__descriptions__["raw_name"], replace=name_replace) if name else name_replace
+        self.act_set_name(name)
+        
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
@@ -289,35 +295,23 @@ class HostBase:
     
     @name.setter
     def name(self, value: str):
-        self._helper_name_set(value, is_init=False)
+        self.act_set_name(value)
         
-    def _helper_name_set(self, name, 
-                         is_init=False, 
-                         replace="object of HostBase"):
-        if not name:
-            object.__setattr__(self, "raw_name", replace)
-            return
-        
-        name = self._helper_name_set_check(name, is_init, replace)
-        if name:
-            object.__setattr__(self, "raw_name", name)
-
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_name_set_check(self, name, is_init, 
-                               replace="object of HostBase", 
-                               name_name="The name of the host object",
-                               logger=None):
+    def act_set_name(self, name, logger=None):
+        
         try:
-            name = as_str(name, name=name_name)
-            return name
+            name = as_str(name, name=self.__descriptions__["raw_name"])
         except:
             logger.exception("Invalid name.")
-            if is_init:
-                logger.recovery(f"Automatically change name into {replace}")
-                return replace
-            else:
-                logger.recovery("Ignore this modification.")
-                return
+            logger.recovery("Ignore this modification.")
+            return
+        
+        check_name = getattr(self.owner, "_helper_check_name", None) if self.owner else None
+        if callable(check_name):
+            name = check_name(name)
+        object.__setattr__(self, "raw_name", name)
+            
             
             
     def __getattr__(self, key):
@@ -328,14 +322,12 @@ class HostBase:
             raise AttributeError(f"{type(self).__name__!s} object has no attribute {key!r}.")
 
         
-    @logging_and_warning_decorator(start_finish_level=5)
     def act_add_attr(
         self,
         name: str,
         doc: str,
         default=None,
         overwrite: bool = False,
-        logger=None,
     ):
 
         name = as_str(name, name='Extra attribute name for PlotGlyph')
@@ -364,9 +356,9 @@ class HostBase:
             
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_setattr_basic(self, key, value, allowed_core=[], logger=None):
+    def _helper_setattr_basic(self, key, value, allowed_extra=[], logger=None):
     
-        allowed_core = list(allowed_core)
+        allowed_core = list(allowed_extra) + ["name", "raw_name"]
         
         extra = object.__getattribute__(self, "_internal_extra_attrs")
         docs = object.__getattribute__(self, "_internal_extra_attrs_docs")
@@ -380,10 +372,8 @@ class HostBase:
                 "Only attributes in {allowed_core} can be modified directly, "
                 f"or a registered extra attribute."
             )
-        if key == 'name':
-            self._helper_name_set(value, is_init=False)
-        else:
-            self.act_commit(**{key: value})
+
+        self.act_commit(**{key: value})
             
     
     def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
@@ -395,7 +385,16 @@ class HostBase:
             kwargs.pop('tag')
         return kwargs
     
+
+    def _helper_commit_pre_opts(self, **kwargs):
+        found, name, kwargs = pop_exclusive(kwargs, "name", "raw_name")
+        if found:
+            self.act_set_name(name)
+        return kwargs
+    
+    
     def act_commit(self, opts=None, **kwargs):
+        kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         self._helper_commit_apply(**kwargs)
     

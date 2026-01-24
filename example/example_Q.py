@@ -71,12 +71,13 @@ Q.act_lines_smooth(window_length=21, min_line_length=40)
 Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4, figure=figure)
     
 trans = 7.5
-spacing = 2.5
+spacing = 0.5
 
 testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), corners_limit=Q._calc_corners)
-testnPlane = Nematics3D.DirectorPlane(Q._calc_interpolator, grid=testGrid)
+testnPlane = Nematics3D.QPlane(Q._calc_interpolator, grid=testGrid)
 
-testnPlane.act_visualize(figure=figure)
+# testnPlane.act_visualize(figure=figure)
+plane = Nematics3D.PlotDelaunay(testnPlane._entity_plane(), color='scalars', scalars=testnPlane._calc_S, figure=figure)
 figure.act_view_yz()
 figure.opts.azimuth = 90
 

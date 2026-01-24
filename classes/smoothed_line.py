@@ -124,10 +124,10 @@ class SmoothedLine(HostBase):
             OptsSmooth,
             opts,
             opts_defaults_override,
+            name=name,
+            name_replace='line',
             **kwargs
             )
-        
-        self._helper_name_set(name, is_init=True, replace='line')
         
         self.opts.act_finalize()
         self._helper_commit_apply()

@@ -737,10 +737,12 @@ def pop_exclusive(kwargs: dict, k1: str, k2: str):
             f"Please pass only one."
         )
     if has1:
-        return True, kwargs.pop(k1)
+        value = kwargs.pop(k1)
+        return True, value, kwargs
     if has2:
-        return True, kwargs.pop(k2)
-    return False, None
+        value = kwargs.pop(k2)
+        return True, value, kwargs
+    return False, None, kwargs
 
 
 def find_nearest_point(query_pt, coords):

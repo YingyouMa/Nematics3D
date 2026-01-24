@@ -5,6 +5,7 @@ import vtk
 from pyvistaqt import BackgroundPlotter
 from types import MappingProxyType
 from typing import Mapping, Any
+from PyQt5 import QtCore
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -18,9 +19,10 @@ from Nematics3D.datatypes import (
 )
 from ..host_base import OptsBase, HostBase
 from ..class_function import cover_value
+from ..registry_base import RegistryBase
 from .pick_manager import PickManager
 from .qt.console import ScopedConsoleDock
-from PyQt5 import QtCore
+
 
 #!!! property act_view
 #!!! load save 
@@ -75,12 +77,16 @@ class OptsFigure(OptsBase):
             
 
 
-class PlotFigure(HostBase):
+class PlotFigure(HostBase, RegistryBase):
+    
+    _DEFAULT_NAME = "unamed figure"
 
     __descriptions__ = {
+        **(HostBase.__descriptions__),
+        
         "raw_name": "The name identifier of the figure",
         "_entity_plotter": "The underlying PyVista BackgroundPlotter instance that owns the VTK rendering pipeline. ",
-        "_entity": "A registry (dict) for objects attached to this figure.",
+        "_entity": "A registry for objects attached to this figure.",
         "_entity_overlay": (
             "A foreground VTK renderer (layer=1) sharing the main camera. "
             "Actors added to this renderer are drawn after the main scene and "
@@ -110,9 +116,10 @@ class PlotFigure(HostBase):
             OptsFigure,
             opts,
             opts_defaults_override,
+            name=name,
+            name_replace=self._DEFAULT_NAME,
             **kwargs
             )
-        self._helper_name_set(name, is_init=True, replace='figure')
         self.opts.act_finalize(is_allow_UNSET=True)
         
         logger.detail("Resovle the input plotter")
@@ -132,7 +139,7 @@ class PlotFigure(HostBase):
         plotter.app_window.setWindowTitle(self.name)
         plotter.resize(*self.opts.size)
         object.__setattr__(self, "_entity_plotter", plotter)
-        object.__setattr__(self, "_entity", {})
+        object.__setattr__(self, "_entity", [])
 
         self._helper_sync_from_plotter(is_allow_cover_target_set=False, is_only_camera=True)
         self._helper_commit_apply()
@@ -205,14 +212,6 @@ class PlotFigure(HostBase):
     def pick_manager(self):
         return self._entity_pick_manager
     
-    
-    def act_get_entity_names(self):
-        names = [
-            entity.name
-            for entity_list in self._entity.values()
-            for entity in entity_list
-        ]
-        return names
 
     def act_check_is_alive(self):
         try:
@@ -231,15 +230,6 @@ class PlotFigure(HostBase):
 
     def __bool__(self):
         return self.act_check_is_alive()
-    
-    def __getitem__(self, name: str):
-        mapping = {
-            entity.name: entity
-            for entity_list in self._entity.values()
-            for entity in entity_list
-            }
-        
-        return mapping.get(name)
     
     
     
@@ -414,24 +404,24 @@ class PlotFigure(HostBase):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
 
-    def _helper_register_entity(
-        self, entity_instance, entity_category, is_reset_camera
-    ):
-        if entity_category in self._entity.keys():
-            self._entity[entity_category].append(entity_instance)
-        else:
-            self._entity[entity_category] = [entity_instance]
-        if is_reset_camera:
+
+    def act_register(self, term, is_contain_ok=False):
+        super().act_register(term, is_contain_ok=is_contain_ok)
+        if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
             
             
-    @property
-    def name(self):
-        return self.raw_name
+    
+    def act_set_name(self, name):
+        name = super().act_set_name(name)
+        if name:
+            self.pl.window().setWindowTitle(self.name)  #!!! setattr direct name
             
-    @name.setter
-    def name(self, value: str):
-        self._helper_name_set(value, is_init=False)
-        self.pl.window().setWindowTitle(self.name)
+    
+    def __repr__(self):
+        msg = HostBase.__repr__(self) + "\n"
+        msg += RegistryBase._helper_repr_by_category(self)
+        return msg
+
 
 

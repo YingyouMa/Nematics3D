@@ -42,14 +42,15 @@ class PlotSphere(PlotGlyph):
     ):
         
         
-        name = name_replace if name is None else as_str(name, name="The name of this PlotSphere object", replace=name_replace)
-        category = as_str(category, name="The category of the PlotSphere object", replace="sphere")
+        category = as_str(category, name="The category of the PlotTube object", replace="tube")
+        object.__setattr__(self, 'raw_category', category)
 
         super().__init__(
             coords=coords,
             opts_type=OptsSphere,
             category=category,
             name=name,
+            name_replace=name_replace,
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
@@ -96,13 +97,3 @@ class PlotSphere(PlotGlyph):
         # object.__setattr__(self, "_calc_mesh", mesh)
         return mesh
     
-    @logging_and_warning_decorator()
-    def act_commit(self,
-                   opts: OptsSphere | None = None, 
-                   logger=None, 
-                   **kwargs):
-        
-
-        is_needs_remesh, kwargs = self._helper_commit_prep(opts, **kwargs)
-
-        self._helper_commit_apply(is_needs_remesh, attr_resolve_extra=[], **kwargs)

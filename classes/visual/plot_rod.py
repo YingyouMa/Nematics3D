@@ -41,7 +41,8 @@ class PlotRod(PlotGlyph):
 
     __descriptions__ = {
         **dict(PlotGlyph.__descriptions__),
-        "raw_orient": "The orientation of rods",
+        "raw_name":     "The name identifier of the PlotRod instance",
+        "raw_orient":   "The orientation of rods",
         "_calc_length": "The resolved per-point length array used for rods length."
     }
     __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
@@ -61,8 +62,8 @@ class PlotRod(PlotGlyph):
         **kwargs
     ):
 
-        name = as_str(name, name="The name of this PlotTube object", replace="rod")
-        category = as_str(category, name="The category of the PlotTube object", replace="rods")
+        category = as_str(category, name="The category of the PlotTube object", replace="tube")
+        object.__setattr__(self, 'raw_category', category)
 
         orient = as_points(orient, name="The orientation of PlotRod object") 
         object.__setattr__(self, "raw_orient", orient)
@@ -72,6 +73,7 @@ class PlotRod(PlotGlyph):
             opts_type=OptsRod,
             category=category,
             name=name,
+            name_replace=name_replace,
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
@@ -90,7 +92,7 @@ class PlotRod(PlotGlyph):
         self._helper_init_end()
 
     def __setattr__(self, key, value):
-        self._helper_setattr_basic(key, value, allowed_extra = ("raw_orient", "orient"))
+        self._helper_setattr_glyph_basic(key, value, allowed_extra = ("raw_orient", "orient"))
 
     
     def __getattribute__(self, name):
@@ -158,15 +160,12 @@ class PlotRod(PlotGlyph):
         return mesh
     
 
-    @logging_and_warning_decorator()
-    def act_commit(self,
-                   opts: OptsRod | None = None, 
-                   logger=None, 
-                   **kwargs):
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_commit_pre_opts(self, logger=None, **kwargs):
         
-        is_needs_remesh = False
+        is_needs_remesh, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-        found, orient = pop_exclusive(kwargs, "orient", "raw_orient")
+        found, orient, kwargs = pop_exclusive(kwargs, "orient", "raw_orient")
         if found:
             try:
                 object.__setattr__(self, "raw_orient", as_points(orient))
@@ -174,12 +173,16 @@ class PlotRod(PlotGlyph):
             except:
                 logger.exception("Invalid input of orient for PlotRod.")
                 logger.recovery("Ignore this modification in the following")
-
-        is_needs_remesh_coord, kwargs = self._helper_commit_prep(opts, **kwargs)
                 
         if len(self.raw_orient) != len(self.raw_coords):
             raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
-
-        is_needs_remesh = is_needs_remesh or is_needs_remesh_coord
-
+                    
+        return is_needs_remesh, kwargs
+    
+    
+    def act_commit(self, opts=None, **kwargs):
+        is_needs_remesh, kwargs = self._helper_commit_pre_opts(**kwargs)
+        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         self._helper_commit_apply(is_needs_remesh, attr_resolve_extra=['length'], **kwargs)
+    
+

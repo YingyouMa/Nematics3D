@@ -16,7 +16,7 @@ from .plane_grid import PlaneGrid, OptsPlaneGrid
 
 #!!! class name
 
-class DirectorPlane:
+class QPlane:
 
     __descriptions__ = {
         "name": "The name identifier of this n-plane object",
@@ -26,6 +26,7 @@ class DirectorPlane:
         "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
         "_entity_visual_defect": "The PlotSphere objects of visualized defects",
         "_calc_n": "List of director field arrays (from Q-diagonalization)",
+        "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
     }
@@ -109,9 +110,10 @@ class DirectorPlane:
 
         logger.detail("Interpolating ...")
         Q_all = self._raw_QInterpolator.interpolate(grid_all_flatten)
-        _, n_all = Q_diagonalize(Q_all)
+        S_all, n_all = Q_diagonalize(Q_all)
         n_all = np.reshape(n_all, (*shape_all, 1, 3))
         self._calc_n = (n_all.reshape((-1, 3)))[plane_grid._calc_box_mask]
+        self._calc_S = (S_all.reshape(-1))[plane_grid._calc_box_mask]
 
         logger.detail("Detecting the defects and surrounding directors ...")
         defect_plane_index = defect_detect(n_all, planes=(False, False, True))  #!!! pbc
