@@ -18,7 +18,7 @@ n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-pts = Q.lines[0]._raw_defect_indices[:200]
+pts = Q.lines[0]._raw_defect_indices[:2000]
 
 # ============================================================
 # Figure + static points
@@ -71,49 +71,33 @@ preview = {
     "r_avg": None,          # float
 }
 
+poly0 = pv.MultipleLines(tube.raw_coords)
+r_avg = float(state["radius scale"]) * current_radius_mean
+preview["r_avg"] = float(r_avg)
+
+tube0 = poly0.tube(radius=float(preview["r_avg"]))
+actor = p.add_mesh(
+    tube0,
+    name="__preview_tube__",
+    color=(0, 0, 0),
+    opacity=1.0,
+    smooth_shading=True,
+)
+preview["actor"] = actor
+preview["poly"] = poly0
+
 
 def _ensure_preview_actor(coords: np.ndarray) -> None:
-    """
-    Ensure a black preview tube actor exists, and update its dataset to coords.
-
-    Notes
-    -----
-    - The preview uses pv.MultipleLines + tube() then swaps mapper input data.
-    - Actor is created once; subsequent updates are mapper input swaps.
-    """
-    if preview["actor"] is None:
-        poly0 = pv.MultipleLines(coords)
-        r_avg = float(state["radius scale"]) * current_radius_mean
-        preview["r_avg"] = float(r_avg)
-
-        tube0 = poly0.tube(radius=float(preview["r_avg"]))
-        actor = p.add_mesh(
-            tube0,
-            name="__preview_tube__",
-            color=(0, 0, 0),
-            opacity=1.0,
-            smooth_shading=True,
-        )
-        preview["actor"] = actor
-        preview["poly"] = poly0
-    else:
-        # update preview radius if user changes radius slider while dragging
-        # (keep using r_avg, which we recompute from desired scalar state)
-        preview["r_avg"] = float(state["radius scale"]) * current_radius_mean
-
-    # Update geometry by swapping mapper input
+    preview["r_avg"] = float(state["radius scale"]) * current_radius_mean
     poly = pv.MultipleLines(coords)
     tube_mesh = poly.tube(radius=float(preview["r_avg"]))
-
     preview["actor"].mapper.SetInputData(tube_mesh)
     preview["actor"].mapper.Update()
 
 
 
 def _begin_drag() -> None:
-    """
-    Enter preview mode: hide PlotTube, show preview actor.
-    """
+
     if preview["is_active"]:
         return
     preview["is_active"] = True
@@ -130,9 +114,7 @@ def _begin_drag() -> None:
 
 
 def _end_drag() -> None:
-    """
-    Exit preview mode: hide preview actor, show PlotTube, optionally commit updates.
-    """
+
     if not preview["is_active"]:
         return
     preview["is_active"] = False
@@ -148,12 +130,7 @@ def _end_drag() -> None:
 
 
 def _commit_plottube_full() -> None:
-    """
-    Do the expensive update once (on slider release):
-      - update smoothing window_length
-      - update PlotTube coords
-      - update PlotTube radius
-    """
+
     smooth.opts.window_length = int(state["window_length"])
     
     if callable(current_radius):
@@ -169,11 +146,7 @@ def _commit_plottube_full() -> None:
 
 
 def _preview_update_only() -> None:
-    """
-    Fast path during dragging:
-      - recompute smooth coords
-      - update preview mapper input
-    """
+
     smooth.opts.window_length = int(state["window_length"])
     _ensure_preview_actor(smooth._entity)
     if hasattr(p, "render"):
@@ -192,6 +165,7 @@ class ControlsWindow(QtWidgets.QWidget):
                  parent=None):
         
         super().__init__(parent)
+        self._is_closing = False
 
         self.setWindowTitle("Line Controls (Preview + Commit)")
         self.setObjectName("window_controls")
@@ -300,6 +274,12 @@ class ControlsWindow(QtWidgets.QWidget):
             _preview_update_only()
         else:
             _commit_plottube_full()
+            
+            
+    def closeEvent(self, event):
+        if not getattr(self, "_is_closing", False):
+            self._is_closing = True
+        event.accept()
 
 
 
