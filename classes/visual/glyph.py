@@ -321,8 +321,7 @@ class PlotGlyph(HostBase):
         
     
         
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_setattr_glyph_basic(self, key, value, allowed_extra=[], logger=None):
+    def _helper_setattr_glyph_basic(self, key, value, allowed_extra=[]):
         allowed_extra = ['raw_category', 'category', "raw_coords", "coords"] + list(allowed_extra)
         self._helper_setattr_basic(key, value, allowed_extra=allowed_extra)
         
@@ -405,9 +404,14 @@ class PlotGlyph(HostBase):
     
     
     # ----------------------------------------------------------------------------------------------------
-    # Create the mesh and actor.
+    # Create the polydata, mesh and actor.
     # ----------------------------------------------------------------------------------------------------
     
+    def _helper_build_poly(self):
+        poly = pv.PolyData(self.raw_coords)
+        object.__setattr__(self, "_calc_poly", poly)
+        return poly
+        
     
     def _helper_build_mesh(self):
         raise NotImplementedError(...)
@@ -435,7 +439,16 @@ class PlotGlyph(HostBase):
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
             input_dir["clim"] = self.opts.scalars_clim
             
-        logger.detail("Creating glyph mesh")
+        logger.detail("Creating glyph polydata and mesh")
+        poly = self._helper_build_poly()
+        if hasattr(self, "_calc_radius"):
+            poly.point_data['radius'] = self._calc_radius 
+        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
+            poly.point_data['opacity'] = self._calc_opacity
+            poly.point_data['scalars'] = self._calc_scalars
+        else:
+            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
+            poly.point_data['rgba'] = rgba_values 
         mesh = self._helper_build_mesh()
             
         logger.detail("Removing the existing actor")
@@ -506,6 +519,17 @@ class PlotGlyph(HostBase):
         actor_silhouette.pickable = False
         
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
+
+    def _helper_clear_silhouette(self):
+
+        plotter = self.owner.pl
+
+        silhouette_id = f"{self._internal_name_pv}__silhouette"
+        if silhouette_id in plotter.actors:
+            plotter.remove_actor(silhouette_id) 
+
+        object.__setattr__(self, "_entity_silhouette", None)
+
         
         
         
@@ -525,8 +549,8 @@ class PlotGlyph(HostBase):
         self._calc_poly.point_data[attr] = data
         mesh_data[attr] = mesh.interpolate(self._calc_poly).point_data[attr]
     
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_update_rgba(self, logger=None):
+
+    def _helper_update_rgba(self):
         rgba = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
         self._helper_replace_data_pv('rgba', rgba)
         mapper = self._entity.mapper
@@ -535,6 +559,7 @@ class PlotGlyph(HostBase):
         mapper.lookup_table = None
         mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
+        mapper.Update()
         
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_update_scalars(self, logger=None):
@@ -589,7 +614,7 @@ class PlotGlyph(HostBase):
         
         kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-        found, category, kwargs = pop_exclusive(kwargs, "name", "raw_category")
+        found, category, kwargs = pop_exclusive(kwargs, "category", "raw_category")
         if found:
             try:
                 category = as_str(category, name=self.__descriptions__["raw_category"])
@@ -612,10 +637,12 @@ class PlotGlyph(HostBase):
         return is_needs_remesh, kwargs
     
     
-    def act_commit(self, opts=None, **kwargs):
+    def act_commit(self, opts=None, is_silhouette=True, **kwargs):
         is_needs_remesh, kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(is_needs_remesh, **kwargs)
+        self._helper_commit_apply(is_needs_remesh, 
+                                  is_silhouette=is_silhouette, 
+                                  **kwargs)
     
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -623,7 +650,9 @@ class PlotGlyph(HostBase):
                              is_needs_remesh, 
                              attr_resolve_extra=[], 
                              is_radius=True,
-                             logger=None, **kwargs):
+                             is_silhouette=True,
+                             logger=None, 
+                             **kwargs):
         
         attr_resolve = ['radius', 'color', 'opacity'] + list(attr_resolve_extra)
 
@@ -641,20 +670,39 @@ class PlotGlyph(HostBase):
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
         
+        logger.detail("Check if a recoloring is requested by input kwargs; if so, determine the color method")
         color_method = None
-        if ('scalars' in kwargs.keys()
-            or 'scalars_cmap' in kwargs.keys()
-            or 'scalars_clim' in kwargs.keys()
-            ) and kwargs['scalars'] is not None:
-            if 'color' in kwargs.keys() and not is_given_str(self.opts.color, 'scalars'):
+        if kwargs.get('scalars') is not None:
+            if 'color' in kwargs.keys() and not is_given_str(kwargs['color'], 'scalars'):
                 logger.warning("You are attempting to modify both 'color' and 'scalars' simultaneously. "
                                "This is a potentially confusing operation."
-                               "The values will be updated accordingly, but rendering will use 'scalars' for coloring.")
+                               "In the following, the rendering will use 'scalars' for coloring,"
+                               "and `color` in kwargs is set to be 'scalars' instead.")
             color_method = 'scalars'
         elif 'color' in kwargs.keys():
-            color_method = 'scalars' if is_given_str(kwargs['color'], 'scalars') else 'color'
+            if is_given_str(kwargs['color'], 'scalars'):
+                if getattr(self, '_calc_scalars', None):
+                    try:
+                        raise ValueError(
+                                "Setting 'color=scalars' was detected, but no input scalars were provided "
+                                "and no existing scalar data was found."
+                                )
+                    except:
+                        logger.exception("Check input.")
+                        logger.recovery("Automatically ignore this modification.")
+                        kwargs.pop('color')
+                else:
+                    color_method = 'scalars'
+            else:
+                color_method = 'color'
         elif 'opacity' in kwargs.keys(): 
             color_method = 'scalars' if is_given_str(self.opts.color, 'scalars') else 'color'
+            
+        if is_needs_remesh and not color_method:  
+            color_method = 'scalars' if is_given_str(self.opts.color, 'scalars') else 'color'
+
+        if color_method == 'scalars':
+            kwargs['color'] = 'scalars'
 
 
         for key, value in kwargs.items():
@@ -728,12 +776,19 @@ class PlotGlyph(HostBase):
                 object.__setattr__(self.opts, key, value)
                 
         if is_needs_remesh:
-            self._helper_make_figure()
-        else:
-            if color_method == 'scalars':
-                self._helper_update_scalars()
-            elif color_method == 'color':
-                self._helper_update_rgba()
+            self._helper_build_poly()
+            if is_radius:
+                self._calc_poly.point_data['radius'] = self._calc_radius 
+            mesh = self._helper_build_mesh()
+            self._entity.mapper.SetInputData(mesh)
+            self._entity.mapper.Update()
+            if is_silhouette:
+                self._helper_add_silhouette()
+
+        
+        if color_method:
+            self._helper_update_scalars() if color_method == 'scalars' else self._helper_update_rgba()
+
                 
         self.owner.pl.render()
 

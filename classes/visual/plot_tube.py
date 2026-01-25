@@ -135,14 +135,12 @@ class PlotTube(PlotGlyph):
             
     def __setattr__(self, key, value):
         self._helper_setattr_glyph_basic(key, value, allowed_extra = ("raw_line_index", "line_index"))
-
         
-    @logging_and_warning_decorator(start_finish_level=5)    
-    def _helper_build_mesh(self, logger=None):
-        """
-        Internal: Create the PyVista PolyData, apply smoothing/clipping, 
-        and generate tube with dynamic or static radius.
-        """
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_build_poly(self, logger=None): 
+        
         points = self.raw_coords
         idx = getattr(self, "raw_line_index", None)
         
@@ -173,15 +171,20 @@ class PlotTube(PlotGlyph):
         if self.opts.smooth_iter > 0:
             logger.detail(f"Smoothing path with {self.opts.smooth_iter} iterations")
             poly = poly.smooth(n_iter=self.opts.smooth_iter)
-        
-        poly.point_data['radius'] = self._calc_radius 
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            poly.point_data['opacity'] = self._calc_opacity
-            poly.point_data['scalars'] = self._calc_scalars
-        else:
-            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values 
             
+        object.__setattr__(self, "_calc_poly", poly)
+        
+        return poly
+
+        
+    @logging_and_warning_decorator(start_finish_level=5)    
+    def _helper_build_mesh(self, logger=None):
+        """
+        Internal: Create the PyVista PolyData, apply smoothing/clipping, 
+        and generate tube with dynamic or static radius.
+        """
+
+        poly = self._calc_poly    
 
         logger.detail("Applying tube filter with dynamic radius scaling")
         mesh = poly.tube(
@@ -198,7 +201,6 @@ class PlotTube(PlotGlyph):
             elif hasattr(self.opts.clip_geometry, "points"):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
-        object.__setattr__(self, "_calc_poly", poly)
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)

@@ -69,16 +69,7 @@ class PlotSphere(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_mesh(self, logger=None):
         
-        points = self.raw_coords
-        poly = pv.PolyData(points)
-
-        poly.point_data['radius'] = self._calc_radius 
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            poly.point_data['opacity'] = self._calc_opacity
-            poly.point_data['scalars'] = self._calc_scalars
-        else:
-            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values 
+        poly = self._calc_poly
             
         logger.detail("Applying sphere filter with dynamic radius scaling")
         unit_sphere = pv.Sphere(theta_resolution=self.opts.sides, 
@@ -94,6 +85,5 @@ class PlotSphere(PlotGlyph):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
         object.__setattr__(self, "_calc_poly", poly)
-        # object.__setattr__(self, "_calc_mesh", mesh)
         return mesh
     
