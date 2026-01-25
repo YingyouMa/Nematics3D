@@ -95,7 +95,7 @@ class PlotTube(PlotGlyph):
             opts_type=OptsTube,
             category=category,
             name=name,
-            name_replace='line',
+            name_replace=name_replace,
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
@@ -199,7 +199,6 @@ class PlotTube(PlotGlyph):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
         object.__setattr__(self, "_calc_poly", poly)
-        object.__setattr__(self, "_calc_mesh", mesh)
         return mesh
     
     @logging_and_warning_decorator(start_finish_level=5)
