@@ -34,11 +34,6 @@ class OptsDelaunay(OptsGlyph):
         "ambient": 0.5
     })
 
-    _commit_level: ClassVar[Mapping[str, Any]] = {
-        k: v
-        for k, v in OptsGlyph._commit_level.items()
-        if k != "radius"
-    }
     
     
 class PlotDelaunay(PlotGlyph):

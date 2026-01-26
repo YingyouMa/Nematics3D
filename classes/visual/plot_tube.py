@@ -11,18 +11,12 @@ from .glyph import OptsGlyph, LEVEL_REMESH, PlotGlyph
 
 from Nematics3D.general import pop_exclusive
 
-#! scalars_limit
-#! scalars_bar     change is_scalars_bar
 #! clip_geometry
 #! light dark pbr
-
-#! only change cmap
 
 #! info log extra attr
 #1 del
 #! orphan figure
-
-#! @coords
 
 #! test
 #! color invalid
@@ -54,11 +48,6 @@ class OptsTube(OptsGlyph):
         "smooth_iter":       0,
     })
 
-    _commit_level: ClassVar[Mapping[str, Any]] = {
-        **dict(OptsGlyph._commit_level),
-        "is_capping":        LEVEL_REMESH,
-        "smooth_iter":       LEVEL_REMESH,
-    }
 
 
         
@@ -114,7 +103,8 @@ class PlotTube(PlotGlyph):
         object.__setattr__(self, "raw_line_index", line_index)
 
         # resolver + plot
-        self._helper_resolver_init()
+        for attr in self._pending_resolution_attrs:
+            self._helper_resolver_spec(attr)
         self._helper_make_figure()
         self._helper_init_end()
 
@@ -173,8 +163,7 @@ class PlotTube(PlotGlyph):
             poly = poly.smooth(n_iter=self.opts.smooth_iter)
             
         object.__setattr__(self, "_calc_poly", poly)
-        
-        return poly
+        self._helper_set_poly(poly)
 
         
     @logging_and_warning_decorator(start_finish_level=5)    
@@ -206,21 +195,21 @@ class PlotTube(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_pre_opts(self, logger=None, **kwargs):
         
-        is_needs_remesh, kwargs = super()._helper_commit_pre_opts(**kwargs)
+        is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
         found, line_index, kwargs = pop_exclusive(kwargs, "line_index", "raw_line_index")
         if found:
             if line_index is None:
                 object.__setattr__(self, "raw_line_index", line_index)
-                is_needs_remesh = True
+                is_new_topology = True
             else:
                 try:
                     line_index = self._helper_check_index(line_index)
                     object.__setattr__(self, "raw_line_index", line_index)
-                    is_needs_remesh = True
+                    is_new_topology = True
                 except:
                     logger.exception("Invalid `line_index` input")
                     logger.recovery("Ignore this modification in the following")
                     
-        return is_needs_remesh, kwargs
+        return is_new_topology, kwargs
 

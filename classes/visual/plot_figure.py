@@ -6,6 +6,7 @@ from pyvistaqt import BackgroundPlotter
 from types import MappingProxyType
 from typing import Mapping, Any
 from PyQt5 import QtCore
+import weakref
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
@@ -94,7 +95,8 @@ class PlotFigure(HostBase, RegistryBase):
         ),
         
         "_entity_pick_manager": "The PickManager instance attached to this figure. ",
-        "_entity_console": "The ScopedConsoleDock instance attached to this figure. "
+        "_entity_console": "The ScopedConsoleDock instance attached to this figure. ",
+        "_entity_scalar_bars": "The RegistryBase instance to manage scalar bars in this figure. "
 
     }
     
@@ -183,6 +185,10 @@ class PlotFigure(HostBase, RegistryBase):
         main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
         
         object.__setattr__(self, "_entity_console", console)
+        
+        scalar_bars = RegistryBase("scalar bars manager")
+        scalar_bars._internal_owner_ref = weakref.ref(self)
+        object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
         
     
     @property

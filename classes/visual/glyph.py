@@ -26,13 +26,15 @@ from Nematics3D.general import pop_exclusive, is_given_str
 from ..opts import merge_opts_all, build_dict_override
 
 #!!! resolver source
+#!!! colorbar name args
+#!!! is_reset_camera commit
 
 LEVEL_ACTOR = 0  # Only changes GPU/Rendering state. (Fastest)
 LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
 LEVEL_REMESH = 2  # Needs to re-run the glyph filter to rebuild the 3D mesh. (Heaviest)
 
 # --- Type aliases ---
-ColorMode = ColorRGB | Callable | Sequence | Literal["scalars"]
+ColorMode = ColorRGB | Callable | Sequence 
 OpacityMode = float | Callable | Sequence
 RadiusMode = float | Callable | Sequence
 ScalarsMode = Callable | Sequence | None
@@ -59,6 +61,7 @@ class OptsGlyph(OptsBase):
     roughness:                  float | Unset                       = UNSET
 
     # --- Shape & Color ---
+    paint_by:                   Literal["color", "scalars"] | Unset = UNSET
     color:                      ColorMode | Unset                   = UNSET
     opacity:                    OpacityMode | Unset                 = UNSET
     scalars:                    ScalarsMode | Unset                 = UNSET
@@ -95,12 +98,12 @@ class OptsGlyph(OptsBase):
         "roughness":            "PBR surface roughness (0-1). Needs PBR enabled.",
         
         # === Shape and Color Control ===
+        "paint_by":             "Controls how the visual appearance of the object is driven, by `color` or `scalars`.",
         "color": (
             "Determines point colors. Options: "
             "1) ColorRGB for entire glyph (e.g. (1,0,0)) "
             "2) Function (mapping function), "
             "3) color data set manually, "
-            "4) 'scalars' (maps 1D data to colors using scalars_cmap/scalars_clim)."
         ),
         "opacity": (
             "Determines point transparency. Options: "
@@ -149,6 +152,7 @@ class OptsGlyph(OptsBase):
         "specular_color":       lambda v, d: as_ColorRGB(v, name=d),
         "metallic":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
         "scalars_clim":         lambda v, d: (v if v is None else as_Vect(v, name=d, dim=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
@@ -170,9 +174,10 @@ class OptsGlyph(OptsBase):
         "specular_color":       (1.0, 1.0, 1.0),
         "metallic":             0.0,
         "roughness":            0.5,
+        "paint_by":             "color",
         "color":                (0.5, 0.5, 0.5),
         "opacity":              1.0,
-        "scalars":              None,
+        "scalars":              lambda x: np.arange(len(x)),
         "radius":               0.5,
         "scalars_cmap":         "viridis",
         "scalars_clim":         None,
@@ -181,18 +186,6 @@ class OptsGlyph(OptsBase):
         "sides":                12,
         "clip_geometry":        None,
     })
-
-
-    _commit_level: ClassVar[Mapping[str, Any]] = {
-        "color":                LEVEL_RECALC,
-        "opacity":              LEVEL_RECALC,
-        "scalars":              LEVEL_RECALC,
-        "radius":               LEVEL_REMESH,
-        "scalars_cmap":         LEVEL_RECALC,
-        "scalars_clim":         LEVEL_RECALC,
-        "sides":                LEVEL_REMESH,
-        "clip_geometry":        LEVEL_REMESH,
-    }
 
     _actor_attr: ClassVar[Mapping[str, str]] = {
         "is_visible":           "visibility",
@@ -249,6 +242,10 @@ class PlotGlyph(HostBase):
         "_internal_owner_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
                                          "To access it, use .owner or ._internal_owner."),
         }
+    
+    _pending_resolution_attrs: Sequence[str] = (
+        "radius", "opacity", "color", "scalars"
+        )
 
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -282,6 +279,16 @@ class PlotGlyph(HostBase):
             **kwargs
             )
         
+        if self.opts.paint_by is UNSET:
+            if self.opts.color is UNSET and self.opts.scalars is not UNSET:
+                self.opts.paint_by = 'scalars'
+            elif self.opts.color is not UNSET and self.opts.scalars is UNSET:
+                self.opts.paint_by = 'color'
+            elif self.opts.color is not UNSET and self.opts.scalars is not UNSET:
+                logger.warning("Both 'color' and 'scalars' are provided, but 'paint_by' is not explicitly specified."
+                               "The default paint_by strategy will be applied.")
+
+        
         logger.detail("Establishing PlotFigure object ...")
         if figure is not None:
             try:
@@ -304,12 +311,6 @@ class PlotGlyph(HostBase):
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         unique_id = self.name + str_now
         object.__setattr__(self, "_internal_name_pv", unique_id)
-        
-        
-        if not (isinstance(self.opts.color, str) and self.opts.color == 'scalars') and self.opts.scalars not in (None, UNSET):
-            msg = "Color input of PlotGlyph is not set to 'scalars'. However, scalars is provided.\n"
-            msg += "The scalars data will be ignored unless color='scalars' is explicitly specified."
-            logger.warning(msg)
             
     def _helper_init_end(self):
         figure = self.owner
@@ -331,12 +332,10 @@ class PlotGlyph(HostBase):
     # ----------------------------------------------------------------------------------------------------
         
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_generic(self, attr_name, attr_input, default_val, logger=None):
+    def _helper_resolver_generic(self, attr_name, attr_input, default_val, is_recover=False, logger=None):
         
         target_shape = (len(self.raw_coords),3) if attr_name=='color' else (len(self.raw_coords),)
         source = getattr(self, self._internal_resolver_source)
-        
-        is_set_success = False
         
         try:
             if attr_input is None:
@@ -358,40 +357,22 @@ class PlotGlyph(HostBase):
                 resolved = as_ColorRGB_array(resolved, name='The pairwise color data of glyph')
                 
             object.__setattr__(self, '_calc_'+attr_name, resolved)
-            is_set_success = True
+            object.__setattr__(self.opts, attr_name, attr_input)
     
     
-        except:
-            logger.exception(f"Failed to resolve {attr_name!r}")
-            if getattr(self, "_entity", None):
-                logger.recovery("Automatically ignore this modification.")
-                is_set_success = False
+        except Exception:
+            if is_recover:
+                raise ValueError("The default value is not valid!")
             else:
-                if attr_name=="scalars" and default_val is None:
-                    default_val = lambda x: np.linalg.norm(x, axis=-1)
-                    resolved = default_val(self.raw_coords)
-                    logger.recovery(f"Reset {attr_name!r} to default: the distance of each point to origin.")
+                logger.exception(f"Failed to resolve {attr_name!r}")
+                if getattr(self, "_entity", None):
+                    logger.recovery("Automatically ignore this modification.")
                 else:
-                    resolved = np.full(target_shape, default_val, dtype=np.float32)
-                    logger.recovery(f"Reset {attr_name!r} to default: {default_val} everywhere.")
-                    object.__setattr__(self.opts, attr_name, default_val)
-                object.__setattr__(self, '_calc_'+attr_name, resolved)
-    
-        return is_set_success
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_init(self, extra=[], logger=None):
-        logger.detail("Resolving data for color, opacity, radius ...")
-        
-        self._helper_resolver_spec('opacity')
-        self._helper_resolver_spec('radius')
-        for attr in extra:
-            self._helper_resolver_spec(attr)
-        
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            self._helper_resolver_spec('scalars')
-        else:
-            self._helper_resolver_spec('color')
+                    logger.recovery(f"Reset {attr_name!r} to default."
+                                    "To find it, check self.opts_defaults[{attr_name}].")
+                    self._helper_resolver_generic(attr_name, default_val, default_val, is_recover=True)
+
+
             
             
     @logging_and_warning_decorator(start_finish_level=5)
@@ -410,7 +391,16 @@ class PlotGlyph(HostBase):
     def _helper_build_poly(self):
         poly = pv.PolyData(self.raw_coords)
         object.__setattr__(self, "_calc_poly", poly)
-        return poly
+        self._helper_set_poly(poly)
+
+    
+    def _helper_set_poly(self, poly):
+        if hasattr(self, "_calc_radius"):
+            poly.point_data['radius'] = self._calc_radius 
+        poly.point_data['opacity'] = self._calc_opacity
+        poly.point_data['scalars'] = self._calc_scalars
+        rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
+        poly.point_data['rgba'] = rgba_values 
         
     
     def _helper_build_mesh(self):
@@ -422,7 +412,7 @@ class PlotGlyph(HostBase):
         Creates or updates the rendering in a PyVista Plotter.
         """
         
-        is_scalars = (isinstance(self.opts.color, str) and self.opts.color == 'scalars')
+        is_scalars = self.opts.paint_by == 'scalars'
         unique_id = self._internal_name_pv
         
         input_dir = {
@@ -436,19 +426,11 @@ class PlotGlyph(HostBase):
             input_dir["opacity"] = "opacity"
             input_dir["cmap"] = self.opts.scalars_cmap
             input_dir["show_scalar_bar"] = self.opts.is_scalar_bar
-            input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
             input_dir["clim"] = self.opts.scalars_clim
+            input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
             
         logger.detail("Creating glyph polydata and mesh")
-        poly = self._helper_build_poly()
-        if hasattr(self, "_calc_radius"):
-            poly.point_data['radius'] = self._calc_radius 
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            poly.point_data['opacity'] = self._calc_opacity
-            poly.point_data['scalars'] = self._calc_scalars
-        else:
-            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values 
+        self._helper_build_poly()
         mesh = self._helper_build_mesh()
             
         logger.detail("Removing the existing actor")
@@ -537,42 +519,29 @@ class PlotGlyph(HostBase):
     # ----------------------------------------------------------------------------------------------------
     # The functios to update the given point-wise data values
     # ----------------------------------------------------------------------------------------------------
-        
-        
-    def _helper_replace_data_pv(self, attr: str, data: np.ndarray):
-        mesh = self._entity.mapper.dataset
-        mesh_data = mesh.point_data
-        if attr in self._calc_poly.point_data:
-            del self._calc_poly.point_data[attr]
-        if attr in mesh_data:
-            del mesh_data[attr]
-        self._calc_poly.point_data[attr] = data
-        mesh_data[attr] = mesh.interpolate(self._calc_poly).point_data[attr]
     
-
     def _helper_update_rgba(self):
-        rgba = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-        self._helper_replace_data_pv('rgba', rgba)
         mapper = self._entity.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = 'direct'
         mapper.lookup_table = None
         mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
-        mapper.Update()
+        if self.opts.scalar_bar_title in self.owner.pl.scalar_bars.keys():
+            self.owner.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
+
         
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_update_scalars(self, logger=None):
-        logger.detail("Update scalar coloring, which may involve switching from a direct color-based scheme to scalar-based coloring.")
-
-        self._helper_replace_data_pv('scalars', self._calc_scalars)
-        self._helper_replace_data_pv('opacity', self._calc_opacity)
+    def _helper_update_scalars(self, logger=None, **kwargs):
         
         mapper = self._entity.mapper
         mesh_data = mapper.dataset.point_data
 
         if "__custom_rgba" in mesh_data.keys():
             mesh_data.remove("__custom_rgba")
+            
+        if not isinstance(mapper.lookup_table, pv.LookupTable):
+            mapper.lookup_table = pv.LookupTable()
         
         mapper.set_scalars(
             mesh_data['scalars'], 
@@ -580,9 +549,17 @@ class PlotGlyph(HostBase):
             cmap = self.opts.scalars_cmap,
             clim = self.opts.scalars_clim,
             custom_opac=True,
-            opacity=mesh_data['opacity'])
+            opacity=mesh_data['opacity']
+            )
         
-        object.__setattr__(self.opts, 'color', 'scalars')
+        if self.opts.scalar_bar_title not in self.owner.pl.scalar_bars.keys():
+            self.owner.pl.add_scalar_bar(
+                title=self.opts.scalar_bar_title,
+                mapper=mapper,
+                render=False
+                )
+        
+
             
         
     # ----------------------------------------------------------------------------------------------------
@@ -618,178 +595,111 @@ class PlotGlyph(HostBase):
         if found:
             try:
                 category = as_str(category, name=self.__descriptions__["raw_category"])
+                object.__setattr__(self, "raw_category", category)
             except:
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification.")
         
-        is_needs_remesh = False
+        is_new_topology = False
         
         found, coords, kwargs = pop_exclusive(kwargs, "coords", "raw_coords")
         if found:
             try:
                 object.__setattr__(self, "raw_coords", as_points(coords))
-                is_needs_remesh = True
+                is_new_topology = True
             except:
                 logger.exception("Invalid input of coords for PlotGlyph.")
                 logger.recovery("Ignore this modification in the following")
                 
         
-        return is_needs_remesh, kwargs
+        return is_new_topology, kwargs
     
     
     def act_commit(self, opts=None, is_silhouette=True, **kwargs):
-        is_needs_remesh, kwargs = self._helper_commit_pre_opts(**kwargs)
+        is_new_topology, kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(is_needs_remesh, 
-                                  is_silhouette=is_silhouette, 
-                                  **kwargs)
+        self._helper_commit_apply_opts(is_new_topology, 
+                                       is_silhouette=is_silhouette, 
+                                       **kwargs)
     
     
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_apply(self, 
-                             is_needs_remesh, 
-                             attr_resolve_extra=[], 
-                             is_radius=True,
+    def _helper_commit_apply_opts(self, 
+                             is_new_topology, 
                              is_silhouette=True,
                              logger=None, 
                              **kwargs):
         
-        attr_resolve = ['radius', 'color', 'opacity'] + list(attr_resolve_extra)
-
-        if not is_radius:
-            attr_resolve.remove('radius')
+        if not is_new_topology and not kwargs:
+            return
         
-        if is_needs_remesh:
-            for attr in attr_resolve:
-                if attr not in kwargs.keys():
-                    if attr == 'color' and is_given_str(self.opts.color, 'scalars'):
-                        self._helper_resolver_spec('scalars')
-                    else:
-                        self._helper_resolver_spec(attr)
-        
+        logger.detail("Check if a recoloring is requested by input kwargs; if so, determine the paint method")
+        paint_method = kwargs.pop('paint_by', None)
+        if paint_method is None:
+            has_color, has_scalars = 'color' in kwargs, 'scalars' in kwargs
+            if has_color ^ has_scalars:   # exactly one is provided
+                paint_method = 'scalars' if has_scalars else 'color'
+        if paint_method is None:
+            paint_method = self.opts.paint_by
+        else:
+            object.__setattr__(self.opts, 'paint_by', paint_method)
+            
+            
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
         
-        logger.detail("Check if a recoloring is requested by input kwargs; if so, determine the color method")
-        color_method = None
-        if kwargs.get('scalars') is not None:
-            if 'color' in kwargs.keys() and not is_given_str(kwargs['color'], 'scalars'):
-                logger.warning("You are attempting to modify both 'color' and 'scalars' simultaneously. "
-                               "This is a potentially confusing operation."
-                               "In the following, the rendering will use 'scalars' for coloring,"
-                               "and `color` in kwargs is set to be 'scalars' instead.")
-            color_method = 'scalars'
-        elif 'color' in kwargs.keys():
-            if is_given_str(kwargs['color'], 'scalars'):
-                if getattr(self, '_calc_scalars', None):
-                    try:
-                        raise ValueError(
-                                "Setting 'color=scalars' was detected, but no input scalars were provided "
-                                "and no existing scalar data was found."
-                                )
-                    except:
-                        logger.exception("Check input.")
-                        logger.recovery("Automatically ignore this modification.")
-                        kwargs.pop('color')
-                else:
-                    color_method = 'scalars'
+        
+        is_needs_remesh = is_new_topology
+        for index, attr in enumerate(self._pending_resolution_attrs):
+            if attr not in kwargs.keys():
+                if is_new_topology: 
+                    self._helper_resolver_spec(attr)
             else:
-                color_method = 'color'
-        elif 'opacity' in kwargs.keys(): 
-            color_method = 'scalars' if is_given_str(self.opts.color, 'scalars') else 'color'
-            
-        if is_needs_remesh and not color_method:  
-            color_method = 'scalars' if is_given_str(self.opts.color, 'scalars') else 'color'
-
-        if color_method == 'scalars':
-            kwargs['color'] = 'scalars'
-
-
-        for key, value in kwargs.items():
-
-            if key == 'scalars' and value is None:
-                continue
-             
-            is_set_success = False
-            
-            try:
-                if key not in self.opts.__descriptions__.keys():
-                    raise ValueError(f"Unknown attribute: {key} in class: PlotGlyph.opts")
+                self._helper_resolver_spec(attr, attr_value=kwargs[attr])
+                kwargs.pop(attr)
+                is_needs_remesh = True
                 
-                level = self.opts._commit_level.get(key, LEVEL_ACTOR)
-                attr_path_actor = self.opts._actor_attr.get(key, None)
-    
-                # Dealing with LEVEL ACTOR (simply resetting values)
-                if level == LEVEL_ACTOR:
-                    
-                    # if key in "is_reset_camera":
-    
-                    pbr_params = ["metallic", "roughness"]
-                    phong_params = ["ambient", "diffuse", "specular", "specular_pow", "specular_color"]
-                    
-                    if key in pbr_params and current_shading != "pbr":
-                        logger.warning(f"Setting '{key}' but current shading_type is '{current_shading}'. PBR effects may not show.")
-                    elif key in phong_params and current_shading == "pbr":
-                        logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
-    
-                    if attr_path_actor and not is_needs_remesh:
-                        parts = attr_path_actor.split('.')
-                        obj = self._entity
-                        for part in parts[:-1]:
-                            obj = getattr(obj, part)
-                        setattr(obj, parts[-1], value)
-
-                    is_set_success = True
-                    
-                
-                # Dealing with LEVEL_RECALC (resolver for color, opacity and scalars)
-                elif level == LEVEL_RECALC:
-                    if key in attr_resolve:
-                        if key == 'color' and is_given_str(kwargs['color'], 'scalars'):
-                            if kwargs.get('scalars') is not None:
-                                is_set_success = self._helper_resolver_spec(
-                                    'scalars', 
-                                    attr_value=kwargs.get('scalars')
-                                    )
-                            else:
-                                is_set_success = self._helper_resolver_spec('scalars')
-                        else:
-                            is_set_success = self._helper_resolver_spec(key, attr_value=value)
-                    else:
-                        is_set_success = True
-                    
-    
-                # Dealing with LEVEL_REMESH (Geometry)
-                elif level == LEVEL_REMESH:
-                    is_needs_remesh = True
-                    if key == 'radius':
-                        is_set_success = self._helper_resolver_spec('radius', attr_value=value)
-                    else:
-                        is_set_success = True
-        
-            except:
-                logger.exception(f"Failed to reset value of {key!r}")
-                logger.recovery("Ignore this modification")
-                is_set_success = False
-        
-            if is_set_success:
-                object.__setattr__(self.opts, key, value)
                 
         if is_needs_remesh:
             self._helper_build_poly()
-            if is_radius:
-                self._calc_poly.point_data['radius'] = self._calc_radius 
             mesh = self._helper_build_mesh()
             self._entity.mapper.SetInputData(mesh)
             self._entity.mapper.Update()
             if is_silhouette:
                 self._helper_add_silhouette()
+                
+
+        pbr_params = ["metallic", "roughness"]
+        phong_params = ["ambient", "diffuse", "specular", "specular_pow", "specular_color"]
+
+        for key, value in kwargs.items():
+            #!!! is_reset_camera is_colorbar scalars_name
+            try:
+
+                if key in pbr_params and current_shading != "pbr":
+                    logger.warning(f"Setting '{key}' but current shading_type is '{current_shading}'. PBR effects may not show.")
+                elif key in phong_params and current_shading == "pbr":
+                    logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
+                    
+                attr_path_actor = self.opts._actor_attr.get(key, None)
+                if attr_path_actor:
+                    parts = attr_path_actor.split('.')
+                    obj = self._entity
+                    for part in parts[:-1]:
+                        obj = getattr(obj, part)
+                    setattr(obj, parts[-1], value)
+                    
+                object.__setattr__(self.opts, key, value)
+            except:
+                logger.exception(f"Failed to reset value of {key!r}")
+                logger.recovery("Ignore this modification")
 
         
-        if color_method:
-            self._helper_update_scalars() if color_method == 'scalars' else self._helper_update_rgba()
-
-                
+        if paint_method == "color":
+            self._helper_update_rgba()
+        else:
+            self._helper_update_scalars()
+            
         self.owner.pl.render()
 
          

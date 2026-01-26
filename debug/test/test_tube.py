@@ -73,11 +73,11 @@ tube4 = Nematics3D.PlotTube(
     line_index = line_index,
     name="func_scalars",
     sides=20,
-    color='scalars',
     radius=0.25,
     opacity=opacity_func,     
     scalars=radius_wave, 
-    scalars_cmap='plasma'     
+    scalars_cmap='plasma',
+    scalar_bar_title='tube4 scalars'
 )
 
 tube5 = Nematics3D.PlotTube(
@@ -86,7 +86,6 @@ tube5 = Nematics3D.PlotTube(
     line_index = line_index,
     name="manual_scalars2",
     sides=20,
-    color="scalars",
     radius=0.25,
     opacity=1,     
     scalars=radius_wave(get_path(offset_y=20)),  
@@ -94,7 +93,7 @@ tube5 = Nematics3D.PlotTube(
     metallic=1,
     roughness=0.4,
     scalars_clim=(0,0.2),
-    scalar_bar_title='test'
+    scalar_bar_title='tube5 scalars'
 )
 
 

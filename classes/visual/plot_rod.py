@@ -31,10 +31,6 @@ class OptsRod(OptsGlyph):
         "radius":       0.3,
     })
 
-    _commit_level: ClassVar[Mapping[str, Any]] = {
-        **dict(OptsGlyph._commit_level),
-        "length":        LEVEL_REMESH,
-    }
 
         
 class PlotRod(PlotGlyph):

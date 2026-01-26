@@ -16,7 +16,7 @@ n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-pts = Q.lines[0]._raw_defect_indices[:1000]
+pts = Q.lines[0]._raw_defect_indices[:3000]
 
 # ============================================================
 # Figure + static points
@@ -25,26 +25,28 @@ figure = Nematics3D.PlotFigure()
 p = figure.pl
 
 
-Nematics3D.PlotSphere(
-    pts,
-    figure=figure,
-    sides=12,
-    radius=0.2,
-    color=(0, 0, 0),
-)
+# Nematics3D.PlotSphere(
+#     pts,
+#     figure=figure,
+#     sides=12,
+#     radius=0.2,
+#     color=(0, 0, 0),
+# )
 
 # ============================================================
 # PlotTube (your system) + SmoothedLine
 # ============================================================
 smooth = Nematics3D.SmoothedLine(pts, window_length=10)
 
-radius_set = np.linspace(0.2, 1.5, 3000)
+radius_set = np.linspace(0.2, 1.5, 9000)
 
 
 tube = Nematics3D.PlotTube(
     smooth._entity,
     figure=figure,
-    color=(1, 0, 0),
+    #paint_by='scalars',
+    #color=lambda x: np.abs(x) / np.linalg.norm(x, axis=-1, keepdims=True),
+    scalars=lambda x: np.max(x, axis=-1),
     radius=radius_set,
 )
 
@@ -200,6 +202,6 @@ class ControlsWindow(QtWidgets.QWidget):
 # ============================================================
 _commit_plottube_full()
 
-# controls_window = ControlsWindow(parent=None, current_radius_mean=current_radius_mean)
-# controls_window.resize(380, 200)
-# controls_window.show()
+controls_window = ControlsWindow(parent=None, current_radius_mean=current_radius_mean)
+controls_window.resize(380, 200)
+controls_window.show()

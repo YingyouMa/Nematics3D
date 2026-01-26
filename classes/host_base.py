@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Callable, ClassVar, Mapping, Type
+from typing import Any, Callable, ClassVar, Mapping, Type, Sequence
 import weakref
 from contextlib import contextmanager
 import numpy as np
@@ -19,6 +19,7 @@ class OptsBase:
         default=None, repr=False, init=False
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
+    _internal_sync_func: dict[str, Sequence[Callable]] = field(default_factory=dict, init=False, repr=False)
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         "tag":                  "name identifier of the option settings",
@@ -31,6 +32,10 @@ class OptsBase:
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
         "tag":                  "options"
         })
+    
+    
+    def __post_init__(self):
+        self._internal_sync_func = {k: [] for k in self.__descriptions__.keys()}
 
     # ---------------------------------------------------------------------
     # Basic core: assignment with validation + lifecycle rule + owner commit
@@ -86,6 +91,9 @@ class OptsBase:
 
     def _helper_sync(self, key, value):
         self._helper_owner_apply(key, value)
+        sync_func = self._internal_sync_func.get(key, None)
+        for func in sync_func:
+            func()
         
     def _helper_owner_apply(self, key, value):
         owner = self._internal_owner_ref()
