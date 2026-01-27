@@ -1,4 +1,4 @@
-from qtpy import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore, QtGui
 from dataclasses import dataclass
 import datetime
 from typing import Callable
@@ -145,3 +145,14 @@ class PanelBase(QtWidgets.QWidget):
 
     def on_changed(self, _v: int = 0):
         raise NotImplementedError
+        
+    def closeEvent(self, event: QtGui.QCloseEvent):
+        try:
+            self.on_close()
+        finally:
+            event.accept()
+            
+    def on_close(self):
+        sync = getattr(self.glyph.opts, "_internal_sync_func", None)
+        for k, sub in sync.items():
+            sub.pop(self.str_now, None)

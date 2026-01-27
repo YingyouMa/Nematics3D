@@ -92,7 +92,7 @@ class OptsBase:
 
     def _helper_sync(self, key, value):
         self._helper_owner_apply(key, value)
-        sync_func = self._internal_sync_func.get(key, None)
+        sync_func = self._internal_sync_func.get(key, {})
         for func in sync_func.values():
             func()
         
@@ -369,8 +369,7 @@ class HostBase:
             data[name] = default
             
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_setattr_basic(self, key, value, allowed_extra=[], logger=None):
+    def _helper_setattr_basic(self, key, value, allowed_extra=[]):
     
         allowed_core = list(allowed_extra) + ["name", "raw_name"]
         

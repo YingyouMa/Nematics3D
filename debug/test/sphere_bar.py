@@ -1,6 +1,6 @@
 import numpy as np
 import pyvista as pv
-from qtpy import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore, QtGui
 import datetime
 
 import sys
@@ -145,9 +145,6 @@ class SphereControlsWindow(PanelBase):
         self._apply_opacity_enabled()
 
 
-        
-
-
         for item in self.sliders.values():
             item.slider.valueChanged.connect(self.on_changed)
             item.slider.sliderPressed.connect(self.glyph._helper_clear_silhouette)
@@ -155,7 +152,7 @@ class SphereControlsWindow(PanelBase):
 
         self.on_changed(0, is_commit=False)
         
-        self.glyph.opts._internal_sync_func["sides"][self.str_now] = self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
+        self.glyph.opts._internal_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
 
     def on_changed(self, _v: int = 0, is_commit: bool = True):
         # ---- radius_rescale ----
@@ -203,8 +200,10 @@ class SphereControlsWindow(PanelBase):
         # ---- color (controlled or restore) ----
         if bool(self.state.get("is_use_control_color", False)):
             color_now = tuple(float(x) for x in self.state["color"])
+            paint_by_now = 'color'
         else:
             color_now = self.glyph._internal_opts_backup[self.str_now]["color"]
+            paint_by_now = self.glyph._internal_opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
@@ -216,6 +215,7 @@ class SphereControlsWindow(PanelBase):
             radius=radius_now,
             color=color_now,
             opacity=opacity_now,
+            paint_by=paint_by_now,
             sides=int(self.state["sides"]),
             is_silhouette=False,
         )
@@ -242,6 +242,8 @@ class SphereControlsWindow(PanelBase):
         item = self.sliders['opacity']
         item.slider.setEnabled(opacity_enabled)
         item.label.setEnabled(opacity_enabled)
+        
+
 
 
 controls_window = SphereControlsWindow(spheres)
