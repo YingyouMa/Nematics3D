@@ -4,6 +4,7 @@ from typing import Any, Callable, ClassVar, Mapping, Type, Sequence
 import weakref
 from contextlib import contextmanager
 import numpy as np
+import datetime
 
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
@@ -19,7 +20,7 @@ class OptsBase:
         default=None, repr=False, init=False
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
-    _internal_sync_func: dict[str, Sequence[Callable]] = field(default_factory=dict, init=False, repr=False)
+    _internal_sync_func: dict[str, dict[str, Callable]] = field(default_factory=dict, init=False, repr=False)
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         "tag":                  "name identifier of the option settings",
@@ -35,7 +36,7 @@ class OptsBase:
     
     
     def __post_init__(self):
-        self._internal_sync_func = {k: [] for k in self.__descriptions__.keys()}
+        self._internal_sync_func = {k: {} for k in self.__descriptions__.keys()}
 
     # ---------------------------------------------------------------------
     # Basic core: assignment with validation + lifecycle rule + owner commit
@@ -92,7 +93,7 @@ class OptsBase:
     def _helper_sync(self, key, value):
         self._helper_owner_apply(key, value)
         sync_func = self._internal_sync_func.get(key, None)
-        for func in sync_func:
+        for func in sync_func.values():
             func()
         
     def _helper_owner_apply(self, key, value):
@@ -214,15 +215,20 @@ class HostBase:
         "opts":                     "The Opts instance controlling options.",
         "opts_defaults":            "The default option settings.",
         
-        "_internal_owner_ref":      ("A weak reference to the owner object associated with this instance."
-                                     "To access it, use .owner or ._internal_owner."),
+        "_internal_owner_ref":      (
+            "A weak reference to the owner object associated with this instance."
+            "To access it, use .owner or ._internal_owner."),
+        
         "_internal_extra_attrs":    (
             "A dict storing user-registered extra attributes. "
             "These are accessed via `glyph.<name>` after calling `act_add_attr(name, doc)`."
         ),
-        "_internal_extra_attrs_docs": (
-            "A dict storing docstrings for user-registered extra attributes."
-        ),
+        "_internal_extra_attrs_docs": "A dict storing docstrings for user-registered extra attributes.",
+        
+        "_internal_opts_backup":        (
+            "A dictionary storing potentially useful options, indexed by timestamp."
+            "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
+            )
         }
     
     
@@ -414,4 +420,10 @@ class HostBase:
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})"
         return msg 
+    
+    def act_save_opts(self, name=None):
+        if not name:
+            name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        self._internal_opts_backup[name] = self.opts.act_asdict()
+        
 

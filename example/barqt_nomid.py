@@ -1,5 +1,6 @@
 import numpy as np
 import pyvista as pv
+import datetime
 
 import sys
 sys.path.insert(0, "D:/Document/GitHub/")
@@ -50,10 +51,9 @@ tube = Nematics3D.PlotTube(
     radius=radius_set,
 )
 
-# --- freeze camera reset while editing ---
-current_radius_mean = tube._calc_radius.mean()
+
+
 current_radius = tube.opts.radius
-tube.opts.is_reset_camera = False
 tube._helper_clear_silhouette()
 
 state = dict(window_length=smooth.opts.window_length)
@@ -89,7 +89,6 @@ def _commit_plottube_full() -> None:
 class ControlsWindow(QtWidgets.QWidget):
     def __init__(
         self,
-        current_radius_mean,
         max_window_length=200,
         parent=None,
     ):
@@ -169,6 +168,10 @@ class ControlsWindow(QtWidgets.QWidget):
         self.slider_r.sliderPressed.connect(self._on_any_slider_pressed)
         self.slider_w.sliderReleased.connect(self._on_any_slider_released)
         self.slider_r.sliderReleased.connect(self._on_any_slider_released)
+        
+        str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        smooth.opts._internal_sync_func['window_length'][str_now] = lambda: self._on_window_changed(smooth.opts.window_length, is_commit=False)
+        
 
     def _on_any_slider_pressed(self):
         self._is_dragging = True
@@ -178,11 +181,12 @@ class ControlsWindow(QtWidgets.QWidget):
         # ensure final commit once more (in case last valueChanged missed)
         _commit_plottube_full()
 
-    def _on_window_changed(self, v: int):
+    def _on_window_changed(self, v: int, is_commit: bool = True):
         v = int(v)
         self.lab_w_val.setText(str(v))
         state["window_length"] = v
-        _commit_plottube_full()
+        if is_commit:
+            _commit_plottube_full()
 
     def _on_radius_changed(self, t: int):
         t = int(t)
@@ -202,6 +206,6 @@ class ControlsWindow(QtWidgets.QWidget):
 # ============================================================
 _commit_plottube_full()
 
-controls_window = ControlsWindow(parent=None, current_radius_mean=current_radius_mean)
+controls_window = ControlsWindow(parent=None)
 controls_window.resize(380, 200)
 controls_window.show()

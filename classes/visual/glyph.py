@@ -53,7 +53,7 @@ class OptsGlyph(OptsBase):
     ambient:                    float | Unset                       = UNSET
     diffuse:                    float | Unset                       = UNSET
     specular:                   float | Unset                       = UNSET
-    specular_pow:               float | Unset                       = UNSET
+    specular_power:             float | Unset                       = UNSET
     specular_color:             ColorRGB | Unset                    = UNSET
 
     # --- PBR Lighting ---
@@ -90,7 +90,7 @@ class OptsGlyph(OptsBase):
         "ambient":              "Reflected light from environment (0-1).",
         "diffuse":              "Standard matte reflection (0-1).",
         "specular":             "Glossy highlight strength (0-1).",
-        "specular_pow":         "Focus of gloss (1-100). Higher = shinier/smaller spot.",
+        "specular_power":       "Focus of gloss (1-100). Higher = shinier/smaller spot.",
         "specular_color":       "The color of the glossy highlight (RGB). Usually white [1,1,1].",
         
         # === Lighting - PBR ===
@@ -148,7 +148,7 @@ class OptsGlyph(OptsBase):
         "ambient":              lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "diffuse":              lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "specular":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "specular_pow":         lambda v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
+        "specular_power":       lambda v, d: as_Number(v, name=d, value_range=(1, 100), bounded=True),
         "specular_color":       lambda v, d: as_ColorRGB(v, name=d),
         "metallic":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
@@ -170,7 +170,7 @@ class OptsGlyph(OptsBase):
         "ambient":              0.2,
         "diffuse":              0.7,
         "specular":             0.2,
-        "specular_pow":         20.0,
+        "specular_power":       20.0,
         "specular_color":       (1.0, 1.0, 1.0),
         "metallic":             0.0,
         "roughness":            0.5,
@@ -194,7 +194,7 @@ class OptsGlyph(OptsBase):
         "ambient":              "prop.ambient",
         "diffuse":              "prop.diffuse",
         "specular":             "prop.specular",
-        "specular_pow":         "prop.specular_power",
+        "specular_power":       "prop.specular_power",
         "specular_color":       "prop.specular_color",
         "metallic":             "prop.metallic",
         "roughness":            "prop.roughness",
@@ -269,6 +269,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "raw_category", category)
         
         object.__setattr__(self, "_internal_resolver_source", "raw_coords")
+        object.__setattr__(self, "_internal_opts_backup", {})
         
         super().__init__(
             opts_type,
@@ -369,7 +370,7 @@ class PlotGlyph(HostBase):
                     logger.recovery("Automatically ignore this modification.")
                 else:
                     logger.recovery(f"Reset {attr_name!r} to default."
-                                    "To find it, check self.opts_defaults[{attr_name}].")
+                                    f"To find it, check self.opts_defaults['{attr_name}'].")
                     self._helper_resolver_generic(attr_name, default_val, default_val, is_recover=True)
 
 
@@ -464,7 +465,7 @@ class PlotGlyph(HostBase):
         prop.ambient = self.opts.ambient
         prop.diffuse = self.opts.diffuse
         prop.specular = self.opts.specular
-        prop.specular_power = self.opts.specular_pow
+        prop.specular_power = self.opts.specular_power
         prop.specular_color = self.opts.specular_color
         
         if shading == 'pbr':
@@ -484,9 +485,7 @@ class PlotGlyph(HostBase):
     
         plotter = self.owner.pl
 
-        silhouette_id = f"{self._internal_name_pv}__silhouette"
-        if silhouette_id in plotter.actors:
-            plotter.remove_actor(silhouette_id) 
+        self._helper_clear_silhouette()
             
         mesh = self._entity.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
@@ -497,19 +496,16 @@ class PlotGlyph(HostBase):
             line_width=6,
             opacity=0.8,
         )
+
         actor_silhouette.visibility = False
         actor_silhouette.pickable = False
         
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
 
     def _helper_clear_silhouette(self):
-
         plotter = self.owner.pl
-
-        silhouette_id = f"{self._internal_name_pv}__silhouette"
-        if silhouette_id in plotter.actors:
-            plotter.remove_actor(silhouette_id) 
-
+        if getattr(self, "_entity_silhouette", None):
+            plotter.remove_actor(self._entity_silhouette)
         object.__setattr__(self, "_entity_silhouette", None)
 
         
@@ -659,6 +655,9 @@ class PlotGlyph(HostBase):
                 kwargs.pop(attr)
                 is_needs_remesh = True
                 
+        if "sides" in kwargs:
+            object.__setattr__(self.opts, 'sides', kwargs['sides'])
+            is_needs_remesh = True
                 
         if is_needs_remesh:
             self._helper_build_poly()
@@ -670,7 +669,7 @@ class PlotGlyph(HostBase):
                 
 
         pbr_params = ["metallic", "roughness"]
-        phong_params = ["ambient", "diffuse", "specular", "specular_pow", "specular_color"]
+        phong_params = ["ambient", "diffuse", "specular", "specular_power", "specular_color"]
 
         for key, value in kwargs.items():
             #!!! is_reset_camera is_colorbar scalars_name
@@ -709,22 +708,28 @@ class PlotGlyph(HostBase):
                       opacity: float | None = None,
                       width: float | None = None):
         
-        self._entity_silhouette.visibility = True
+        silhouette = getattr(self, '_entity_silhouette', None)
         
-        color = as_ColorRGB(color, name="The color of silhouette", replace=None) if color is not None else None
-        opacity = as_Number(opacity, name="The opacity of silhouette", value_range=(0,1), replace=None) if opacity is not None else None
-        width = as_Number(width, name="The line width of silhouette", value_range=(0,np.inf), replace=None) if width is not None else None
-        
-        sil_prop = self._entity_silhouette.prop
-        if color is not None:
-            sil_prop.color = color
-        if opacity is not None:
-            sil_prop.opacity = opacity
-        if width is not None:
-            sil_prop.line_width = width
+        if silhouette:
+            
+            self._entity_silhouette.visibility = True
+            
+            color = as_ColorRGB(color, name="The color of silhouette", replace=None) if color is not None else None
+            opacity = as_Number(opacity, name="The opacity of silhouette", value_range=(0,1), replace=None) if opacity is not None else None
+            width = as_Number(width, name="The line width of silhouette", value_range=(0,np.inf), replace=None) if width is not None else None
+            
+            sil_prop = self._entity_silhouette.prop
+            if color is not None:
+                sil_prop.color = color
+            if opacity is not None:
+                sil_prop.opacity = opacity
+            if width is not None:
+                sil_prop.line_width = width
             
     def act_dehighlight(self):
-        self._entity_silhouette.visibility = False
+        silhouette = getattr(self, '_entity_silhouette', None)
+        if silhouette:
+            self._entity_silhouette.visibility = False
             
             
     def __repr__(self) -> str:

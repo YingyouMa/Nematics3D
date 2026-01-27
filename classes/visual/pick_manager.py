@@ -66,21 +66,23 @@ class OptsPickManager:
                 for pack in markers:
                     pack["actor"].GetProperty().SetPointSize(value)
                     
-            if key == "marker_color":
+            elif key == "marker_color":
                 for pack in markers:
                     pack["actor"].GetProperty().SetColor(*value)
                     
-            if key == "marker_font_size":
+            elif key == "marker_font_size":
                 for pack in markers:
                     pack["text_actor"].GetTextProperty().SetFontSize(value)
-                    
-            for glyph in owner._internal_active_glyphs:
-                if key == "sil_color":
-                    glyph._entity_silhouette.prop.color = value
-                if key == "sil_opacity":
-                    glyph._entity_silhouette.prop.opacity = value
-                if key == "sil_width":
-                    glyph._entity_silhouette.prop.line_width = value
+            
+            else:
+                for glyph in self._internal_registry.values():
+                    if hasattr(glyph, '_entity_silhouette') and glyph._entity_silhouette.visibility:
+                        if key == "sil_color":
+                            glyph._entity_silhouette.prop.color = value
+                        if key == "sil_opacity":
+                            glyph._entity_silhouette.prop.opacity = value
+                        if key == "sil_width":
+                            glyph._entity_silhouette.prop.line_width = value
             
             owner.owner.pl.render()
                 
@@ -176,16 +178,15 @@ class PickManager:
         object.__setattr__(self, "_state_last_click_time", now)
         object.__setattr__(self, "_state_last_click_actor", actor)
         
-        if owner in self._internal_active_glyphs:
-            owner.act_dehighlight()
-            self._internal_active_glyphs.remove(owner)
-        else:
-            owner.act_highlight(
-                color=self.opts.sil_color,
-                opacity=self.opts.sil_opacity,
-                width=self.opts.sil_width
-                )
-            self._internal_active_glyphs.append(owner)
+        if hasattr(owner, '_entity_silhouette'):
+            if owner._entity_silhouette.visibility == True:
+                owner.act_dehighlight()
+            else:
+                owner.act_highlight(
+                    color=self.opts.sil_color,
+                    opacity=self.opts.sil_opacity,
+                    width=self.opts.sil_width
+                    )
 
         # Single click: print only.
         if not is_double:

@@ -16,20 +16,20 @@ class OptsDelaunay(OptsGlyph):
     __descriptions__: ClassVar[Mapping[str, str]] = {
         k: v
         for k, v in OptsGlyph.__descriptions__.items()
-        if k != "radius"
+        if k not in ( "radius", "sides")
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         k: v
         for k, v in OptsGlyph._validators.items()
-        if k != "radius"
+        if k not in ( "radius", "sides")
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
         **{
         k: v
         for k, v in OptsGlyph._DEFAULTS_FROZEN.items()
-        if k != "radius"
+        if k not in ( "radius", "sides")
     },
         "ambient": 0.5
     })

@@ -58,7 +58,8 @@ class PlotSphere(PlotGlyph):
             **kwargs,
         )
 
-        self._helper_resolver_init()
+        for attr in self._pending_resolution_attrs:
+            self._helper_resolver_spec(attr)
         self._helper_make_figure()
         self._helper_init_end()
         
@@ -84,6 +85,5 @@ class PlotSphere(PlotGlyph):
             elif hasattr(self.opts.clip_geometry, "points"):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
-        object.__setattr__(self, "_calc_poly", poly)
         return mesh
     
