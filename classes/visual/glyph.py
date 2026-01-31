@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type
+from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
 import weakref
 import numpy as np
@@ -243,9 +243,9 @@ class PlotGlyph(HostBase):
                                          "To access it, use .owner or ._internal_owner."),
         }
     
-    _pending_resolution_attrs: Sequence[str] = (
+    _pending_resolution_attrs: List[str] = [
         "radius", "opacity", "color", "scalars"
-        )
+        ]
 
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -646,7 +646,7 @@ class PlotGlyph(HostBase):
         
         
         is_needs_remesh = is_new_topology
-        for index, attr in enumerate(self._pending_resolution_attrs):
+        for attr in self._pending_resolution_attrs:
             if attr not in kwargs.keys():
                 if is_new_topology: 
                     self._helper_resolver_spec(attr)

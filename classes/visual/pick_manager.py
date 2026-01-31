@@ -53,7 +53,7 @@ class OptsPickManager:
     
     def __setattr__(self, key, value):
         if key in self._validators:
-            desc = f'{key!r}: {self.__descriptions__.get(key)[2]}'
+            desc = f'{key!r}: {self.__descriptions__.get(key)}'
             value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
         

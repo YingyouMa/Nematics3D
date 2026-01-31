@@ -22,7 +22,7 @@ p.add_axes()
 
 p.add_mesh(pv.PolyData(pts), render_points_as_spheres=True, point_size=6, opacity=0.25)
 
-txt = p.add_text("", position=(5, 1000), font_size=12)
+txt = p.add_text("", position=(3, 1000), font_size=12)
 
 state = dict(window_length=5)
 

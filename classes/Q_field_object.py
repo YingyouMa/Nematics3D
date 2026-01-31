@@ -3,6 +3,7 @@ import time
 from typing import Optional, Union
 from dataclasses import replace, dataclass, asdict, field
 from pyvistaqt import BackgroundPlotter
+import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
@@ -41,6 +42,8 @@ from .plane_grid import OptsPlaneGrid
 from .opts import merge_opts_all
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth
+from .registry_base import RegistryBase
+from .disclination_line import DisclinationLine
 
 #!!! Q.default_tube_opts
 
@@ -118,55 +121,57 @@ class QFieldObject:
     
     __descriptions__ = {
         # --- Identity ---
-        "name": ["Name identifier of this Q tensor object.", "SLOT"],
+        "raw_name": "Name identifier of this Q tensor object.",
+        "name":     "Property: Name identifier. This equals `raw_name`.",
 
-        # --- Raw inputs (stored as _raw_*) ---
-        "_raw_Q": ["Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).", "SLOT"],
-        "_raw_S": ["Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).", "SLOT"],
-        "_raw_n": ["Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).", "SLOT"],
-        "_raw_box_periodic_flag": ["Per-dimension periodic boundary condition flags (bool array-like of length 3).", "SLOT"],
-        "_raw_grid_offset": ["Grid translation offset mapping lattice indices -> real-space coordinates (Vect(3)).", "SLOT"],
-        "_raw_grid_transform": ["Grid linear transform mapping lattice indices -> real-space coordinates (3x3 Tensor).", "SLOT"],
+        # --- Raw inputs ---
+        "_raw_Q": "Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).",
+        "_raw_S": "Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
+        "_raw_n": "Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
+        "_raw_box_periodic_flag": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
+        "_raw_grid_offset": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
+        "_raw_grid_transform": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
 
-        # --- Defaults / thresholds (stored as _raw_default_*) ---
-        "_raw_default_miminum_line_length_smooth": ["Default minimum line length (#points) required to apply smoothing.", "SLOT"],
-        "_raw_default_smooth_window_length": ["Default smoothing window length (#points) used when not specified.", "SLOT"],
-        "_raw_default_miminum_line_length_visual": ["Default minimum line length (#points) required for visualization.", "SLOT"],
-        "_raw_default_cross_line_padding_num_": ["Default number of points padded for smoothing cross-type disclination line.", "SLOT"],
+        # --- Defaults / thresholds ---
+        "default_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
+        "default_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
+        "default_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
+        "default_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
 
-        # --- Derived grids / geometry (stored as _calc_*) ---
-        "_calc_grid_index": ["Lattice coordinate grid in index space (before applying transform/offset).", "SLOT"],
-        "_calc_grid": ["Coordinate grid in real space after applying grid_transform and grid_offset.", "SLOT"],
-        "_calc_corners_index": ["Box corners in lattice-index space.", "SLOT"],
-        "_calc_corners": ["Box corners in real space coordinates.", "SLOT"],
-        "_calc_box_size_periodic_index": [(
+        # --- Derived grids / geometry ---
+        "_calc_grid_index": "Lattice coordinate grid in index space (before applying transform/offset).",
+        "_calc_grid": "Coordinate grid in real space after applying grid_transform and grid_offset.",
+        "_calc_corners_index": "Box corners in lattice-index space.",
+        "_calc_corners": "Box corners in real space coordinates.",
+        "_calc_box_size_periodic_index": (
             "Effective periodic box size in index units. "
             "For periodic dims equals grid size, otherwise inf."
-        ), "SLOT"],
-        "_calc_box_size_periodic_coord": ["Effective periodic box size in real-space coordinates.", "SLOT"],
+        ),
+        "_calc_box_size_periodic_coord": "Effective periodic box size in real-space coordinates.",
 
-        # --- Defects / disclinations (stored as _calc_*) ---
-        "_calc_defect_indices": ["Indices (lattice coordinates) of detected defect points.", "SLOT"],
-        "_calc_defect_grid": ["Real-space coordinates of detected defect points.", "SLOT"],
-        "_calc_lines": ["List of disclination line objects classified from defect indices.", "SLOT"],
+        # --- Defects / disclinations  ---
+        "_calc_defect_indices": "Indices (lattice coordinates) of detected defect points.",
+        "_calc_defect_grid": "Real-space coordinates of detected defect points.",
 
-        # --- Interpolation (stored as _calc_*) ---
-        "_calc_interpolator": ["Interpolator object for Q field in real space / index space.", "SLOT"],
+        # --- Interpolation ---
+        "_calc_interpolator": "Interpolator object for Q field in real space / index space.",
 
-        # --- Visualization state ---
-        "_entity_figures": ["FigureManager project to manage PlotFigure objects created for visualization.", "SLOT"],
+        # --- Visualization ---
+        "_entity_figures": "FigureManager object to manage PlotFigure objects created for visualization.",
+        "_entity_objects": "RegistryBase object to manage physical objects related to this Q field.",
 
         # --- Public properties (semantic) ---
-        "S": ["Property accessor: scalar order parameter field S. This equals _raw_S", "PROPERTY"],
-        "n": ["Property accessor: director field n. This equals _raw_n", "PROPERTY"],
-        "lines": ["Property accessor: classified disclination lines. This equals _calc_lines", "PROPERTY"],
-        "figs": ["Property accessor: visualization scenes/figures. This equals _entity_figures", "PROPERTY"],
+        "S": "Property: scalar order parameter field S. This equals _raw_S",
+        "n": "Property: director field n. This equals _raw_n",
+        "lines": "Property: classified disclination lines.",
+        "figs": "Property : visualization figures. This equals _entity_figures",
+        "objs": "Property: physcial objects. This equals _entity_objects",
     }
 
     __slots__ = tuple(
-        k for k, (_, kind) in __descriptions__.items()
-        if kind == "SLOT"
-    )
+        k for k, value in __descriptions__.items()
+        if not value.startswith("Property")
+    ) + ("__weakref__",)
 
     @logging_and_warning_decorator()
     def __init__(
@@ -182,8 +187,12 @@ class QFieldObject:
         for k, v in asdict(inputValue).items():
             if k == "name":
                setattr(self, "name", v)
+            elif k.startswith("default"):
+                setattr(self, k, v)
             else:
                setattr(self, f"_raw_{k}", v)
+               
+        self._entity_objects = RegistryBase(f"The objects manager of Q field {self.name!r}")
         
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
         if self._raw_n is not None:
@@ -231,8 +240,6 @@ class QFieldObject:
         self._calc_grid = apply_linear_transform(
             self._calc_grid_index, transform=self._raw_grid_transform, offset=self._raw_grid_offset
         )
-
-        self._entity_figures = FigureManager()
         
         logger.debug("Generating the coorners of Q.")
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
@@ -274,8 +281,18 @@ class QFieldObject:
                 
             logger.progress(f"Defect analysis is finished, with {time.time()-start:.2f} s")
         
-        
         self.act_add_interpolator()
+        
+        self._entity_figures = FigureManager()
+        
+    @property
+    def name(self):
+        return self.raw_name
+    
+    @name.setter
+    def name(self, value: str):
+        name = as_str(value, name="The name of the Q field")
+        self.raw_name = name       
         
           
     @logging_and_warning_decorator(start_finish_level=5)
@@ -296,7 +313,7 @@ class QFieldObject:
     @logging_and_warning_decorator(start_finish_level=5)
     def act_lines_classify(self, logger=None):
         
-        self._calc_lines = defect_classify_into_lines(
+        lines = defect_classify_into_lines(
             self._calc_defect_indices,
             box_size_periodic=self._calc_box_size_periodic_index,
             grid_offset=self._raw_grid_offset,
@@ -304,15 +321,16 @@ class QFieldObject:
             logger=logger,
         )
         logger.detail("Sorting lines by length")
-        self._calc_lines = sorted(
-            self._calc_lines, key=lambda line: line._calc_defect_num, reverse=True
+        lines = sorted(
+            lines, key=lambda line: line._calc_defect_num, reverse=True
         ) 
-        for i, line in enumerate(self._calc_lines):
-            line.name = f"line{i}"
+        for i, line in enumerate(lines):
+            line.name = f"disclination line {i}"
+            self._entity_objects.act_register(line)            
             
-        logger.info(f"{len(self._calc_lines)} lines are found.")
+        logger.info(f"{len(lines)} lines are found.")
 
-        return self._calc_lines
+        return lines
 
     @logging_and_warning_decorator()
     def act_lines_smooth(
@@ -331,9 +349,9 @@ class QFieldObject:
         opts.is_window_warning = False
         
         if opts.min_line_length is UNSET:
-            opts.min_line_length = self._raw_default_miminum_line_length_smooth
+            opts.min_line_length = self.default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self._raw_default_miminum_line_length_smooth={self._raw_default_smooth_window_length}."
+            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_smooth_window_length}."
             logger.info(msg)
         
         opts.act_finalize()
@@ -345,9 +363,9 @@ class QFieldObject:
             opts.window_ratio = None
             
         if opts.window_length is None and opts.window_ratio is None:
-            opts.window_length = self._raw_default_smooth_window_length
+            opts.window_length = self.default_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += f"Using the default value self._raw_default_smooth_window_length={self._raw_default_smooth_window_length}."
+            msg += f"Using the default value self.default_smooth_window_length={self.default_smooth_window_length}."
             logger.info(msg)
         
         msg = f"Start to smooth disclination lines in Q tensor {self.name!r} With paramaters: \n"
@@ -358,15 +376,15 @@ class QFieldObject:
 
         num_smooth = 0
         window_list = {}
-        for line in self._calc_lines:
+        for line in self.lines:
             if line._calc_defect_num >= opts.min_line_length:
                 line.act_smooth(opts=opts)
                 num_smooth += 1
-                window_list[line.name] = line._calc_defect_coords_smooth_obj.opts.window_length
+                window_list[line.name] = line.smooth.opts.window_length
             else:
                 logger.debug(f"Line `{line.name}` is not smoothed because it is too short, with only {line._calc_defect_num} defects. ")
                 
-        msg = f"There are {len(self._calc_lines)} disclination lines in total, with {num_smooth} lines are smoothed.\n"
+        msg = f"There are {len(self.lines)} disclination lines in total, with {num_smooth} lines are smoothed.\n"
         msg += "The smoothing window length is: "
         if opts.window_length is not None:
             msg += str(opts.window_length)
@@ -391,7 +409,7 @@ class QFieldObject:
         )
         interpolator = Interpolator(
             interpolator,
-            np.array([v[-1], u[-1], w[-1]]),
+            np.array([u[-1], v[-1], w[-1]]),
             grid_transform=self._raw_grid_transform,
             grid_offset=self._raw_grid_offset,
         )
@@ -458,9 +476,8 @@ class QFieldObject:
                     figure = self.figs[figure]
                     figure.act_commit(opts_figure)
                 elif figure is None:
-                    figure_active = self.figs[self.figs._state_active_name]
-                    if figure_active:
-                        figure = figure_active
+                    if hasattr(self.figs, '_state_active_name') and self.figs[self.figs._state_active_name]:
+                        figure = self.figs[self.figs._state_active_name]
                     else:
                         figure = PlotFigure(opts=opts_figure, name=title)
                 elif isinstance(figure, PlotFigure):
@@ -481,23 +498,14 @@ class QFieldObject:
 
         if min_line_length is None:
             logger.info("No minimum line length has been provided for the plotted lines. "
-                        f"Use the default value {self._raw_default_miminum_line_length_visual}"
+                        f"Use the default value {self.default_miminum_line_length_visual}"
                         )
-            min_line_length = self._raw_default_miminum_line_length_visual
-        
-        logger.detail("Checking if some unsmoothed lines would be plotted")
-        if is_smooth and hasattr(self._calc_lines[0], "_calc_defect_coords_smooth_obj"):
-            _min_len_length_smooth = self._calc_lines[0]._calc_defect_coords_smooth_obj.opts.min_line_length
-            if _min_len_length_smooth > min_line_length:
-                msg = f"The minimum line length to be plotted ({min_line_length}) is shorter than the required minimum length for smoothing ({_min_len_length_smooth}) \n"
-                msg += f"Use the larger value {_min_len_length_smooth} instead."
-                min_line_length = _min_len_length_smooth
-                logger.warning(msg)
+            min_line_length = self.default_miminum_line_length_visual
 
         logger.debug(f"min_line_length = {min_line_length}")
         
         lines_plot = [
-            line for line in self._calc_lines if line._calc_defect_num > min_line_length
+            line for line in self.lines if line._calc_defect_num > min_line_length
         ]
 
         # logger.detail("Searching the attributes of ")
@@ -512,7 +520,7 @@ class QFieldObject:
         #             )
         # else:
         #     lines_scalars = [None for line in lines_plot]
-        lines_scalars = [None for line in lines_plot]
+        lines_scalars = [UNSET for line in lines_plot]
 
         if opts_tube.color == 'sample_far':  
             logger.detail('Apply a variety of colors to ensure disclination lines are easily identifiable.')
@@ -537,7 +545,7 @@ class QFieldObject:
                 figure=figure,
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
-                scalars=line_scalar,
+                # scalars=line_scalar,
                 opts=opts_tube,
             )
 
@@ -629,7 +637,8 @@ class QFieldObject:
         
     @property
     def lines(self):
-        return self._calc_lines
+        result = [item for item in self._entity_objects if isinstance(item, DisclinationLine)]
+        return result
     
     @property
     def figs(self):

@@ -7,7 +7,7 @@ from types import MappingProxyType
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
 from .plot_figure import PlotFigure
-from .glyph import OptsGlyph, LEVEL_REMESH, PlotGlyph
+from .glyph import OptsGlyph, PlotGlyph
 
 from Nematics3D.general import pop_exclusive
 
@@ -56,6 +56,7 @@ class PlotTube(PlotGlyph):
 
     __descriptions__ = {
         **dict(PlotGlyph.__descriptions__),
+        "raw_name":     "The name identifier of the PlotTube instance",
         "raw_line_index": "Optional polyline membership indices.",
     }
     __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
@@ -109,8 +110,7 @@ class PlotTube(PlotGlyph):
         self._helper_init_end()
 
         
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_check_index(self, line_index, is_keep=False, logger=None):
+    def _helper_check_index(self, line_index):
         try:
             line_index = np.asarray(line_index, dtype=int)
             if line_index.ndim != 1 or len(line_index) != self.raw_coords.shape[0]:

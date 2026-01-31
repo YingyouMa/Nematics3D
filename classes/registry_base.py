@@ -6,7 +6,7 @@ from Nematics3D.datatypes import as_str
 class RegistryBase:
     
     __descriptions__ = {
-        "raw_name":                 "The name of the Registry. Used as the key for the Registry's owner.",
+        "raw_name":                 "The name of the Registry.",
         "_entity":                  "The container storing the objects.",
         
         "_internal_owner_ref":      ("A weak reference to the owner object associated with this instance."
@@ -118,9 +118,7 @@ class RegistryBase:
         return "\n".join(lines)
     
 
-    def _helper_repr_by_category(self, 
-                                 default_category: str = "uncategorized",
-                                 is_name=False) -> str:
+    def _helper_repr_by_category(self, is_name=False) -> str:
     
         if not self._entity:
             return "<empty registry>"
@@ -132,7 +130,7 @@ class RegistryBase:
                 name = obj.name
             else:
                 name = str(obj)
-            category = getattr(obj, "raw_category", default_category)
+            category = getattr(obj, "raw_category", type(obj).__name__)
             records.append((category, name))
     
         # --- group while preserving category order ---
@@ -162,7 +160,7 @@ class RegistryBase:
     def __repr__(self):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
-        return msg + self._helper_repr_by_order()
+        return msg + self._helper_repr_by_category()
 
             
     

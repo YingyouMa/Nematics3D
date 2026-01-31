@@ -43,6 +43,8 @@ class PlotRod(PlotGlyph):
     }
     __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
     
+    _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + ["length"]
+    
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -58,7 +60,7 @@ class PlotRod(PlotGlyph):
         **kwargs
     ):
 
-        category = as_str(category, name="The category of the PlotTube object", replace="tube")
+        category = as_str(category, name="The category of the PlotRod object", replace="rods")
         object.__setattr__(self, 'raw_category', category)
 
         orient = as_points(orient, name="The orientation of PlotRod object") 
@@ -83,7 +85,8 @@ class PlotRod(PlotGlyph):
         object.__setattr__(self, "_internal_resolver_source", "raw_orient")
 
         # resolver + plot
-        self._helper_resolver_init(extra=['length'])
+        for attr in self._pending_resolution_attrs:
+            self._helper_resolver_spec(attr)
         self._helper_make_figure()
         self._helper_init_end()
 
@@ -96,10 +99,10 @@ class PlotRod(PlotGlyph):
         if name in ["_calc_color", "_calc_opacity", "_calc_radius", "_calc_scalars"]:
             value = np.repeat(value, 2, axis=0)
         return value
-        
-        
+    
+    
     @logging_and_warning_decorator(start_finish_level=5)    
-    def _helper_build_mesh(self, logger=None):
+    def _helper_build_poly(self, logger=None):
         
         points = self.raw_coords
         length = self._calc_length.reshape(-1, 1)
@@ -129,14 +132,15 @@ class PlotRod(PlotGlyph):
         lines[:, 2] = 2 * np.arange(n_rods) + 1
         
         poly = pv.PolyData(endpoints, lines=lines.ravel())
-
-        poly.point_data['radius'] = self._calc_radius
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            poly.point_data['opacity'] = self._calc_opacity
-            poly.point_data['scalars'] = self._calc_scalars
-        else:
-            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values
+        
+        object.__setattr__(self, "_calc_poly", poly)
+        self._helper_set_poly(poly)
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)    
+    def _helper_build_mesh(self, logger=None):
+        
+        poly = self._calc_poly
             
         logger.detail("Applying tube filter with dynamic radius scaling")
         mesh = poly.tube(
@@ -159,13 +163,13 @@ class PlotRod(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_pre_opts(self, logger=None, **kwargs):
         
-        is_needs_remesh, kwargs = super()._helper_commit_pre_opts(**kwargs)
+        is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
         found, orient, kwargs = pop_exclusive(kwargs, "orient", "raw_orient")
         if found:
             try:
                 object.__setattr__(self, "raw_orient", as_points(orient))
-                is_needs_remesh = True
+                is_new_topology = True
             except:
                 logger.exception("Invalid input of orient for PlotRod.")
                 logger.recovery("Ignore this modification in the following")
@@ -173,12 +177,7 @@ class PlotRod(PlotGlyph):
         if len(self.raw_orient) != len(self.raw_coords):
             raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
                     
-        return is_needs_remesh, kwargs
-    
-    
-    def act_commit(self, opts=None, **kwargs):
-        is_needs_remesh, kwargs = self._helper_commit_pre_opts(**kwargs)
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(is_needs_remesh, attr_resolve_extra=['length'], **kwargs)
+        return is_new_topology, kwargs
+
     
 

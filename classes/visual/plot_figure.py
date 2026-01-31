@@ -114,16 +114,6 @@ class PlotFigure(HostBase, RegistryBase):
         **kwargs,
     ):
         
-        super().__init__(
-            OptsFigure,
-            opts,
-            opts_defaults_override,
-            name=name,
-            name_replace=self._DEFAULT_NAME,
-            **kwargs
-            )
-        self.opts.act_finalize(is_allow_UNSET=True)
-        
         logger.detail("Resovle the input plotter")
         if plotter is None:
             plotter = BackgroundPlotter()
@@ -138,10 +128,19 @@ class PlotFigure(HostBase, RegistryBase):
                     logger.recovery("Create a new figure instead.")
                     plotter = BackgroundPlotter()
         
-        plotter.app_window.setWindowTitle(self.name)
-        plotter.resize(*self.opts.size)
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
+        
+        super().__init__(
+            OptsFigure,
+            opts,
+            opts_defaults_override,
+            name=name,
+            name_replace=self._DEFAULT_NAME,
+            **kwargs
+            )
+        self.opts.act_finalize(is_allow_UNSET=True)
+        plotter.resize(*self.opts.size)
 
         self._helper_sync_from_plotter(is_allow_cover_target_set=False, is_only_camera=True)
         self._helper_commit_apply()
@@ -194,7 +193,11 @@ class PlotFigure(HostBase, RegistryBase):
     @property
     def console(self):
         return self._entity_console
-        
+    
+    def act_set_name(self, name):
+        name = super().act_set_name(name)
+        if name:
+            self.pl.app_window.setWindowTitle(name)
         
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -350,9 +353,9 @@ class PlotFigure(HostBase, RegistryBase):
         azimuth = np.degrees(az_rad) % 360
 
         view_dir = -vec / dist
-        right = np.cross(view_dir, [0, 1, 0])
+        right = np.cross(view_dir, [0, 0, 1])
         if np.linalg.norm(right) < 1e-6:
-            right = np.cross(view_dir, [0, 0, 1])
+            right = np.cross(view_dir, [0, 1, 0])
         right /= np.linalg.norm(right)
         up_ref = np.cross(right, view_dir)
         roll = np.degrees(np.arctan2(np.dot(up, right), np.dot(up, up_ref)))
@@ -376,7 +379,7 @@ class PlotFigure(HostBase, RegistryBase):
 
         view_dir = focal - pos
         view_dir = view_dir / np.linalg.norm(view_dir)
-        up_candidate = np.array([0, 1, 0])
+        up_candidate = np.array([0, 0, 1])
         up_proj = up_candidate - np.dot(up_candidate, view_dir) * view_dir
         if np.linalg.norm(up_proj) != 0:
             up = up_proj / np.linalg.norm(up_proj)

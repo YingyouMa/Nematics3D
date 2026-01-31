@@ -17,7 +17,7 @@ n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-pts = Q.lines[0]._raw_defect_indices[:3000]
+pts = Q.lines[0]._raw_defect_indices[:]
 
 # ============================================================
 # Figure + static points
@@ -39,11 +39,11 @@ p = figure.pl
 # ============================================================
 smooth = Nematics3D.SmoothedLine(pts, window_length=10)
 
-radius_set = np.linspace(0.2, 1.5, 9000)
+radius_set = 0.5 # np.linspace(0.2, 1.5, 9000)
 
 
 tube = Nematics3D.PlotTube(
-    smooth._entity,
+    smooth.result,
     figure=figure,
     #paint_by='scalars',
     #color=lambda x: np.abs(x) / np.linalg.norm(x, axis=-1, keepdims=True),
@@ -75,7 +75,7 @@ def _commit_plottube_full() -> None:
         radius_now = float(state["radius scale"]) * current_radius
 
     tube.act_commit(
-        coords=smooth._entity,
+        coords=smooth.result,
         radius=radius_now,
         is_silhouette=False
     )

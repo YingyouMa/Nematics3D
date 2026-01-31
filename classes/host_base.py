@@ -247,9 +247,15 @@ class HostBase:
         self.__descriptions__["raw_name"] = f"The name identifier of the {type(self).__name__} instance"
         
         logger.detail("Dealing with basic attributes and input")
-        object.__setattr__(self, "_internal_extra_attrs", {})
-        object.__setattr__(self, "_internal_extra_attrs_docs", {})
-        object.__setattr__(self, "_internal_owner_ref", None)
+        if not hasattr(self, "_internal_extra_attrs"):
+            object.__setattr__(self, "_internal_extra_attrs", {})
+        if not hasattr(self, "_internal_extra_attrs_docs"):
+            object.__setattr__(self, "_internal_extra_attrs_docs", {})
+        if not hasattr(self, "_internal_owner_ref"):
+            object.__setattr__(self, "_internal_owner_ref", None)
+        if not hasattr(self, "_internal_opts_backup"):
+            object.__setattr__(self, "_internal_opts_backup", {})
+
         
         opts = self._helper_check_opts(opts, opts_type=opts_type)
                 
@@ -325,6 +331,8 @@ class HostBase:
         if callable(check_name):
             name = check_name(name)
         object.__setattr__(self, "raw_name", name)
+
+        return name
             
             
             
@@ -382,7 +390,7 @@ class HostBase:
         if key not in allowed_core:
             raise AttributeError(
                 f"Invalid attribute assignment: {key!r}. "
-                "Only attributes in {allowed_core} can be modified directly, "
+                f"Only attributes in {allowed_core} can be modified directly, "
                 f"or a registered extra attribute."
             )
 

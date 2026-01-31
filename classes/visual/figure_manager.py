@@ -6,7 +6,8 @@ from ..registry_base import RegistryBase
 class FigureManager(RegistryBase):
 
     __descriptions__ = {
-        **(RegistryBase.__descriptions__)
+        **(RegistryBase.__descriptions__),
+        "_state_active_name": "The name of current active figure",
     }
 
     __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
@@ -24,5 +25,10 @@ class FigureManager(RegistryBase):
             self._state_active_name = figure.name
         else:
             raise KeyError("This figure is deleted and could not be set to active figure.")
+            
+    def __repr__(self):
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}({self.name!r})\n"
+        return msg + self._helper_repr_by_order()
 
         

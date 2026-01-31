@@ -57,7 +57,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         None,
         "window_length":        None,
         "order":                3,
-        "N_out_ratio":          3,
+        "N_out_ratio":          2,
         "mode":                 "interp",
         "min_line_length":      50,
         "is_window_warning":    True
@@ -82,7 +82,7 @@ class SmoothedLine(HostBase):
         "raw_coords":               "Raw input line coordinates (shape: N x D)",
         "_calc_N_init":             "Number of input points (before smoothing)",
         "_calc_N_out":              "Number of output points (after smoothing)",
-        "_entity":                  "The moothed output coordinates (shape: M x D)",
+        "_calc_result":                  "The moothed output coordinates (shape: M x D)",
         "_state_is_smoothed":       "Boolean flag indicating whether smoothing was applied",
         
         "_state_status": (
@@ -94,26 +94,24 @@ class SmoothedLine(HostBase):
             "string describing the specific reason."),
         
         "_entity_preview":           "The PlotFigure object. Only used in act_tuning() which helps users modify options",
-        "_internal_backup_opts":    "backed-up options during manually tuning."
         }
 
     __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
 
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         line_coord_input: np.ndarray,
         name: str | None = None,
         opts: OptsSmooth | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
         
         line_coord_input = np.asarray(line_coord_input)
         if line_coord_input.ndim != 2:
             raise ValueError("line_coord_input for smoothing must be a 2D array of shape (N, D)")
-
+            
+           
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
@@ -133,12 +131,12 @@ class SmoothedLine(HostBase):
         self._helper_commit_apply()
         
     def __setattr__(self, key, value):
-        self._helper_setattr_basic(key, value, allowed_core=["coords", "raw_coords"])
+        self._helper_setattr_basic(key, value, allowed_extra=["coords", "raw_coords"])
 
     
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_entity", self.raw_coords)
+        object.__setattr__(self, "_calc_result", self.raw_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
         object.__setattr__(self, "_state_status", f"The line `{self.name}` is not smoothed, reason: {reason}.")
         
@@ -158,7 +156,7 @@ class SmoothedLine(HostBase):
             except ValueError:
                 logger.exception("Check input")
                 logger.recovery("Automatically ignore this modification.")
-        
+                
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         self._helper_commit_apply(**kwargs)
         
@@ -166,10 +164,12 @@ class SmoothedLine(HostBase):
     @logging_and_warning_decorator()
     def _helper_commit_apply(self, logger=None, **kwargs):
         
+        object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
+        
         if kwargs:
             if 'window_ratio' in kwargs.keys() and 'window_length' not in kwargs.keys():
                 object.__setattr__(self.opts, "window_length", None)
-            if 'window_ratio' not in kwargs.keys():
+            if 'window_ratio' not in kwargs.keys() and 'window_length' in kwargs.keys():
                 object.__setattr__(self.opts, "window_ratio", None)
         
         with self.opts._helper_internal_update():
@@ -187,7 +187,6 @@ class SmoothedLine(HostBase):
                 
         if self._calc_N_init < self.opts.min_line_length:
             reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
-            logger.warning(f"{self.name!r} is not smoothed, because {reason}.")
             self._helper_fallback_no_smooth(reason)
             return
         
@@ -234,8 +233,8 @@ class SmoothedLine(HostBase):
 
             logger.detail('Fitting and evaluate spline')
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            entity = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
-            object.__setattr__(self, "_entity", entity)
+            result = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
+            object.__setattr__(self, "_calc_result", result)
             
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
@@ -252,20 +251,24 @@ class SmoothedLine(HostBase):
         
         
     def __array__(self, dtype=None):
-        arr = self._entity
+        arr = self._calc_result
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
         
     def __getitem__(self, idx):
-        return self._entity[idx]
+        return self._calc_result[idx]
     
     def __iter__(self):
-        return iter(self._entity)
+        return iter(self._calc_result)
     
     def __bool__(self):
         return self._state_is_smoothed
     
     def __len__(self) -> int:
         return self._calc_N_out
+    
+    @property
+    def result(self):
+        return self._calc_result
     
     
     # @logging_and_warning_decorator(start_finish_level=5)

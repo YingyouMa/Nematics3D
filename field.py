@@ -468,7 +468,7 @@ def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
         Trajectory shifted so that the first point is inside [0, L) for periodic dimensions.
     """
     points_unwrap = np.asarray(points_unwrap, dtype=float)
-    L = box_size_periodic = as_dimension_info(box_size_periodic)
+    L = as_dimension_info(box_size_periodic)
 
     shifted = points_unwrap.copy()
     for dim in range(3):
