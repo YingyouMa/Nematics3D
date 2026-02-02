@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -22,8 +22,6 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from .plot_figure import PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import pop_exclusive, is_given_str
-from ..opts import merge_opts_all, build_dict_override
 
 #!!! resolver source
 #!!! colorbar name args

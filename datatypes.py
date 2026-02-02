@@ -713,9 +713,9 @@ def as_DefectIndex(arr: np.ndarray, tol=1e-8, is_return_row=False) -> DefectInde
     if arr.ndim != 2 or arr.shape[1] != 3:
         raise ValueError(f"Input must be (N,3) array for defect_indices, got shape {arr.shape}")
         
-    nearest_int = np.round(arr)
-    is_int = np.abs(arr - nearest_int) < tol
-    is_half = np.abs(arr - (nearest_int + 0.5)) < tol
+    is_int = np.abs(arr - np.round(arr)) < tol
+    is_half = (np.abs(arr * 2 - np.round(arr * 2)) < tol) & (~is_int)
+    valid_rows = (is_int.sum(axis=1) == 1) & (is_half.sum(axis=1) == 2)
     
     valid_rows = (is_int.sum(axis=1) == 1) & (is_half.sum(axis=1) == 2)
     

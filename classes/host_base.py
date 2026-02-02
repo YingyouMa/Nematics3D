@@ -89,7 +89,7 @@ class OptsBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
 
-        is_final = bool(self._state_is_functioning) and (self.host is not None)
+        is_final = bool(getattr(self, "_state_is_functioning", False)) and (self.host is not None)
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
@@ -253,7 +253,7 @@ class HostBase(ClassBase):
 
     # fmt: off
     __descriptions__: ClassVar[Mapping[str, str]] = {
-        **(super().__descriptions__),
+        **(ClassBase.__descriptions__),
         
         "raw_name":             "The name identifier of the host object",
         

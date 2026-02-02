@@ -33,7 +33,6 @@ from ..field import (
 )
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
-from .visual_mayavi.plot_n_plane import OptsnPlane, PlotnPlane
 from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
 from .visual.plot_figure import PlotFigure, OptsFigure
@@ -562,78 +561,78 @@ class QFieldObject:
         self.figs.act_register(figure, is_contain_ok=True)
         self.figs.act_set_active(figure.name)
 
-    @logging_and_warning_decorator()
-    def act_visualize_n_in_Q(
-        self,
-        plane_normal: Optional[Vect(3)] = None,
-        plane_spacing: Optional[Number] = None,
-        plane_size: Optional[Number] = None,
-        is_new: bool = True,
-        is_extent: bool = True,
-        opts_grid=OptsPlaneGrid(),
-        opts_nPlane=OptsnPlane(),
-        opts_extent=OptsTube(),
-        opts_scene=None, #!!!!!
-        logger=None,
-        **kwargs,
-    ):
+    # @logging_and_warning_decorator()
+    # def act_visualize_n_in_Q(
+    #     self,
+    #     plane_normal: Optional[Vect(3)] = None,
+    #     plane_spacing: Optional[Number] = None,
+    #     plane_size: Optional[Number] = None,
+    #     is_new: bool = True,
+    #     is_extent: bool = True,
+    #     opts_grid=OptsPlaneGrid(),
+    #     opts_nPlane=OptsnPlane(),
+    #     opts_extent=OptsTube(),
+    #     opts_scene=None, #!!!!!
+    #     logger=None,
+    #     **kwargs,
+    # ):
 
-        # opts_extent.corners = self._calc_corners
-        opts_grid.corners_limit = self._calc_corners
+    #     # opts_extent.corners = self._calc_corners
+    #     opts_grid.corners_limit = self._calc_corners
         
-        merge = merge_opts_all(
-            {
-             "plane_": opts_grid,
-             "n_": opts_nPlane,
-             "extent_": opts_extent,
-             "scene_": opts_scene
-             },
-            kwargs, "QFieldObject.act_visualize_n_in_Q"
-            )
+    #     merge = merge_opts_all(
+    #         {
+    #          "plane_": opts_grid,
+    #          "n_": opts_nPlane,
+    #          "extent_": opts_extent,
+    #          "scene_": opts_scene
+    #          },
+    #         kwargs, "QFieldObject.act_visualize_n_in_Q"
+    #         )
 
-        opts_grid = merge["plane_"]
-        opts_nPlane = merge["n_"]
-        opts_extent = merge["extent_"]
-        opts_scene = merge["scene_"]
+    #     opts_grid = merge["plane_"]
+    #     opts_nPlane = merge["n_"]
+    #     opts_extent = merge["extent_"]
+    #     opts_scene = merge["scene_"]
 
-        if not hasattr(self, "_calc_interpolator"):
-            self.act_add_interpolator()
+    #     if not hasattr(self, "_calc_interpolator"):
+    #         self.act_add_interpolator()
 
-        opts_grid.normal = plane_normal
-        opts_grid.spacing = plane_spacing
-        opts_grid.size = plane_size
+    #     opts_grid.normal = plane_normal
+    #     opts_grid.spacing = plane_spacing
+    #     opts_grid.size = plane_size
 
-        check_bool_flags(locals())
+    #     check_bool_flags(locals())
 
-        figure = self.act_add_scene(is_new, opts=opts_scene)
+    #     figure = self.act_add_scene(is_new, opts=opts_scene)
 
-        nPlane = PlotnPlane(
-            QInterpolator=self._calc_interpolator,
-            opts_grid=opts_grid,
-            opts_nPlane=opts_nPlane,
-            logger=logger,
-        )
+    #     nPlane = PlotnPlane(
+    #         QInterpolator=self._calc_interpolator,
+    #         opts_grid=opts_grid,
+    #         opts_nPlane=opts_nPlane,
+    #         logger=logger,
+    #     )
         
-        # figure.add_object(nPlane, category="nPlanes")
+    #     # figure.add_object(nPlane, category="nPlanes")
 
 
-        if is_extent:
-            extent = PlotExtent(opts_extent)
-            figure.add_object(extent, category="extent")
-            figure.scene.distance = opts_scene.distance
+    #     if is_extent:
+    #         extent = PlotExtent(opts_extent)
+    #         figure.add_object(extent, category="extent")
+    #         figure.scene.distance = opts_scene.distance
 
-        # if opts_scene.distance != None:
-        #     figure.scene.distance = opts_scene.distance
+    #     # if opts_scene.distance != None:
+    #     #     figure.scene.distance = opts_scene.distance
 
-    def act_add_scene(self, is_new=True, opts=None): #!!!!!!!!!!!
-        # figure = PlotScene(is_new=is_new, opts=opts)
-        # if is_new or (not is_new and len(self._entity_figures) == 0):
-        #     self._entity_figures.append(figure)
-        # return figure
-        return 0
+    # def act_add_scene(self, is_new=True, opts=None): #!!!!!!!!!!!
+    #     # figure = PlotScene(is_new=is_new, opts=opts)
+    #     # if is_new or (not is_new and len(self._entity_figures) == 0):
+    #     #     self._entity_figures.append(figure)
+    #     # return figure
+    #     return 0
 
-    def act_reset_figures(self):
-        self._entity_figures = []
+    # def act_reset_figures(self):
+    #     self._entity_figures = []
         
     @property
     def lines(self):

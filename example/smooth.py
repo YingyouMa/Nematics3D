@@ -28,13 +28,13 @@ state = dict(window_length=5)
 
 # 初始化一条 spline 曲线
 smooth = Nematics3D.SmoothedLine(pts, window_length=5)
-poly = pv.MultipleLines(smooth._entity)
+poly = pv.MultipleLines(smooth.result)
 tube0 = poly.tube()
 sm_actor = p.add_mesh(tube0, name="spline_tube", show_edges=False)
 
 def rebuild():
     smooth.opts.window_length = state["window_length"]
-    poly = pv.MultipleLines(smooth._entity)
+    poly = pv.MultipleLines(smooth.result)
     tube = poly.tube()
 
     sm_actor.mapper.SetInputData(tube)
