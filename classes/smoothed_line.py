@@ -98,7 +98,7 @@ class SmoothedLine(HostBase):
         }
 
     __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
-    # fmt: off 
+    # fmt: on
     #  ------------------------------------------------------------------------------------
 
     def __init__(
