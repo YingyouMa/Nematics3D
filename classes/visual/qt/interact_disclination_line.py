@@ -1,37 +1,11 @@
+from qtpy import QtWidgets
 import numpy as np
-import pyvista as pv
-import datetime
-from qtpy import QtWidgets, QtCore, QtGui
 
-import sys
-sys.path.insert(0, "D:/Document/GitHub/")
-import Nematics3D
-
-from Nematics3D.classes.visual.qt.panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
+from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
 from Nematics3D.datatypes import as_ColorRGB, boundary_periodic_size_to_flag
+from ..plot_sphere import PlotSphere
 
-
-
-# ============================================================
-# Data
-# ============================================================
-index_max = 128
-n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
-S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
-
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-line = Q.lines[1]
-line.act_smooth(window_length=20)
-
-figure = Nematics3D.PlotFigure()
-
-line.act_visualize(
-    is_wrap=False,
-    scalars=lambda x: np.max(x, axis=-1),
-    figure=figure
-    )
-
-class ControlsWindow(PanelBase):
+class InteractDisclinationLine(PanelBase):
     
     def __init__(self, obj):
         self.obj = obj
@@ -40,11 +14,12 @@ class ControlsWindow(PanelBase):
         super().__init__(self.obj._entity, title="Smoothed disclination line control")
         self.owner.act_save_opts(name=self.str_now)
             
-        self.spheres = Nematics3D.PlotSphere(
+        self.spheres = PlotSphere(
             self._helper_create_sphere_coords(self.obj.state_is_wrap),
             figure=self.glyph.fig,
             name="raw defect points",
-            color=(0,0,0)
+            color=(0,0,0),
+            is_reset_camera=False
             )
         
     def _helper_create_sphere_coords(self, is_wrap):
@@ -335,7 +310,3 @@ class ControlsWindow(PanelBase):
             sub.pop(self.str_now, None)
         object.__setattr__(self.owner, "state_is_silhouette", True)
         self.spheres.act_remove()
-        
-controls_window = ControlsWindow(line.smooth._entity_visual)
-# controls_window.resize(380, 250)
-controls_window.show()

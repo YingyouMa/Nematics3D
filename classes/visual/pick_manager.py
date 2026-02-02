@@ -111,8 +111,11 @@ class PickManager:
         "_internal_active_glyphs": "Set of currently active glyphs (multi-selection).",
         
         "_state_pick_count": "Monotonic counter for marker numbering (never decreases).",
+        
         "_state_last_click_time": "Last click timestamp (monotonic time) for double-click detection.",
         "_state_last_click_actor": "Last clicked actor for double-click detection.",
+        "_state_last_rclick_time": "Last RIGHT click timestamp for right-double-click detection.",
+        "_state_last_rclick_actor": "Last RIGHT clicked actor for right-double-click detection.",
 
         "_entity_markers": (
             "A list of marker packs; each pack holds VTK actors for one overlay point marker."
@@ -128,6 +131,8 @@ class PickManager:
         object.__setattr__(self, "_state_pick_count", 0)
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
+        object.__setattr__(self, "_state_last_rclick_time", None)
+        object.__setattr__(self, "_state_last_rclick_actor", None)
         object.__setattr__(self, "_entity_markers", [])
         object.__setattr__(self, "_internal_active_glyphs", [])
         
@@ -136,6 +141,11 @@ class PickManager:
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_internal_owner_ref", weakref.ref(self))
         object.__setattr__(self, "opts", opts)
+        
+        fig = self.owner
+        if fig is not None:
+            iren = fig.pl.iren.interactor  
+            iren.AddObserver("RightButtonPressEvent", self._vtk_on_right_button_press)
 
     @property
     def owner(self):
@@ -197,7 +207,7 @@ class PickManager:
         resolved = self._helper_resolve_marker_pos(owner, point)
         if resolved is None:
             return
-        self.owner.console.println(f"picked point #{self._state_pick_count+1}: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
+        
         
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
@@ -205,6 +215,8 @@ class PickManager:
         thr = self.opts.marker_proximity_threshold
         if nearest_pack is not None and nearest_d2 is not None and nearest_d2 <= thr:
             self._helper_remove_marker_pack(nearest_pack)
+            pos = nearest_pack['world_xyz']
+            self.owner.console.println(f"remove point #{nearest_pack['id']}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
 
             object.__setattr__(self, "_state_last_click_time", None)
             object.__setattr__(self, "_state_last_click_actor", None)
@@ -212,6 +224,7 @@ class PickManager:
 
         # No nearby marker -> add a new marker at resolved position.
         self._helper_add_marker(resolved)
+        self.owner.console.println(f"picked point #{self._state_pick_count}: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
 
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
@@ -402,4 +415,62 @@ class PickManager:
             return find_nearest_point(p, owner.raw_coords)
     
         return None
+    
+
+
+    def _vtk_on_right_button_press(self, vtk_iren, _evt):
+
+        fig = self.owner
+        if fig is None:
+            return
+
+        # 1) pick (actor + world point)
+        x, y = vtk_iren.GetEventPosition()
+
+        picker = vtk.vtkCellPicker()
+        picker.SetTolerance(0.0005)  # 你可按需调
+        picker.Pick(x, y, 0.0, fig.pl.renderer)
+
+        actor = picker.GetActor()
+        if actor is None or actor not in self._internal_registry:
+            return
+
+        # 2) right-double-click detect (time + same actor)
+        now = time.monotonic()
+        last_t = self._state_last_rclick_time
+        last_a = self._state_last_rclick_actor
+
+        is_double = (
+            last_t is not None
+            and (actor is last_a)
+            and ((now - last_t) <= self.opts.double_click_threshold)
+        )
+
+        object.__setattr__(self, "_state_last_rclick_time", now)
+        object.__setattr__(self, "_state_last_rclick_actor", actor)
+
+        if not is_double:
+            return
+
+        # 3) on right-double-click: PlotSphere && _state_is_interactable => InteractSphere(owner)
+        owner = self._internal_registry[actor]
+
+        if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
+            
+            from .qt.interact_sphere import InteractSphere
+            control = InteractSphere(owner)
+            control.show()
+            
+        elif type(owner).__name__ == "PlotTube" and getattr(owner, "_state_is_interactable", False):
+            
+            owner = owner.owner
+            if type(owner).__name__ == "DisclinationLineSmoothPlot":
+                from .qt.interact_disclination_line import InteractDisclinationLine
+                control = InteractDisclinationLine(owner)
+                control.show()
+            
+
+        # reset to avoid triple-trigger
+        object.__setattr__(self, "_state_last_rclick_time", None)
+        object.__setattr__(self, "_state_last_rclick_actor", None)
 

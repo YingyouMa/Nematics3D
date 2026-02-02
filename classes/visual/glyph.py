@@ -236,11 +236,14 @@ class PlotGlyph(HostBase):
         
         "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
+        
         "_internal_name_pv":            "The unique identifier of this glyph stored in the PyVista plotter.",
         "_internal_resolver_source":    "Field used to drive visual variations (e.g. color, opacity)",
         
-        "_internal_owner_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
-                                         "To access it, use .owner or ._internal_owner."),
+        "_internal_figure_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
+                                         "To access it, use .fig or ._internal_figure."),
+        
+        "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     
     _pending_resolution_attrs: List[str] = [
@@ -270,6 +273,7 @@ class PlotGlyph(HostBase):
         
         object.__setattr__(self, "_internal_resolver_source", "raw_coords")
         object.__setattr__(self, "_internal_opts_backup", {})
+        object.__setattr__(self, "_state_is_interactable", True)
         
         super().__init__(
             opts_type,
@@ -300,11 +304,11 @@ class PlotGlyph(HostBase):
                         raise RuntimeError("The plotting window has been closed. Cannot update an inactive plotter.") 
             except (TypeError, RuntimeError):
                 logger.exception("Check input")
-                logger.recovery("Create a new PlotFigure object and store it in self._owner")
+                logger.recovery("Create a new PlotFigure object and store it in self.fig")
                 figure = PlotFigure()
         elif figure is None:
             figure = PlotFigure()
-        object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
+        object.__setattr__(self, "_internal_figure_ref", weakref.ref(figure))
             
 
         logger.detail("Examining the options before plotting ...")
@@ -314,12 +318,21 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_internal_name_pv", unique_id)
             
     def _helper_init_end(self):
-        figure = self.owner
+        figure = self.fig
         figure.pl.render()
         figure.pl.show()
         figure.act_register(self)
         
         
+    @property
+    def _internal_figure(self):
+        ref = self._internal_figure_ref
+        return ref() if ref is not None else None
+    
+    @property
+    def fig(self):
+        ref = self._internal_figure_ref
+        return ref() if ref is not None else None
         
     
         
@@ -435,12 +448,12 @@ class PlotGlyph(HostBase):
         mesh = self._helper_build_mesh()
             
         logger.detail("Removing the existing actor")
-        plotter = self._internal_owner.pl
+        plotter = self.fig.pl
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
         old_actor = getattr(self, "_entity", None)
         if old_actor is not None:
-            pm = getattr(self._internal_owner, "_entity_pick_manager", None)
+            pm = getattr(self.fig, "_entity_pick_manager", None)
             if pm is not None:
                 pm.act_unregister(old_actor)
             
@@ -483,7 +496,7 @@ class PlotGlyph(HostBase):
     
     def _helper_add_silhouette(self):
     
-        plotter = self.owner.pl
+        plotter = self.fig.pl
 
         self._helper_clear_silhouette()
             
@@ -503,7 +516,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
 
     def _helper_clear_silhouette(self):
-        plotter = self.owner.pl
+        plotter = self.fig.pl
         if getattr(self, "_entity_silhouette", None):
             plotter.remove_actor(self._entity_silhouette)
         object.__setattr__(self, "_entity_silhouette", None)
@@ -523,8 +536,8 @@ class PlotGlyph(HostBase):
         mapper.lookup_table = None
         mapper.dataset.set_active_scalars('rgba')
         mapper.SetArrayName('rgba')
-        if self.opts.scalar_bar_title in self.owner.pl.scalar_bars.keys():
-            self.owner.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
+        if self.opts.scalar_bar_title in self.fig.pl.scalar_bars.keys():
+            self.fig.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
 
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -548,8 +561,8 @@ class PlotGlyph(HostBase):
             opacity=mesh_data['opacity']
             )
         
-        if self.opts.scalar_bar_title not in self.owner.pl.scalar_bars.keys():
-            self.owner.pl.add_scalar_bar(
+        if self.opts.scalar_bar_title not in self.fig.pl.scalar_bars.keys():
+            self.fig.pl.add_scalar_bar(
                 title=self.opts.scalar_bar_title,
                 mapper=mapper,
                 render=False
@@ -565,7 +578,7 @@ class PlotGlyph(HostBase):
 
     def _helper_register_pick(self, actor):
 
-        fig = self.owner
+        fig = self.fig
         if fig is None:
             return
         pm = getattr(fig, "_entity_pick_manager", None)
@@ -574,8 +587,9 @@ class PlotGlyph(HostBase):
         pm.act_register(actor=actor, owner=self)   
         
     def act_remove(self):
-        self.owner.pl.remove_actor(self._entity)
-        self.owner.pick_manager._internal_registry.pop(self._entity)
+        self.fig.pl.remove_actor(self._entity)
+        self.fig.pick_manager._internal_registry.pop(self._entity)
+        self.fig._entity.remove(self)
         
         
     # ----------------------------------------------------------------------------------------------------
@@ -699,7 +713,7 @@ class PlotGlyph(HostBase):
         else:
             self._helper_update_scalars()
             
-        self.owner.pl.render()
+        self.fig.pl.render()
 
          
     

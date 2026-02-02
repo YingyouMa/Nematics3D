@@ -1,106 +1,24 @@
-import numpy as np
-import pyvista as pv
-import datetime
-from qtpy import QtWidgets, QtCore, QtGui
+from qtpy import QtWidgets
 
-import sys
-sys.path.insert(0, "D:/Document/GitHub/")
-import Nematics3D
+from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
+from Nematics3D.datatypes import as_ColorRGB
 
-from Nematics3D.classes.visual.qt.panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
-from Nematics3D.datatypes import as_ColorRGB, boundary_periodic_size_to_flag
+class InteractSphere(PanelBase):
+    def __init__(self, glyph):
+        super().__init__(glyph, title="Sphere Controls")
 
-
-
-# ============================================================
-# Data
-# ============================================================
-index_max = 128
-n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
-S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
-
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-line = Q.lines[1]
-line.act_smooth(window_length=20)
-
-figure = Nematics3D.PlotFigure()
-
-line.act_visualize(
-    is_wrap=False,
-    scalars=lambda x: np.max(x, axis=-1),
-    figure=figure
-    )
-
-class ControlsWindow(PanelBase):
-    
-    def __init__(self, obj):
-        self.obj = obj
-        self.owner = obj.owner
-        object.__setattr__(self.owner, "state_is_silhouette", False)
-        super().__init__(self.obj._entity, title="Smoothed disclination line control")
-        self.owner.act_save_opts(name=self.str_now)
-            
-        self.spheres = Nematics3D.PlotSphere(
-            self._helper_create_sphere_coords(self.obj.state_is_wrap),
-            figure=self.glyph.fig,
-            name="raw defect points",
-            color=(0,0,0)
-            )
-        
-    def _helper_create_sphere_coords(self, is_wrap):
-        if is_wrap:
-            boundary_flag = boundary_periodic_size_to_flag(
-                self.owner.owner._raw_box_size_periodic_index
-            )
-            coords = np.where(
-                boundary_flag,
-                self.owner.owner._calc_defect_coords % self.owner.owner._raw_box_size_periodic_index,
-                self.owner.owner._calc_defect_coords,
-            )
-        else:
-            coords = self.owner.owner._calc_defect_coords
-        return coords
-        
-        
     def build_ui(self):
         # ----------------------------
         # initial state
         # ----------------------------
         self.state = {
-            "window_length":            int(self.owner.opts.window_length),
-            "is_smooth":                bool(self.obj.state_is_smooth),
             "radius_rescale":           1.0,
             "sides":                    int(self.glyph.opts.sides),
-            "is_wrap":                  bool(self.obj.state_is_wrap),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
             "color":                    (1,1,1),
             "opacity":                  1,
             }
-        
-        # ----------------------------
-        # Smooth group
-        # ----------------------------
-        group_smooth = QtWidgets.QGroupBox("Smooth", self)
-        gl_smooth = QtWidgets.QVBoxLayout(group_smooth)
-        self.layout.addWidget(group_smooth)
-        
-        self.sliders["window_length"] = make_labeled_slider_row(
-            parent=group_smooth,
-            layout=gl_smooth,
-            name="window_length",
-            tick_min=5,
-            tick_max=100,
-            tick_init=int(self.owner.opts.window_length),   
-            tick_to_value=lambda t: float(int(t)),
-            value_fmt="{:.0f}",
-        )
-        
-        self.chk_is_smooth = QtWidgets.QCheckBox("Use smoothed coordinates", group_smooth)
-        self.chk_is_smooth.setChecked(self.state["is_smooth"])
-        gl_smooth.addWidget(self.chk_is_smooth)
-        self.chk_is_smooth.stateChanged.connect(self._on_toggle_is_smooth)
-        self._apply_smooth_enabled()
 
         # ----------------------------
         # Geometry group
@@ -108,11 +26,6 @@ class ControlsWindow(PanelBase):
         group_geometry = QtWidgets.QGroupBox("Geometry", self)
         gl_geometry = QtWidgets.QVBoxLayout(group_geometry)
         self.layout.addWidget(group_geometry)
-        
-        self.chk_is_wrap = QtWidgets.QCheckBox("Use wrapped coordinates", group_geometry)
-        self.chk_is_wrap.setChecked(self.state["is_wrap"])
-        gl_geometry.addWidget(self.chk_is_wrap)
-        self.chk_is_wrap.stateChanged.connect(self._on_toggle_is_wrap)
 
         
         self.sliders["radius_rescale"] = make_labeled_slider_row(
@@ -194,26 +107,12 @@ class ControlsWindow(PanelBase):
             item.slider.valueChanged.connect(self.on_changed)
             item.slider.sliderPressed.connect(self.glyph._helper_clear_silhouette)
             item.slider.sliderReleased.connect(self.glyph._helper_add_silhouette)
-            
-        self.sliders["window_length"].slider.valueChanged.connect(lambda: self.on_changed(is_only_smooth=True))
 
         self.on_changed(0, is_commit=False)
         
         self.glyph.opts._internal_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
-        self.owner.opts._internal_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_glyph("window_length", self.owner.opts.window_length)
-        self.obj._internal_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_smooth", self.obj.state_is_smooth)
-        self.obj._internal_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_wrap", self.obj.state_is_wrap)
 
-    def on_changed(self, _v=0, is_commit: bool=True, is_only_smooth=False):
-        
-        self.state["is_smooth"] = bool(self.chk_is_smooth.isChecked())
-        
-        # ---- window_length ----
-        window_length_f = float(self.sliders["window_length"].get_value())
-        window_length = int(round(window_length_f))
-        self.sliders["window_length"].label.setText(f"{window_length:d}")
-        self.state["window_length"] = window_length
-        
+    def on_changed(self, _v: int = 0, is_commit: bool = True):
         # ---- radius_rescale ----
         rr = float(self.sliders["radius_rescale"].get_value())
         self.sliders["radius_rescale"].label.setText(f"{rr:.4g}")
@@ -245,14 +144,9 @@ class ControlsWindow(PanelBase):
         self.state["opacity"] = opacity
 
         if is_commit:
-            self.commit(is_only_smooth=is_only_smooth)
+            self.commit()
 
-    def commit(self, is_only_smooth=False):
-        
-        if is_only_smooth:
-            self.owner.opts.window_length = self.state["window_length"]
-            return
-        
+    def commit(self):
         # ---- radius ----
         current_radius = self.glyph._internal_opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
@@ -275,7 +169,7 @@ class ControlsWindow(PanelBase):
         else:
             opacity_now = self.glyph._internal_opts_backup[self.str_now]["opacity"]
 
-        self.obj.act_commit(
+        self.glyph.act_commit(
             radius=radius_now,
             color=color_now,
             opacity=opacity_now,
@@ -283,18 +177,6 @@ class ControlsWindow(PanelBase):
             sides=int(self.state["sides"]),
             is_silhouette=False,
         )
-        
-    def _on_toggle_is_wrap(self, _state: int):
-        is_wrap = self.chk_is_wrap.isChecked()
-        self.state["is_wrap"] = is_wrap
-        self.spheres.act_commit(coords=self._helper_create_sphere_coords(is_wrap))
-        self.obj.act_commit(is_wrap=is_wrap)
-        
-        
-    def _on_toggle_is_smooth(self, _state: int):
-        self.state["is_smooth"] = self.chk_is_smooth.isChecked()
-        self._apply_smooth_enabled()
-        self.obj.act_commit(is_smooth=bool(self.state.get("is_smooth")))
 
     def _on_toggle_use_color(self, _state: int):
         self.state["is_use_control_color"] = self.chk_use_color.isChecked()
@@ -318,24 +200,3 @@ class ControlsWindow(PanelBase):
         item = self.sliders['opacity']
         item.slider.setEnabled(opacity_enabled)
         item.label.setEnabled(opacity_enabled)
-        
-    def _apply_smooth_enabled(self):
-        smooth_enabled = bool(self.chk_is_smooth.isChecked())
-        item = self.sliders['window_length']
-        item.slider.setEnabled(smooth_enabled)
-        item.label.setEnabled(smooth_enabled)
-        
-    def on_close(self):
-        super().on_close()
-        sync = getattr(self.owner.opts, "_internal_sync_func", None)
-        for k, sub in sync.items():
-            sub.pop(self.str_now, None)
-        sync = getattr(self.obj, "_internal_sync_func", None)
-        for k, sub in sync.items():
-            sub.pop(self.str_now, None)
-        object.__setattr__(self.owner, "state_is_silhouette", True)
-        self.spheres.act_remove()
-        
-controls_window = ControlsWindow(line.smooth._entity_visual)
-# controls_window.resize(380, 250)
-controls_window.show()

@@ -413,9 +413,26 @@ class PlotFigure(HostBase, RegistryBase):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
 
-
-    def act_register(self, term, is_contain_ok=False):
-        super().act_register(term, is_contain_ok=is_contain_ok)
+            
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_register(self, term, is_contain_ok=False, logger=None):
+    
+        if term in self._entity:
+            if not is_contain_ok:
+                try:
+                    raise ValueError(f"term {term!r} is already registered in Registry {self.name!r}")
+                except ValueError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this process.")
+            return
+        
+        if not hasattr(self, "name"):
+            raise TypeError("term must have attribute `.name`.")
+        name = self._helper_check_name(term.name)
+        term.name = name
+        self._entity.append(term)
+        object.__setattr__(term, "_internal_figure_ref", weakref.ref(self))
+        
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
             

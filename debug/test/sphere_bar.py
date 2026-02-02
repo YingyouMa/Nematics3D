@@ -247,7 +247,6 @@ class SphereControlsWindow(PanelBase):
 
 
 controls_window = SphereControlsWindow(spheres)
-controls_window.resize(380, 100)
 controls_window.show()
 
 

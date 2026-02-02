@@ -315,6 +315,7 @@ class DisclinationLineSmooth(SmoothedLine):
         "_calc_result_coords":  "The smoothed disclination coords in real space",
         
         "_entity_visual":       "The PlotTube object as the visualization of this smoothed disclination line",
+        "state_is_silhouette":  "Whether to add silhouette when setting values of opts. Only used in control window."
         }
     
     __slots__ = tuple(__descriptions__.keys())
@@ -331,6 +332,7 @@ class DisclinationLineSmooth(SmoothedLine):
                             f"Got type={type(line).__name__} instead.")
             
         object.__setattr__(self, '_internal_owner_ref', weakref.ref(line))
+        object.__setattr__(self, 'state_is_silhouette', True)
         
         if name is None:
             name = self.owner.name
@@ -406,6 +408,7 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, "raw_coords", indices)
         
         super()._helper_commit_apply(mode=smooth_mode, **kwargs)
+        result = self._calc_result
         
         result = self._calc_result[
             int(padding_num * self.opts.N_out_ratio) : int(
@@ -416,16 +419,16 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, '_calc_N_out', len(result))
 
         
-        coords = apply_linear_transform(
+        result = apply_linear_transform(
             result,
             transform=self.owner._raw_grid_transform,
             offset=self.owner._raw_grid_offset
             )
-        object.__setattr__(self, '_calc_result_coords', coords)
+        object.__setattr__(self, '_calc_result_coords', result)
         
         tube = getattr(self, "_entity_visual", None)
         if tube:
-            tube.act_commit(is_remesh=True)
+            tube.act_commit(is_remesh=True, is_silhouette=self.state_is_silhouette)
         
         
       
@@ -472,7 +475,7 @@ class DisclinationLineSmoothPlot:
             "To access it, use .owner or ._internal_owner."),
         }
     
-    __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
+    __slots__ = tuple(__descriptions__.keys())  + ("__weakref__",)
     
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         "state_is_smooth":      lambda v, d: as_bool(v, name=d),
@@ -513,8 +516,11 @@ class DisclinationLineSmoothPlot:
             **kwargs
             )
         
+        object.__setattr__(tube, "_internal_owner_ref", weakref.ref(self))
         object.__setattr__(self, "_entity", tube)
-        object.__setattr__(self, "_internal_sync_func", {})
+    
+        sync_func = dict(state_is_smooth={}, state_is_wrap={})
+        object.__setattr__(self, "_internal_sync_func", sync_func)
 
         
         
@@ -572,7 +578,7 @@ class DisclinationLineSmoothPlot:
                 self.owner.owner._raw_box_size_periodic_index
             )
             
-            line_coords_origin = self.owner.result if self.state_is_smooth else self.owner.owner.raw_defect_indices
+            line_coords_origin = self.owner.result if self.state_is_smooth else self.owner.owner._raw_defect_indices
             if self.owner.owner._calc_end2end_kind == "loop":
                 line_coords_origin = np.concatenate((line_coords_origin, [line_coords_origin[0]]))
                 
