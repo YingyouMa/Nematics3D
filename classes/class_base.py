@@ -25,8 +25,9 @@ class ClassBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
-        name,
-        name_replace,
+        *,
+        name: str,
+        name_replace: str,
         logger=None
             ):
         
