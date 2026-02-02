@@ -9,8 +9,8 @@ class RegistryBase:
         "raw_name":                 "The name of the Registry.",
         "_entity":                  "The container storing the objects.",
         
-        "_internal_owner_ref":      ("A weak reference to the owner object associated with this instance."
-                                    "To access it, use .owner or ._internal_owner."),
+        "_impl_owner_ref":      ("A weak reference to the owner object associated with this instance. "
+                                    "To access it, use .owner or ._impl_owner."),
         }
     
     
@@ -19,7 +19,7 @@ class RegistryBase:
         
         name = as_str(name, name="The name of the Registry")
         object.__setattr__(self, "raw_name", name)
-        object.__setattr__(self, "_internal_owner_ref", None)
+        object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -50,12 +50,19 @@ class RegistryBase:
                     logger.recovery("Ignore this process.")
             return
         
-        if not hasattr(self, "name"):
+        if not hasattr(term, "name"):
             raise TypeError("term must have attribute `.name`.")
         name = self._helper_check_name(term.name)
-        term.name = name
+        object.__setattr__(term, "raw_name", name)
         self._entity.append(term)
-        object.__setattr__(term, "_internal_owner_ref", weakref.ref(self))
+
+        old_ref = getattr(term, "_impl_host_ref", None)
+        old_host = old_ref() if callable(old_ref) else None
+        if old_host is not None:
+            logger.warning(
+                    f"{term!r} already has a host {old_host!r}. Overwrite host to {self!r}."
+                )            
+        object.__setattr__(term, "_impl_host_ref", weakref.ref(self))
 
     @property
     def name(self):
@@ -64,7 +71,14 @@ class RegistryBase:
     @name.setter
     def name(self, value):
         name = as_str(value, name="The name of the Registry")
-        self.raw_name = name
+        object.__setattr__(self, "raw_name", name)
+    
+    @property
+    def owner(self):
+        ref = self._impl_owner_ref
+        return ref() if ref is not None else None
+    
+    _impl_owner = owner
         
     def __call__(self):
         return tuple(self._entity)

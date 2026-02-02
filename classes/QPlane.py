@@ -19,7 +19,7 @@ from .plane_grid import PlaneGrid, OptsPlaneGrid
 class QPlane:
 
     __descriptions__ = {
-        "name": "The name identifier of this n-plane object",
+        "raw_name": "The name identifier of this Q-plane object",
         "_raw_QInterpolator": "Interpolator object for Q-tensor field (class Interpolator)",
         "_entity_plane": "The PlaneGrid entity (coordinates of 2D lattice)",
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
@@ -29,6 +29,10 @@ class QPlane:
         "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
+        
+        "_internal_owner_ref":      (
+            "A weak reference to the owner object associated with this instance."
+            "To access it, use .owner or ._internal_owner."),
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
@@ -44,42 +48,17 @@ class QPlane:
         **kwargs,
     ):
         
-        name = as_str(name, name="The name identifier of this n-plane object", replace="n plane")
+        object.__setattr__(self, "_internal_owner_ref", None)
+        
+        name = as_str(name, name=self.__descriptions__["raw_name"], replace="Q plane")
         self.name = name
         
-        if opts_grid is None:
-            opts_grid = OptsPlaneGrid()
-        elif not isinstance(opts_grid, OptsPlaneGrid):
-            try:
-                raise TypeError(
-                        f"opts must be an instance of {OptsPlaneGrid.__name__}, "
-                        f"got {type(opts_grid).__name__}"
-                    )
-            except TypeError:
-                logger.exception("Check input.")
-                logger.recovery("Automatically ignore this input")
-                opts_grid = OptsPlaneGrid()
         
-        opts_grid = merge_opts_all({"": opts_grid}, kwargs, type(self).__name__)[""]
-
-        if grid is None:
-            self._entity_plane = PlaneGrid(opts=opts_grid)
-        elif isinstance(grid, PlaneGrid):
-            grid.act_commit(opts_grid)
+        if grid:
             self._entity_plane = grid
+            self._entity_plane.act_commit(opts=opts_grid, name=self.name+" grid")
         else:
-            try:
-                raise TypeError(
-                    "`grid` must be PlaneGrid object or None (create a new PlaneGrid object)"
-                    f"Got {type(grid)} instead."
-                )
-            except TypeError:
-                logger.exception("Check input grid.")
-                logger.recovery(
-                    "Make a new blank PlaneGrid instead."
-                    "Notice: a blank PlaneGrid could not work without specific kwargs"
-                )
-                self._entity_plane = PlaneGrid(opts=opts_grid)
+            self._entity_plane = PlaneGrid(opts=opts_grid, name=self.name+" grid")
                 
         object.__setattr__(
             self._entity_plane, "_internal_owner_ref", weakref.ref(self)
@@ -96,6 +75,43 @@ class QPlane:
         self._entity_visual_defect = None
 
         self._helper_commit()
+        
+        
+    @property
+    def _internal_owner(self):
+        ref = self._internal_owner_ref
+        return ref() if ref is not None else None
+    
+    @property
+    def owner(self):
+        ref = self._internal_owner_ref
+        return ref() if ref is not None else None
+        
+    @property
+    def name(self):
+        return self.raw_name
+    
+    @name.setter
+    def name(self, value: str):
+        self.act_set_name(value)
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_set_name(self, name, logger=None):
+        
+        try:
+            name = as_str(name, name=self.__descriptions__["raw_name"])
+        except:
+            logger.exception("Invalid name.")
+            logger.recovery("Ignore this modification.")
+            return
+        
+        check_name = getattr(self.owner, "_helper_check_name", None) if self.owner else None
+        if callable(check_name):
+            name = check_name(name)
+        object.__setattr__(self, "raw_name", name)
+
+        return name
+        
 
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
