@@ -10,17 +10,60 @@ from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
 from .opts import merge_opts_all, build_dict_override
+from .class_base import ClassBase
+
+
+
+# ---------------------------------------------------------------------
+# Design Contract: Opts / Host Interaction Semantics
+#
+# The following assumptions are fundamental to the correct usage of
+# OptsBase and HostBase in this framework:
+#
+# 1. After an Opts instance has been finalized (i.e. enters the
+#    "functioning" state), assignments to public (non-underscore) fields
+#    of opts do NOT directly mutate the opts object. Such assignments are
+#    treated as *requests* and are forwarded to the host via commit.
+#
+#    Consequently, opts primarily serve as a lightweight preprocessing
+#    and validation layer. The host is responsible for deciding whether
+#    an update is accepted and, if so, for writing the final value back.
+#
+# 2. The kwargs received by HostBase._helper_commit_apply(...) are
+#    guaranteed to have passed all opts-level preprocessing and basic
+#    validation. Host implementations may assume that input values are
+#    already sanitized, and therefore should not repeat opts-level
+#    validation. Host-side logic should focus on state-dependent or
+#    cross-field constraints and side effects.
+#
+# 3. HostBase.__init__ only performs minimal wiring (opts binding,
+#    defaults construction, and name initialization). Concrete host
+#    subclasses are responsible for:
+#       - finalizing opts at the appropriate lifecycle stage, and
+#       - defining how finalized opts are consumed and applied.
+#
+# 4. When a host accepts an update in _helper_commit_apply(...), it MUST
+#    write the resolved value back to opts. This write-back must bypass
+#    the normal opts assignment path (e.g. via object.__setattr__ or
+#    OptsBase._helper_impl_update) to avoid recursive commit loops.
+#
+# Violating any of these assumptions may result in silent state
+# inconsistencies or hard-to-debug behavior.
+# ---------------------------------------------------------------------
+
+
+
 
 
 @dataclass(slots=True, repr=False)
 class OptsBase:
     tag: str | Unset = UNSET
 
-    _internal_owner_ref: weakref.ReferenceType | None = field(
+    _impl_host_ref: weakref.ReferenceType | None = field(
         default=None, repr=False, init=False
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
-    _internal_sync_func: dict[str, dict[str, Callable]] = field(default_factory=dict, init=False, repr=False)
+    _impl_sync_func: dict[str, dict[str, Callable[[], Any]]] = field(default_factory=dict, init=False, repr=False)
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         "tag":                  "name identifier of the option settings",
@@ -36,15 +79,20 @@ class OptsBase:
     
     
     def __post_init__(self):
-        self._internal_sync_func = {k: {} for k in self.__descriptions__.keys()}
+        object.__setattr__(self, "_impl_sync_func", {k: {} for k in self.__descriptions__.keys()})
+
+    @property
+    def host(self):
+        ref = self._impl_host_ref
+        return ref() if ref is not None else None
 
     # ---------------------------------------------------------------------
-    # Basic core: assignment with validation + lifecycle rule + owner commit
+    # Basic core: assignment with validation + lifecycle rule + host commit
     # ---------------------------------------------------------------------
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
 
-        is_final = bool(getattr(self, "_state_is_functioning", False)) and getattr(self, "_internal_owner_ref", None) is not None
+        is_final = bool(self._state_is_functioning) and (self.host is not None)
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
@@ -81,7 +129,7 @@ class OptsBase:
                 return value
                 
 
-        # --- owner commit (only after functioning) ---
+        # --- host commit (only after functioning) ---
         if not key.startswith("_") and is_final:
             self._helper_sync(key, value)
             return value
@@ -91,26 +139,29 @@ class OptsBase:
 
 
     def _helper_sync(self, key, value):
-        self._helper_owner_apply(key, value)
-        sync_func = self._internal_sync_func.get(key, {})
+        self._helper_host_apply(key, value)
+        sync_func = self._impl_sync_func.get(key, {})
         for func in sync_func.values():
             func()
         
-    def _helper_owner_apply(self, key, value):
-        owner = self._internal_owner_ref()
-        if owner is not None:
-            owner._helper_commit_apply(**{key: value})
+    def _helper_host_apply(self, key, value):
+        if self.host:
+            self.host._helper_commit_apply(**{key: value})
             return value
 
     # ---------------------------------------------------------------------
     # Basic core: finalize (fill UNSET by defaults then freeze state)
     # ---------------------------------------------------------------------
+    @logging_and_warning_decorator(start_finish_level=5)
     def _helper_finalize_basic(self, 
                                defaults: Mapping[str, Any] | None = None,
-                               is_allow_UNSET=False) -> None:
+                               is_allow_UNSET=False,
+                               logger=None) -> None:
 
         if getattr(self, "_state_is_functioning", False):
             raise RuntimeError("This Opts has already been finalized.")
+        
+        logger.detail("finalize: fill UNSET fields with defaults")
 
         defaults_dict = {} if defaults is None else dict(defaults)
 
@@ -120,6 +171,7 @@ class OptsBase:
                 if v is UNSET and not is_allow_UNSET:
                     raise KeyError(f"Missing default for field {k!r}.")
                 setattr(self, k, v)
+                logger.detail(f"finalize: set default {k!r}={v!r}")
 
         object.__setattr__(self, "_state_is_functioning", True)
 
@@ -138,7 +190,7 @@ class OptsBase:
 
     
     @contextmanager
-    def _helper_internal_update(self):
+    def _helper_impl_update(self):
         state_current = getattr(self, '_state_is_functioning', False)
         object.__setattr__(self, "_state_is_functioning", False)
         try:
@@ -165,10 +217,9 @@ class OptsBase:
         cls_name = cls.__name__
 
         # --- header line ---
-        owner = getattr(self, "_internal_owner_ref", None)
-        owner = owner() if owner else None
-        if owner:
-            lines = [f"{cls_name}: the options of {owner!r}"]
+        host = self.host
+        if host:
+            lines = [f"{cls_name}: the options of {host!r}"]
         else:
             lines = [f"{cls_name}"]
             
@@ -207,25 +258,17 @@ class OptsBase:
 
             
 
-class HostBase:
+class HostBase(ClassBase):
     
     __descriptions__: ClassVar[Mapping[str, str]] = {
+        **(super().__descriptions__),
+
         "raw_name":                 "The name identifier of the host object",
         
         "opts":                     "The Opts instance controlling options.",
         "opts_defaults":            "The default option settings.",
         
-        "_internal_owner_ref":      (
-            "A weak reference to the owner object associated with this instance."
-            "To access it, use .owner or ._internal_owner."),
-        
-        "_internal_extra_attrs":    (
-            "A dict storing user-registered extra attributes. "
-            "These are accessed via `glyph.<name>` after calling `act_add_attr(name, doc)`."
-        ),
-        "_internal_extra_attrs_docs": "A dict storing docstrings for user-registered extra attributes.",
-        
-        "_internal_opts_backup":        (
+        "_impl_opts_backup":        (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
             )
@@ -244,24 +287,12 @@ class HostBase:
         **kwargs
             ):    
         
-        self.__descriptions__["raw_name"] = f"The name identifier of the {type(self).__name__} instance"
-        
-        logger.detail("Dealing with basic attributes and input")
-        if not hasattr(self, "_internal_extra_attrs"):
-            object.__setattr__(self, "_internal_extra_attrs", {})
-        if not hasattr(self, "_internal_extra_attrs_docs"):
-            object.__setattr__(self, "_internal_extra_attrs_docs", {})
-        if not hasattr(self, "_internal_owner_ref"):
-            object.__setattr__(self, "_internal_owner_ref", None)
-        if not hasattr(self, "_internal_opts_backup"):
-            object.__setattr__(self, "_internal_opts_backup", {})
-
-        
-        opts = self._helper_check_opts(opts, opts_type=opts_type)
+        super().__init__(name=name, name_replace=name_replace)
                 
         logger.detail('Handling explicit kwargs overrides ...')
+        opts = self._helper_check_opts(opts, opts_type=opts_type)
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(opts, "_internal_owner_ref", weakref.ref(self))
+        object.__setattr__(opts, "_impl_host_ref", weakref.ref(self))
         object.__setattr__(self, "opts", opts)
 
         
@@ -273,8 +304,6 @@ class HostBase:
                         )
         object.__setattr__(self, "opts_defaults", opts_defaults)
         
-        name = as_str(name, name=self.__descriptions__["raw_name"], replace=name_replace) if name else name_replace
-        self.act_set_name(name)
         
         
     @logging_and_warning_decorator(start_finish_level=5)
@@ -297,104 +326,6 @@ class HostBase:
                 opts = opts_type()
                 
         return opts
-        
-
-    @property
-    def _internal_owner(self):
-        ref = self._internal_owner_ref
-        return ref() if ref is not None else None
-    
-    @property
-    def owner(self):
-        ref = self._internal_owner_ref
-        return ref() if ref is not None else None
-        
-    @property
-    def name(self):
-        return self.raw_name
-    
-    @name.setter
-    def name(self, value: str):
-        self.act_set_name(value)
-        
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_set_name(self, name, logger=None):
-        
-        try:
-            name = as_str(name, name=self.__descriptions__["raw_name"])
-        except:
-            logger.exception("Invalid name.")
-            logger.recovery("Ignore this modification.")
-            return
-        
-        check_name = getattr(self.owner, "_helper_check_name", None) if self.owner else None
-        if callable(check_name):
-            name = check_name(name)
-        object.__setattr__(self, "raw_name", name)
-
-        return name
-            
-            
-            
-    def __getattr__(self, key):
-        extra = object.__getattribute__(self, "_internal_extra_attrs")
-        if key in extra:
-            return extra[key]
-        else:
-            raise AttributeError(f"{type(self).__name__!s} object has no attribute {key!r}.")
-
-        
-    def act_add_attr(
-        self,
-        name: str,
-        doc: str,
-        default=None,
-        overwrite: bool = False,
-    ):
-
-        name = as_str(name, name='Extra attribute name for PlotGlyph')
-        doc = as_str(doc, name='Extra attribute doc for PlotGlyph')
-
-
-        if not name.isidentifier():
-            raise ValueError(f"Invalid extra attribute name {name!r}: must be a valid Python identifier.")
-
-        if hasattr(type(self), name) or (name in getattr(type(self), "__slots__", ())):
-            raise AttributeError(
-                f"Cannot register extra attribute {name!r}: it conflicts with an existing attribute of {type(self).__name__}."
-            )
-
-        docs = self._internal_extra_attrs_docs
-        data = self._internal_extra_attrs
-
-        if (name in docs) and (not overwrite):
-            raise KeyError(
-                f"Extra attribute {name!r} is already registered. Use overwrite=True to override."
-            )
-
-        docs[name] = doc
-        if overwrite or (name not in data):
-            data[name] = default
-            
-
-    def _helper_setattr_basic(self, key, value, allowed_extra=[]):
-    
-        allowed_core = list(allowed_extra) + ["name", "raw_name"]
-        
-        extra = object.__getattribute__(self, "_internal_extra_attrs")
-        docs = object.__getattribute__(self, "_internal_extra_attrs_docs")
-        if key in docs:
-            extra[key] = value
-            return
-    
-        if key not in allowed_core:
-            raise AttributeError(
-                f"Invalid attribute assignment: {key!r}. "
-                f"Only attributes in {allowed_core} can be modified directly, "
-                f"or a registered extra attribute."
-            )
-
-        self.act_commit(**{key: value})
             
     
     def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
@@ -421,16 +352,37 @@ class HostBase:
     
     def _helper_commit_apply(self, **kwargs):
         raise NotImplementedError(...)
+    
+    
+    def _helper_setattr_basic(self, key, value, allowed_extra=None):
         
+        if allowed_extra is None:
+            allowed_extra = []
+        allowed_core = list(allowed_extra) + ["name", "raw_name"]
         
-    def __repr__(self) -> str:
-        cls_name = self.__class__.__name__
-        msg = f"{cls_name}({self.name!r})"
-        return msg 
+        extra = object.__getattribute__(self, "_impl_extra_attrs")
+        docs = object.__getattribute__(self, "_impl_extra_attrs_docs")
+        if key in docs:
+            extra[key] = value
+            return
+    
+        if key not in allowed_core:
+            raise AttributeError(
+                f"Invalid attribute assignment: {key!r}. "
+                f"Only attributes in {allowed_core} can be modified directly, "
+                f"or a registered extra attribute."
+            )
+
+        self.act_commit(**{key: value})
+        
     
     def act_save_opts(self, name=None):
         if not name:
             name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        self._internal_opts_backup[name] = self.opts.act_asdict()
+        self._impl_opts_backup[name] = self.opts.act_asdict()
+
+
+
+
         
 
