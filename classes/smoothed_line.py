@@ -18,12 +18,10 @@ from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import OptsTube, PlotTube
 from .class_function import cover_value
 
-
+# fmt: off
 @dataclass(slots=True, repr=False)
 class OptsSmooth(OptsBase):
     
-    #  ------------------------------------------------------------------------------------
-    # fmt: off
     window_ratio:               Number | None | Unset               = UNSET
     window_length:              int | float | None | Unset          = UNSET
     order:                      int | Unset                         = UNSET
@@ -65,6 +63,9 @@ class OptsSmooth(OptsBase):
         "min_line_length":      50,
         "is_window_warning":    True
     })
+# fmt: on
+
+
         
 class SmoothingConfigError(ValueError):
     """
@@ -79,6 +80,7 @@ class SmoothingConfigError(ValueError):
 
 class SmoothedLine(HostBase):
     
+    # fmt: off
     __descriptions__ = {
         **dict(HostBase.__descriptions__),
         "raw_name":                 "The name identifier of the original line",    
@@ -96,10 +98,9 @@ class SmoothedLine(HostBase):
             "or numerical failures), this field stores a human-readable "
             "string describing the specific reason."),
         }
+    # fmt: on
 
     __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
-    # fmt: on
-    #  ------------------------------------------------------------------------------------
 
     def __init__(
         self,
