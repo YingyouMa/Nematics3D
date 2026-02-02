@@ -46,6 +46,8 @@ class RegistryBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def act_register(self, term, is_contain_ok=False, logger=None):
 
+        logger.detail(f"Register term into Registry {self.name!r}: term={term!r}")
+
         if term in self._entity:
             if not is_contain_ok:
                 try:
