@@ -56,13 +56,13 @@ class RegistryBase:
         object.__setattr__(term, "raw_name", name)
         self._entity.append(term)
 
-        old_ref = getattr(term, "_impl_host_ref", None)
-        old_host = old_ref() if callable(old_ref) else None
-        if old_host is not None:
+        old_ref = getattr(term, "_impl_registry_ref", None)
+        old_registry = old_ref() if callable(old_ref) else None
+        if old_registry is not None:
             logger.warning(
-                    f"{term!r} already has a host {old_host!r}. Overwrite host to {self!r}."
+                    f"{term!r} already has a registry {old_registry!r}. Overwrite registry to {self!r}."
                 )            
-        object.__setattr__(term, "_impl_host_ref", weakref.ref(self))
+        object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
 
     @property
     def name(self):
