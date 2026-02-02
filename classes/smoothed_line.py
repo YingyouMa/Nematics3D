@@ -21,8 +21,11 @@ from .class_function import cover_value
 
 @dataclass(slots=True, repr=False)
 class OptsSmooth(OptsBase):
+    
+    #  ------------------------------------------------------------------------------------
+    # fmt: off
     window_ratio:               Number | None | Unset               = UNSET
-    window_length:              int | None | Unset                  = UNSET
+    window_length:              int | float | None | Unset          = UNSET
     order:                      int | Unset                         = UNSET
     N_out_ratio:                Number | Unset                      = UNSET
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
@@ -82,7 +85,7 @@ class SmoothedLine(HostBase):
         "raw_coords":               "Raw input line coordinates (shape: N x D)",
         "_calc_N_init":             "Number of input points (before smoothing)",
         "_calc_N_out":              "Number of output points (after smoothing)",
-        "_calc_result":                  "The moothed output coordinates (shape: M x D)",
+        "_calc_result":             "The smoothed output coordinates (shape: M x D)",
         "_state_is_smoothed":       "Boolean flag indicating whether smoothing was applied",
         
         "_state_status": (
@@ -92,11 +95,11 @@ class SmoothedLine(HostBase):
             "conditions (e.g. line too short, invalid window size, "
             "or numerical failures), this field stores a human-readable "
             "string describing the specific reason."),
-        
-        "_entity_preview":           "The PlotFigure object. Only used in act_tuning() which helps users modify options",
         }
 
     __slots__ = tuple(__descriptions__.keys()) # + ('__weakref__' ,)
+    # fmt: off 
+    #  ------------------------------------------------------------------------------------
 
     def __init__(
         self,
@@ -172,7 +175,7 @@ class SmoothedLine(HostBase):
             if 'window_ratio' not in kwargs.keys() and 'window_length' in kwargs.keys():
                 object.__setattr__(self.opts, "window_ratio", None)
         
-        with self.opts._helper_internal_update():
+        with self.opts._helper_impl_update():
             cover_value(self.opts,
                         is_allow_cover_target_set=True,
                         is_allow_unset_source=False,
@@ -299,13 +302,13 @@ class SmoothedLine(HostBase):
     
     
     # def __enter__(self):
-    #     object.__setattr__(self, "_internal_backup_opts", self.opts.act_asdict())
+    #     object.__setattr__(self, "_impl_backup_opts", self.opts.act_asdict())
     #     return self
     
     # def __exit__(self, exc_type, exc_val, exc_tb):
-    #     for k, v in self._internal_backup_opts.items():
+    #     for k, v in self._impl_backup_opts.items():
     #         setattr(self.opts, k, v)
     #     self._helper_apply()
-    #     del self._internal_backup_opts
+    #     del self._impl_backup_opts
     #     return False  
         

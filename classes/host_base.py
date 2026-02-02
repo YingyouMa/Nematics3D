@@ -340,6 +340,31 @@ class HostBase(ClassBase):
 
     def _helper_commit_apply(self, **kwargs):
         raise NotImplementedError(...)
+        
+        
+
+    def act_save_opts(self, name=None):
+        if not name:
+            name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        self._impl_opts_backup[name] = self.opts.act_asdict()
+        
+
+
+    # -----------------------------------------------------------------
+    # OVERRIDE:
+    #
+    # This method intentionally overrides ClassBase._helper_setattr_basic.
+    #
+    # For Host objects, direct assignment to public (non-underscore)
+    # attributes does NOT mutate the host instance immediately.
+    # Instead, such assignments are forwarded to act_commit(...) and
+    # handled by the commit pipeline.
+    #
+    # This enforces a strict "commit-driven" update model for hosts:
+    # all externally visible state changes must pass through
+    # _helper_commit_apply(...), where consistency checks and side
+    # effects are centrally managed.
+    # -----------------------------------------------------------------
 
     def _helper_setattr_basic(self, key, value, allowed_extra=None):
 
@@ -362,7 +387,3 @@ class HostBase(ClassBase):
 
         self.act_commit(**{key: value})
 
-    def act_save_opts(self, name=None):
-        if not name:
-            name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        self._impl_opts_backup[name] = self.opts.act_asdict()
