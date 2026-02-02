@@ -250,7 +250,7 @@ class OptsBase:
 
 
 class HostBase(ClassBase):
-    
+
     # fmt: off
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **(super().__descriptions__),
