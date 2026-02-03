@@ -96,7 +96,7 @@ class DisclinationLine(ClassBase):
     ):
 
         if inputValue is None:
-            inputValue: InputLine | None = None
+            inputValue = InputLine()
 
         super().__init__(name=name, name_replace="disclination line")
 
@@ -299,10 +299,10 @@ class DisclinationLineSmooth(SmoothedLine):
     def act_commit(self, opts: OptsSmooth | None = None, **kwargs):
 
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(**kwargs)
+        self._helper_commit_apply_opts(**kwargs)
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts(self, logger=None, **kwargs):
 
         v = kwargs.pop("mode", None)
         if v is not None:
@@ -335,7 +335,6 @@ class DisclinationLineSmooth(SmoothedLine):
             )
 
             indices_origin = self.owner._raw_defect_indices.copy()
-
             tail = indices_origin[:padding_num].copy()
             head = indices_origin[-padding_num:].copy()
             indices = np.concatenate([head, indices_origin, tail])
@@ -361,12 +360,12 @@ class DisclinationLineSmooth(SmoothedLine):
 
         object.__setattr__(self, "raw_coords", indices)
 
-        super()._helper_commit_apply(mode=smooth_mode, **kwargs)
+        super()._helper_commit_apply_opts(mode=smooth_mode, **kwargs)
         result = self._calc_result
 
         result = self._calc_result[
             int(padding_num * self.opts.N_out_ratio) : int(
-                (-padding_num - 1) * self.opts.N_out_ratio
+                (-padding_num-1) * self.opts.N_out_ratio
             )
         ]
         object.__setattr__(self, "_calc_result", result)
@@ -616,5 +615,6 @@ class DisclinationLineSmoothPlot:
         else:
             kwargs.pop("coords", None)
             kwargs.pop("line_index", None)
-
+            
+        print(is_silhouette, kwargs)
         self._entity.act_commit(opts=opts, is_silhouette=is_silhouette, **kwargs)

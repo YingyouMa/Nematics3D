@@ -70,7 +70,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         None,
         "window_length":        None,
         "order":                3,
-        "N_out_ratio":          2,
+        "N_out_ratio":          3,
         "mode":                 "interp",
         "min_line_length":      50,
         "is_window_warning":    True
@@ -145,7 +145,7 @@ class SmoothedLine(HostBase):
         )
 
         self.opts.act_finalize()
-        self._helper_commit_apply()
+        self._helper_commit_apply_opts()
 
     def __setattr__(self, key, value):
         self._helper_setattr_basic(key, value, allowed_extra=["coords", "raw_coords"])
@@ -177,10 +177,10 @@ class SmoothedLine(HostBase):
                 logger.recovery("Automatically ignore this modification.")
 
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(**kwargs)
+        self._helper_commit_apply_opts(**kwargs)
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts(self, logger=None, **kwargs):
 
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
@@ -190,7 +190,7 @@ class SmoothedLine(HostBase):
             if "window_ratio" not in kwargs.keys() and "window_length" in kwargs.keys():
                 object.__setattr__(self.opts, "window_ratio", None)
 
-        with self.opts._helper_impl_update():
+        with self.opts._helper_internal_update():
             cover_value(
                 self.opts,
                 is_allow_cover_target_set=True,

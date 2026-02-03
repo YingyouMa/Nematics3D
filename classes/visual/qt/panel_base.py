@@ -155,6 +155,6 @@ class PanelBase(QtWidgets.QWidget):
             
     def on_close(self):
         object.__setattr__(self.glyph, "_state_is_interactable", True)
-        sync = getattr(self.glyph.opts, "_internal_sync_func", None)
+        sync = getattr(self.glyph.opts, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)

@@ -10,7 +10,7 @@ class InteractDisclinationLine(PanelBase):
     def __init__(self, obj):
         self.obj = obj
         self.owner = obj.owner
-        object.__setattr__(self.owner, "state_is_silhouette", False)
+        object.__setattr__(self.owner, "_state_is_silhouette", False)
         super().__init__(self.obj._entity, title="Smoothed disclination line control")
         self.owner.act_save_opts(name=self.str_now)
             
@@ -165,19 +165,20 @@ class InteractDisclinationLine(PanelBase):
         self._apply_opacity_enabled()
 
 
-        for item in self.sliders.values():
-            item.slider.valueChanged.connect(self.on_changed)
+        for key, item in self.sliders.items():
+            if key == "window_length":
+                item.slider.valueChanged.connect(lambda: self.on_changed(is_only_smooth=True))
+            else:
+                item.slider.valueChanged.connect(self.on_changed)
             item.slider.sliderPressed.connect(self.glyph._helper_clear_silhouette)
             item.slider.sliderReleased.connect(self.glyph._helper_add_silhouette)
-            
-        self.sliders["window_length"].slider.valueChanged.connect(lambda: self.on_changed(is_only_smooth=True))
 
         self.on_changed(0, is_commit=False)
         
-        self.glyph.opts._internal_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
-        self.owner.opts._internal_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_glyph("window_length", self.owner.opts.window_length)
-        self.obj._internal_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_smooth", self.obj.state_is_smooth)
-        self.obj._internal_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_wrap", self.obj.state_is_wrap)
+        self.glyph.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
+        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_glyph("window_length", self.owner.opts.window_length)
+        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_smooth", self.obj.state_is_smooth)
+        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_wrap", self.obj.state_is_wrap)
 
     def on_changed(self, _v=0, is_commit: bool=True, is_only_smooth=False):
         
@@ -229,7 +230,7 @@ class InteractDisclinationLine(PanelBase):
             return
         
         # ---- radius ----
-        current_radius = self.glyph._internal_opts_backup[self.str_now]["radius"]
+        current_radius = self.glyph._impl_opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -241,14 +242,14 @@ class InteractDisclinationLine(PanelBase):
             color_now = tuple(float(x) for x in self.state["color"])
             paint_by_now = 'color'
         else:
-            color_now = self.glyph._internal_opts_backup[self.str_now]["color"]
-            paint_by_now = self.glyph._internal_opts_backup[self.str_now]["paint_by"]
+            color_now = self.glyph._impl_opts_backup[self.str_now]["color"]
+            paint_by_now = self.glyph._impl_opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.glyph._internal_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.glyph._impl_opts_backup[self.str_now]["opacity"]
 
         self.obj.act_commit(
             radius=radius_now,
@@ -302,11 +303,11 @@ class InteractDisclinationLine(PanelBase):
         
     def on_close(self):
         super().on_close()
-        sync = getattr(self.owner.opts, "_internal_sync_func", None)
+        sync = getattr(self.owner.opts, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)
-        sync = getattr(self.obj, "_internal_sync_func", None)
+        sync = getattr(self.obj, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)
-        object.__setattr__(self.owner, "state_is_silhouette", True)
+        object.__setattr__(self.owner, "_state_is_silhouette", True)
         self.spheres.act_remove()

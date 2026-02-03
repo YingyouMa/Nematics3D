@@ -103,10 +103,6 @@ class PlotTube(PlotGlyph):
                 line_index = None
         object.__setattr__(self, "raw_line_index", line_index)
 
-        # resolver + plot
-        for attr in self._pending_resolution_attrs:
-            self._helper_resolver_spec(attr)
-        self._helper_make_figure()
         self._helper_init_end()
 
         
@@ -148,8 +144,8 @@ class PlotTube(PlotGlyph):
             for s, e in zip(starts, ends):
                 k = e - s
                 if k < 2:
-                    msg = 'Detect one invalid line segment with only one point. Ignore it in the following.'
-                    logger.warning(msg)
+                    logger.warning(f"Detect one invalid line segment with only one point at index={s}."
+                                   "This will not be plotted.")
                 chunks.append(np.r_[k, np.arange(s, e, dtype=np.int64)])
         
             if len(chunks) == 0:

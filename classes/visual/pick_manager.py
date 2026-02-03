@@ -25,7 +25,7 @@ class OptsPickManager:
     sil_opacity:                        float = 0.8
     sil_width:                          float = 3
     
-    _internal_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
+    _impl_owner_ref: weakref.ReferenceType | None = field(default=None, init=False, repr=False)
     
     __descriptions__ = {
         "double_click_threshold":       ("The maximum time interval (in seconds)"
@@ -57,7 +57,7 @@ class OptsPickManager:
             value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
         
-        owner = getattr(self, "_internal_owner_ref", None)
+        owner = getattr(self, "_impl_owner_ref", None)
         if owner:
             owner = owner()
             markers = owner._entity_markers
@@ -75,7 +75,7 @@ class OptsPickManager:
                     pack["text_actor"].GetTextProperty().SetFontSize(value)
             
             else:
-                for glyph in self._internal_registry.values():
+                for glyph in self._impl_registry.values():
                     if hasattr(glyph, '_entity_silhouette') and glyph._entity_silhouette.visibility:
                         if key == "sil_color":
                             glyph._entity_silhouette.prop.color = value
@@ -104,11 +104,11 @@ class PickManager:
 
     __descriptions__ = {
         "opts": "The OptsPickManager instance controlling behavior.",
-        "_internal_owner_ref": (
+        "_impl_owner_ref": (
             "A weak reference to the PlotFigure that owns this pick manager."
         ),
-        "_internal_registry": "A registry dict: actor -> visual object",
-        "_internal_active_glyphs": "Set of currently active glyphs (multi-selection).",
+        "_impl_registry": "A registry dict: actor -> visual object",
+        "_impl_active_glyphs": "Set of currently active glyphs (multi-selection).",
         
         "_state_pick_count": "Monotonic counter for marker numbering (never decreases).",
         
@@ -126,20 +126,20 @@ class PickManager:
     
     def __init__(self, figure, opts: OptsPickManager | None = None, **kwargs):
 
-        object.__setattr__(self, "_internal_owner_ref", weakref.ref(figure))
-        object.__setattr__(self, "_internal_registry", {})
+        object.__setattr__(self, "_impl_owner_ref", weakref.ref(figure))
+        object.__setattr__(self, "_impl_registry", {})
         object.__setattr__(self, "_state_pick_count", 0)
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
         object.__setattr__(self, "_state_last_rclick_time", None)
         object.__setattr__(self, "_state_last_rclick_actor", None)
         object.__setattr__(self, "_entity_markers", [])
-        object.__setattr__(self, "_internal_active_glyphs", [])
+        object.__setattr__(self, "_impl_active_glyphs", [])
         
         if opts is None:
             opts = OptsPickManager()
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        object.__setattr__(opts, "_internal_owner_ref", weakref.ref(self))
+        object.__setattr__(opts, "_impl_owner_ref", weakref.ref(self))
         object.__setattr__(self, "opts", opts)
         
         fig = self.owner
@@ -149,17 +149,17 @@ class PickManager:
 
     @property
     def owner(self):
-        return self._internal_owner_ref()
+        return self._impl_owner_ref()
 
     # ---------------------------------------------------------------------
     # Registry: actor -> owner (PlotTube / PlotSphere / PlotRod / ...)
     # ---------------------------------------------------------------------
     def act_register(self, actor, owner):
-        self._internal_registry[actor] = owner
+        self._impl_registry[actor] = owner
 
     def act_unregister(self, actor, logger=None):
-        if actor in self._internal_registry:
-            del self._internal_registry[actor]
+        if actor in self._impl_registry:
+            del self._impl_registry[actor]
 
 
     # ---------------------------------------------------------------------
@@ -168,10 +168,10 @@ class PickManager:
     def _helper_callback(self, point, picker):
 
         actor = picker.GetActor() if picker is not None else None
-        if actor is None or actor not in self._internal_registry:
+        if actor is None or actor not in self._impl_registry:
             return
 
-        owner = self._internal_registry[actor]
+        owner = self._impl_registry[actor]
 
         now = time.monotonic()
         last_t = self._state_last_click_time
@@ -432,7 +432,7 @@ class PickManager:
         picker.Pick(x, y, 0.0, fig.pl.renderer)
 
         actor = picker.GetActor()
-        if actor is None or actor not in self._internal_registry:
+        if actor is None or actor not in self._impl_registry:
             return
 
         # 2) right-double-click detect (time + same actor)
@@ -453,7 +453,7 @@ class PickManager:
             return
 
         # 3) on right-double-click: PlotSphere && _state_is_interactable => InteractSphere(owner)
-        owner = self._internal_registry[actor]
+        owner = self._impl_registry[actor]
 
         if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
             

@@ -5,9 +5,9 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
+from Nematics3D.datatypes import UNSET, Unset, as_str
 from .plot_figure import PlotFigure
-from .glyph import OptsGlyph, LEVEL_REMESH, PlotGlyph
+from .glyph import OptsGlyph,PlotGlyph
 from Nematics3D.general import pop_exclusive
 from Nematics3D.datatypes import as_points
 

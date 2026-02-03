@@ -58,9 +58,6 @@ class PlotSphere(PlotGlyph):
             **kwargs,
         )
 
-        for attr in self._pending_resolution_attrs:
-            self._helper_resolver_spec(attr)
-        self._helper_make_figure()
         self._helper_init_end()
         
     def __setattr__(self, key, value):

@@ -28,7 +28,7 @@ from .class_base import ClassBase
 #    and validation layer. The host is responsible for deciding whether
 #    an update is accepted and, if so, for writing the final value back.
 #
-# 2. The kwargs received by HostBase._helper_commit_apply(...) are
+# 2. The kwargs received by HostBase._helper_commit_apply_opts(...) are
 #    guaranteed to have passed all opts-level preprocessing and basic
 #    validation. Host implementations may assume that input values are
 #    already sanitized, and therefore should not repeat opts-level
@@ -41,10 +41,10 @@ from .class_base import ClassBase
 #       - finalizing opts at the appropriate lifecycle stage, and
 #       - defining how finalized opts are consumed and applied.
 #
-# 4. When a host accepts an update in _helper_commit_apply(...), it MUST
+# 4. When a host accepts an update in _helper_commit_apply_opts(...), it MUST
 #    write the resolved value back to opts. This write-back must bypass
 #    the normal opts assignment path (e.g. via object.__setattr__ or
-#    OptsBase._helper_impl_update) to avoid recursive commit loops.
+#    OptsBase._helper_internal_update) to avoid recursive commit loops.
 #
 # Violating any of these assumptions may result in silent state
 # inconsistencies or hard-to-debug behavior.
@@ -141,7 +141,7 @@ class OptsBase:
 
     def _helper_host_apply(self, key, value):
         if self.host:
-            self.host._helper_commit_apply(**{key: value})
+            self.host._helper_commit_apply_opts(**{key: value})
             return value
 
     # ---------------------------------------------------------------------
@@ -186,7 +186,7 @@ class OptsBase:
         return result
 
     @contextmanager
-    def _helper_impl_update(self):
+    def _helper_internal_update(self):
         state_current = getattr(self, "_state_is_functioning", False)
         object.__setattr__(self, "_state_is_functioning", False)
         try:
@@ -336,9 +336,9 @@ class HostBase(ClassBase):
     def act_commit(self, opts=None, **kwargs):
         kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply(**kwargs)
+        self._helper_commit_apply_opts(**kwargs)
 
-    def _helper_commit_apply(self, **kwargs):
+    def _helper_commit_apply_opts(self, **kwargs):
         raise NotImplementedError(...)
         
         
@@ -362,7 +362,7 @@ class HostBase(ClassBase):
     #
     # This enforces a strict "commit-driven" update model for hosts:
     # all externally visible state changes must pass through
-    # _helper_commit_apply(...), where consistency checks and side
+    # _helper_commit_apply_opts(...), where consistency checks and side
     # effects are centrally managed.
     # -----------------------------------------------------------------
 

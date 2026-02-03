@@ -22,14 +22,11 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from .plot_figure import PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.general import pop_exclusive
 
 #!!! resolver source
 #!!! colorbar name args
 #!!! is_reset_camera commit
-
-LEVEL_ACTOR = 0  # Only changes GPU/Rendering state. (Fastest)
-LEVEL_RECALC = 1  # Needs to re-calculate data arrays (colors, etc.) but keeps geometry.
-LEVEL_REMESH = 2  # Needs to re-run the glyph filter to rebuild the 3D mesh. (Heaviest)
 
 # --- Type aliases ---
 ColorMode = ColorRGB | Callable | Sequence 
@@ -96,7 +93,7 @@ class OptsGlyph(OptsBase):
         "roughness":            "PBR surface roughness (0-1). Needs PBR enabled.",
         
         # === Shape and Color Control ===
-        "paint_by":             "Controls how the visual appearance of the object is driven, by `color` or `scalars`.",
+        "paint_by":             "Select rendering pipeline: direct RGBA vs scalar colormap.",
         "color": (
             "Determines point colors. Options: "
             "1) ColorRGB for entire glyph (e.g. (1,0,0)) "
@@ -197,23 +194,10 @@ class OptsGlyph(OptsBase):
         "metallic":             "prop.metallic",
         "roughness":            "prop.roughness",
         }
-
-    # ---------------------------------------------------------------------
-    # Public API entrypoints (thin wrappers around OptsBase basics)
-    # ---------------------------------------------------------------------
-    def __setattr__(self, key: str, value: Any, logger=None):
-        self._helper_setattr_basic(key, value)
-
-    def act_finalize(self, defaults: Mapping[str, Any] | None = None) -> None:
-        self._helper_finalize_basic(defaults)
-
-    def act_asdict(self, is_include_UNSET: bool = False) -> dict[str, Any]:
-        return self._helper_asdict_basic(is_include_UNSET=is_include_UNSET)
     
-    def _helper_owner_apply(self, key, value):
-        owner = self._internal_owner_ref()
-        if owner is not None:
-            owner.act_commit(**{key: value})
+    def _helper_host_apply(self, key, value):
+        if self.host:
+            self.host.act_commit(**{key: value})
             return value
     
   
@@ -235,11 +219,11 @@ class PlotGlyph(HostBase):
         "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
         
-        "_internal_name_pv":            "The unique identifier of this glyph stored in the PyVista plotter.",
-        "_internal_resolver_source":    "Field used to drive visual variations (e.g. color, opacity)",
+        "_impl_name_pv":            "The unique identifier of this glyph stored in the PyVista plotter.",
+        "_impl_resolver_source":    "Field used to drive visual variations (e.g. color, opacity)",
         
-        "_internal_figure_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
-                                         "To access it, use .fig or ._internal_figure."),
+        "_impl_figure_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
+                                         "To access it, use .fig or ._impl_figure."),
         
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
@@ -269,8 +253,8 @@ class PlotGlyph(HostBase):
         category = as_str(category, name="The category of the glyph")
         object.__setattr__(self, "raw_category", category)
         
-        object.__setattr__(self, "_internal_resolver_source", "raw_coords")
-        object.__setattr__(self, "_internal_opts_backup", {})
+        object.__setattr__(self, "_impl_resolver_source", "raw_coords")
+        object.__setattr__(self, "_impl_opts_backup", {})
         object.__setattr__(self, "_state_is_interactable", True)
         
         super().__init__(
@@ -306,31 +290,33 @@ class PlotGlyph(HostBase):
                 figure = PlotFigure()
         elif figure is None:
             figure = PlotFigure()
-        object.__setattr__(self, "_internal_figure_ref", weakref.ref(figure))
+        object.__setattr__(self, "_impl_figure_ref", weakref.ref(figure))
             
 
         logger.detail("Examining the options before plotting ...")
         self.opts.act_finalize(self.opts_defaults)
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         unique_id = self.name + str_now
-        object.__setattr__(self, "_internal_name_pv", unique_id)
+        object.__setattr__(self, "_impl_name_pv", unique_id)
             
     def _helper_init_end(self):
+        
+        for attr in self._pending_resolution_attrs:
+            self._helper_resolver_spec(attr)
+        self._helper_make_figure()
+        
         figure = self.fig
         figure.pl.render()
         figure.pl.show()
         figure.act_register(self)
         
-        
-    @property
-    def _internal_figure(self):
-        ref = self._internal_figure_ref
-        return ref() if ref is not None else None
     
     @property
     def fig(self):
-        ref = self._internal_figure_ref
+        ref = self._impl_figure_ref
         return ref() if ref is not None else None
+    
+    _impl_figure = fig
         
     
         
@@ -347,7 +333,7 @@ class PlotGlyph(HostBase):
     def _helper_resolver_generic(self, attr_name, attr_input, default_val, is_recover=False, logger=None):
         
         target_shape = (len(self.raw_coords),3) if attr_name=='color' else (len(self.raw_coords),)
-        source = getattr(self, self._internal_resolver_source)
+        source = getattr(self, self._impl_resolver_source)
         
         try:
             if attr_input is None:
@@ -425,7 +411,7 @@ class PlotGlyph(HostBase):
         """
         
         is_scalars = self.opts.paint_by == 'scalars'
-        unique_id = self._internal_name_pv
+        unique_id = self._impl_name_pv
         
         input_dir = {
             "name":             unique_id,
@@ -586,7 +572,7 @@ class PlotGlyph(HostBase):
         
     def act_remove(self):
         self.fig.pl.remove_actor(self._entity)
-        self.fig.pick_manager._internal_registry.pop(self._entity)
+        self.fig.pick_manager._impl_registry.pop(self._entity)
         self.fig._entity.remove(self)
         
         

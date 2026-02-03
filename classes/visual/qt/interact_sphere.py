@@ -110,7 +110,7 @@ class InteractSphere(PanelBase):
 
         self.on_changed(0, is_commit=False)
         
-        self.glyph.opts._internal_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
+        self.glyph.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
 
     def on_changed(self, _v: int = 0, is_commit: bool = True):
         # ---- radius_rescale ----
@@ -148,7 +148,7 @@ class InteractSphere(PanelBase):
 
     def commit(self):
         # ---- radius ----
-        current_radius = self.glyph._internal_opts_backup[self.str_now]["radius"]
+        current_radius = self.glyph._impl_opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -160,14 +160,14 @@ class InteractSphere(PanelBase):
             color_now = tuple(float(x) for x in self.state["color"])
             paint_by_now = 'color'
         else:
-            color_now = self.glyph._internal_opts_backup[self.str_now]["color"]
-            paint_by_now = self.glyph._internal_opts_backup[self.str_now]["paint_by"]
+            color_now = self.glyph._impl_opts_backup[self.str_now]["color"]
+            paint_by_now = self.glyph._impl_opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.glyph._internal_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.glyph._impl_opts_backup[self.str_now]["opacity"]
 
         self.glyph.act_commit(
             radius=radius_now,

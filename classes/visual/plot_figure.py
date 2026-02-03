@@ -28,7 +28,7 @@ from .qt.console import ScopedConsoleDock
 #!!! property act_view
 #!!! load save 
 #!!! overlay blanket
-#!!! name figure manager owner
+#!!! name figure manager registry
 
 # opts_cam = {"azimuth", "elevation", "roll", "distance", "focal_point"}
 # opts_bg = {"bg_color", "bg_opacity"}
@@ -186,7 +186,7 @@ class PlotFigure(HostBase, RegistryBase):
         object.__setattr__(self, "_entity_console", console)
         
         scalar_bars = RegistryBase("scalar bars manager")
-        scalar_bars._internal_owner_ref = weakref.ref(self)
+        scalar_bars._impl_registry_ref = weakref.ref(self)
         object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
         
     
@@ -431,7 +431,7 @@ class PlotFigure(HostBase, RegistryBase):
         name = self._helper_check_name(term.name)
         term.name = name
         self._entity.append(term)
-        object.__setattr__(term, "_internal_figure_ref", weakref.ref(self))
+        object.__setattr__(term, "_impl_figure_ref", weakref.ref(self))
         
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
