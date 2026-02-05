@@ -82,12 +82,8 @@ class PlotRod(PlotGlyph):
         if len(self.raw_orient) != len(self.raw_coords):
             raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
             
-        object.__setattr__(self, "_internal_resolver_source", "raw_orient")
+        object.__setattr__(self, "_impl_resolver_source", "raw_orient")
 
-        # resolver + plot
-        for attr in self._pending_resolution_attrs:
-            self._helper_resolver_spec(attr)
-        self._helper_make_figure()
         self._helper_init_end()
 
     def __setattr__(self, key, value):

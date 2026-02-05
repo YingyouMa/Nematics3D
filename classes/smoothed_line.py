@@ -70,7 +70,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         None,
         "window_length":        None,
         "order":                3,
-        "N_out_ratio":          3,
+        "N_out_ratio":          2,
         "mode":                 "interp",
         "min_line_length":      50,
         "is_window_warning":    True

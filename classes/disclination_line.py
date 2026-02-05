@@ -104,25 +104,23 @@ class DisclinationLine(ClassBase):
         if inputValue.defect_indices is None:
             raise ValueError("No defects are input into disclination line")
         for k, v in asdict(inputValue).items():
-            setattr(self, f"_raw_{k}", v)
+            object.__setattr__(self, f"_raw_{k}", v)
 
         logger.detail(f"Initializing the disclination line {self.name!r}")
 
         if is_sorted == False:
             logger.detail("Sorting defects by closest neighboring pairs.")
-            self._raw_defect_indices = sort_line_indices(self._raw_defect_indices)
-
-        self._raw_box_size_periodic_index = as_dimension_info(
-            self._raw_box_size_periodic_index
-        )
+            object.__setattr__(self, '_raw_defect_indices', sort_line_indices(self._raw_defect_indices))
+        
+        object.__setattr__(self, '_raw_box_size_periodic_index', as_dimension_info(self._raw_box_size_periodic_index))
 
         logger.debug("Classifying line kind by the distance between head and tail.")
         if (
             np.linalg.norm(self._raw_defect_indices[0] - self._raw_defect_indices[-1])
             == 0
         ):
-            self._calc_end2end_kind = "loop"
-            self._raw_defect_indices = self._raw_defect_indices[:-1]
+            object.__setattr__(self, '_calc_end2end_kind', "loop")
+            object.__setattr__(self, '_raw_defect_indices', self._raw_defect_indices[:-1])
         else:
             defect1 = self._raw_defect_indices[0].copy()
             defect2 = self._raw_defect_indices[-1].copy()
@@ -137,11 +135,11 @@ class DisclinationLine(ClassBase):
                 defect2 % self._raw_box_size_periodic_index,
             )
             if np.linalg.norm(defect1 - defect2) == 0:
-                self._calc_end2end_kind = "cross"
-                self._raw_defect_indices = self._raw_defect_indices[:-1]
+                object.__setattr__(self, '_calc_end2end_kind', "cross")
+                object.__setattr__(self, '_raw_defect_indices', self._raw_defect_indices[:-1])
             else:
-                self._calc_end2end_kind = "seg"
-                self._raw_defect_indices = self._raw_defect_indices
+                object.__setattr__(self, '_calc_end2end_kind', "seg")
+                object.__setattr__(self, '_raw_defect_indices', self._raw_defect_indices)
         logger.debug(
             f"Disclination line {self.name!r} is of kind {self._calc_end2end_kind!r}"
         )
@@ -149,16 +147,17 @@ class DisclinationLine(ClassBase):
             f"The first and end point are {self._raw_defect_indices[0]} and {self._raw_defect_indices[-1]}"
         )
 
-        self._calc_defect_num = np.shape(self._raw_defect_indices)[0]
+        object.__setattr__(self, '_calc_defect_num', np.shape(self._raw_defect_indices)[0])
 
         logger.detail("Calculating the defects positions in real-space units.")
-        self._calc_defect_coords = apply_linear_transform(
+        defect_coords = apply_linear_transform(
             self._raw_defect_indices,
             transform=self._raw_grid_transform,
             offset=self._raw_grid_offset,
         )
+        object.__setattr__(self, "_calc_defect_coords", defect_coords)
 
-        self._entity_smooth_objs = []
+        object.__setattr__(self, "_entity_smooth_objs", [])
 
     def act_smooth(
         self,
@@ -616,5 +615,4 @@ class DisclinationLineSmoothPlot:
             kwargs.pop("coords", None)
             kwargs.pop("line_index", None)
             
-        print(is_silhouette, kwargs)
         self._entity.act_commit(opts=opts, is_silhouette=is_silhouette, **kwargs)

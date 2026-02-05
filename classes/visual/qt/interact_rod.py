@@ -1,11 +1,10 @@
 from qtpy import QtWidgets
 
 from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
-from Nematics3D.datatypes import as_ColorRGB
 
-class InteractSphere(PanelBase):
+class InteractRod(PanelBase):
     def __init__(self, host):
-        super().__init__(host, title="Sphere Controls")
+        super().__init__(host, title="Rod Controls")
 
     def build_ui(self):
         # ----------------------------
@@ -13,6 +12,7 @@ class InteractSphere(PanelBase):
         # ----------------------------
         self.state = {
             "radius_rescale":           1.0,
+            "length_rescale":           1.0,
             "sides":                    int(self.host.opts.sides),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
@@ -34,6 +34,17 @@ class InteractSphere(PanelBase):
             name="radius_rescale",
             tick_min=20,
             tick_max=500,
+            tick_init=100,     
+            tick_to_value=lambda t: t / 100.0,
+            value_fmt="{:.4g}",
+        )
+        
+        self.sliders["length_rescale"] = make_labeled_slider_row(
+            parent=group_geometry,
+            layout=gl_geometry,
+            name="length_rescale",
+            tick_min=50,
+            tick_max=200,
             tick_init=100,     
             tick_to_value=lambda t: t / 100.0,
             value_fmt="{:.4g}",
@@ -114,6 +125,11 @@ class InteractSphere(PanelBase):
         rr = float(self.sliders["radius_rescale"].get_value())
         self.sliders["radius_rescale"].label.setText(f"{rr:.4g}")
         self.state["radius_rescale"] = rr
+        
+        # ---- length_rescale ----
+        lr = float(self.sliders["length_rescale"].get_value())
+        self.sliders["length_rescale"].label.setText(f"{lr:.4g}")
+        self.state["length_rescale"] = lr
     
         # ---- sides ----
         sides_f = float(self.sliders["sides"].get_value())
@@ -152,6 +168,14 @@ class InteractSphere(PanelBase):
         else:
             radius_now = scale * float(current_radius)
             
+        # ---- length ----
+        current_length = self.host._impl_opts_backup[self.str_now]["length"]
+        scale = float(self.state["length_rescale"])
+        if callable(current_length):
+            length_now = lambda x: scale * current_length(x)
+        else:
+            length_now = scale * float(current_length)
+            
         # ---- color (controlled or restore) ----
         if bool(self.state.get("is_use_control_color", False)):
             color_now = tuple(float(x) for x in self.state["color"])
@@ -168,6 +192,7 @@ class InteractSphere(PanelBase):
 
         self.host.act_commit(
             radius=radius_now,
+            length=length_now,
             color=color_now,
             opacity=opacity_now,
             paint_by=paint_by_now,

@@ -13,10 +13,10 @@ class InteractDisclinationLine(PanelBase):
         object.__setattr__(self.owner, "_state_is_silhouette", False)
         super().__init__(self.obj._entity, title="Smoothed disclination line control")
         self.owner.act_save_opts(name=self.str_now)
-            
+        
         self.spheres = PlotSphere(
             self._helper_create_sphere_coords(self.obj.state_is_wrap),
-            figure=self.glyph.fig,
+            figure=self.host.fig,
             name="raw defect points",
             color=(0,0,0),
             is_reset_camera=False
@@ -45,7 +45,7 @@ class InteractDisclinationLine(PanelBase):
             "window_length":            int(self.owner.opts.window_length),
             "is_smooth":                bool(self.obj.state_is_smooth),
             "radius_rescale":           1.0,
-            "sides":                    int(self.glyph.opts.sides),
+            "sides":                    int(self.host.opts.sides),
             "is_wrap":                  bool(self.obj.state_is_wrap),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
@@ -108,7 +108,7 @@ class InteractDisclinationLine(PanelBase):
             name="sides",
             tick_min=4,
             tick_max=40,
-            tick_init=int(self.glyph.opts.sides),   
+            tick_init=int(self.host.opts.sides),   
             tick_to_value=lambda t: float(int(t)),
             value_fmt="{:.0f}",
         )
@@ -121,10 +121,7 @@ class InteractDisclinationLine(PanelBase):
         gl_RGB = QtWidgets.QVBoxLayout(group_RGB)
         self.layout.addWidget(group_RGB)
         
-        try:
-            init_rgb = as_ColorRGB(self.glyph.opts.color) 
-        except:
-            init_rgb = (0.5, 0.5, 0.5)
+        init_rgb = self.host._calc_color[0]
         make_RGB_slider(
             parent=group_RGB,
             layout=gl_RGB,
@@ -153,7 +150,7 @@ class InteractDisclinationLine(PanelBase):
             name="opacity",
             tick_min=0,
             tick_max=100,
-            tick_init=100,   
+            tick_init=int(self.host._calc_opacity[0]*100),
             tick_to_value=lambda t: float(t/100.0),
             value_fmt="{:.2f}",
         )
@@ -170,15 +167,15 @@ class InteractDisclinationLine(PanelBase):
                 item.slider.valueChanged.connect(lambda: self.on_changed(is_only_smooth=True))
             else:
                 item.slider.valueChanged.connect(self.on_changed)
-            item.slider.sliderPressed.connect(self.glyph._helper_clear_silhouette)
-            item.slider.sliderReleased.connect(self.glyph._helper_add_silhouette)
+            item.slider.sliderPressed.connect(self.host._helper_clear_silhouette)
+            item.slider.sliderReleased.connect(self.host._helper_add_silhouette)
 
         self.on_changed(0, is_commit=False)
         
-        self.glyph.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_glyph("sides", self.glyph.opts.sides)
-        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_glyph("window_length", self.owner.opts.window_length)
-        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_smooth", self.obj.state_is_smooth)
-        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_glyph("state_is_wrap", self.obj.state_is_wrap)
+        self.host.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_host("sides", self.host.opts.sides)
+        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_host("window_length", self.owner.opts.window_length)
+        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_host("state_is_smooth", self.obj.state_is_smooth)
+        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_host("state_is_wrap", self.obj.state_is_wrap)
 
     def on_changed(self, _v=0, is_commit: bool=True, is_only_smooth=False):
         
@@ -230,7 +227,7 @@ class InteractDisclinationLine(PanelBase):
             return
         
         # ---- radius ----
-        current_radius = self.glyph._impl_opts_backup[self.str_now]["radius"]
+        current_radius = self.host._impl_opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -242,14 +239,14 @@ class InteractDisclinationLine(PanelBase):
             color_now = tuple(float(x) for x in self.state["color"])
             paint_by_now = 'color'
         else:
-            color_now = self.glyph._impl_opts_backup[self.str_now]["color"]
-            paint_by_now = self.glyph._impl_opts_backup[self.str_now]["paint_by"]
+            color_now = self.host._impl_opts_backup[self.str_now]["color"]
+            paint_by_now = self.host._impl_opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.glyph._impl_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.host._impl_opts_backup[self.str_now]["opacity"]
 
         self.obj.act_commit(
             radius=radius_now,

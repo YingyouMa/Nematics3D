@@ -105,16 +105,17 @@ def make_RGB_slider(
 
 class PanelBase(QtWidgets.QWidget):
     
-    def __init__(self, glyph, title: str = "Panel"):
+    def __init__(self, host, title: str = "Panel"):
         
         title = as_str(title, name="The title of panel", replace="Panel")
         
         super().__init__()
         
-        self.glyph = glyph
+        self.host = host
         self.str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        self.glyph.act_save_opts(self.str_now)
-        object.__setattr__(self.glyph, "_state_is_interactable", False)
+        self.host.act_save_opts(self.str_now)
+        if hasattr(self.host, "_state_is_interactable"):
+            object.__setattr__(self.host, "_state_is_interactable", False)
         
         self.state: dict[str, object] = {}
         self.sliders: dict[str, SliderItem] = {}
@@ -129,7 +130,7 @@ class PanelBase(QtWidgets.QWidget):
         
         self.build_ui()
         
-    def _sync_sides_from_glyph(self, attr: str, value: int):
+    def _sync_sides_from_host(self, attr: str, value: int):
         s = self.sliders[attr].slider
         try:
             s.blockSignals(True)
@@ -154,7 +155,8 @@ class PanelBase(QtWidgets.QWidget):
             event.accept()
             
     def on_close(self):
-        object.__setattr__(self.glyph, "_state_is_interactable", True)
-        sync = getattr(self.glyph.opts, "_impl_sync_func", None)
+        if hasattr(self.host, "_state_is_interactable"):
+            object.__setattr__(self.host, "_state_is_interactable", True)
+        sync = getattr(self.host.opts, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)

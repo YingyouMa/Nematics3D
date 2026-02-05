@@ -143,7 +143,7 @@ class PlotFigure(HostBase, RegistryBase):
         plotter.resize(*self.opts.size)
 
         self._helper_sync_from_plotter(is_allow_cover_target_set=False, is_only_camera=True)
-        self._helper_commit_apply()
+        self._helper_commit_apply_opts()
         
         def _on_interaction_start(obj, event):
             pm = getattr(self, "_entity_pick_manager", None)
@@ -201,7 +201,7 @@ class PlotFigure(HostBase, RegistryBase):
         
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_apply(self, **kwargs):
+    def _helper_commit_apply_opts(self, **kwargs):
         
         with self.opts._helper_internal_update():
             cover_value(self.opts,
@@ -435,13 +435,6 @@ class PlotFigure(HostBase, RegistryBase):
         
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
-            
-            
-    
-    def act_set_name(self, name):
-        name = super().act_set_name(name)
-        if name:
-            self.pl.window().setWindowTitle(self.name)  #!!! setattr direct name
             
     
     def __repr__(self):

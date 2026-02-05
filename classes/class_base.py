@@ -15,6 +15,7 @@ class ClassBase:
         "_impl_registry_ref":   (
             "A weak reference to the Registry that this object is currently registered in. "
             "Each object is expected to be associated with at most one registry at a time."
+            "To assess it, use .registry or ._impl_registry."
         ),
         
         "_impl_extra_attrs":    (
@@ -153,6 +154,11 @@ class ClassBase:
             )
 
         object.__setattr__(self, key, value)
+
+
+    def __setattr__(self, key, value):
+        self._helper_setattr_basic(key, value)
+
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

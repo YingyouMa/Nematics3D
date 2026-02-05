@@ -1,5 +1,5 @@
 import numpy as np
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass
 from typing import Literal, Any, Mapping
 import weakref
 from contextlib import contextmanager
@@ -106,6 +106,12 @@ class PlaneGrid(HostBase):
         "_calc_axis2": "The second in-plane axis which normal to both axis1 and normal.",
         "_calc_offset_real": "Offset vector applied to center the plane grid at the specified origin (3-vector) in lattice units",
         "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
+        "_calc_size":   "The actual size calculated based on opts.size",
+        "_calc_size_extra": "The actual size_extra calculated based on opts.size and opts.size_extra",
+        
+        
+        "_impl_field_ref": ("Quantity field evaluated on the 2D plane grid."
+                            "To assess it, use .field or ._impl_field."),
         
         # ========== visualization / diagnostic ==========
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
@@ -130,6 +136,8 @@ class PlaneGrid(HostBase):
             )
         
         object.__setattr__(self, '_entity_fig_demo', None)
+        object.__setattr__(self, '_impl_field_ref', None)
+        object.__setattr__(self, '_entity_fig_demo', None)
 
         for name, value in {
             "normal": self.opts.normal,
@@ -140,14 +148,12 @@ class PlaneGrid(HostBase):
                 raise ValueError(
                     f"Missing required variable {name} to generate plane_grid"
                 )
-        
-        self._entity_fig_demo = None
 
         self.opts.act_finalize()
-        self._helper_commit_apply()
+        self._helper_commit_apply_opts()
     
     @logging_and_warning_decorator()
-    def _helper_commit_apply(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts(self, logger=None, **kwargs):
 
         with self.opts._helper_internal_update():
             cover_value(self.opts,
@@ -202,8 +208,7 @@ class PlaneGrid(HostBase):
         grid = np.reshape(grid, (-1, 2))
         grid = np.einsum("ai, ib -> ab", grid, axis_both)
         
-        logger.detail("Transparent the grid to make its center at origin.")
-        
+        logger.detail("Translate the grid according to the origin.")
         if alignment == "bottom-left":
             offset = origin
         else:
@@ -218,25 +223,22 @@ class PlaneGrid(HostBase):
         logger.debug(f"Select the grids inside the corners limit {corners_limit}.")
         grid_select, mask = select_grid_in_box(grid, corners_limit, is_return_mask=True)
 
-        self._entity_grid = grid_select
-        self._entity_grid_all = np.reshape(grid, (*target_shape, 3))
-        self._entity_grid_int = grid_int
-        self._calc_offset_real = offset
-        self._calc_axis2 = axis2
-        self._calc_box_mask = mask
-        
-        with self.opts._helper_internal_update():
-            self.opts.size = size1
-            self.opts.size_extra = size2 if self.opts.size_extra is not None else None
-            self.opts.axis1 = axis1
+        object.__setattr__(self, '_entity_grid', grid_select)
+        object.__setattr__(self, '_entity_grid_all', np.reshape(grid, (*target_shape, 3)))
+        object.__setattr__(self, '_entity_grid_int', grid_int)
+        object.__setattr__(self, '_calc_offset_real', offset)
+        object.__setattr__(self, '_calc_axis2', axis2)
+        object.__setattr__(self, '_calc_box_mask', mask)
+        object.__setattr__(self, '_calc_size', size1)
+        object.__setattr__(self, '_calc_size_extra', size2)
+        object.__setattr__(self.opts, "axis1", axis1)
             
         if self._entity_fig_demo:
             self._entity_fig_demo['grid'].raw_coords = self._entity_grid
             self._entity_fig_demo['origin'].raw_coords = self.opts.origin
-            # self._entity_fig_demo['grid_extent'].raw_coords = 
             
-        if hasattr(self, "_internal_owner_ref") and self.owner:
-            self.owner._helper_commit()
+        if self.field:
+            self.field._helper_commit()
 
 
     def __str__(self) -> str:
@@ -260,6 +262,13 @@ class PlaneGrid(HostBase):
     
     def __call__(self):
         return self._entity_grid
+    
+    @property
+    def field(self):
+        ref = self._impl_field_ref
+        return ref() if ref is not None else None
+    
+    _impl_field = field
     
     def act_debug_plot(self,
                        opts_extent: OptsTube | None = None,

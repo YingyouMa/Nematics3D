@@ -1,6 +1,7 @@
 import pyvista as pv
 import numpy as np
 import weakref
+from typing import Mapping, Any
 
 from .Interpolator import Interpolator
 from Nematics3D.field import Q_diagonalize, n_color_immerse, apply_linear_transform
@@ -11,112 +12,64 @@ from Nematics3D.datatypes import as_bool, as_str
 from .visual.plot_figure import PlotFigure, OptsFigure
 from .visual.plot_sphere import PlotSphere, OptsSphere
 from .visual.plot_rod import PlotRod, OptsRod
+from .visual.plot_delaunay import OptsDelaunay, PlotDelaunay
 from .opts import merge_opts_all
 from .plane_grid import PlaneGrid, OptsPlaneGrid
+from .interplate_plane import InterplatePlane
 
-#!!! class name
 
-class QPlane:
+class QPlane(InterplatePlane):
 
     __descriptions__ = {
+        **(InterplatePlane.__descriptions__),
+        
         "raw_name": "The name identifier of this Q-plane object",
-        "_raw_QInterpolator": "Interpolator object for Q-tensor field (class Interpolator)",
-        "_entity_plane": "The PlaneGrid entity (coordinates of 2D lattice)",
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
         "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
         "_entity_visual_defect": "The PlotSphere objects of visualized defects",
+        "_entity_S": "The PlotDealunay object of visualized S",
         "_calc_n": "List of director field arrays (from Q-diagonalization)",
         "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
-        
-        "_internal_owner_ref":      (
-            "A weak reference to the owner object associated with this instance."
-            "To access it, use .owner or ._internal_owner."),
+        "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
     }
 
-    __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
+    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
-        QInterpolator: Interpolator,
-        name: str = "n plane",
+        interpolator: Interpolator,
+        name: str = "Q-plane",
         grid: PlaneGrid | None = None,
-        opts_grid: OptsPlaneGrid | None = None,
+        opts: OptsPlaneGrid | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
     ):
         
-        object.__setattr__(self, "_internal_owner_ref", None)
+        object.__setattr__(self, '_entity_visual_nb', None)
+        object.__setattr__(self, '_entity_visual_nd', None)
+        object.__setattr__(self, '_entity_visual_defect', None)
+        object.__setattr__(self, '_state_is_interactable', True)
         
-        name = as_str(name, name=self.__descriptions__["raw_name"], replace="Q plane")
-        self.name = name
-        
-        
-        if grid:
-            self._entity_plane = grid
-            self._entity_plane.act_commit(opts=opts_grid, name=self.name+" grid")
-        else:
-            self._entity_plane = PlaneGrid(opts=opts_grid, name=self.name+" grid")
-                
-        object.__setattr__(
-            self._entity_plane, "_internal_owner_ref", weakref.ref(self)
-        )
-
-        if not isinstance(QInterpolator, Interpolator):
-            raise TypeError(
-                "Interpolator for PlotnPlane must be the class of Nematics3D.classes.Interpolator.Interpolator"
+        super().__init__(
+            interpolator=interpolator,
+            name=name,
+            grid=grid,
+            opts=opts,
+            opts_defaults_override=opts_defaults_override
             )
-        self._raw_QInterpolator = QInterpolator
-        
-        self._entity_visual_nb = None
-        self._entity_visual_nd = None
-        self._entity_visual_defect = None
 
         self._helper_commit()
         
-        
-    @property
-    def _internal_owner(self):
-        ref = self._internal_owner_ref
-        return ref() if ref is not None else None
-    
-    @property
-    def owner(self):
-        ref = self._internal_owner_ref
-        return ref() if ref is not None else None
-        
-    @property
-    def name(self):
-        return self.raw_name
-    
-    @name.setter
-    def name(self, value: str):
-        self.act_set_name(value)
-        
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_set_name(self, name, logger=None):
-        
-        try:
-            name = as_str(name, name=self.__descriptions__["raw_name"])
-        except:
-            logger.exception("Invalid name.")
-            logger.recovery("Ignore this modification.")
-            return
-        
-        check_name = getattr(self.owner, "_helper_check_name", None) if self.owner else None
-        if callable(check_name):
-            name = check_name(name)
-        object.__setattr__(self, "raw_name", name)
 
-        return name
         
 
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
 
-        logger.debug("Start to identify the directors surrouding defects.")
         plane_grid = self._entity_plane
 
         logger.detail("Retrieving the full grid in lattice index structure ...")
@@ -125,11 +78,13 @@ class QPlane:
         grid_all_flatten = np.reshape(grid_all, (-1, 3))
 
         logger.detail("Interpolating ...")
-        Q_all = self._raw_QInterpolator.interpolate(grid_all_flatten)
+        Q_all = self._raw_interpolator.interpolate(grid_all_flatten)
         S_all, n_all = Q_diagonalize(Q_all)
+        object.__setattr__(self, '_calc_n', n_all[plane_grid._calc_box_mask])
+        object.__setattr__(self, '_calc_S', S_all[plane_grid._calc_box_mask])
+        object.__setattr__(self, '_calc_result', Q_all[plane_grid._calc_box_mask])
+        
         n_all = np.reshape(n_all, (*shape_all, 1, 3))
-        self._calc_n = (n_all.reshape((-1, 3)))[plane_grid._calc_box_mask]
-        self._calc_S = (S_all.reshape(-1))[plane_grid._calc_box_mask]
 
         logger.detail("Detecting the defects and surrounding directors ...")
         defect_plane_index = defect_detect(n_all, planes=(False, False, True))  #!!! pbc
@@ -141,10 +96,10 @@ class QPlane:
         mask_near_defect = mark_points_membership(
             plane_grid._entity_grid_int.astype(int), defect_vicinity_index
         )
-        self._calc_is_near_defect = mask_near_defect[plane_grid._calc_box_mask]
+        object.__setattr__(self, '_calc_is_near_defect', mask_near_defect[plane_grid._calc_box_mask])
 
         if len(defect_plane_index)==0:
-            self._calc_defect_pos = None
+            object.__setattr__(self, '_calc_defect_pos', None)
         else:
             logger.detail("Switching the lattice indices of defects into real space units ...")
             
@@ -168,35 +123,48 @@ class QPlane:
                 offset=plane_grid.opts.grid_offset,
             )
             defect_pos = select_grid_in_box(defect_pos, plane_grid.opts.corners_limit)
-            self._calc_defect_pos = defect_pos
+            object.__setattr__(self, '_calc_defect_pos', defect_pos)
             
-        if self._entity_visual_nb:
+        if self._entity_visual_nb or self._entity_visual_nd:
             
             self._entity_visual_nb.act_commit(       
                 coords=self._entity_plane()[~self._calc_is_near_defect],
-                orient=self._calc_n[~self._calc_is_near_defect]
+                orient=self._calc_n[~self._calc_is_near_defect],
+                is_silhouette=self._state_is_interactable,
                 )
             
             if np.sum(self._calc_is_near_defect) > 0:
-                
                 self._entity_visual_nd.act_commit(       
                     coords=self._entity_plane()[self._calc_is_near_defect],
-                    orient=self._calc_n[self._calc_is_near_defect]
-                    )
-                
-                self._entity_visual_defect.act_commit( 
-                    coords=self._calc_defect_pos
+                    orient=self._calc_n[self._calc_is_near_defect],
+                    is_silhouette=self._state_is_interactable,
+                    is_visible=True
                     )
             else:
-                self._entity_visual_nd.act_remove()
-                self._entity_visual_defect.act_remove()
+                self._entity_visual_nd.opts.is_visible = False
                 
+                
+            if self._calc_defect_pos and len(self._calc_defect_pos)>0:   
+                self._entity_visual_defect.act_commit( 
+                    coords=self._calc_defect_pos,
+                    is_silhouette=self._state_is_interactable,
+                    is_visible=self._entity_visual_defect.is_show_defect
+                    )
+            else:
+                self._entity_visual_defect.opts.is_visible = False
+                
+        if getattr(self, "_entity_visual_S", None):
+            self._entity_visual_S.act_commit(
+                coords=self.plane(),
+                scalars=self._calc_S,
+                is_silhouette=self._state_is_interactable,
+                )
             
             
             
 
     @logging_and_warning_decorator()
-    def act_visualize(
+    def act_visualize_n(
         self,
         figure: PlotFigure | pv.Plotter | None = None,
         opts_figure: OptsFigure | None = None,
@@ -257,35 +225,122 @@ class QPlane:
         visual_nb = PlotRod(
             coords=self._entity_plane()[~self._calc_is_near_defect],
             orient=self._calc_n[~self._calc_is_near_defect],
-            name="n bulk",
-            category=f"plane {self.name!r}",
+            name="n bulk of plane {self.name!r}",
+            category="plane analysis",
             opts=opts_nb,
             figure=figure,
         )
-        self._entity_visual_nb = visual_nb
+        object.__setattr__(visual_nb, "_impl_owner_ref", weakref.ref(self))
+        object.__setattr__(self, '_entity_visual_nb', visual_nb)
 
         if np.sum(self._calc_is_near_defect) > 0:
             
             visual_nd = PlotRod(
                 coords=self._entity_plane()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
-                name="n near defect",
-                category=f"plane {self.name!r}",
+                name=f"n near defect of plane {self.name!r}",
+                category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
             )
-            self._entity_visual_nd = visual_nd
+            
+            visual_defect = PlotSphere(
+                coords=self._calc_defect_pos, 
+                name=f"defects of plane {self.name!r}",
+                category="plane analysis",
+                opts=opts_defect, 
+                figure=figure
+            )
+            
+        else:
+            
+            visual_nd = PlotRod(
+                coords=self._entity_plane()[self._calc_is_near_defect[:2]],
+                orient=self._calc_n[self._calc_is_near_defect[:2]],
+                name=f"n near defect of plane {self.name!r}",
+                category="plane analysis",
+                opts=opts_nd,
+                figure=figure,
+                is_visible=False
+            )
+            
+            visual_defect = PlotSphere(
+                coords=self._entity_plane()[self._calc_is_near_defect[:2]], 
+                name="defects of plane {self.name!r}",
+                category="plane analysis",
+                opts=opts_defect, 
+                figure=figure,
+                is_visible=False
+            )
+            
+            
+        object.__setattr__(visual_nd, "_impl_owner_ref", weakref.ref(self))
+        object.__setattr__(self, '_entity_visual_nd', visual_nd)
+        
+        object.__setattr__(visual_defect, "_impl_owner_ref", weakref.ref(self))
+        object.__setattr__(self, '_entity_visual_defect', visual_defect)
+            
+        visual_defect.act_add_attr(
+            "is_show_defect", 
+            f"Whether to plot defect points during the visualization of directors on {self.name}.",
+            default=is_defect
+            )
+        
+        visual_defect.opts.is_visible = visual_defect.is_show_defect
 
-            visual_defect = PlotSphere(coords=self._calc_defect_pos, 
-                                       name="defects",
-                                       category=f"plane {self.name!r}",
-                                       opts=opts_defect, 
-                                       figure=figure)
-            self._entity_visual_defect = visual_defect
-            if not is_defect:
-                visual_defect.opts.is_visible = False
 
-    @property
-    def plane(self):
-        return self._entity_plane
+    def act_visualize_S(
+        self,
+        figure: PlotFigure | pv.Plotter | None = None,
+        opts_figure: OptsFigure | None = None,
+        opts_S: OptsDelaunay | None = None,
+        logger=None,
+        **kwargs,
+    ):
     
+        if opts_figure is None:
+            opts_figure = OptsFigure()
+        if opts_S is None:
+            opts_S = OptsDelaunay()
+
+        merge = merge_opts_all(
+            {
+                "figure_": opts_figure,
+                "S_": opts_S,
+            },
+            kwargs,
+            type(self).__name__,
+        )
+
+        opts_figure = merge["figure_"]
+        opts_S = merge["S_"]
+
+        try:
+            if figure is None:
+                figure = PlotFigure(opts=opts_figure)
+            elif isinstance(figure, PlotFigure):
+                figure.act_commit(opts_figure)
+            elif isinstance(figure, pv.Plotter):
+                figure = PlotFigure(plotter=figure, opts=opts_figure)
+            else:
+                raise ValueError(
+                    "`figure` input must be a valid PlotFigure object, "
+                    "or a valid pyvista plotter object "
+                    "or None (creating a new figure) "
+                    "Got type {type(figure)!r} instead."
+                )
+        except:
+            logger.exception("Invalid figure input")
+            logger.recovery("Create a new figure instead.")
+            figure = PlotFigure(opts=opts_figure)
+            
+        visual_S = PlotDelaunay(
+            coords=self.plane(),
+            scalars=self._calc_S,
+            figure=figure,
+            name=f"S defect of plane {self.name!r}",
+            category="plane analysis",
+            )
+        
+        object.__setattr__(visual_S, "_impl_owner_ref", weakref.ref(self))
+        object.__setattr__(self, '_entity_visual_S', visual_S)

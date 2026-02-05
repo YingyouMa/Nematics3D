@@ -46,6 +46,8 @@ class PlotDelaunay(PlotGlyph):
     
     __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
     
+    _pending_resolution_attrs = ['color', 'scalars', 'opacity']
+    
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -77,26 +79,14 @@ class PlotDelaunay(PlotGlyph):
             **kwargs,
         )
 
-        self._helper_resolver_init()
-        self._helper_make_figure()
         self._helper_init_end()
         
-    def __setattr__(self, key, value):
-        self._helper_setattr_glyph_basic(key, value, allowed_extra = ())
             
             
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_mesh(self, logger=None):
         
-        points = self.raw_coords
-        poly = pv.PolyData(points)
-
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            poly.point_data['opacity'] = self._calc_opacity
-            poly.point_data['scalars'] = self._calc_scalars
-        else:
-            rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
-            poly.point_data['rgba'] = rgba_values 
+        poly = self._calc_poly  
             
         logger.detail("Creating the triangulation by Delaunay method.")
         mesh = poly.delaunay_2d(alpha=0.0)
@@ -108,16 +98,14 @@ class PlotDelaunay(PlotGlyph):
             elif hasattr(self.opts.clip_geometry, "points"):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
-        object.__setattr__(self, "_calc_poly", poly)
-        # object.__setattr__(self, "_calc_mesh", mesh)
         return mesh   
     
 
     def _helper_add_silhouette(self):
     
-        plotter = self.owner.pl
+        plotter = self.fig.pl
 
-        silhouette_id = f"{self._internal_name_pv}__silhouette"
+        silhouette_id = f"{self._impl_name_pv}__silhouette"
         if silhouette_id in plotter.actors:
             plotter.remove_actor(silhouette_id) 
             
@@ -140,23 +128,7 @@ class PlotDelaunay(PlotGlyph):
         actor_silhouette.pickable = False
         
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
-    
-    
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_init(self, extra=[], logger=None):
-        logger.detail("Resolving data for color, opacity and scalars")
-        
-        self._helper_resolver_spec('opacity')
-        for attr in extra:
-            self._helper_resolver_spec(attr)
-        
-        if isinstance(self.opts.color, str) and self.opts.color == 'scalars':
-            self._helper_resolver_spec('scalars')
-        else:
-            self._helper_resolver_spec('color')
-            
-    def _helper_commit_apply(self, is_needs_remesh, **kwargs):
-        return super()._helper_commit_apply(is_needs_remesh, is_radius=False, **kwargs)
+
 
 
 

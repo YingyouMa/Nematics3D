@@ -468,6 +468,31 @@ class PickManager:
                 from .qt.interact_disclination_line import InteractDisclinationLine
                 control = InteractDisclinationLine(owner)
                 control.show()
+                
+        if type(owner).__name__ == "PlotRod" and getattr(owner, "_state_is_interactable", False):
+            
+            from .qt.interact_rod import InteractRod
+            control = InteractRod(owner)
+            control.show()
+            
+            owner = owner.owner
+            if type(owner).__name__ == "QPlane" and getattr(owner, "_state_is_interactable", False):
+                from .qt.interact_plane import InteractPlane
+                control = InteractPlane(owner)
+                control.show()
+                
+        if type(owner).__name__ == "PlotDelaunay" and getattr(owner, "_state_is_interactable", False):
+            
+            from .qt.interact_delaunay import InteractDelaunay
+            control = InteractDelaunay(owner)
+            control.show()
+            
+            owner = owner.owner
+            if type(owner).__name__ in ["QPlane", "InterpolatePlane"] and getattr(owner, "_state_is_interactable", False):
+                from .qt.interact_plane import InteractPlane
+                control = InteractPlane(owner)
+                control.show()
+            
             
 
         # reset to avoid triple-trigger
