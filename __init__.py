@@ -18,5 +18,6 @@ from .classes.plane_grid import *
 from .classes.QPlane import *
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
+from .classes.visual import qt
 
 __version__ = "0.1.7"

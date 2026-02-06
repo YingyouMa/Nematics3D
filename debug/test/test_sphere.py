@@ -38,54 +38,54 @@ tube1 = Nematics3D.PlotSphere(
     sides=12,
 )
 
-# # --- 案例 2: 函数驱动 (一次性传入函数) ---
-# tube2 = Nematics3D.PlotSphere(
-#     figure=figure,
-#     coords=get_path(offset_y=5),
-#     name="functional",
-#     color=color_func,     # 渐变色函数
-#     radius=radius_wave,   # 波动半径函数
-#     opacity=opacity_func,
-# )
+# --- 案例 2: 函数驱动 (一次性传入函数) ---
+tube2 = Nematics3D.PlotSphere(
+    figure=figure,
+    coords=get_path(offset_y=5),
+    name="functional",
+    color=color_func,     # 渐变色函数
+    radius=radius_wave,   # 波动半径函数
+    opacity=opacity_func,
+)
 
-# # --- 案例 3: 手动模式 + 透明度 ---
-# tube3 = Nematics3D.PlotSphere(
-#     figure=figure,
-#     coords=get_path(offset_y=10),
-#     name="manual_color",
-#     color=np.random.rand(75, 3), # 随机色数组
-#     radius=0.15,
-#     opacity=1,
-#     shading_type='pbr',
-#     metallic=1,
-#     roughness=0.4    
-# )
+# --- 案例 3: 手动模式 + 透明度 ---
+tube3 = Nematics3D.PlotSphere(
+    figure=figure,
+    coords=get_path(offset_y=10),
+    name="manual_color",
+    color=np.random.rand(75, 3), # 随机色数组
+    radius=0.15,
+    opacity=1,
+    shading_type='pbr',
+    metallic=1,
+    roughness=0.4    
+)
 
-# tube4 = Nematics3D.PlotSphere(
-#     figure=figure,
-#     coords=get_path(offset_y=15),
-#     name="func_scalars",
-#     sides=20,
-#     radius=0.25,
-#     opacity=opacity_func,     
-#     scalars=radius_wave, 
-#     scalars_cmap='plasma'     
-# )
+tube4 = Nematics3D.PlotSphere(
+    figure=figure,
+    coords=get_path(offset_y=15),
+    name="func_scalars",
+    sides=20,
+    radius=0.25,
+    opacity=opacity_func,     
+    scalars=radius_wave, 
+    scalars_cmap='plasma'     
+)
 
-# tube5 = Nematics3D.PlotSphere(
-#     figure=figure,
-#     coords=get_path(offset_y=20),
-#     name="manual_scalars2",
-#     sides=20,
-#     radius=0.25,
-#     opacity=1,     
-#     scalars=radius_wave(get_path(offset_y=20)),  
-#     shading_type='pbr',
-#     metallic=1,
-#     roughness=0.4,
-#     scalars_clim=(0,0.2),
-#     scalar_bar_title='test'
-# )
+tube5 = Nematics3D.PlotSphere(
+    figure=figure,
+    coords=get_path(offset_y=20),
+    name="manual_scalars2",
+    sides=20,
+    radius=0.25,
+    opacity=1,     
+    scalars=radius_wave(get_path(offset_y=20)),  
+    shading_type='pbr',
+    metallic=1,
+    roughness=0.4,
+    scalars_clim=(0,0.2),
+    scalar_bar_title='test'
+)
 '''
 tube1.opts.color = 'scalars'
 tube1.opts.scalars = lambda x: radius_wave(x)+1

@@ -140,7 +140,7 @@ class OptsBase:
             func()
 
     def _helper_host_apply(self, key, value):
-        if self.host:
+        if self.host is not None:
             self.host._helper_commit_apply_opts(**{key: value})
             return value
 
@@ -251,21 +251,21 @@ class OptsBase:
 
 class HostBase(ClassBase):
 
-    # fmt: off
-    __descriptions__: ClassVar[Mapping[str, str]] = {
+    __descriptions__ = {
         **(ClassBase.__descriptions__),
-        
         "raw_name":             "The name identifier of the host object",
-        
         "opts":                 "The Opts instance controlling options.",
         "opts_defaults":        "The default option settings.",
-        
         "_impl_opts_backup": (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
         ),
     }
-    # fmt: off
+    
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in ClassBase.__slots__
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -328,7 +328,7 @@ class HostBase(ClassBase):
         return kwargs
 
     def _helper_commit_pre_opts(self, **kwargs):
-        found, name, kwargs = pop_exclusive(kwargs, "name", "raw_name")
+        found, name = pop_exclusive(kwargs, "name", "raw_name")
         if found:
             self.act_set_name(name)
         return kwargs

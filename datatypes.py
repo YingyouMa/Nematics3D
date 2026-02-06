@@ -39,15 +39,26 @@ Number = numbers.Real
 # - list/tuple/array of 3 values → used directly
 NumericInput = Union[Number, Sequence[Number]]
 
+
 @logging_and_warning_decorator(start_finish_level=5)
-def as_Number(input_data, name="input data", is_int=False, value_range=None, bounded=False, replace=None, logger=None):
-    
+def as_Number(
+    input_data,
+    name="input data",
+    is_int=False,
+    value_range=None,
+    bounded=False,
+    replace=None,
+    logger=None,
+):
+
     try:
         # --- Type checks ---
         if is_int:
             if isinstance(input_data, numbers.Integral):
                 input_data = int(input_data)
-            elif isinstance(input_data, numbers.Real) and float(input_data).is_integer():
+            elif (
+                isinstance(input_data, numbers.Real) and float(input_data).is_integer()
+            ):
                 input_data = int(input_data)
             else:
                 raise TypeError(
@@ -75,7 +86,9 @@ def as_Number(input_data, name="input data", is_int=False, value_range=None, bou
 
                 lo, hi = value_range_arr
                 if hi <= lo:
-                    raise ValueError(f"value_range must be strictly increasing, got {value_range!r}")
+                    raise ValueError(
+                        f"value_range must be strictly increasing, got {value_range!r}"
+                    )
 
             except Exception as e:
                 logger.exception(
@@ -107,7 +120,7 @@ def as_Number(input_data, name="input data", is_int=False, value_range=None, bou
         # --- Recovery ---
         if replace is None:
             raise
-            
+
         logger.exception(f"Validation failed for {name!r}: {e}")
         logger.recovery(f"Set {name!r} to be {replace!r} in the following.")
 
@@ -118,9 +131,12 @@ def as_Number(input_data, name="input data", is_int=False, value_range=None, bou
 def Vect(d):
     return Union[Sequence[Union[int, float]], np.ndarray]
 
+
 @logging_and_warning_decorator(start_finish_level=5)
-def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, logger=None):
-    
+def as_Vect(
+    input_data, dim=3, name="input data", is_norm=False, replace=None, logger=None
+):
+
     try:
         if (
             not isinstance(input_data, (tuple, list, np.ndarray))
@@ -139,7 +155,7 @@ def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, l
             input_data = replace
             if not isinstance(input_data, (tuple, list, np.ndarray)):
                 return input_data
-            
+
     input_data = np.asarray(input_data)
 
     if is_norm:
@@ -147,12 +163,18 @@ def as_Vect(input_data, dim=3, name="input data", is_norm=False, replace=None, l
             input_data = input_data / np.linalg.norm(input_data)
         else:
             try:
-                raise ValueError(f"The norm of input vector {input_data} is below the normalization threshold 1e-3.")
+                raise ValueError(
+                    f"The norm of input vector {input_data} is below the normalization threshold 1e-3."
+                )
             except ValueError:
-                logger.exception("Normalization is skipped to avoid numerical instability.")
-                logger.recovery("Subsequent processing is still performed using the unnormalized vector. "
-                                "Please check the input data. If this behavior is intentional, consider "
-                                "rescaling the vector before passing it in.")
+                logger.exception(
+                    "Normalization is skipped to avoid numerical instability."
+                )
+                logger.recovery(
+                    "Subsequent processing is still performed using the unnormalized vector. "
+                    "Please check the input data. If this behavior is intentional, consider "
+                    "rescaling the vector before passing it in."
+                )
 
     return input_data
 
@@ -180,8 +202,16 @@ def as_Tensor(input_data, shape, name="input data"):
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
 
+
 @logging_and_warning_decorator(start_finish_level=5)
-def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, replace=None, logger=None):
+def as_ColorRGB(
+    input_data,
+    name="input data",
+    is_norm=False,
+    norm_order=2,
+    replace=None,
+    logger=None,
+):
     """
     Convert input into an RGB color tuple with optional normalization.
 
@@ -207,11 +237,11 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
             - norm_order=2 : Euclidean-like normalization (sum of squares)
             - norm_order=1 : L1 normalization (sum of absolute values)
         Defaults to 2.
-    
+
     replace : ColorRGB, optional
         Recover the input_data to this replace value if the input_data is illegal.
         Defaults to None, no recovery.
-        
+
 
     Returns
     -------
@@ -233,7 +263,7 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
     >>> as_ColorRGB([0.2, 0.5, 0.8], is_norm=True, norm_order=2)
     (0.19245008972987526, 0.480, 0.7698001794597505)
     """
-    
+
     try:
         if (
             not isinstance(input_data, (tuple, list, np.ndarray))
@@ -243,9 +273,9 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
             raise ValueError(
                 f"{name} should be ColorRGB, which must be a tuple with 3 numbers. Got {input_data} instead."
             )
-    
+
         input_data = np.asarray(input_data)
-    
+
         if np.max(input_data) > 1 or np.min(input_data) < 0:
             raise ValueError(
                 f"{name} should be ColorRGB, where each number should be in [0,1]. Got {input_data} instead."
@@ -257,13 +287,14 @@ def as_ColorRGB(input_data, name="input data", is_norm=False, norm_order=2, repl
             input_data = replace
         else:
             raise
-    
+
         if is_norm:
             if np.sum(input_data) < 1e-3:
                 return (0, 0, 0)
             input_data = input_data / np.sum(input_data**norm_order)
 
     return tuple(map(float, input_data))
+
 
 @logging_and_warning_decorator(start_finish_level=5)
 def as_ColorRGB_array(
@@ -319,10 +350,10 @@ def as_ColorRGB_array(
         else:
             logger.exception("Please check color array values.")
             logger.recovery(f"Set color array to {replace} in the following.")
-    
+
             # --- Recovery: broadcast replace to (N, 3) ---
             replace_arr = np.asarray(replace, dtype=float)
-    
+
             if replace_arr.ndim == 1:
                 if replace_arr.shape != (3,):
                     raise ValueError(
@@ -330,7 +361,7 @@ def as_ColorRGB_array(
                     )
                 # (3,) -> (N, 3)
                 input_data = np.tile(replace_arr, (N, 1))
-            
+
             elif replace_arr.ndim == 2:
                 if replace_arr.shape != (N, 3):
                     raise ValueError(
@@ -338,7 +369,7 @@ def as_ColorRGB_array(
                         f"expected (N, 3) with N={N}."
                     )
                 input_data = replace_arr
-            
+
             else:
                 raise ValueError(
                     f"replace must be shape (3,) or (N, 3). Got array with ndim={replace_arr.ndim}."
@@ -346,7 +377,7 @@ def as_ColorRGB_array(
 
     # ---------- Row-wise normalization ----------
     if is_norm:
-        norms = np.sum(input_data ** norm_order, axis=1)
+        norms = np.sum(input_data**norm_order, axis=1)
 
         safe = norms >= 1e-3
         input_data[safe] /= norms[safe][:, None]
@@ -357,10 +388,51 @@ def as_ColorRGB_array(
 
 @logging_and_warning_decorator(start_finish_level=5)
 def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
-    
+    """
+    Validate an input value as a string, with optional membership check and
+    user-provided fallback replacement.
+
+    Parameters
+    ----------
+    input_data : Any
+        The value to be validated. It is expected to be of type ``str`` under
+        normal usage.
+    name : str, optional
+        A human-readable name used in error messages.
+    pool : iterable, optional
+        A collection of allowed string values. The membership check is applied
+        only when ``pool`` is truthy. It is the caller's responsibility to ensure
+        that ``pool`` itself is a valid iterable of acceptable values.
+    replace : Any, optional
+        A fallback value used when validation fails. When provided, validation
+        errors will be suppressed and the return value will be forcibly replaced
+        by ``replace``.
+        **Note:** ``replace`` is not validated and may be of any type, including
+        non-string values. The caller must ensure its semantic correctness.
+    logger : object, optional
+        Logger injected by the decorator. Not intended to be supplied manually.
+
+    Returns
+    -------
+    Any
+        Returns ``input_data`` if validation succeeds. Otherwise returns
+        ``replace`` when it is provided. No guarantee is made that the return
+        value is of type ``str`` when the replacement path is taken.
+
+    Raises
+    ------
+    TypeError
+        If ``input_data`` is not a string and ``replace`` is not provided.
+    ValueError
+        If ``input_data`` is not contained in ``pool`` and ``replace`` is not
+        provided.
+    """
+
     try:
         if not isinstance(input_data, str):
-            raise TypeError(f"{name!r} should be str. Got {input_data} with type {type(input_data).__name__} instead")
+            raise TypeError(
+                f"{name!r} should be str. Got {input_data} with type {type(input_data).__name__} instead"
+            )
         elif pool and input_data not in pool:
             raise ValueError(f"{name!r} must be in {pool}. Got {input_data} instead.")
     except (TypeError, ValueError):
@@ -370,7 +442,7 @@ def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
             logger.exception("Please check data type")
             logger.recovery(f"Changed it into {replace!r} in the following.")
             input_data = replace
-    
+
     return input_data
 
 
@@ -389,7 +461,9 @@ DimensionInfo = np.ndarray
 DimensionInfoInput = NumericInput
 
 
-def as_dimension_info(input_data: DimensionInfoInput, name: str = "input_data", is_bool: bool = False) -> DimensionInfo:
+def as_dimension_info(
+    input_data: DimensionInfoInput, name: str = "input_data", is_bool: bool = False
+) -> DimensionInfo:
     """
     Convert flexible user input into a standardized DimensionInfo array of shape (3,).
 
@@ -421,12 +495,11 @@ def as_dimension_info(input_data: DimensionInfoInput, name: str = "input_data", 
         raise ValueError(
             f"{name} must be either a single number or a list, tuple, or NumPy array of exactly three elements."
         )
-        
-    if (is_bool and not all(isinstance(x, (bool, np.bool_)) for x in result)):
+
+    if is_bool and not all(isinstance(x, (bool, np.bool_)) for x in result):
         raise ValueError(f"The elements in {name} must be bool. Got {result} instead.")
-        
+
     return result
-        
 
 
 # -------------------------
@@ -706,31 +779,35 @@ def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
 #   This defines a 2×2 loop over which the director field forms a closed path.
 DefectIndex = np.ndarray
 
+
 def as_DefectIndex(arr: np.ndarray, tol=1e-8, is_return_row=False) -> DefectIndex:
-    
+
     arr = np.asarray(arr)
-    
+
     if arr.ndim != 2 or arr.shape[1] != 3:
-        raise ValueError(f"Input must be (N,3) array for defect_indices, got shape {arr.shape}")
-        
+        raise ValueError(
+            f"Input must be (N,3) array for defect_indices, got shape {arr.shape}"
+        )
+
     is_int = np.abs(arr - np.round(arr)) < tol
     is_half = (np.abs(arr * 2 - np.round(arr * 2)) < tol) & (~is_int)
     valid_rows = (is_int.sum(axis=1) == 1) & (is_half.sum(axis=1) == 2)
-    
+
     valid_rows = (is_int.sum(axis=1) == 1) & (is_half.sum(axis=1) == 2)
-    
+
     if not np.all(valid_rows):
         msg = "DefectIndex is not valid. For each defect there must be one integer and two half-intergers.\n"
         if is_return_row:
             bad_idx = np.where(~valid_rows)[0]
             msg += f"Invalid DefectIndex rows detected at indices {bad_idx.tolist()} "
         raise ValueError(msg)
-    
+
     return arr
+
 
 @logging_and_warning_decorator(start_finish_level=5)
 def as_bool(input_data, name="input data", replace=None, logger=None) -> bool:
-    
+
     try:
         # --- Case 1: already boolean ---
         if isinstance(input_data, (bool, np.bool_)):
@@ -755,27 +832,31 @@ def as_bool(input_data, name="input data", replace=None, logger=None) -> bool:
         # --- No recovery allowed ---
         if replace is None:
             raise
-            
+
         logger.exception("Please check data type")
         logger.recovery(f"set {name} to be {replace} in the following.")
-        
-        return replace
 
+        return replace
 
 
 def check_bool_flags(d: dict, prefix: str = "is_"):
     for name, value in d.items():
         if name.startswith(prefix):
-            if not isinstance(value, (bool, np.bool_, Number)) or (isinstance(value, Number) and value not in (0,1)):
+            if not isinstance(value, (bool, np.bool_, Number)) or (
+                isinstance(value, Number) and value not in (0, 1)
+            ):
                 raise TypeError(f"{name} must be a bool, got {type(value)}")
-                       
+
+
 def as_points(coords, name="input data"):
     try:
         coords = np.asarray(coords, dtype=float)
         if coords.ndim == 1:
             coords = np.asarray([coords], dtype=float)
         if coords.ndim != 2 or coords.shape[1] != 3:
-            raise ValueError(f"{name!r} must be an (N, 3) array. Got {coords.shape} instead.")
+            raise ValueError(
+                f"{name!r} must be an (N, 3) array. Got {coords.shape} instead."
+            )
         return coords
     except (ValueError, TypeError) as e:
         raise TypeError(f"Invalid `coords` input: {e}")
@@ -795,6 +876,7 @@ class _UnsetType:
     - type-identifiable (usable in type annotations),
     - and safe against accidental mutation.
     """
+
     __slots__ = ()
 
     def __repr__(self) -> str:

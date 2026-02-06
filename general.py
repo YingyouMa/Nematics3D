@@ -714,15 +714,16 @@ def fit_plane(points):
     return normal_vector
 
 
-def pop_exclusive(kwargs: dict, k1: str, k2: str):
+def pop_exclusive(kwargs: dict, k1: str, k2: str):    #1
     """
-    Pop exactly one of (k1, k2) if present.
+    Pop exactly one of (k1, k2) from kwargs if present.
 
     Returns
     -------
-    (found: bool, value: Any)
-        found is True if either key existed; value is the popped value.
-        If neither exists, found=False and value=None.
+    found : bool
+        True if exactly one of the keys existed.
+    value : Any
+        The popped value if found, otherwise None.
 
     Raises
     ------
@@ -737,12 +738,10 @@ def pop_exclusive(kwargs: dict, k1: str, k2: str):
             f"Please pass only one."
         )
     if has1:
-        value = kwargs.pop(k1)
-        return True, value, kwargs
+        return True, kwargs.pop(k1)
     if has2:
-        value = kwargs.pop(k2)
-        return True, value, kwargs
-    return False, None, kwargs
+        return True, kwargs.pop(k2)
+    return False, None
 
 
 def find_nearest_point(query_pt, coords):

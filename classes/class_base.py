@@ -3,28 +3,69 @@ from ..datatypes import as_str
 
 
 class ClassBase:
+    """
+    A foundational base class providing structured identity, hierarchy management,
+    and strict attribute control.
 
-    # fmt: off
+    ### Main Features:
+    * **Identity & Hierarchy**: Manages the object's name and its relationships
+        with an 'Owner' (parent object) and a 'Registry' (container). It supports
+        automatic name conflict resolution via the Registry's helper methods.
+    * **Attribute Control**: Uses ``__slots__`` to optimize memory and prevent
+        accidental assignment of undefined variables.
+    * **Dynamic Extension**: Supports 'Human-added' attributes via ``act_add_attr``.
+
+    ### Variables & Descriptions:
+    All attributes, properties, and internal implementations are documented
+    in the ``__descriptions__`` dictionary. Please refer to it for detailed
+    per-variable metadata.
+
+    ### Inheritance Guidelines:
+    1.  **Unique Relationships**: An instance can have at most **one owner** and
+        be registered in **one registry** at any given time.
+    2.  **Metadata Expansion**: When inheriting, subclasses should update or
+        extend the ``__descriptions__`` dictionary to reflect new attributes.
+        It is highly recommended to re-include ``raw_name`` in the subclass's 
+        descriptions to ensure consistent behavior for string representation.
+    3.  **Slot Maintenance**: To preserve memory efficiency and the strict
+        assignment policy, subclasses **MUST** define ``__slots__`` (or include
+        new fields) to prevent the accidental creation of a ``__dict__``.
+    """
+
     __descriptions__ = {
-        "raw_name":                 "The name of the ClassBase instance.",
-        
-        "_impl_owner_ref":      (
-            "A weak reference to the owner object associated with this instance. "
-            "To access it, use .owner or ._impl_owner."
+        "name": (
+            "Property: The display name of the instance. "
+            "Returns 'raw_name' and can be updated via the setter."
         ),
-        "_impl_registry_ref":   (
-            "A weak reference to the Registry that this object is currently registered in. "
-            "Each object is expected to be associated with at most one registry at a time."
-            "To assess it, use .registry or ._impl_registry."
+        "owner": (
+            "Property: The object that owns this instance. "
+            "An instance can belong to at most one owner at a time."
         ),
-        
-        "_impl_extra_attrs":    (
-            "A dict storing user-registered extra attributes. "
-            "These are accessed via `glyph.<name>` after calling `act_add_attr(name, doc)`."
+        "registry": (
+            "Property: The Registry object where this instance is registered. "
+            "An instance can belong to at most one registry at a time."
         ),
-        "_impl_extra_attrs_docs": "A dict storing docstrings for user-registered extra attributes.",
-        }
-    # fmt: on
+        # Internal Attributes
+        "raw_name": "The underlying string identifier for this instance.",
+        "_impl_owner_ref": (
+            "A weak reference to the owner object. "
+            "Use the 'owner' property for safe access."
+        ),
+        "_impl_registry_ref": (
+            "A weak reference to the associated Registry. "
+            "Use the 'registry' property for safe access."
+        ),
+        "_impl_extra_attrs": (
+            "A dictionary storing dynamic user-defined attributes. "
+            "Managed via 'act_add_attr'."
+        ),
+        "_impl_extra_attrs_docs": "Documentation strings for user-defined extra attributes.",
+        "_impl_opts_backup": "Internal storage for backing up configuration options.",
+    }
+
+    __slots__ = tuple(
+        k for k, v in __descriptions__.items() if not v.startswith("Property:")
+    ) + ("__weakref__",)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(self, *, name: str, name_replace: str, logger=None):
@@ -38,8 +79,6 @@ class ClassBase:
             object.__setattr__(self, "_impl_owner_ref", None)
         if not hasattr(self, "_impl_registry_ref"):
             object.__setattr__(self, "_impl_registry_ref", None)
-        if not hasattr(self, "_impl_opts_backup"):
-            object.__setattr__(self, "_impl_opts_backup", {})
 
         name = (
             as_str(name, name=self.__descriptions__["raw_name"], replace=name_replace)
@@ -77,16 +116,20 @@ class ClassBase:
 
         try:
             name = as_str(name, name=self.__descriptions__["raw_name"])
-        except:
+        except (TypeError, ValueError):
             logger.exception("Invalid name.")
             logger.recovery("Ignore this modification.")
             return
 
         check_name = (
-            getattr(self.owner, "_helper_check_name", None) if self.owner else None
+            getattr(self.registry, "_helper_check_name", None)
+            if self.registry
+            else None
         )
         if callable(check_name):
-            logger.detail("Owner provides _helper_check_name; resolving name conflict.")
+            logger.detail(
+                "The registry provides _helper_check_name; resolving name conflict."
+            )
             name = check_name(name)
         object.__setattr__(self, "raw_name", name)
 
@@ -109,15 +152,17 @@ class ClassBase:
         overwrite: bool = False,
     ):
 
-        name = as_str(name, name="Extra attribute name for PlotGlyph")
-        doc = as_str(doc, name="Extra attribute doc for PlotGlyph")
+        name = as_str(name, name=f"Extra attribute name for instance {self.name!r}")
+        doc = as_str(doc, name=f"Extra attribute doc for instance {self.name!r}")
 
         if not name.isidentifier():
             raise ValueError(
                 f"Invalid extra attribute name {name!r}: must be a valid Python identifier."
             )
 
-        if hasattr(type(self), name) or (name in getattr(type(self), "__slots__", ())):
+        if hasattr(type(self), name) or (
+            name in getattr(type(self), "__descriptions__", ())
+        ):
             raise AttributeError(
                 f"Cannot register extra attribute {name!r}: it conflicts with an existing attribute of {type(self).__name__}."
             )
@@ -155,10 +200,8 @@ class ClassBase:
 
         object.__setattr__(self, key, value)
 
-
     def __setattr__(self, key, value):
         self._helper_setattr_basic(key, value)
-
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

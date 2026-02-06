@@ -127,11 +127,15 @@ class QPlane(InterplatePlane):
             
         if self._entity_visual_nb or self._entity_visual_nd:
             
-            self._entity_visual_nb.act_commit(       
-                coords=self._entity_plane()[~self._calc_is_near_defect],
-                orient=self._calc_n[~self._calc_is_near_defect],
-                is_silhouette=self._state_is_interactable,
-                )
+            if np.sum(~self._calc_is_near_defect) > 0:
+                self._entity_visual_nb.act_commit(       
+                    coords=self._entity_plane()[~self._calc_is_near_defect],
+                    orient=self._calc_n[~self._calc_is_near_defect],
+                    is_silhouette=self._state_is_interactable,
+                    is_visible=True
+                    )
+            else:
+                self._entity_visual_nb.opts.is_visible = False
             
             if np.sum(self._calc_is_near_defect) > 0:
                 self._entity_visual_nd.act_commit(       
@@ -144,7 +148,7 @@ class QPlane(InterplatePlane):
                 self._entity_visual_nd.opts.is_visible = False
                 
                 
-            if self._calc_defect_pos and len(self._calc_defect_pos)>0:   
+            if getattr(self, "_calc_defect_pos", None) is not None and len(self._calc_defect_pos)>0:   
                 self._entity_visual_defect.act_commit( 
                     coords=self._calc_defect_pos,
                     is_silhouette=self._state_is_interactable,
@@ -225,7 +229,7 @@ class QPlane(InterplatePlane):
         visual_nb = PlotRod(
             coords=self._entity_plane()[~self._calc_is_near_defect],
             orient=self._calc_n[~self._calc_is_near_defect],
-            name="n bulk of plane {self.name!r}",
+            name=f"n bulk of plane {self.name!r}",
             category="plane analysis",
             opts=opts_nb,
             figure=figure,
@@ -266,7 +270,7 @@ class QPlane(InterplatePlane):
             
             visual_defect = PlotSphere(
                 coords=self._entity_plane()[self._calc_is_near_defect[:2]], 
-                name="defects of plane {self.name!r}",
+                name=f"defects of plane {self.name!r}",
                 category="plane analysis",
                 opts=opts_defect, 
                 figure=figure,

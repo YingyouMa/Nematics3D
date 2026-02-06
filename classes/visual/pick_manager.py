@@ -475,10 +475,11 @@ class PickManager:
             control = InteractRod(owner)
             control.show()
             
+            figure = owner.fig
             owner = owner.owner
             if type(owner).__name__ == "QPlane" and getattr(owner, "_state_is_interactable", False):
                 from .qt.interact_plane import InteractPlane
-                control = InteractPlane(owner)
+                control = InteractPlane(owner, figure)
                 control.show()
                 
         if type(owner).__name__ == "PlotDelaunay" and getattr(owner, "_state_is_interactable", False):
@@ -487,10 +488,11 @@ class PickManager:
             control = InteractDelaunay(owner)
             control.show()
             
+            figure = owner.fig
             owner = owner.owner
             if type(owner).__name__ in ["QPlane", "InterpolatePlane"] and getattr(owner, "_state_is_interactable", False):
                 from .qt.interact_plane import InteractPlane
-                control = InteractPlane(owner)
+                control = InteractPlane(owner, figure)
                 control.show()
             
             
