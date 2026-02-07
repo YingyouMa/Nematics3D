@@ -25,7 +25,10 @@ class PlotSphere(PlotGlyph):
         **dict(PlotGlyph.__descriptions__),
     }
     
-    __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        )
     
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(

@@ -41,7 +41,10 @@ class PlotRod(PlotGlyph):
         "raw_orient":   "The orientation of rods",
         "_calc_length": "The resolved per-point length array used for rods length."
     }
-    __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        )
     
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + ["length"]
     
@@ -161,7 +164,7 @@ class PlotRod(PlotGlyph):
         
         is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-        found, orient, kwargs = pop_exclusive(kwargs, "orient", "raw_orient")
+        found, orient = pop_exclusive(kwargs, "orient", "raw_orient")
         if found:
             try:
                 object.__setattr__(self, "raw_orient", as_points(orient))

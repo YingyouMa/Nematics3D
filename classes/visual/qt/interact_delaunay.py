@@ -13,8 +13,8 @@ class InteractDelaunay(PanelBase):
         self.state = {
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
-            "color":                    (1,1,1),
-            "opacity":                  1,
+            "color":                    self.host._calc_color[0],
+            "opacity":                  self.host._calc_opacity[0],
             }
         
         # ----------------------------
@@ -30,7 +30,7 @@ class InteractDelaunay(PanelBase):
             layout=gl_RGB,
             sliders=self.sliders,
             prefix="color",
-            init_rgb=self.host._calc_color[0],
+            init_rgb=self.state['color'],
         )
         
         self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
@@ -54,7 +54,7 @@ class InteractDelaunay(PanelBase):
             name="opacity",
             value_min=0,
             value_max=1,
-            value_init=self.host._calc_opacity[0],   
+            value_init=self.state['opacity'],   
             tick_to_value=lambda t: float(t/100.0),
             value_to_tick=lambda v: int(v*100),
             value_fmt="{:.2f}",
@@ -88,14 +88,14 @@ class InteractDelaunay(PanelBase):
             )
             paint_by_now = 'color'
         else:
-            color_now = self.host._impl_opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._impl_opts_backup[self.str_now]["paint_by"]
+            color_now = self.host._opts_backup[self.str_now]["color"]
+            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.host._impl_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
         self.host.act_commit(
             color=color_now,

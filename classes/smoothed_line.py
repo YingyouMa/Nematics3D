@@ -6,36 +6,25 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Any
 
-# import os
-# import json
-import weakref
-
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import pop_exclusive
-from .opts import merge_opts_all, build_dict_override
 from .host_base import OptsBase, HostBase
+from .opts import cover_value
 from ..datatypes import (
     Number,
     as_Number,
     as_str,
-    ColorRGB,
-    as_ColorRGB,
-    Vect,
-    as_Vect,
     as_bool,
     UNSET,
     Unset,
 )
-from .visual.plot_figure import PlotFigure
-from .visual.plot_tube import OptsTube, PlotTube
-from .class_function import cover_value
 
 # fmt: off
 @dataclass(slots=True, repr=False)
 class OptsSmooth(OptsBase):
     
     window_ratio:               Number | None | Unset               = UNSET
-    window_length:              int | float | None | Unset          = UNSET
+    window_length:              int | None | Unset                  = UNSET
     order:                      int | Unset                         = UNSET
     N_out_ratio:                Number | Unset                      = UNSET
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
@@ -56,11 +45,11 @@ class OptsSmooth(OptsBase):
     _validators = {
         **(OptsBase._validators),
         "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
-        "window_length":        lambda v, d: None if v is None else as_Number(v, name=d),
+        "window_length":        lambda v, d: None if v is None else as_Number(v, name=d, is_int=True),
         "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
-        "N_out_ratio":          lambda v, d: as_Number(v, name=d),
+        "N_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
-        "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True),
+        "min_line_length":      lambda v, d: as_Number(v, name=d, value_range=(2, np.inf)),
         "is_window_warning":    lambda v, d: as_bool(v, name=d)
     }
     
@@ -112,7 +101,11 @@ class SmoothedLine(HostBase):
         }
     # fmt: on
 
-    __slots__ = tuple(__descriptions__.keys())  # + ('__weakref__' ,)
+    __slots__ = tuple(
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in HostBase.__slots__
+    )
 
     def __init__(
         self,
@@ -293,6 +286,8 @@ class SmoothedLine(HostBase):
             )
             self._helper_fallback_no_smooth("system error")
 
+        self._helper_trigger_sync_batch(**kwargs)
+
     def __array__(self, dtype=None):
         arr = self._calc_result
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
@@ -303,49 +298,9 @@ class SmoothedLine(HostBase):
     def __iter__(self):
         return iter(self._calc_result)
 
-    def __bool__(self):
-        return self._state_is_smoothed
-
     def __len__(self) -> int:
         return self._calc_N_out
 
     @property
     def result(self):
         return self._calc_result
-
-    # @logging_and_warning_decorator(start_finish_level=5)
-    # def act_preview(self,
-    #                 move: Vect(3) = (0,0,0),
-    #                 is_new=False,
-    #                 logger=None,
-    #                 **kwargs,
-    #                 ):
-
-    #     move = as_Vect(move, name="The replacement to move smooth line", replace=(0,0,0))
-
-    #     if not is_new:
-    #         Figure = getattr(self, '_entity_preview', None)
-    #         if Figure is None or not Figure:
-    #             Figure = PlotFigure()
-    #             object.__setattr__(self, '_entity_preview', Figure)
-    #     else:
-    #         Figure = PlotFigure()
-    #         object.__setattr__(self, '_entity_preview', Figure)
-
-    #     pts = np.array(self)
-    #     pts = pts[:, :3] + move
-    #     PlotTube(pts, Figure, **kwargs)
-
-    # def act_copy(self):
-    #     return SmoothedLine(self.raw_coords.copy(), opts=OptsSmooth(**self.opts.act_asdict()))
-
-    # def __enter__(self):
-    #     object.__setattr__(self, "_impl_backup_opts", self.opts.act_asdict())
-    #     return self
-
-    # def __exit__(self, exc_type, exc_val, exc_tb):
-    #     for k, v in self._impl_backup_opts.items():
-    #         setattr(self.opts, k, v)
-    #     self._helper_apply()
-    #     del self._impl_backup_opts
-    #     return False

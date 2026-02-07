@@ -228,6 +228,11 @@ class PlotGlyph(HostBase):
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in HostBase.__slots__
+        )
+    
     _pending_resolution_attrs: List[str] = [
         "radius", "opacity", "color", "scalars"
         ]
@@ -254,7 +259,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "raw_category", category)
         
         object.__setattr__(self, "_impl_resolver_source", "raw_coords")
-        object.__setattr__(self, "_impl_opts_backup", {})
+        object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_interactable", True)
         
         super().__init__(
@@ -294,7 +299,7 @@ class PlotGlyph(HostBase):
             
 
         logger.detail("Examining the options before plotting ...")
-        self.opts.act_finalize(self.opts_defaults)
+        self.opts.act_finalize(self._opts_defaults)
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         unique_id = self.name + str_now
         object.__setattr__(self, "_impl_name_pv", unique_id)
@@ -367,7 +372,7 @@ class PlotGlyph(HostBase):
                     logger.recovery("Automatically ignore this modification.")
                 else:
                     logger.recovery(f"Reset {attr_name!r} to default."
-                                    f"To find it, check self.opts_defaults['{attr_name}'].")
+                                    f"To find it, check self._opts_defaults['{attr_name}'].")
                     self._helper_resolver_generic(attr_name, default_val, default_val, is_recover=True)
 
 
@@ -379,7 +384,7 @@ class PlotGlyph(HostBase):
         if attr_value is None:
             attr_value = getattr(self.opts, attr_name)
         
-        return self._helper_resolver_generic(attr_name, attr_value, self.opts_defaults[attr_name])
+        return self._helper_resolver_generic(attr_name, attr_value, self._opts_defaults[attr_name])
     
     
     # ----------------------------------------------------------------------------------------------------
@@ -585,7 +590,7 @@ class PlotGlyph(HostBase):
         
         kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-        found, category, kwargs = pop_exclusive(kwargs, "category", "raw_category")
+        found, category = pop_exclusive(kwargs, "category", "raw_category")
         if found:
             try:
                 category = as_str(category, name=self.__descriptions__["raw_category"])
@@ -596,7 +601,7 @@ class PlotGlyph(HostBase):
         
         is_new_topology = False
         
-        found, coords, kwargs = pop_exclusive(kwargs, "coords", "raw_coords")
+        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
         if found:
             try:
                 object.__setattr__(self, "raw_coords", as_points(coords))
@@ -698,6 +703,8 @@ class PlotGlyph(HostBase):
             self._helper_update_scalars()
             
         self.fig.pl.render()
+        
+        self._helper_trigger_sync_batch(**kwargs)
 
          
     

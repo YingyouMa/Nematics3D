@@ -10,13 +10,13 @@ class InteractSphere(PanelBase):
 
         self.state = {
             "radius_rescale":           1.0,
-            "sides":                    None,
+            "sides":                    int(self.host.opts.sides),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
             "color_r":                  None,
             "color_g":                  None,
             "color_b":                  None,
-            "opacity":                  None,
+            "opacity":                  self.host._calc_opacity[0],
         }
 
         # ----------------------------
@@ -38,10 +38,11 @@ class InteractSphere(PanelBase):
             layout=gl_geometry,
             name="radius_rescale",
             state_key="radius_rescale",
-            tick_min=log_mapper.tick_min,
-            tick_max=log_mapper.tick_max,
-            tick_init=log_mapper.value_to_tick(1.0),
+            value_min=log_mapper.value_min,
+            value_max=log_mapper.value_max,
+            value_init=1.0,
             tick_to_value=log_mapper.tick_to_value,
+            value_to_tick=log_mapper.value_to_tick
         )
 
         self.sliders["sides"] = make_labeled_slider_row(
@@ -49,10 +50,9 @@ class InteractSphere(PanelBase):
             layout=gl_geometry,
             name="sides",
             state_key="sides",
-            tick_min=4,
-            tick_max=40,
-            tick_init=int(self.host.opts.sides),
-            tick_to_value=lambda t: float(int(t)),
+            value_min=4,
+            value_max=30,
+            value_init=int(self.host.opts.sides),
             value_fmt="{:.0f}",
         )
         
@@ -90,11 +90,11 @@ class InteractSphere(PanelBase):
             layout=gl_opacity,
             name="opacity",
             state_key="opacity",
-            tick_min=0,
-            tick_max=100,
-            tick_init=int(self.host._calc_opacity[0] * 100),
+            value_min=0,
+            value_max=1,
+            value_init=self.state["opacity"],
             tick_to_value=lambda t: float(t / 100.0),
-            value_fmt="{:.2f}",
+            value_to_tick=lambda v: int(v * 100)
         )
 
         self.chk_use_opacity = QtWidgets.QCheckBox("Use controlled opacity", group_opacity)
@@ -116,7 +116,7 @@ class InteractSphere(PanelBase):
 
     def commit(self):
         # ---- radius ----
-        current_radius = self.host._impl_opts_backup[self.str_now]["radius"]
+        current_radius = self.host._opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -132,14 +132,14 @@ class InteractSphere(PanelBase):
             )
             paint_by_now = 'color'
         else:
-            color_now = self.host._impl_opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._impl_opts_backup[self.str_now]["paint_by"]
+            color_now = self.host._opts_backup[self.str_now]["color"]
+            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.host._impl_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
         self.host.act_commit(
             radius=radius_now,

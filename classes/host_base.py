@@ -13,46 +13,32 @@ from .opts import merge_opts_all, build_dict_override
 from .class_base import ClassBase
 
 
-# ---------------------------------------------------------------------
-# Design Contract: Opts / Host Interaction Semantics
-#
-# The following assumptions are fundamental to the correct usage of
-# OptsBase and HostBase in this framework:
-#
-# 1. After an Opts instance has been finalized (i.e. enters the
-#    "functioning" state), assignments to public (non-underscore) fields
-#    of opts do NOT directly mutate the opts object. Such assignments are
-#    treated as *requests* and are forwarded to the host via commit.
-#
-#    Consequently, opts primarily serve as a lightweight preprocessing
-#    and validation layer. The host is responsible for deciding whether
-#    an update is accepted and, if so, for writing the final value back.
-#
-# 2. The kwargs received by HostBase._helper_commit_apply_opts(...) are
-#    guaranteed to have passed all opts-level preprocessing and basic
-#    validation. Host implementations may assume that input values are
-#    already sanitized, and therefore should not repeat opts-level
-#    validation. Host-side logic should focus on state-dependent or
-#    cross-field constraints and side effects.
-#
-# 3. HostBase.__init__ only performs minimal wiring (opts binding,
-#    defaults construction, and name initialization). Concrete host
-#    subclasses are responsible for:
-#       - finalizing opts at the appropriate lifecycle stage, and
-#       - defining how finalized opts are consumed and applied.
-#
-# 4. When a host accepts an update in _helper_commit_apply_opts(...), it MUST
-#    write the resolved value back to opts. This write-back must bypass
-#    the normal opts assignment path (e.g. via object.__setattr__ or
-#    OptsBase._helper_internal_update) to avoid recursive commit loops.
-#
-# Violating any of these assumptions may result in silent state
-# inconsistencies or hard-to-debug behavior.
-# ---------------------------------------------------------------------
-
-
 @dataclass(slots=True, repr=False)
 class OptsBase:
+    '''
+    A reactive configuration base class designed for pre-processing, 
+    validation, and synchronized state management.
+
+    ### Configuration Workflow:
+    1.  **Validation Layer**: Each attribute assignment is pre-checked by 
+        ``_validators``. This ensures that only data meeting specific type or 
+        value constraints enters the system.
+    2.  **UNSET & Finalization**: Attributes are initialized as ``UNSET`` by 
+        default if no input is provided. During the ``act_finalize`` phase, 
+        all ``UNSET`` fields are automatically populated using a hierarchy of 
+        default values (instance-level overrides -> class-level defaults).
+    3.  **Lifecycle & Commitment**:
+        * Once finalized, the instance enters the ``is_functioning`` state as 
+          self._state_is_functioning = True
+        * Setting an attribute to ``UNSET`` is strictly forbidden after finalization.
+        * Any subsequent modification to public attributes will be treated as a 
+          request and forwarded to the associated Host via the commit pipeline.
+        * These updates will trigger ``_impl_sync_func`` for downstream listeners.
+    4.  **Data Export**: The current state of all non-hidden attributes can 
+        be retrieved as a standard dictionary via ``act_asdict()``.
+
+    
+    '''
     tag: str | Unset = UNSET
 
     _impl_host_ref: weakref.ReferenceType | None = field(
@@ -127,22 +113,17 @@ class OptsBase:
 
         # --- host commit (only after functioning) ---
         if not key.startswith("_") and is_final:
-            self._helper_sync(key, value)
+            self._helper_host_apply(key, value)
             return value
 
         object.__setattr__(self, key, value)
         return value
 
-    def _helper_sync(self, key, value):
-        self._helper_host_apply(key, value)
-        sync_func = self._impl_sync_func.get(key, {})
-        for func in sync_func.values():
-            func()
-
     def _helper_host_apply(self, key, value):
         if self.host is not None:
             self.host._helper_commit_apply_opts(**{key: value})
             return value
+        
 
     # ---------------------------------------------------------------------
     # Basic core: finalize (fill UNSET by defaults then freeze state)
@@ -172,11 +153,11 @@ class OptsBase:
 
         object.__setattr__(self, "_state_is_functioning", True)
 
+
     # ---------------------------------------------------------------------
     # Basic core: export to dict
     # ---------------------------------------------------------------------
     def _helper_asdict_basic(self, *, is_include_UNSET: bool = False) -> dict[str, Any]:
-
         result: dict[str, Any] = {}
         for k in self.__class__.__descriptions__.keys():
             v = getattr(self, k)
@@ -198,7 +179,9 @@ class OptsBase:
         self._helper_setattr_basic(key, value)
 
     def act_finalize(
-        self, defaults: Mapping[str, Any] | None = None, is_allow_UNSET=False
+        self, 
+        defaults: Mapping[str, Any] | None = None, 
+        is_allow_UNSET=False
     ):
         self._helper_finalize_basic(defaults, is_allow_UNSET=is_allow_UNSET)
 
@@ -250,13 +233,75 @@ class OptsBase:
 
 
 class HostBase(ClassBase):
+    """
+    A high-level controller class that manages complex state through a 
+    'Opts' configuration layer and a strict commit-based update pipeline.
+    
+    ### 1. Centralized Data Storage (.opts)
+    All critical parameters and functional settings are stored exclusively within 
+    the ``.opts`` attribute, which is an instance of ``OptsBase`` (or its subclass). 
+    The Host instance itself does not hold primary state variables; instead, it 
+    acts as the logic engine that governs and applies the configuration held 
+    by the Opts instance.
+
+    ### 2. Host-Opts Interaction Semantics
+    This class operates on a "Request-Commit-Apply" model. Instead of 
+    direct mutation, the Host delegates its public configuration to an 
+    associated ``OptsBase`` instance.
+    * **State Isolation**: Before 'finalization', Opts acts as a buffer. 
+        Once finalized (functioning state), any change to Opts triggers a 
+        request back to the Host.
+    * **The Commit Pipeline**: All public attribute assignments on the Host 
+        are intercepted and routed through ``act_commit()``. This ensures that 
+        changes undergo validation, preprocessing, and side-effect management 
+        (e.g., hardware updates, cache invalidation) before state realization.
+    * **Write-Back Policy**: When a commit is accepted, the Host is responsible 
+        for updating its internal state and writing resolved values back to 
+        the Opts instance via bypass methods to avoid recursive loops.
+
+    ### 2. Core Functional Modules
+    * **Identity Management**: Inherits robust naming and conflict resolution 
+        from ``ClassBase``.
+    * **Option Lifecycle**: Manages the binding, override merging, and 
+        finalization of configuration options (Opts).
+    * **State Snapshots**: Provides a timestamped backup mechanism 
+        (``_opts_backup``) to archive configuration history.
+
+    ### 3. Variables & Metadata
+    Refer to the ``__descriptions__`` dictionary for granular details on 
+    internal implementation slots and public properties. 
+    Key internal stores include:
+    * ``opts``: The primary configuration engine.
+    * ``_opts_defaults``: The baseline configuration used during finalization.
+    * ``_opts_backup``: Historical archive of previous option states.
+
+    ### 4. Inheritance Guidelines
+    * HostBase.__init__ only performs minimal wiring (opts binding,
+        defaults construction, and name initialization). Concrete host
+        subclasses are responsible for:
+          - finalizing opts at the appropriate lifecycle stage, and
+          - defining how finalized opts are consumed and applied.
+    * The kwargs received by HostBase._helper_commit_apply_opts(...) are
+        guaranteed to have passed all opts-level preprocessing and basic
+        validation. Host implementations may assume that input values are
+        already sanitized, and therefore should not repeat opts-level
+        validation. Host-side logic should focus on state-dependent or
+        cross-field constraints and side effects.
+    * When a host accepts an update in _helper_commit_apply_opts(...), it
+        MUST write the resolved value back to opts. This write-back must bypass
+        the normal opts assignment path (e.g. via object.__setattr__ or
+        OptsBase._helper_internal_update) to avoid recursive commit loops.
+        The host is also responsible for calling self._helper_trigger_sync_batch()
+        all downstream listeners are notified of the resolved value.
+    * Other inheritance guidelines of ClassBase class.
+    """
 
     __descriptions__ = {
         **(ClassBase.__descriptions__),
         "raw_name":             "The name identifier of the host object",
         "opts":                 "The Opts instance controlling options.",
-        "opts_defaults":        "The default option settings.",
-        "_impl_opts_backup": (
+        "_opts_defaults":        "The default option settings.",
+        "_opts_backup": (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
         ),
@@ -272,7 +317,7 @@ class HostBase(ClassBase):
         self,
         opts_type: Type[OptsBase],
         opts: OptsBase | None = None,
-        opts_defaults_override: Mapping[str, Any] | None = None,
+        _opts_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
         name_replace: str = "unnamed",
         logger=None,
@@ -288,12 +333,13 @@ class HostBase(ClassBase):
         object.__setattr__(self, "opts", opts)
 
         logger.detail("Building default option values ...")
-        opts_defaults = build_dict_override(
+        _opts_defaults = build_dict_override(
             opts._DEFAULTS_FROZEN,
-            opts_defaults_override,
+            _opts_defaults_override,
             name=type(opts).__name__,
         )
-        object.__setattr__(self, "opts_defaults", opts_defaults)
+        object.__setattr__(self, "_opts_defaults", _opts_defaults)
+        object.__setattr__(self, "_opts_backup", {})
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
@@ -341,19 +387,24 @@ class HostBase(ClassBase):
     def _helper_commit_apply_opts(self, **kwargs):
         raise NotImplementedError(...)
         
+    def _helper_trigger_sync_batch(self, **kwargs):
+        for attr in kwargs.keys():
+            sync_func = self.opts._impl_sync_func.get(attr, {})
+            for func in sync_func.values():
+                func()
         
-
+        
     def act_save_opts(self, name=None):
         if not name:
             name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
-        self._impl_opts_backup[name] = self.opts.act_asdict()
+        self._opts_backup[name] = self.opts.act_asdict()
         
-
 
     # -----------------------------------------------------------------
     # OVERRIDE:
     #
-    # This method intentionally overrides ClassBase._helper_setattr_basic.
+    # This method intentionally overrides ClassBase._helper_setattr_basic
+    # by changing setattr to act_commit at the end.
     #
     # For Host objects, direct assignment to public (non-underscore)
     # attributes does NOT mutate the host instance immediately.

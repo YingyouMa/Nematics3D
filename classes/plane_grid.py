@@ -11,7 +11,7 @@ from Nematics3D.general import select_grid_in_box
 from .opts import merge_opts_all, build_dict_override
 from .host_base import OptsBase, HostBase
 from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Tensor, as_str, UNSET, Unset
-from .class_function import cover_value
+from .opts import cover_value
 
 from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
@@ -117,7 +117,10 @@ class PlaneGrid(HostBase):
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
     }
 
-    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in HostBase.__slots__
+        )
 
     def __init__(self,
                  name: str | None = None,

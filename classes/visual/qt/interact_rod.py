@@ -11,11 +11,11 @@ class InteractRod(PanelBase):
         self.state = {
             "radius_rescale":           1.0,
             "length_rescale":           1.0,
-            "sides":                    None,
+            "sides":                    int(self.host.opts.sides),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
-            "color":                    None,
-            "opacity":                  None,
+            "color":                    self.host._calc_color[0],
+            "opacity":                  self.host._calc_opacity[0],
             }
 
         # ----------------------------
@@ -63,7 +63,7 @@ class InteractRod(PanelBase):
             state_key="sides",
             value_min=4,
             value_max=30,
-            value_init=int(self.host.opts.sides),
+            value_init=self.state["sides"],
             value_fmt="{:.0f}",
         )
         
@@ -80,7 +80,7 @@ class InteractRod(PanelBase):
             layout=gl_RGB,
             sliders=self.sliders,
             prefix="color",
-            init_rgb=self.host._calc_color[0],
+            init_rgb=self.state["color"],
         )
         
         self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
@@ -105,7 +105,7 @@ class InteractRod(PanelBase):
             state_key="opacity",
             value_min=0,
             value_max=1,
-            value_init=self.host._calc_opacity[0],
+            value_init=self.state["opacity"],
             tick_to_value=lambda t: float(t / 100.0),
             value_to_tick=lambda v: int(v * 100)
         )
@@ -125,13 +125,13 @@ class InteractRod(PanelBase):
         self.on_changed(0, is_commit=False)
         
         self.host.opts._impl_sync_func["sides"][self.str_now] = (
-            lambda: self._sync_sides_from_host("sides", self.host.opts.sides)
+            lambda: self._sync_from_host("sides", self.host.opts.sides)
         )
 
 
     def commit(self):
         # ---- radius ----
-        current_radius = self.host._impl_opts_backup[self.str_now]["radius"]
+        current_radius = self.host._opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -139,7 +139,7 @@ class InteractRod(PanelBase):
             radius_now = scale * float(current_radius)
             
         # ---- length ----
-        current_length = self.host._impl_opts_backup[self.str_now]["length"]
+        current_length = self.host._opts_backup[self.str_now]["length"]
         scale = float(self.state["length_rescale"])
         if callable(current_length):
             length_now = lambda x: scale * current_length(x)
@@ -155,14 +155,14 @@ class InteractRod(PanelBase):
             )
             paint_by_now = 'color'
         else:
-            color_now = self.host._impl_opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._impl_opts_backup[self.str_now]["paint_by"]
+            color_now = self.host._opts_backup[self.str_now]["color"]
+            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.host._impl_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
         self.host.act_commit(
             radius=radius_now,

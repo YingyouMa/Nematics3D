@@ -10,7 +10,7 @@ from .class_base import ClassBase
 
 #!!! class name
 
-class InterplatePlane(ClassBase):
+class InterpolatePlane(ClassBase):
 
     __descriptions__ = {
         **(ClassBase.__descriptions__),
@@ -21,7 +21,10 @@ class InterplatePlane(ClassBase):
         "_entity_plane": "The PlaneGrid entity (coordinates of 2D lattice)",
     }
 
-    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in ClassBase.__slots__
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(

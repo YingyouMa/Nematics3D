@@ -8,7 +8,6 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
-
 from Nematics3D.general import pop_exclusive
 
 #! clip_geometry
@@ -59,7 +58,11 @@ class PlotTube(PlotGlyph):
         "raw_name":     "The name identifier of the PlotTube instance",
         "raw_line_index": "Optional polyline membership indices.",
     }
-    __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
+    
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        )
     
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -193,7 +196,7 @@ class PlotTube(PlotGlyph):
         
         is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
         
-        found, line_index, kwargs = pop_exclusive(kwargs, "line_index", "raw_line_index")
+        found, line_index = pop_exclusive(kwargs, "line_index", "raw_line_index")
         if found:
             if line_index is None:
                 object.__setattr__(self, "raw_line_index", line_index)

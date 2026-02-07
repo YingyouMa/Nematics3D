@@ -19,7 +19,7 @@ from Nematics3D.datatypes import (
     Unset,
 )
 from ..host_base import OptsBase, HostBase
-from ..class_function import cover_value
+from ..opts import cover_value
 from ..registry_base import RegistryBase
 from .pick_manager import PickManager
 from .qt.console import ScopedConsoleDock
@@ -101,7 +101,10 @@ class PlotFigure(HostBase, RegistryBase):
     }
     
 
-    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in HostBase.__slots__
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -211,6 +214,7 @@ class PlotFigure(HostBase, RegistryBase):
                         )
         
         self._helper_sync_from_opts()
+        self._helper_trigger_sync_batch(**kwargs)
         
 
     @property

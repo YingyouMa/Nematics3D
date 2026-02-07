@@ -409,8 +409,6 @@ def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
         by ``replace``.
         **Note:** ``replace`` is not validated and may be of any type, including
         non-string values. The caller must ensure its semantic correctness.
-    logger : object, optional
-        Logger injected by the decorator. Not intended to be supplied manually.
 
     Returns
     -------

@@ -1,36 +1,54 @@
 from dataclasses import fields, is_dataclass, replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.datatypes import UNSET
 
 @logging_and_warning_decorator(start_finish_level=5)
 def merge_opts(opts, kwargs, prefix="", logger=None):
     """
-    Update a dataclass instance `opts` with values from `kwargs` whose
-    keys start with a given prefix. The prefix is removed before matching
-    the remaining part of the key to a field name in the dataclass.
+    Merge prefixed keyword arguments into a dataclass-based option object.
+
+    This function extracts entries from ``kwargs`` whose keys start with the
+    specified ``prefix``, strips the prefix, and applies the resulting key–value
+    pairs to a dataclass instance ``opts``.  All successfully matched keys are
+    consumed (removed) from ``kwargs``.
+
+    The merge is performed by constructing a *new* dataclass instance via
+    ``dataclasses.replace``.  As a result, all field-level validation defined
+    inside ``opts`` (e.g. via ``__init__``, ``__post_init__``, ``__setattr__``,
+    or custom validators in the option class hierarchy) is automatically
+    triggered during the merge process.
 
     Parameters
     ----------
     opts : dataclass instance
-        The target dataclass object to be updated.
-        
+        The target option object.  Must be an instance of a dataclass.
+        A new instance will be returned; the original object is not modified.
+
     kwargs : dict
-        A dictionary of keyword arguments that may contain keys with the
-        specified prefix. Matching keys will be consumed (removed) from
-        this dictionary.
-        
+        A dictionary of keyword arguments to be consumed.  Any key that matches
+        the given prefix and a valid field name will be removed from this
+        dictionary.
+
     prefix : str, optional
-        The prefix used to identify relevant keys in `kwargs`. Defaults to "".
+        Prefix used to identify which entries in ``kwargs`` belong to this
+        option object.  The prefix is stripped before matching against
+        dataclass field names.  Defaults to ``""``.
 
     Returns
     -------
-    dataclass instance
-        A new dataclass object with updated field values.
+    new_opts : dataclass instance
+        A new dataclass instance with updated field values.  All merged values
+        have already passed the internal validation logic of ``opts``.
+
+    remaining_kwargs : dict
+        The same ``kwargs`` dictionary after in-place consumption of all
+        recognized keys.
 
     Raises
     ------
     TypeError
-        If `opts` is not a dataclass instance.
+        If ``opts`` is not a dataclass instance.
     """
     if not is_dataclass(opts):
         raise TypeError("opts must be a dataclass instance")
@@ -106,9 +124,6 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
         Name of the parent class or component invoking this function.  Used only
         for producing clearer warning messages when unexpected arguments appear.
 
-    logger : Logger, optional
-        Logger used to emit warnings about unmatched keyword arguments.
-
     Returns
     -------
     dict[str, object]
@@ -170,6 +185,39 @@ def build_dict_override(
     name: str = "input",
     logger = None
 ):
+    """
+    Merge an override dictionary into a base dictionary with key validation.
+    
+    This function creates a shallow copy of ``dict_origin`` and applies values
+    from ``dict_override`` on top of it.  Only keys that already exist in
+    ``dict_origin`` are allowed to be overridden; any unknown keys appearing
+    in ``dict_override`` are considered invalid and will be ignored with a
+    warning.
+    
+    The merge operation is non-destructive to the input dictionaries:
+    ``dict_origin`` is never modified, and a new dictionary is returned.
+    
+    Parameters
+    ----------
+    dict_origin : dict
+        The base dictionary defining the allowed set of keys and their default
+        values.
+    
+    dict_override : dict or None, optional
+        A dictionary containing override values.  Only keys present in
+        ``dict_origin`` are applied.  If ``None``, an empty override is assumed.
+    
+    name : str, optional
+        A human-readable name used in warning or error messages to identify
+        the configuration context (e.g. ``"input"``, ``"options"``,
+        ``"visual"``).
+    
+    Returns
+    -------
+    dict
+        A new dictionary consisting of ``dict_origin`` updated with all valid
+        overrides from ``dict_override``.
+    """
 
     if dict_override is None:
         dict_override = {}
@@ -180,8 +228,8 @@ def build_dict_override(
         if k not in defaults:
             try:
                 raise KeyError(
-                    f"Invalid key {k!r} in dict_origin; "
-                    f"not a valid {name} option."
+                    f"Invalid key {k!r} in dict_override; not a valid {name} option. "
+                    "This key will be ignored."
                 )
             except KeyError:
                 logger.exception("Check input.")
@@ -192,56 +240,45 @@ def build_dict_override(
     return defaults
 
 
-# @logging_and_warning_decorator(start_finish_level=5)
-# def merge_opts_with_kwargs(
-#     opts,
-#     kwargs: dict,
-#     *,
-#     opts_type,
-#     logger=None,
-# ):
-#     """
-#     Merge an optional options object with keyword arguments.
+@logging_and_warning_decorator(start_finish_level=5)
+def cover_value(
+    obj,
+    is_allow_cover_target_set: bool = True,
+    is_allow_unset_source: bool = False,
+    logger=None,
+    **kwargs,
+):
+    """
+    Conditionally assign values from kwargs to attributes of obj.
 
-#     Parameters
-#     ----------
-#     opts : object or None
-#         Options object to be merged. If provided, must be an instance of opts_type
-#         and implement `act_asdict()`.
-#     kwargs : dict
-#         Keyword-based configuration. Takes precedence over opts on overlap.
-#     opts_type : type
-#         Expected type of the opts object.
+    Parameters
+    ----------
+    obj : object
+        Target object whose attributes will be updated.
+    is_allow_cover_target_set : bool, default True
+        If False, attributes on obj that are already set (not UNSET)
+        will not be overwritten.
+    is_allow_unset_source : bool, default False
+        If False, kwargs entries whose value is UNSET will be ignored.
+    **kwargs
+        Attribute-value pairs used as assignment sources.
+    """
 
-#     Returns
-#     -------
-#     merged_opts : dict
-#         Merged configuration dictionary, where kwargs override opts.
-#     """
+    for key, value in kwargs.items():
 
-#     if opts is not None:
-#         if not isinstance(opts, opts_type):
-#             try:
-#                 raise TypeError(
-#                     f"`opts` must be {opts_type.__name__} object. "
-#                     f"Got type={type(opts)} instead."
-#                 )
-#             except:
-#                 logger.exception("Check input.")
-#                 logger.recovery("Ignoring `opts` and using `kwargs` only.")
-#                 opts_dict = {}
-#         else:
-#             opts_dict = opts.act_asdict()
-#             overlap = opts_dict.keys() & kwargs.keys()
-#             if overlap:
-#                 logger.warning(
-#                     f"Overlapping configuration detected: {list(overlap)}. "
-#                     f"The values in **kwargs will take precedence over `opts`.",
-#                 )
-#     else:
-#         opts_dict = {}
+        # Source-side constraint: whether UNSET is allowed as an input value
+        if not is_allow_unset_source and value is UNSET:
+            continue
 
-#     return opts_dict | kwargs
+        # Target-side constraint: whether existing values may be overwritten
+        if not is_allow_cover_target_set and getattr(obj, key, UNSET) is not UNSET:
+            continue
+        
+        try:
+            setattr(obj, key, value)
+        except Exception:
+            logger.exception("Check input.")
+            logger.recovery("Automatically ignore this modification")
 
 
 

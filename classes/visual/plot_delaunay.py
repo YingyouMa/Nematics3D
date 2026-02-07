@@ -44,7 +44,10 @@ class PlotDelaunay(PlotGlyph):
         if k != "_calc_radius"
     }
     
-    __slots__ = tuple(__descriptions__.keys())  #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        )
     
     _pending_resolution_attrs = ['color', 'scalars', 'opacity']
     

@@ -15,13 +15,13 @@ from .visual.plot_rod import PlotRod, OptsRod
 from .visual.plot_delaunay import OptsDelaunay, PlotDelaunay
 from .opts import merge_opts_all
 from .plane_grid import PlaneGrid, OptsPlaneGrid
-from .interplate_plane import InterplatePlane
+from .interpolate_plane import InterpolatePlane
 
 
-class QPlane(InterplatePlane):
+class QPlane(InterpolatePlane):
 
     __descriptions__ = {
-        **(InterplatePlane.__descriptions__),
+        **(InterpolatePlane.__descriptions__),
         
         "raw_name": "The name identifier of this Q-plane object",
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
@@ -35,7 +35,10 @@ class QPlane(InterplatePlane):
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
     }
 
-    __slots__ = tuple(__descriptions__.keys()) #+ ("__weakref__",)
+    __slots__ = tuple(
+            k for k, v in __descriptions__.items() 
+            if not v.startswith("Property:") and k not in InterpolatePlane.__slots__
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(

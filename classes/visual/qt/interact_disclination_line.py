@@ -42,15 +42,15 @@ class InteractDisclinationLine(PanelBase):
         # initial state
         # ----------------------------
         self.state = {
-            "window_length":            None,
-            "is_smooth":                None,
+            "window_length":            int(self.owner.opts.window_length),
+            "is_smooth":                bool(self.obj.state_is_smooth),
             "radius_rescale":           1.0,
-            "sides":                    None,
-            "is_wrap":                  None,
+            "sides":                    int(self.host.opts.sides),
+            "is_wrap":                  bool(self.obj.state_is_wrap),
             "is_use_control_color":     False,
             "is_use_control_opacity":   False,
-            "color":                    None,
-            "opacity":                  None,
+            "color":                    self.host._calc_color[0],
+            "opacity":                  self.host.opts.opacity,
             }
         
         # ----------------------------
@@ -64,15 +64,14 @@ class InteractDisclinationLine(PanelBase):
             parent=group_smooth,
             layout=gl_smooth,
             name="window_length",
-            tick_min=5,
-            tick_max=np.min([100, self.owner.owner._calc_defect_num-1]),
-            tick_init=int(self.owner.opts.window_length),   
-            tick_to_value=lambda t: int(t),
+            value_min=5,
+            value_max=np.min([100, self.owner.owner._calc_defect_num-1]),
+            value_init=int(self.owner.opts.window_length),   
             value_fmt="{:.0f}",
         )
         
         self.chk_is_smooth = QtWidgets.QCheckBox("Use smoothed coordinates", group_smooth)
-        self.chk_is_smooth.setChecked(bool(self.obj.state_is_smooth))
+        self.chk_is_smooth.setChecked(self.state["is_smooth"])
         gl_smooth.addWidget(self.chk_is_smooth)
         self.chk_is_smooth.stateChanged.connect(self._on_toggle_is_smooth)
         self.sliders["window_length"].set_enabled(self.chk_is_smooth.isChecked())
@@ -85,7 +84,7 @@ class InteractDisclinationLine(PanelBase):
         self.layout.addWidget(group_geometry)
         
         self.chk_is_wrap = QtWidgets.QCheckBox("Use wrapped coordinates", group_geometry)
-        self.chk_is_wrap.setChecked(bool(self.obj.state_is_wrap))
+        self.chk_is_wrap.setChecked(self.state["is_wrap"])
         gl_geometry.addWidget(self.chk_is_wrap)
         self.chk_is_wrap.stateChanged.connect(self._on_toggle_is_wrap)
 
@@ -100,10 +99,11 @@ class InteractDisclinationLine(PanelBase):
             layout=gl_geometry,
             name="radius_rescale",
             state_key="radius_rescale",
-            tick_min=log_mapper.tick_min,
-            tick_max=log_mapper.tick_max,
-            tick_init=log_mapper.value_to_tick(1.0),
+            value_min=log_mapper.value_min,
+            value_max=log_mapper.value_max,
+            value_init=1.0,
             tick_to_value=log_mapper.tick_to_value,
+            value_to_tick=log_mapper.value_to_tick
         )
 
         self.sliders["sides"] = make_labeled_slider_row(
@@ -111,10 +111,9 @@ class InteractDisclinationLine(PanelBase):
             layout=gl_geometry,
             name="sides",
             state_key="sides",
-            tick_min=4,
-            tick_max=40,
-            tick_init=int(self.host.opts.sides),
-            tick_to_value=lambda t: float(int(t)),
+            value_min=4,
+            value_max=30,
+            value_init=self.state["sides"],
             value_fmt="{:.0f}",
         )
         
@@ -131,7 +130,7 @@ class InteractDisclinationLine(PanelBase):
             layout=gl_RGB,
             sliders=self.sliders,
             prefix="color",
-            init_rgb=self.host._calc_color[0],
+            init_rgb=self.state['color'],
         )
         
         self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
@@ -154,11 +153,11 @@ class InteractDisclinationLine(PanelBase):
             layout=gl_opacity,
             name="opacity",
             state_key="opacity",
-            tick_min=0,
-            tick_max=100,
-            tick_init=int(self.host._calc_opacity[0] * 100),
+            value_min=0,
+            value_max=1,
+            value_init=self.state["opacity"],
             tick_to_value=lambda t: float(t / 100.0),
-            value_fmt="{:.2f}",
+            value_to_tick=lambda v: int(v * 100)
         )
         
         self.chk_use_opacity = QtWidgets.QCheckBox("Use controlled opacity", group_opacity)
@@ -178,10 +177,10 @@ class InteractDisclinationLine(PanelBase):
 
         self.on_changed(0, is_commit=False)
         
-        self.host.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_sides_from_host("sides", self.host.opts.sides)
-        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_sides_from_host("window_length", self.owner.opts.window_length)
-        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_sides_from_host("state_is_smooth", self.obj.state_is_smooth)
-        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_sides_from_host("state_is_wrap", self.obj.state_is_wrap)
+        self.host.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_from_host("sides", self.host.opts.sides)
+        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_from_host("window_length", self.owner.opts.window_length)
+        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_from_host("state_is_smooth", self.obj.state_is_smooth)
+        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_from_host("state_is_wrap", self.obj.state_is_wrap)
 
 
     def on_changed(self, _v=0, is_commit=True, is_only_smooth=False):
@@ -199,7 +198,7 @@ class InteractDisclinationLine(PanelBase):
             return
         
         # ---- radius ----
-        current_radius = self.host._impl_opts_backup[self.str_now]["radius"]
+        current_radius = self.host._opts_backup[self.str_now]["radius"]
         scale = float(self.state["radius_rescale"])
         if callable(current_radius):
             radius_now = lambda x: scale * current_radius(x)
@@ -215,14 +214,14 @@ class InteractDisclinationLine(PanelBase):
             )
             paint_by_now = 'color'
         else:
-            color_now = self.host._impl_opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._impl_opts_backup[self.str_now]["paint_by"]
+            color_now = self.host._opts_backup[self.str_now]["color"]
+            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
             
         # ---- opacity (controlled or restore) ----
         if bool(self.state.get("is_use_control_opacity", False)):
             opacity_now = self.state["opacity"]
         else:
-            opacity_now = self.host._impl_opts_backup[self.str_now]["opacity"]
+            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
         self.obj.act_commit(
             radius=radius_now,
