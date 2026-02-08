@@ -1,4 +1,4 @@
-import pyvista as pv
+from pyvistaqt import BackgroundPlotter
 import numpy as np
 import weakref
 from typing import Mapping, Any
@@ -27,7 +27,7 @@ class QPlane(InterpolatePlane):
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
         "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
         "_entity_visual_defect": "The PlotSphere objects of visualized defects",
-        "_entity_S": "The PlotDealunay object of visualized S",
+        "_entity_visual_S": "The PlotDealunay object of visualized S",
         "_calc_n": "List of director field arrays (from Q-diagonalization)",
         "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
@@ -55,6 +55,7 @@ class QPlane(InterpolatePlane):
         object.__setattr__(self, '_entity_visual_nb', None)
         object.__setattr__(self, '_entity_visual_nd', None)
         object.__setattr__(self, '_entity_visual_defect', None)
+        object.__setattr__(self, '_entity_visual_S', None)
         object.__setattr__(self, '_state_is_interactable', True)
         
         super().__init__(
@@ -173,7 +174,7 @@ class QPlane(InterpolatePlane):
     @logging_and_warning_decorator()
     def act_visualize_n(
         self,
-        figure: PlotFigure | pv.Plotter | None = None,
+        figure: PlotFigure | BackgroundPlotter | None = None,
         opts_figure: OptsFigure | None = None,
         opts_nb: OptsRod | None = None,
         opts_nd: OptsRod | None = None,
@@ -186,9 +187,9 @@ class QPlane(InterpolatePlane):
         is_defect = as_bool(is_defect, replace=True)
 
         if opts_nb is None:
-            opts_nb = OptsRod(color=n_color_immerse, opacity=0.2)
+            opts_nb = OptsRod()
         if opts_nd is None:
-            opts_nd = OptsRod(color=n_color_immerse)
+            opts_nd = OptsRod()
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_defect is None:
@@ -215,7 +216,7 @@ class QPlane(InterpolatePlane):
                 figure = PlotFigure(opts=opts_figure)
             elif isinstance(figure, PlotFigure):
                 figure.act_commit(opts_figure)
-            elif isinstance(figure, pv.Plotter):
+            elif isinstance(figure, BackgroundPlotter):
                 figure = PlotFigure(plotter=figure, opts=opts_figure)
             else:
                 raise ValueError(
@@ -229,14 +230,31 @@ class QPlane(InterpolatePlane):
             logger.recovery("Create a new figure instead.")
             figure = PlotFigure(opts=opts_figure)
             
-        visual_nb = PlotRod(
-            coords=self._entity_plane()[~self._calc_is_near_defect],
-            orient=self._calc_n[~self._calc_is_near_defect],
-            name=f"n bulk of plane {self.name!r}",
-            category="plane analysis",
-            opts=opts_nb,
-            figure=figure,
-        )
+        if np.sum(~self._calc_is_near_defect) > 0:
+            
+            visual_nb = PlotRod(
+                coords=self._entity_plane()[~self._calc_is_near_defect],
+                orient=self._calc_n[~self._calc_is_near_defect],
+                name=f"n bulk of plane {self.name!r}",
+                category="plane analysis",
+                opts=opts_nb,
+                figure=figure,
+                opts_defaults_override={"color": n_color_immerse, "opacity": 0.2}
+            )
+            
+        else:
+            
+            visual_nb = PlotRod(
+                coords=self._entity_plane()[self._calc_is_near_defect],
+                orient=self._calc_n[self._calc_is_near_defect],
+                name=f"n bulk of plane {self.name!r}",
+                category="plane analysis",
+                opts=opts_nb,
+                figure=figure,
+                opts_defaults_override={"color": n_color_immerse, "opacity": 0.2},
+                is_visible=False
+            )
+            
         object.__setattr__(visual_nb, "_impl_owner_ref", weakref.ref(self))
         object.__setattr__(self, '_entity_visual_nb', visual_nb)
 
@@ -249,6 +267,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
+                opts_defaults_override={"color": n_color_immerse}
             )
             
             visual_defect = PlotSphere(
@@ -262,17 +281,18 @@ class QPlane(InterpolatePlane):
         else:
             
             visual_nd = PlotRod(
-                coords=self._entity_plane()[self._calc_is_near_defect[:2]],
-                orient=self._calc_n[self._calc_is_near_defect[:2]],
+                coords=self._entity_plane()[~self._calc_is_near_defect][:2],
+                orient=self._calc_n[~self._calc_is_near_defect][:2],
                 name=f"n near defect of plane {self.name!r}",
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                is_visible=False
+                is_visible=False,
+                opts_defaults_override={"color": n_color_immerse}
             )
             
             visual_defect = PlotSphere(
-                coords=self._entity_plane()[self._calc_is_near_defect[:2]], 
+                coords=self._entity_plane()[~self._calc_is_near_defect][:2], 
                 name=f"defects of plane {self.name!r}",
                 category="plane analysis",
                 opts=opts_defect, 
@@ -298,7 +318,7 @@ class QPlane(InterpolatePlane):
 
     def act_visualize_S(
         self,
-        figure: PlotFigure | pv.Plotter | None = None,
+        figure: PlotFigure | BackgroundPlotter | None = None,
         opts_figure: OptsFigure | None = None,
         opts_S: OptsDelaunay | None = None,
         logger=None,
@@ -327,7 +347,7 @@ class QPlane(InterpolatePlane):
                 figure = PlotFigure(opts=opts_figure)
             elif isinstance(figure, PlotFigure):
                 figure.act_commit(opts_figure)
-            elif isinstance(figure, pv.Plotter):
+            elif isinstance(figure, BackgroundPlotter):
                 figure = PlotFigure(plotter=figure, opts=opts_figure)
             else:
                 raise ValueError(

@@ -4,7 +4,7 @@ from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider, Log
 
 class InteractRod(PanelBase):
     def __init__(self, host):
-        super().__init__(host, title="Rod Controls of {host.name!r}")
+        super().__init__(host, title=f"Rod Controls of {host.name!r}")
 
     def build_ui(self):
 

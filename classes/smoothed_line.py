@@ -197,11 +197,6 @@ class SmoothedLine(HostBase):
         msg += f"minimum smoothed line length = {self.opts.min_line_length}"
         logger.debug(msg)
 
-        if self._calc_N_init < self.opts.min_line_length:
-            reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
-            self._helper_fallback_no_smooth(reason)
-            return
-
         try:
             logger.detail("Start to determine the smoothing window length.")
             if self.opts.window_length is None:
@@ -232,6 +227,11 @@ class SmoothedLine(HostBase):
                     "window_ratio",
                     self._calc_N_init / self.opts.window_length,
                 )
+                
+            if self._calc_N_init < self.opts.min_line_length:
+                reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
+                self._helper_fallback_no_smooth(reason)
+                return
 
             if self.opts.window_length >= self._calc_N_init:
                 reason = f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"

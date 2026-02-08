@@ -365,7 +365,7 @@ class PlotGlyph(HostBase):
     
         except Exception:
             if is_recover:
-                raise ValueError("The default value is not valid!")
+                raise ValueError(f"The default value is not valid for {attr_name!r}!")
             else:
                 logger.exception(f"Failed to resolve {attr_name!r}")
                 if getattr(self, "_entity", None):

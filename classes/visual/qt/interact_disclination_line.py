@@ -11,8 +11,11 @@ class InteractDisclinationLine(PanelBase):
         self.obj = obj
         self.owner = obj.owner
         object.__setattr__(self.owner, "_state_is_silhouette", False)
+        
+        
         super().__init__(self.obj._entity, title="Smoothed disclination line control")
         self.owner.act_save_opts(name=self.str_now)
+        object.__setattr__(self.owner.opts, "min_line_length", 2)
         
         self.spheres = PlotSphere(
             self._helper_create_sphere_coords(self.obj.state_is_wrap),

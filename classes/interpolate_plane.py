@@ -40,7 +40,6 @@ class InterpolatePlane(ClassBase):
         
         super().__init__(name=name, name_replace="interpolate plane")
         
-        
         if grid:
             object.__setattr__(self, "_entity_plane", grid)
             self._entity_plane.act_commit(

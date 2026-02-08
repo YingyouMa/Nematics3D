@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from typing import Union
-from dataclasses import replace, dataclass, asdict, field
+from dataclasses import replace, dataclass, field, fields
 from pyvistaqt import BackgroundPlotter
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -23,7 +23,8 @@ from ..datatypes import (
     check_bool_flags,
     UNSET,
     Unset,
-    as_str
+    as_str,
+    as_bool,
 )
 from ..field import (
     Q_diagonalize,
@@ -35,10 +36,14 @@ from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
 from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
+from .visual.plot_rod import OptsRod
+from .visual.plot_sphere import OptsSphere
+from .visual.plot_delaunay import OptsDelaunay
 from .visual.plot_figure import PlotFigure, OptsFigure
+from .Q_plane import QPlane
 from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
-from .opts import merge_opts_all
+from .opts import merge_opts_all, cover_value
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
@@ -96,7 +101,7 @@ class InputQ:
         object.__setattr__(self, key, value)
 
 
-class QFieldObject:
+class QFieldObject(ClassBase):
 
     __descriptions__ = {
         # --- Identity ---
@@ -155,28 +160,34 @@ class QFieldObject:
         logger=None,
         **kwargs,
     ) -> None:
-        
-        # super().__init__(name=name, name_replace="Q")
-        self.name = name #!!!!!!!
+
+        super().__init__(name=name, name_replace="Q")
+        # self.name = name  #!!!!!!!
 
         inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
-        for k, v in asdict(inputValue).items():
+        for f in fields(inputValue):
+            k = f.name
+            v = getattr(inputValue, k)
             if k.startswith("default"):
-                setattr(self, k, v)
+                object.__setattr__(self, k, v)
             else:
-                setattr(self, f"_raw_{k}", v)
+                object.__setattr__(self, f"_raw_{k}", v)
 
-        self._entity_objects = RegistryBase(
-            f"The objects manager of Q field {self.name!r}"
+        object.__setattr__(
+            self,
+            "_entity_objects",
+            RegistryBase(f"The objects manager of Q field {self.name!r}"),
         )
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
-        if self._raw_n is not None:
+        if self._raw_n is not UNSET:
             logger.debug("Initialize Q field with S and n")
-            if self._raw_S is None:
+            if self._raw_S is UNSET:
                 logger.warning("No S input. Set to 1 everywhere.")
-                self._raw_S = np.zeros(np.shape(self._raw_n)[:-1]) + 1.0
-            if self._raw_Q is not None:
+                object.__setattr__(
+                    self, "_raw_S", np.zeros(np.shape(self._raw_n)[:-1]) + 1.0
+                )
+            if self._raw_Q is not UNSET:
                 logger.warning(
                     "Both Q and n are provided to initialize Q field. Q will be IGNORED."
                 )
@@ -186,15 +197,19 @@ class QFieldObject:
                     f"expected n.shape[:3] == S.shape, "
                     f"but got n.shape = {self._raw_n.shape}, S.shape = {self._raw_S.shape}."
                 )
-            self._raw_Q = as_QField5(getQ(self._raw_n, S=self._raw_S))
+            object.__setattr__(
+                self, "_raw_Q", as_QField5(getQ(self._raw_n, S=self._raw_S))
+            )
         else:
-            if self._raw_Q is not None:
-                self._raw_S, self._raw_n = Q_diagonalize(self._raw_Q)
+            if self._raw_Q is not UNSET:
+                temp_S, temp_n = Q_diagonalize(self._raw_Q)
+                object.__setattr__(self, "_raw_S", temp_S)
+                object.__setattr__(self, "_raw_n", temp_n)
             else:
                 raise NameError("No data is input to initialize Q field.")
 
         logger.detail("Recording the information of periodic boundary conditions.")
-        self._calc_box_size_periodic_index = np.zeros(3)
+        object.__setattr__(self, "_calc_box_size_periodic_index", np.zeros(3))
         for i, flag in enumerate(self._raw_box_periodic_flag):
             if flag:
                 self._calc_box_size_periodic_index[i] = np.shape(self._raw_Q)[i]
@@ -202,7 +217,9 @@ class QFieldObject:
                 self._calc_box_size_periodic_index[i] = np.inf
         T = np.asarray(self._raw_grid_transform, dtype=float)
         diag = np.diag(T).astype(float)
-        self._calc_box_size_periodic_coord = np.full(3, np.inf, dtype=float)
+        object.__setattr__(
+            self, "_calc_box_size_periodic_coord", np.full(3, np.inf, dtype=float)
+        )
         finite_mask = np.isfinite(self._calc_box_size_periodic_index)
         self._calc_box_size_periodic_coord[finite_mask] = (
             diag[finite_mask] * self._calc_box_size_periodic_index[finite_mask]
@@ -213,11 +230,19 @@ class QFieldObject:
 
         logger.detail("Generating grid of Q")
         grid_shape = np.shape(self._raw_Q)[:3]
-        self._calc_grid_index, _, _ = generate_coordinate_grid(grid_shape, grid_shape)
-        self._calc_grid = apply_linear_transform(
-            self._calc_grid_index,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
+        object.__setattr__(
+            self,
+            "_calc_grid_index",
+            generate_coordinate_grid(grid_shape, grid_shape)[0],
+        )
+        object.__setattr__(
+            self,
+            "_calc_grid",
+            apply_linear_transform(
+                self._calc_grid_index,
+                transform=self._raw_grid_transform,
+                offset=self._raw_grid_offset,
+            ),
         )
 
         logger.debug("Generating the coorners of Q.")
@@ -228,10 +253,13 @@ class QFieldObject:
             transform=self._raw_grid_transform,
             offset=self._raw_grid_offset,
         )
-        self._calc_corners_index = corners_index
-        self._calc_corners = corners
-        msg = f"Box corners in lattice-index units is {self._calc_corners_index}.\n"
-        msg = f"Box corners in reap-space coordinates is {self._calc_corners}."
+        
+        object.__setattr__(self, "_calc_corners_index", corners_index)
+        object.__setattr__(self, "_calc_corners", corners)
+        logger.debug(
+            f"Box corners in lattice-index units is {self._calc_corners_index}."
+            f"Box corners in reap-space coordinates is {self._calc_corners}."
+            )
 
         if (not is_detect_defects) and is_classify_lines:
             is_classify_lines = False
@@ -266,21 +294,29 @@ class QFieldObject:
 
         self.act_add_interpolator()
 
-        self._entity_figures = FigureManager()
+        object.__setattr__(self, "_entity_figures", FigureManager())
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
-        self._calc_defect_indices = defect_detect(
-            self._raw_n,
-            is_boundary_periodic=self._raw_box_periodic_flag,
+        object.__setattr__(
+            self, 
+            "_calc_defect_indices", 
+            defect_detect(
+                self._raw_n,
+                is_boundary_periodic=self._raw_box_periodic_flag,
+            )
         )
         logger.info(f"{len(self._calc_defect_indices)} defects are found.")
 
         logger.detail("Start to calculate the coordinates of defects in real space.")
-        self._calc_defect_grid = apply_linear_transform(
-            self._calc_defect_indices,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
+        object.__setattr__(
+            self, 
+            "_calc_defect_grid",
+            apply_linear_transform(
+                self._calc_defect_indices,
+                transform=self._raw_grid_transform,
+                offset=self._raw_grid_offset,
+            )
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -291,7 +327,6 @@ class QFieldObject:
             box_size_periodic=self._calc_box_size_periodic_index,
             grid_offset=self._raw_grid_offset,
             grid_transform=self._raw_grid_transform,
-            logger=logger,
         )
         logger.detail("Sorting lines by length")
         lines = sorted(lines, key=lambda line: line._calc_defect_num, reverse=True)
@@ -387,7 +422,7 @@ class QFieldObject:
             grid_offset=self._raw_grid_offset,
         )
 
-        self._calc_interpolator = interpolator
+        object.__setattr__(self, "_calc_interpolator", interpolator)
 
         return self._calc_interpolator
 
@@ -395,6 +430,62 @@ class QFieldObject:
         if not hasattr(self, "_interpolator"):
             self.act_act_add_interpolator()
         return self._calc_interpolator.interpolate(points, is_index=is_index)
+
+    @logging_and_warning_decorator()
+    def _helper_set_figure(
+        self,
+        is_new: bool,
+        figure: PlotFigure | str | int | BackgroundPlotter | None,
+        opts_figure: OptsFigure,
+        title: str,
+        logger=None,
+    ):
+
+        is_new = as_bool(is_new, name="Whether to create a new figure", replace=True)
+
+        if is_new:
+            if figure is not None:
+                logger.warning(
+                    "is_new=True was specified while figure is not None."
+                    "The figure argument will be ignored and a new figure will be created."
+                )
+            figure = PlotFigure(opts=opts_figure, name=title)
+        else:
+            try:
+                if isinstance(figure, (str, int)):
+                    figure = self.figs[figure]
+                    figure.act_commit(opts_figure)
+                elif figure is None:
+                    if (
+                        hasattr(self.figs, "_state_active_name")
+                        and self.figs[self.figs._state_active_name]
+                    ):
+                        figure = self.figs[self.figs._state_active_name]
+                        figure.act_commit(opts_figure)
+                    else:
+                        figure = PlotFigure(opts=opts_figure, name=title)
+                elif isinstance(figure, PlotFigure):
+                    figure.act_commit(opts_figure)
+                elif isinstance(figure, BackgroundPlotter):
+                    figure = PlotFigure(plotter=figure, opts=opts_figure, name=title)
+                else:
+                    raise ValueError(
+                        "`figure` input must be either index in FigureManager (str or int) "
+                        "or a valid PlotFigure object, or a valid pyvistaqt BackgroundPlotter object, "
+                        "or None (creating a new figure) "
+                        "Got type {type(figure)!r} instead."
+                    )
+            except:
+                logger.exception("Could not find figure in FigureManager.")
+                logger.recovery("Create a new figure instead.")
+                figure = PlotFigure(opts=opts_figure, name=title)
+
+        if figure.name.startswith(figure._DEFAULT_NAME):
+            figure.name = title
+        self.figs.act_register(figure, is_contain_ok=True)
+        self.figs.act_set_active(figure.name)
+
+        return figure
 
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
@@ -417,12 +508,12 @@ class QFieldObject:
 
         logger.detail("Dealing with the parameters")
 
-        if opts_tube is None:
-            opts_tube = OptsTube(color="sample_far")
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
             opts_figure = OptsFigure()
+        if opts_tube is None:
+            opts_tube = OptsTube(color="sample_far")
 
         merge = merge_opts_all(
             {"figure_": opts_figure, "line_": opts_tube, "extent_": opts_extent},
@@ -436,41 +527,7 @@ class QFieldObject:
 
         check_bool_flags(locals())
 
-        if is_new:
-            if figure is not None:
-                logger.warning(
-                    "is_new=True was specified while figure is not None."
-                    "The figure argument will be ignored and a new figure will be created."
-                )
-            figure = PlotFigure(opts=opts_figure)
-        else:
-            try:
-                if isinstance(figure, (str, int)):
-                    figure = self.figs[figure]
-                    figure.act_commit(opts_figure)
-                elif figure is None:
-                    if (
-                        hasattr(self.figs, "_state_active_name")
-                        and self.figs[self.figs._state_active_name]
-                    ):
-                        figure = self.figs[self.figs._state_active_name]
-                    else:
-                        figure = PlotFigure(opts=opts_figure, name=title)
-                elif isinstance(figure, PlotFigure):
-                    figure.act_commit(opts_figure)
-                elif isinstance(figure, BackgroundPlotter):
-                    figure = PlotFigure(plotter=figure, opts=opts_figure, name=title)
-                else:
-                    raise ValueError(
-                        "`figure` input must be either index in FigureManager (str or int) "
-                        "or a valid PlotFigure object, or a valid pyvistaqt BackgroundPlotter object, "
-                        "or None (creating a new figure) "
-                        "Got type {type(figure)!r} instead."
-                    )
-            except:
-                logger.exception("Could not find figure in FigureManager.")
-                logger.recovery("Create a new figure instead.")
-                figure = PlotFigure(opts=opts_figure, name=title)
+        figure = self._helper_set_figure(is_new, figure, opts_figure, title)
 
         if min_line_length is None:
             logger.info(
@@ -536,82 +593,177 @@ class QFieldObject:
                 is_reset_camera=False,
             )
 
-        if figure.name.startswith(figure._DEFAULT_NAME):
-            figure.name = title
-        self.figs.act_register(figure, is_contain_ok=True)
-        self.figs.act_set_active(figure.name)
+    @logging_and_warning_decorator()
+    def act_visualize_n_plane(
+        self,
+        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
+        is_new: bool = False,
+        is_extent: bool = True,
+        is_defect: bool = False,
+        opts_grid: OptsPlaneGrid | None = None,
+        opts_n: OptsRod | None = None,
+        opts_nb: OptsRod | None = None,
+        opts_nd: OptsRod | None = None,
+        opts_figure: OptsFigure | None = None,
+        opts_extent: OptsTube | None = None,
+        opts_defect: OptsSphere | None = None,
+        title: str = "visualization of n plane",
+        name_plane: str = "n-plane",
+        logger=None,
+        **kwargs,
+    ):
 
-    # @logging_and_warning_decorator()
-    # def act_visualize_n_in_Q(
-    #     self,
-    #     plane_normal: Optional[Vect(3)] = None,
-    #     plane_spacing: Optional[Number] = None,
-    #     plane_size: Optional[Number] = None,
-    #     is_new: bool = True,
-    #     is_extent: bool = True,
-    #     opts_grid=OptsPlaneGrid(),
-    #     opts_nPlane=OptsnPlane(),
-    #     opts_extent=OptsTube(),
-    #     opts_scene=None, #!!!!!
-    #     logger=None,
-    #     **kwargs,
-    # ):
+        logger.detail("Dealing with the parameters")
+        if opts_grid is None:
+            opts_grid = OptsPlaneGrid()
+        if opts_extent is None:
+            opts_extent = OptsTube()
+        if opts_figure is None:
+            opts_figure = OptsFigure()
+        if opts_n is None:
+            opts_n = OptsRod()
+        if opts_nb is None:
+            opts_nb = OptsRod()
+        if opts_nd is None:
+            opts_nd = OptsRod()
+        if opts_defect is None:
+            opts_defect = OptsSphere()
 
-    #     # opts_extent.corners = self._calc_corners
-    #     opts_grid.corners_limit = self._calc_corners
+        merge = merge_opts_all(
+            {
+                "figure_": opts_figure,
+                "grid_": opts_grid,
+                "extent_": opts_extent,
+                "n_": opts_n,
+                "nb_": opts_nb,
+                "nd_": opts_nd,
+                "defect_": opts_defect,
+            },
+            kwargs,
+            type(self).__name__,
+        )
 
-    #     merge = merge_opts_all(
-    #         {
-    #          "plane_": opts_grid,
-    #          "n_": opts_nPlane,
-    #          "extent_": opts_extent,
-    #          "scene_": opts_scene
-    #          },
-    #         kwargs, "QFieldObject.act_visualize_n_in_Q"
-    #         )
+        opts_figure = merge["figure_"]
+        opts_grid = merge["grid_"]
+        opts_extent = merge["extent_"]
+        opts_n = merge["n_"]
+        opts_nb = merge["nb_"]
+        opts_nd = merge["nd_"]
+        opts_defect = merge["defect_"]
 
-    #     opts_grid = merge["plane_"]
-    #     opts_nPlane = merge["n_"]
-    #     opts_extent = merge["extent_"]
-    #     opts_scene = merge["scene_"]
+        cover_value(opts_nb, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
+        cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
 
-    #     if not hasattr(self, "_calc_interpolator"):
-    #         self.act_add_interpolator()
+        figure = self._helper_set_figure(is_new, figure, opts_figure, title)
 
-    #     opts_grid.normal = plane_normal
-    #     opts_grid.spacing = plane_spacing
-    #     opts_grid.size = plane_size
+        if not hasattr(self, "_calc_interpolator"):
+            self.act_add_interpolator()
 
-    #     check_bool_flags(locals())
+        logger.detail("Create the plane.")
+        n_plane = QPlane(
+            self._calc_interpolator,
+            name=name_plane,
+            opts=opts_grid,
+            opts_defaults_override={
+                "size": 1.8 * np.max(self.S.shape),
+                "spacing": 1,
+                "corners_limit": self._calc_corners_index,
+                "grid_offset": self._raw_grid_offset,
+                "grid_transform": self._raw_grid_transform,
+            },
+        )
+        self.objs.act_register(n_plane)
 
-    #     figure = self.act_add_scene(is_new, opts=opts_scene)
+        n_plane.act_visualize_n(
+            figure=figure,
+            is_defect=is_defect,
+            opts_nb=opts_nb,
+            opts_nd=opts_nd,
+            opts_defect=opts_defect,
+        )
 
-    #     nPlane = PlotnPlane(
-    #         QInterpolator=self._calc_interpolator,
-    #         opts_grid=opts_grid,
-    #         opts_nPlane=opts_nPlane,
-    #         logger=logger,
-    #     )
+        if is_extent:
+            PlotExtent(
+                self._calc_corners,
+                figure=figure,
+                opts=opts_extent,
+                is_reset_camera=False,
+            )
 
-    #     # figure.add_object(nPlane, category="nPlanes")
+    @logging_and_warning_decorator()
+    def act_visualize_S_plane(
+        self,
+        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
+        is_new: bool = False,
+        is_extent: bool = True,
+        opts_grid: OptsPlaneGrid | None = None,
+        opts_S: OptsDelaunay | None = None,
+        opts_figure: OptsFigure | None = None,
+        opts_extent: OptsTube | None = None,
+        title: str = "visualization of S plane",
+        name_plane: str = "S-plane",
+        logger=None,
+        **kwargs,
+    ):
 
-    #     if is_extent:
-    #         extent = PlotExtent(opts_extent)
-    #         figure.add_object(extent, category="extent")
-    #         figure.scene.distance = opts_scene.distance
+        logger.detail("Dealing with the parameters")
+        if opts_grid is None:
+            opts_grid = OptsPlaneGrid()
+        if opts_extent is None:
+            opts_extent = OptsTube()
+        if opts_figure is None:
+            opts_figure = OptsFigure()
+        if opts_S is None:
+            opts_S = OptsDelaunay()
 
-    #     # if opts_scene.distance != None:
-    #     #     figure.scene.distance = opts_scene.distance
+        merge = merge_opts_all(
+            {
+                "figure_": opts_figure,
+                "grid_": opts_grid,
+                "extent_": opts_extent,
+                "S_": opts_S,
+            },
+            kwargs,
+            type(self).__name__,
+        )
 
-    # def act_add_scene(self, is_new=True, opts=None): #!!!!!!!!!!!
-    #     # figure = PlotScene(is_new=is_new, opts=opts)
-    #     # if is_new or (not is_new and len(self._entity_figures) == 0):
-    #     #     self._entity_figures.append(figure)
-    #     # return figure
-    #     return 0
+        opts_figure = merge["figure_"]
+        opts_grid = merge["grid_"]
+        opts_extent = merge["extent_"]
+        opts_S = merge["S_"]
 
-    # def act_reset_figures(self):
-    #     self._entity_figures = []
+        figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+
+        if not hasattr(self, "_calc_interpolator"):
+            self.act_add_interpolator()
+
+        logger.detail("Create the plane.")
+        S_plane = QPlane(
+            self._calc_interpolator,
+            name=name_plane,
+            opts=opts_grid,
+            opts_defaults_override={
+                "size": 1.8 * np.max(self.S.shape),
+                "spacing": 1,
+                "corners_limit": self._calc_corners_index,
+                "grid_offset": self._raw_grid_offset,
+                "grid_transform": self._raw_grid_transform,
+            },
+        )
+        self.objs.act_register(S_plane)
+
+        S_plane.act_visualize_S(
+            figure=figure,
+            opts_S=opts_S,
+        )
+
+        if is_extent:
+            PlotExtent(
+                self._calc_corners,
+                figure=figure,
+                opts=opts_extent,
+                is_reset_camera=False,
+            )
 
     @property
     def lines(self):
@@ -625,6 +777,10 @@ class QFieldObject:
         return self._entity_figures
 
     @property
+    def objs(self):
+        return self._entity_objects
+
+    @property
     def S(self):
         return self._raw_S
 
@@ -635,12 +791,11 @@ class QFieldObject:
     def __call__(self) -> np.ndarray:
         return self._raw_Q
 
-
     @property
     def name(self):
         return self.raw_name
-    
+
     @name.setter
     def name(self, value: str):
         name = as_str(value, name="The name of the Q field")
-        self.raw_name = name 
+        self.raw_name = name

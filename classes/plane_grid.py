@@ -142,6 +142,7 @@ class PlaneGrid(HostBase):
         object.__setattr__(self, '_impl_field_ref', None)
         object.__setattr__(self, '_entity_fig_demo', None)
 
+        self.opts.act_finalize(defaults=self._opts_defaults)
         for name, value in {
             "normal": self.opts.normal,
             "spacing": self.opts.spacing,
@@ -152,7 +153,7 @@ class PlaneGrid(HostBase):
                     f"Missing required variable {name} to generate plane_grid"
                 )
 
-        self.opts.act_finalize()
+        
         self._helper_commit_apply_opts()
     
     @logging_and_warning_decorator()

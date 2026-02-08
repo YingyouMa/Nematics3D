@@ -164,7 +164,7 @@ class DisclinationLine(ClassBase):
 
     def act_smooth(
         self,
-        is_new=False,
+        is_new=True,
         opts: OptsSmooth | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
@@ -228,7 +228,7 @@ class DisclinationLine(ClassBase):
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}(name={self.name!r}), has {self._calc_defect_num} defect points with type {self._calc_end2end_kind}"
+        msg = f"{cls_name}({self.name!r}), type {self._calc_end2end_kind} with {self._calc_defect_num} defect points"
         return msg
 
     def __iter__(self):

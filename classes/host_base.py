@@ -36,8 +36,6 @@ class OptsBase:
         * These updates will trigger ``_impl_sync_func`` for downstream listeners.
     4.  **Data Export**: The current state of all non-hidden attributes can 
         be retrieved as a standard dictionary via ``act_asdict()``.
-
-    
     '''
     tag: str | Unset = UNSET
 
@@ -317,7 +315,7 @@ class HostBase(ClassBase):
         self,
         opts_type: Type[OptsBase],
         opts: OptsBase | None = None,
-        _opts_defaults_override: Mapping[str, Any] | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
         name_replace: str = "unnamed",
         logger=None,
@@ -333,12 +331,16 @@ class HostBase(ClassBase):
         object.__setattr__(self, "opts", opts)
 
         logger.detail("Building default option values ...")
-        _opts_defaults = build_dict_override(
-            opts._DEFAULTS_FROZEN,
-            _opts_defaults_override,
+        opts_defaults = {
+            **{k: UNSET for k in opts.__descriptions__},
+            **dict(opts._DEFAULTS_FROZEN),
+        }
+        opts_defaults = build_dict_override(
+            opts_defaults,
+            opts_defaults_override,
             name=type(opts).__name__,
         )
-        object.__setattr__(self, "_opts_defaults", _opts_defaults)
+        object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
 
     @logging_and_warning_decorator(start_finish_level=5)
