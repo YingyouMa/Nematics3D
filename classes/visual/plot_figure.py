@@ -76,23 +76,73 @@ class OptsFigure(OptsBase):
 class PlotFigure(HostBase, RegistryBase):
 
     _DEFAULT_NAME = "unamed figure"
-    
-    # fmt: off
+
     __descriptions__ = {
         **(HostBase.__descriptions__),
-        "raw_name":                 "The name identifier of the figure",
-        "_entity_plotter":          "The underlying PyVista BackgroundPlotter instance that owns the VTK rendering pipeline. ",
-        "_entity":                  "A registry for objects attached to this figure.",
-        "_entity_pick_manager":     "The PickManager instance attached to this figure. ",
-        "_entity_console":          "The ScopedConsoleDock instance attached to this figure. ",
-        "_entity_scalar_bars":      "The RegistryBase instance to manage scalar bars in this figure. ",
+    
+        # -----------------
+        # Public identity
+        # -----------------
+        "raw_name": (
+            "Human-readable identifier of the figure. "
+            "Used as the window title for BackgroundPlotter."
+        ),
+    
+        # -----------------
+        # Core plot backend
+        # -----------------
+        "_entity_plotter": (
+            "The underlying plotting backend. "
+            "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance. "
+        ),
+    
+        # -----------------
+        # Attached entities
+        # -----------------
+        "_entity": (
+            "Internal registry of objects attached to this figure."
+        ),
+        "_entity_pick_manager": (
+            "The PickManager instance associated with this figure. "
+            "Available only in interactive (on-screen) sessions."
+        ),
+        "_entity_console": (
+            "The ScopedConsoleDock attached to the Qt main window. "
+            "Available only in interactive (on-screen) sessions."
+        ),
+        "_entity_scalar_bars": (
+            "RegistryBase instance managing scalar bars attached to this figure."
+        ),
+    
+        # -----------------
+        # VTK overlay layer
+        # -----------------
         "_entity_overlay": (
-            "A foreground VTK renderer (layer=1) sharing the main camera. "
-            "Actors added to this renderer are drawn after the main scene and "
-            "are not occluded by 3D geometry in the base layer."
+            "Foreground vtkRenderer (layer=1) that shares the main camera "
+            "with the base renderer. "
+            "Actors added to this renderer are drawn on top of the main scene "
+            "and are not occluded by 3D geometry."
+        ),
+    
+        # -----------------
+        # Properties (excluded from __slots__)
+        # NOTE: the description string MUST start with 'Property:'
+        # -----------------
+        "name": "Property: Alias of `raw_name`",
+        "pl": "Property: Alias of `_entity_plotter`",
+        "pl_type": (
+            "Property: Short identifier of the plotter type. "
+            "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
+        ),
+        "pick_manager": (
+            "Property: Alias of `_entity_pick_manager` "
+            "(or None if not initialized)."
+        ),
+        "console": (
+            "Property: Alias of `_entity_console` "
+            "(or None if not initialized)."
         ),
     }
-    # fmt: on
 
     __slots__ = tuple(
         k
@@ -248,8 +298,6 @@ class PlotFigure(HostBase, RegistryBase):
                 f"Unsupported plotter type: {type(self.pl).__name__}. "
                 "Expected pyvista.Plotter or pyvistaqt.BackgroundPlotter."
             )
-
-            
 
     def act_check_is_alive(self):
         try:
