@@ -15,28 +15,29 @@ from .class_base import ClassBase
 
 @dataclass(slots=True, repr=False)
 class OptsBase:
-    '''
-    A reactive configuration base class designed for pre-processing, 
+    """
+    A reactive configuration base class designed for pre-processing,
     validation, and synchronized state management.
 
     ### Configuration Workflow:
-    1.  **Validation Layer**: Each attribute assignment is pre-checked by 
-        ``_validators``. This ensures that only data meeting specific type or 
+    1.  **Validation Layer**: Each attribute assignment is pre-checked by
+        ``_validators``. This ensures that only data meeting specific type or
         value constraints enters the system.
-    2.  **UNSET & Finalization**: Attributes are initialized as ``UNSET`` by 
-        default if no input is provided. During the ``act_finalize`` phase, 
-        all ``UNSET`` fields are automatically populated using a hierarchy of 
+    2.  **UNSET & Finalization**: Attributes are initialized as ``UNSET`` by
+        default if no input is provided. During the ``act_finalize`` phase,
+        all ``UNSET`` fields are automatically populated using a hierarchy of
         default values (instance-level overrides -> class-level defaults).
     3.  **Lifecycle & Commitment**:
-        * Once finalized, the instance enters the ``is_functioning`` state as 
+        * Once finalized, the instance enters the ``is_functioning`` state as
           self._state_is_functioning = True
         * Setting an attribute to ``UNSET`` is strictly forbidden after finalization.
-        * Any subsequent modification to public attributes will be treated as a 
+        * Any subsequent modification to public attributes will be treated as a
           request and forwarded to the associated Host via the commit pipeline.
         * These updates will trigger ``_impl_sync_func`` for downstream listeners.
-    4.  **Data Export**: The current state of all non-hidden attributes can 
+    4.  **Data Export**: The current state of all non-hidden attributes can
         be retrieved as a standard dictionary via ``act_asdict()``.
-    '''
+    """
+
     tag: str | Unset = UNSET
 
     _impl_host_ref: weakref.ReferenceType | None = field(
@@ -73,7 +74,15 @@ class OptsBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
 
-        is_final = bool(getattr(self, "_state_is_functioning", False)) and (self.host is not None)
+        is_final = bool(getattr(self, "_state_is_functioning", False)) and (
+            self.host is not None
+        )
+
+        if not key.startswith("_") and key not in self.__class__.__descriptions__:
+            raise AttributeError(
+                f"Invalid option field {key!r}. "
+                f"Valid fields are: {list(self.__class__.__descriptions__.keys())}"
+            )
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
@@ -110,7 +119,7 @@ class OptsBase:
                 return value
 
         # --- host commit (only after functioning) ---
-        if not key.startswith("_") and is_final:
+        if not key.startswith("_") and is_final and key in self.__class__._validators:
             self._helper_host_apply(key, value)
             return value
 
@@ -121,7 +130,6 @@ class OptsBase:
         if self.host is not None:
             self.host._helper_commit_apply_opts(**{key: value})
             return value
-        
 
     # ---------------------------------------------------------------------
     # Basic core: finalize (fill UNSET by defaults then freeze state)
@@ -151,7 +159,6 @@ class OptsBase:
 
         object.__setattr__(self, "_state_is_functioning", True)
 
-
     # ---------------------------------------------------------------------
     # Basic core: export to dict
     # ---------------------------------------------------------------------
@@ -177,9 +184,7 @@ class OptsBase:
         self._helper_setattr_basic(key, value)
 
     def act_finalize(
-        self, 
-        defaults: Mapping[str, Any] | None = None, 
-        is_allow_UNSET=False
+        self, defaults: Mapping[str, Any] | None = None, is_allow_UNSET=False
     ):
         self._helper_finalize_basic(defaults, is_allow_UNSET=is_allow_UNSET)
 
@@ -193,7 +198,7 @@ class OptsBase:
         # --- header line ---
         host = self.host
         if host:
-            lines = [f"{cls_name}: the options of {host!r}"]
+            lines = [f"{cls_name}: the options of {str(host)}"]
         else:
             lines = [f"{cls_name}"]
 
@@ -232,42 +237,42 @@ class OptsBase:
 
 class HostBase(ClassBase):
     """
-    A high-level controller class that manages complex state through a 
+    A high-level controller class that manages complex state through a
     'Opts' configuration layer and a strict commit-based update pipeline.
-    
+
     ### 1. Centralized Data Storage (.opts)
-    All critical parameters and functional settings are stored exclusively within 
-    the ``.opts`` attribute, which is an instance of ``OptsBase`` (or its subclass). 
-    The Host instance itself does not hold primary state variables; instead, it 
-    acts as the logic engine that governs and applies the configuration held 
+    All critical parameters and functional settings are stored exclusively within
+    the ``.opts`` attribute, which is an instance of ``OptsBase`` (or its subclass).
+    The Host instance itself does not hold primary state variables; instead, it
+    acts as the logic engine that governs and applies the configuration held
     by the Opts instance.
 
     ### 2. Host-Opts Interaction Semantics
-    This class operates on a "Request-Commit-Apply" model. Instead of 
-    direct mutation, the Host delegates its public configuration to an 
+    This class operates on a "Request-Commit-Apply" model. Instead of
+    direct mutation, the Host delegates its public configuration to an
     associated ``OptsBase`` instance.
-    * **State Isolation**: Before 'finalization', Opts acts as a buffer. 
-        Once finalized (functioning state), any change to Opts triggers a 
+    * **State Isolation**: Before 'finalization', Opts acts as a buffer.
+        Once finalized (functioning state), any change to Opts triggers a
         request back to the Host.
-    * **The Commit Pipeline**: All public attribute assignments on the Host 
-        are intercepted and routed through ``act_commit()``. This ensures that 
-        changes undergo validation, preprocessing, and side-effect management 
+    * **The Commit Pipeline**: All public attribute assignments on the Host
+        are intercepted and routed through ``act_commit()``. This ensures that
+        changes undergo validation, preprocessing, and side-effect management
         (e.g., hardware updates, cache invalidation) before state realization.
-    * **Write-Back Policy**: When a commit is accepted, the Host is responsible 
-        for updating its internal state and writing resolved values back to 
+    * **Write-Back Policy**: When a commit is accepted, the Host is responsible
+        for updating its internal state and writing resolved values back to
         the Opts instance via bypass methods to avoid recursive loops.
 
     ### 2. Core Functional Modules
-    * **Identity Management**: Inherits robust naming and conflict resolution 
+    * **Identity Management**: Inherits robust naming and conflict resolution
         from ``ClassBase``.
-    * **Option Lifecycle**: Manages the binding, override merging, and 
+    * **Option Lifecycle**: Manages the binding, override merging, and
         finalization of configuration options (Opts).
-    * **State Snapshots**: Provides a timestamped backup mechanism 
+    * **State Snapshots**: Provides a timestamped backup mechanism
         (``_opts_backup``) to archive configuration history.
 
     ### 3. Variables & Metadata
-    Refer to the ``__descriptions__`` dictionary for granular details on 
-    internal implementation slots and public properties. 
+    Refer to the ``__descriptions__`` dictionary for granular details on
+    internal implementation slots and public properties.
     Key internal stores include:
     * ``opts``: The primary configuration engine.
     * ``_opts_defaults``: The baseline configuration used during finalization.
@@ -296,19 +301,20 @@ class HostBase(ClassBase):
 
     __descriptions__ = {
         **(ClassBase.__descriptions__),
-        "raw_name":             "The name identifier of the host object",
-        "opts":                 "The Opts instance controlling options.",
-        "_opts_defaults":        "The default option settings.",
+        "raw_name": "The name identifier of the host object",
+        "opts": "The Opts instance controlling options.",
+        "_opts_defaults": "The default option settings.",
         "_opts_backup": (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
         ),
     }
-    
+
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in ClassBase.__slots__
-        )
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in ClassBase.__slots__
+    )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -388,19 +394,17 @@ class HostBase(ClassBase):
 
     def _helper_commit_apply_opts(self, **kwargs):
         raise NotImplementedError(...)
-        
+
     def _helper_trigger_sync_batch(self, **kwargs):
         for attr in kwargs.keys():
             sync_func = self.opts._impl_sync_func.get(attr, {})
             for func in sync_func.values():
                 func()
-        
-        
+
     def act_save_opts(self, name=None):
         if not name:
             name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         self._opts_backup[name] = self.opts.act_asdict()
-        
 
     # -----------------------------------------------------------------
     # OVERRIDE:
@@ -439,4 +443,3 @@ class HostBase(ClassBase):
             )
 
         self.act_commit(**{key: value})
-

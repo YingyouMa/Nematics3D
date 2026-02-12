@@ -26,24 +26,20 @@ from .qt.console import ScopedConsoleDock
 
 
 #!!! property act_view
-#!!! load save 
-#!!! overlay blanket
-#!!! name figure manager registry
+#!!! load save
 
-# opts_cam = {"azimuth", "elevation", "roll", "distance", "focal_point"}
-# opts_bg = {"bg_color", "bg_opacity"}
 
 @dataclass(slots=True, repr=False)
 class OptsFigure(OptsBase):
-    azimuth:                float | Unset       = UNSET
-    elevation:              float | Unset       = UNSET
-    roll:                   float | Unset       = UNSET
-    distance:               float | Unset       = UNSET
-    focal_point:            Vect(3) | Unset     = UNSET
-    size:                   Vect(2) | Unset     = UNSET
-    bg_color:               ColorRGB | Unset    = UNSET
-    bg_opacity:             float | Unset       = UNSET
+    azimuth: float | Unset = UNSET
+    elevation: float | Unset = UNSET
+    roll: float | Unset = UNSET
+    distance: float | Unset = UNSET
+    focal_point: Vect(3) | Unset = UNSET
+    size: Vect(2) | Unset = UNSET
+    bg_color: ColorRGB | Unset = UNSET
 
+    # fmt: off
     __descriptions__ = {
         **(OptsBase.__descriptions__),
         "azimuth":          "The azimuthal angle (degrees) of the camera around the focal point.",
@@ -53,7 +49,6 @@ class OptsFigure(OptsBase):
         "focal_point":      "The point the camera is looking at (x, y, z).",
         "size":             "The window size of figure",
         "bg_color":         "The background color of figure",
-        "bg_opacity":       "The background opacity of figure",
     }
 
     _validators = {
@@ -65,188 +60,213 @@ class OptsFigure(OptsBase):
         "focal_point":      lambda v, d: as_Vect(v, name=d, dim=3),
         "size":             lambda v, d: as_Vect(v, name=d, dim=2),
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
-        "bg_opacity":       lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
     }
-    
-    _DEFAULTS_FROZEN = MappingProxyType({
-        **(OptsBase._DEFAULTS_FROZEN),
-        "tag":              "figure options",
-        "size":             (2542, 1305),
-        "bg_color":         (1,1,1),
-        "bg_opacity":       0
-    })
-            
+
+    _DEFAULTS_FROZEN = MappingProxyType(
+        {
+            **(OptsBase._DEFAULTS_FROZEN),
+            "tag":          "figure options",
+            "size":         (2542, 1305),
+            "bg_color":     (1, 1, 1),
+        }
+    )
+    # fmt: on
 
 
 class PlotFigure(HostBase, RegistryBase):
-    
-    _DEFAULT_NAME = "unamed figure"
 
+    _DEFAULT_NAME = "unamed figure"
+    
+    # fmt: off
     __descriptions__ = {
         **(HostBase.__descriptions__),
-        
-        "raw_name": "The name identifier of the figure",
-        "_entity_plotter": "The underlying PyVista BackgroundPlotter instance that owns the VTK rendering pipeline. ",
-        "_entity": "A registry for objects attached to this figure.",
+        "raw_name":                 "The name identifier of the figure",
+        "_entity_plotter":          "The underlying PyVista BackgroundPlotter instance that owns the VTK rendering pipeline. ",
+        "_entity":                  "A registry for objects attached to this figure.",
+        "_entity_pick_manager":     "The PickManager instance attached to this figure. ",
+        "_entity_console":          "The ScopedConsoleDock instance attached to this figure. ",
+        "_entity_scalar_bars":      "The RegistryBase instance to manage scalar bars in this figure. ",
         "_entity_overlay": (
             "A foreground VTK renderer (layer=1) sharing the main camera. "
             "Actors added to this renderer are drawn after the main scene and "
             "are not occluded by 3D geometry in the base layer."
         ),
-        
-        "_entity_pick_manager": "The PickManager instance attached to this figure. ",
-        "_entity_console": "The ScopedConsoleDock instance attached to this figure. ",
-        "_entity_scalar_bars": "The RegistryBase instance to manage scalar bars in this figure. "
-
     }
-    
+    # fmt: on
 
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in HostBase.__slots__
-        )
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in HostBase.__slots__
+    )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
-        plotter: pv.Plotter | None = None,
+        plotter: pv.Plotter | BackgroundPlotter | None = None,
         opts: OptsFigure | None = None,
+        is_off_screen: bool = False,
         name: str | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
     ):
-        
+
         logger.detail("Resovle the input plotter")
+        is_new_plotter = False
         if plotter is None:
-            plotter = BackgroundPlotter()
+            is_new_plotter = True
         else:
-            if not isinstance(plotter, BackgroundPlotter):
+            if not isinstance(plotter, (BackgroundPlotter, pv.Plotter)):
                 try:
                     raise TypeError(
-                        "`plotter` for PlotFigure must be PyVista BackgroundPlotter object, or None."
+                        "`plotter` for PlotFigure must be either"
+                        "pyvistaqt BackgroundPlotter object or PyVista Plotter object, or None."
                     )
                 except:
                     logger.exception("Check input")
                     logger.recovery("Create a new figure instead.")
-                    plotter = BackgroundPlotter()
-        
+                    is_new_plotter = True
+            else:
+                if is_off_screen and not plotter.off_screen:
+                    logger.warning(
+                        "The provided plotter is not in off-screen mode, "
+                        "but is_off_screen=True was requested. "
+                        "The existing plotter's display mode will take precedence."
+                    )
+                    is_off_screen = False
+
+        if is_new_plotter:
+            if is_off_screen:
+                plotter = pv.Plotter(off_screen=True)
+            else:
+                plotter = BackgroundPlotter()
+
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
-        
+
         super().__init__(
             OptsFigure,
             opts,
             opts_defaults_override,
             name=name,
             name_replace=self._DEFAULT_NAME,
-            **kwargs
-            )
+            **kwargs,
+        )
         self.opts.act_finalize(is_allow_UNSET=True)
-        plotter.resize(*self.opts.size)
+        plotter.window_size = tuple(self.opts.size)
 
-        self._helper_sync_from_plotter(is_allow_cover_target_set=False, is_only_camera=True)
+        self._helper_sync_from_plotter(
+            is_allow_cover_target_set=False, is_only_camera=True
+        )
         self._helper_commit_apply_opts()
-        
-        def _on_interaction_start(obj, event):
-            pm = getattr(self, "_entity_pick_manager", None)
-            if pm is not None:
-                pm._helper_hide_marker_label_during_interaction()
-            self.pl.render()
-        
-        def _on_interaction_end(obj, event):
-            self._helper_sync_from_plotter()
-            pm = getattr(self, "_entity_pick_manager", None)
-            if pm is not None:
-                pm._helper_show_marker_label_after_interaction()
-            self.pl.render()
-    
-    
-        self.pl.iren.add_observer("StartInteractionEvent", _on_interaction_start)
-        self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
-        
+
+        scalar_bars = RegistryBase("scalar bars manager")
+        scalar_bars._impl_owner_ref = weakref.ref(self)
+        object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
+
         # --- Create overlay renderer (layer=1) at initialization ---
         overlay = self._helper_init_overlay_renderer()
         object.__setattr__(self, "_entity_overlay", overlay)
-        
-        pm = PickManager(self)
-        object.__setattr__(self, "_entity_pick_manager", pm)
-        self.pl.enable_point_picking(
-            callback = self.pick_manager._helper_callback,
-            left_clicking=True,
-            pickable_window=True,
-            use_picker=True,
-            show_point=False,
-            picker="cell",
-            tolerance=0.003,
-            show_message=False,
-        )
-        
-        main_window = self.pl.app_window
-        console = ScopedConsoleDock(parent=main_window)
-        main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
-        
-        object.__setattr__(self, "_entity_console", console)
-        
-        scalar_bars = RegistryBase("scalar bars manager")
-        scalar_bars._impl_registry_ref = weakref.ref(self)
-        object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
-        
-    
+
+        if not is_off_screen:
+
+            def _on_interaction_start(obj, event):
+                pm = getattr(self, "_entity_pick_manager", None)
+                if pm is not None:
+                    pm._helper_hide_marker_label_during_interaction()
+                self.pl.render()
+
+            def _on_interaction_end(obj, event):
+                self._helper_sync_from_plotter()
+                pm = getattr(self, "_entity_pick_manager", None)
+                if pm is not None:
+                    pm._helper_show_marker_label_after_interaction()
+                self.pl.render()
+
+            self.pl.iren.add_observer("StartInteractionEvent", _on_interaction_start)
+            self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
+
+            pm = PickManager(self)
+            object.__setattr__(self, "_entity_pick_manager", pm)
+            self.pl.enable_point_picking(
+                callback=self.pick_manager._helper_callback,
+                left_clicking=True,
+                pickable_window=True,
+                use_picker=True,
+                show_point=False,
+                picker="cell",
+                tolerance=0.003,
+                show_message=False,
+            )
+
+            main_window = self.pl.app_window
+            console = ScopedConsoleDock(parent=main_window)
+            main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
+
+            object.__setattr__(self, "_entity_console", console)
+
     @property
     def console(self):
-        return self._entity_console
-    
+        return getattr(self, "_entity_console", None)
+
     def act_set_name(self, name):
         name = super().act_set_name(name)
-        if name:
+        if name and self.pl_type == "B":
             self.pl.app_window.setWindowTitle(name)
-        
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts(self, **kwargs):
-        
+
         with self.opts._helper_internal_update():
-            cover_value(self.opts,
-                        is_allow_cover_target_set=True,
-                        is_allow_unset_source=False,
-                        **kwargs
-                        )
-        
+            cover_value(
+                self.opts,
+                is_allow_cover_target_set=True,
+                is_allow_unset_source=False,
+                **kwargs,
+            )
+
         self._helper_sync_from_opts()
         self._helper_trigger_sync_batch(**kwargs)
-        
 
     @property
     def pl(self):
         return self._entity_plotter
-    
+
     @property
     def pick_manager(self):
-        return self._entity_pick_manager
-    
+        return getattr(self, "_entity_pick_manager", None)
+
+    @property
+    def pl_type(self):
+        if isinstance(self.pl, BackgroundPlotter):
+            return "B"
+        elif isinstance(self.pl, pv.Plotter):
+            return "P"
+        else:
+            raise TypeError(
+                f"Unsupported plotter type: {type(self.pl).__name__}. "
+                "Expected pyvista.Plotter or pyvistaqt.BackgroundPlotter."
+            )
+
+            
 
     def act_check_is_alive(self):
         try:
-            if len(self.pl.renderer.actors) == 0:
-                return True
-            
             if self.pl._closed:
                 return False
-            
+            else:
+                if self.pl_type == "P":
+                    return True
+
             return True if self.pl.render_window.GetGenericWindowId() else False
 
-            # iren = plotter.iren
-            # return iren is not None and bool(iren.initialized)
         except Exception:
             return False
 
     def __bool__(self):
         return self.act_check_is_alive()
-    
-    
-    
-    
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_init_overlay_renderer(self, logger=None) -> vtk.vtkRenderer:
         """
@@ -274,69 +294,57 @@ class PlotFigure(HostBase, RegistryBase):
         rw.AddRenderer(overlay)
 
         return overlay
-    
-    
-    
-    
+
     # -------------------------------
     # Functions about camera settings
     # -------------------------------
 
+    def _helper_sync_from_plotter(
+        self, is_allow_cover_target_set=True, is_only_camera=False
+    ):
 
-
-
-    def _helper_sync_from_plotter(self, 
-                                  is_allow_cover_target_set=True,
-                                  is_only_camera=False):
-        
         camera = self.pl.camera
         temp = self._helper_convert_pos_to_spherical(
             camera.position, camera.focal_point, camera.up
         )
 
         alter = {
-            "focal_point":  camera.focal_point,
-            "azimuth":      temp[0],
-            "elevation":    temp[1],
-            "roll":         temp[2],
-            "distance":     temp[3],
-            "bg_color":     self.pl.background_color.float_rgb,
-            "bg_opacity":   self.pl.background_color.opacity / 255.0,
+            "focal_point": camera.focal_point,
+            "azimuth": temp[0],
+            "elevation": temp[1],
+            "roll": temp[2],
+            "distance": temp[3],
         }
-        
+
         if not is_only_camera:
-            size = self.pl.size()
             alter = {
                 **alter,
-                "bg_color":     self.pl.background_color.float_rgb,
-                "bg_opacity":   self.pl.background_color.opacity / 255.0,
-                "size":         (size.width(), size.height())
-                }
-        
-        with self.opts._helper_internal_update():
-            cover_value(self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter)
+                "bg_color": self.pl.background_color.float_rgb,
+                "size": self.pl.window_size,
+            }
 
+        with self.opts._helper_internal_update():
+            cover_value(
+                self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter
+            )
 
     def _helper_sync_from_opts(self):
-        
-            camera = self.pl.camera
-            pos, focal, up = self._helper_convert_spherical_to_pos(
-                self.opts.azimuth,
-                self.opts.elevation,
-                self.opts.roll,
-                self.opts.distance,
-                self.opts.focal_point,
-            )
-            camera.position = pos
-            camera.focal_point = focal
-            camera.up = up
-            self.pl.render()
 
-            rgba = np.r_[self.opts.bg_color, [self.opts.bg_opacity]] * 255
-            rgba = rgba.astype(int)
-            self.pl.background_color = rgba
-            
-            self.pl.resize(*self.opts.size)
+        camera = self.pl.camera
+        pos, focal, up = self._helper_convert_spherical_to_pos(
+            self.opts.azimuth,
+            self.opts.elevation,
+            self.opts.roll,
+            self.opts.distance,
+            self.opts.focal_point,
+        )
+        camera.position = pos
+        camera.focal_point = focal
+        camera.up = up
+        self.pl.render()
+
+        self.pl.set_background(self.opts.bg_color)
+        self.pl.window_size = tuple(self.opts.size)
 
     @staticmethod
     def _helper_convert_pos_to_spherical(position, focal_point, view_up):
@@ -417,34 +425,28 @@ class PlotFigure(HostBase, RegistryBase):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
 
-            
     @logging_and_warning_decorator(start_finish_level=5)
     def act_register(self, term, is_contain_ok=False, logger=None):
-    
-        if term in self._entity:
-            if not is_contain_ok:
-                try:
-                    raise ValueError(f"term {term!r} is already registered in Registry {self.name!r}")
-                except ValueError:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignore this process.")
-            return
-        
-        if not hasattr(self, "name"):
-            raise TypeError("term must have attribute `.name`.")
-        name = self._helper_check_name(term.name)
-        term.name = name
-        self._entity.append(term)
-        object.__setattr__(term, "_impl_figure_ref", weakref.ref(self))
-        
+        super().act_register(term, is_contain_ok=is_contain_ok)
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
-            
-    
+
+    def act_savefig(
+        self, filename, scale=1, is_transparent_background=False, window_size=None
+    ):
+        if window_size is None:
+            window_size = self.opts.size
+        self.pl.screenshot(
+            filename,
+            scale=scale,
+            transparent_background=is_transparent_background,
+            window_size=window_size,
+        )
+
     def __repr__(self):
         msg = HostBase.__repr__(self) + "\n"
         msg += RegistryBase._helper_repr_by_category(self)
         return msg
 
-
-
+    def __str__(self):
+        return HostBase.__repr__(self)

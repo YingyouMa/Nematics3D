@@ -570,8 +570,6 @@ class QFieldObject(ClassBase):
         else:
             lines_colors = [opts_tube.color for line in lines_plot]
 
-        # figure = self.act_add_scene(is_new, opts=opts_scene)
-
         logger.debug("Start to draw disclination lines")
         for line, line_color, line_scalar in zip(
             lines_plot, lines_colors, lines_scalars
@@ -592,6 +590,7 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
 
     @logging_and_warning_decorator()
     def act_visualize_n_plane(

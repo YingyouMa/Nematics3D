@@ -312,8 +312,9 @@ class PlotGlyph(HostBase):
         
         figure = self.fig
         figure.pl.render()
-        figure.pl.show()
         figure.act_register(self)
+        # if figure.pl_type == "P":
+        #     figure.pl.show(interactive_update=True)
         
     
     @property
@@ -577,7 +578,9 @@ class PlotGlyph(HostBase):
         
     def act_remove(self):
         self.fig.pl.remove_actor(self._entity)
-        self.fig.pick_manager._impl_registry.pop(self._entity)
+        pm = getattr(self.fig, "_entity_pick_manager", None)
+        if pm:
+            pm._impl_registry.pop(self._entity)
         self.fig._entity.remove(self)
         
         

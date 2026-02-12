@@ -220,7 +220,7 @@ class DisclinationLine(ClassBase):
         line_plot = smooth_obj.act_visualize(
             figure=figure, is_wrap=is_wrap, is_smooth=is_smooth, opts=opts, **kwargs
         )
-
+        
         return line_plot
 
     def __len__(self) -> int:
