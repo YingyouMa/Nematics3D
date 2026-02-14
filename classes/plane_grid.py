@@ -1,14 +1,12 @@
 import numpy as np
 from dataclasses import dataclass
 from typing import Literal, Any, Mapping
-import weakref
-from contextlib import contextmanager
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_fixed_step_grid, apply_linear_transform
 from Nematics3D.general import select_grid_in_box
-from .opts import merge_opts_all, build_dict_override
+from .opts import merge_opts_all
 from .host_base import OptsBase, HostBase
 from Nematics3D.datatypes import Number, as_Number, Vect, as_Vect, Tensor, as_Tensor, as_str, UNSET, Unset
 from .opts import cover_value
@@ -142,7 +140,6 @@ class PlaneGrid(HostBase):
         object.__setattr__(self, '_impl_field_ref', None)
         object.__setattr__(self, '_entity_fig_demo', None)
 
-        self.opts.act_finalize(defaults=self._opts_defaults)
         for name, value in {
             "normal": self.opts.normal,
             "spacing": self.opts.spacing,
@@ -150,8 +147,9 @@ class PlaneGrid(HostBase):
         }.items():
             if value is UNSET:
                 raise ValueError(
-                    f"Missing required variable {name} to generate plane_grid"
+                    f"Missing required variable {name!r} to generate plane_grid"
                 )
+        self.opts.act_finalize(defaults=self._opts_defaults)
 
         
         self._helper_commit_apply_opts()

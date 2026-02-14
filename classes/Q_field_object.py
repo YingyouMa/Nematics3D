@@ -3,6 +3,7 @@ import time
 from typing import Union
 from dataclasses import replace, dataclass, field, fields
 from pyvistaqt import BackgroundPlotter
+import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
@@ -417,9 +418,7 @@ class QFieldObject(ClassBase):
         )
         interpolator = Interpolator(
             interpolator,
-            np.array([u[-1], v[-1], w[-1]]),
-            grid_transform=self._raw_grid_transform,
-            grid_offset=self._raw_grid_offset,
+            weakref.ref(self)
         )
 
         object.__setattr__(self, "_calc_interpolator", interpolator)

@@ -68,128 +68,175 @@ figure.act_savefig('test.png')
 # figure.pl.screenshot('test.png', transparent_background=False)
 
 
-# Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
-#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
-#                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=False, is_extent=False, n_is_n_defect=True)
-# Q.figs[0].scene.opts_azimuth = 90
-# Q.figs[0].scene.opts_elevation = 90
+# origin = (41.36, 40.36, 29.75)
+origin = (21.58, 23.31, 23.08)
+# origin = (42.12, 46.13, 23.22)
+figure2 = Nematics3D.PlotFigure()  
+Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4, figure=figure2)
+testPolar = Nematics3D.PlaneGridPolar(normal=(1,1,1), dr=0.5, R_max=5, origin=origin )
+# Nematics3D.PlotSphere(testPolar._entity_grid, figure=figure2)
+QPolar = Q._calc_interpolator.interpolate(testPolar._entity_grid)
+_, nPolar = Nematics3D.Q_diagonalize(QPolar)
+rods = Nematics3D.PlotRod(coords=testPolar._entity_grid, orient=nPolar, figure=figure2, color=Nematics3D.n_color_immerse)
 
-# Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
-#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
-#                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=True, is_extent=False, n_is_n_defect=True)
-# Q.figs[1].objects["nPlanes"][0].act_commit(opts_spacing=3, length=3, origin=(30,30,30), opts_normal=(1,1,0), opts_radius=0.1, sda=1)
-# Q.figs[1].objects["nPlanes"][0].colors = (1,0,0)
+figure2.act_view_yz()
+figure2.opts.azimuth = 90
 
-# test = Q.lines[0].smooth_obj
-# test.N_out_ratio = 1
-# test.act_visualize()
-# with test as l:
-#     l.window_length = 5
-#     l.opts_N_out_ratio = 3
-#     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
-
-    
-
-# @Nematics3D.logging_and_warning_decorator
-# def example_visualize(Q, logger=None):
-#     Q.update_defects(logger=logger)
-#     Q.update_lines_classify(logger=logger)
-#     Q.update_lines_smoothen(logger=logger)
-#     Q.visualize_disclination_lines(logger=logger)
-    
-# # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True)
-# example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True, log_mode='none')
-
-# Q.update_defects()
-# Q.update_lines_classify()
-# opts_smoothen = Nematics3D.OptsSmoothen(min_line_length=50, window_length=41)
-# Q.update_lines_smoothen(opts=opts_smoothen)
-# Q.update_lines_smoothen(smoothen_min_line_length=50, smoothen_window_length=41)
-# Q.update_lines_smoothen()
-# Q.visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
-
-# for line in Q._lines:
-#     if line._defect_num > 50:
-#         line.visualize(is_wrap=False, opts=Nematics3D.OptsTube(color=(1,0,0)))
-
-# trans = 0
-# Q.update_defects()
-# Q.update_lines_classify()
-# Q.update_lines_smoothen(min_line_length=30, window_length=21)
-# Q.visualize_disclination_lines(is_wrap=True, lines_color_input_all=(0,0,0), extent_radius=0.05, min_line_length=30, radius=0.2)
-# # Q.visualize_n_in_Q((1,1,1), 1.5, 100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
-# Q.visualize_n_in_Q((1,0,0), 1.5, index_max, axis1=(0,1,0), origin=(0,index_max/2,index_max/2), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
-# Q.visualize_n_in_Q((0,1,0), 1.5, index_max, axis1=(0,0,1), origin=(index_max/2,0,index_max/2), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
-# Q.visualize_n_in_Q((0,0,1), 1.5, index_max, axis1=(1,0,0), origin=(index_max/2,index_max/2,0), length=1.5, opacity=0.2, radius=0.2, is_new=False, is_extent=False)
+def _wrap_to_pi(angle: np.ndarray) -> np.ndarray:
+    """Wrap angles to (-pi, pi]."""
+    return (angle + np.pi) % (2.0 * np.pi) - np.pi
 
 
-# Q.update_defects()
-# mlab.figure()
-# mlab.points3d(*(Q._defect_indices).T, scale_factor=0.5)
+def defect_detects_polar_flat(
+    points: np.ndarray,          # (N, 3)
+    polar: np.ndarray,           # (N, 2) [r, theta]
+    ring_offsets: np.ndarray,    # (n_rings+1,)
+    directors: np.ndarray,       # (N, 3)
+    threshold: float=0,
+):
+    """
+    Detect defects on flattened polar-ring sampling and return:
+      - defect_centers: (K,3) mean of loop vertices (a,b,c,d) for flagged loops
+      - adjacent_mask: (N,) bool, True for points participating in any flagged loop
+    """
+    from Nematics3D.field import align_directors  # use your existing definition
+
+    points = np.asarray(points)
+    polar = np.asarray(polar)
+    ring_offsets = np.asarray(ring_offsets, dtype=np.int64)
+    directors = np.asarray(directors)
+
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError(f"points must be (N,3). Got {points.shape}.")
+    if polar.ndim != 2 or polar.shape[1] != 2:
+        raise ValueError(f"polar must be (N,2). Got {polar.shape}.")
+    if directors.shape != points.shape:
+        raise ValueError(f"directors must match points shape (N,3). Got {directors.shape} vs {points.shape}.")
+    if ring_offsets.ndim != 1 or ring_offsets.shape[0] < 2:
+        raise ValueError("ring_offsets must be 1D with length >= 2.")
+    if ring_offsets[0] != 0 or ring_offsets[-1] != points.shape[0]:
+        raise ValueError("ring_offsets must start at 0 and end at N (points.shape[0]).")
+
+    n_rings = ring_offsets.shape[0] - 1
+    adjacent_mask = np.zeros((points.shape[0],), dtype=bool)
+    defect_centers_chunks = []
+
+    # If ring 0 is origin block (size 1 at r=0), skip it for quad loops
+    start_ring = 0
+    if n_rings >= 1:
+        s0, e0 = ring_offsets[0], ring_offsets[1]
+        if (e0 - s0) == 1 and np.isclose(polar[s0, 0], 0.0):
+            start_ring = 1
+
+    # ring-pair loop: traverse from outer ring -> inner ring
+    # For each pair (k, k+1), we take:
+    #   outer = k+1, inner = k
+    for k in range(start_ring, n_rings - 1):
+        s_inner, e_inner = ring_offsets[k], ring_offsets[k + 1]
+        s_outer, e_outer = ring_offsets[k + 1], ring_offsets[k + 2]
+
+        n_inner = e_inner - s_inner
+        n_outer = e_outer - s_outer
+        if n_inner < 2 or n_outer < 2:
+            continue
+
+        theta_inner = polar[s_inner:e_inner, 1]    # (n_inner,)
+        theta_outer = polar[s_outer:e_outer, 1]    # (n_outer,) may NOT be sorted
+
+        # local indices on OUTER ring (base edge lives on outer ring)
+        j = np.arange(n_outer, dtype=np.int64)
+        jn = (j + 1) % n_outer
+
+        idx_a = s_outer + j     # a on outer ring
+        idx_b = s_outer + jn    # b on outer ring (next theta)
+
+        # ----------------------------
+        # Build the polar "cell" as (outer -> inner):
+        #   a=(outer, j)
+        #   b=(outer, j+1)
+        #   c=(inner, nearest(theta_b))
+        #   d=(inner, neighbor-of-c that is closer to theta_a)
+        #
+        # Here "neighbor-of-c" is defined by sorting theta_inner to form the circular
+        # adjacency on the INNER ring (because c,d lie on the inner ring).
+        # ----------------------------
+
+        theta_a = theta_outer[j]     # (n_outer,)
+        theta_b = theta_outer[jn]    # (n_outer,)
+
+        # (1) c: nearest on INNER ring to theta_b (no sorted assumption)
+        diff_b = _wrap_to_pi(theta_inner[None, :] - theta_b[:, None])        # (n_outer, n_inner)
+        c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)         # (n_outer,)
+
+        # (2) define INNER-ring adjacency by sorting theta_inner to form a circular order
+        order = np.argsort(theta_inner)                                      # (n_inner,)
+        rank_of = np.empty_like(order)
+        rank_of[order] = np.arange(n_inner, dtype=np.int64)                  # local_index -> rank
+
+        c_rank = rank_of[c_local]                                            # (n_outer,)
+        prev_rank = (c_rank - 1) % n_inner
+        next_rank = (c_rank + 1) % n_inner
+
+        prev_local = order[prev_rank]                                        # (n_outer,)
+        next_local = order[next_rank]                                        # (n_outer,)
+
+        # (3) pick d as the neighbor of c closer to theta_a (circular distance on INNER ring)
+        d_prev = np.abs(_wrap_to_pi(theta_inner[prev_local] - theta_a))      # (n_outer,)
+        d_next = np.abs(_wrap_to_pi(theta_inner[next_local] - theta_a))      # (n_outer,)
+        d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(np.int64)
+
+        idx_c = s_inner + c_local   # c on inner ring
+        idx_d = s_inner + d_local   # d on inner ring
+
+        # loop vertex coords
+        pa = points[idx_a]
+        pb = points[idx_b]
+        pc = points[idx_c]
+        pd = points[idx_d]
+
+        # loop directors
+        a = directors[idx_a]
+        b_raw = directors[idx_b]
+        c_raw = directors[idx_c]
+        d_raw = directors[idx_d]
+
+        # align along loop: a -> b -> c -> d
+        b = align_directors(a, b_raw)
+        c = align_directors(b, c_raw)
+        d = align_directors(c, d_raw)
+
+        test = np.einsum("...i,...i->...", a, d)  # (n_outer,)
+        hit = test < threshold
+        if not np.any(hit):
+            continue
+
+        centers = (pa + pb + pc + pd) * 0.25
+        defect_centers_chunks.append(centers[hit])
+
+        # adjacency mask: mark all points participating in hit loops
+        adjacent_mask[idx_a[hit]] = True
+        adjacent_mask[idx_b[hit]] = True
+        inner_idx = np.unique(np.concatenate([idx_c[hit], idx_d[hit]]))
+        adjacent_mask[inner_idx] = True
+
+    defect_centers = (
+        np.concatenate(defect_centers_chunks, axis=0).astype(float)
+        if defect_centers_chunks
+        else np.zeros((0, 3), dtype=float)
+    )
+
+    return defect_centers, adjacent_mask
+
+test_defect_centers, test_adjacent_mask = defect_detects_polar_flat(
+    testPolar._entity_grid,
+    testPolar._entity_polar,
+    testPolar._calc_ring_offsets,
+    nPolar
+    )
+
+opacity = np.zeros(len(testPolar._entity_grid)) + 0.2
+opacity[test_adjacent_mask] = 1
+rods.opts.opacity = opacity
 
 
-'''
-Q.update_corners()
-extent = Nematics3D.PlotExtent(Q._corners)
-test = Nematics3D.PlotPlaneGrid((1,1,1), 100, 100, 200, corners_limit=Q._corners, origin=(64,64,64))
-
-Nematics3D.PlotExtent(Q._corners)
-mlab.points3d(*(test._grid.T))
-'''
-# Q.update_corners()
-# extent = Nematics3D.PlotExtent(Q._corners, radius=0.02)
-# plane = Nematics3D.PlotPlaneGrid((1,1,1), 10, 10, index_max, corners_limit=Q._corners, origin=(index_max/2, index_max/2, index_max/2))
-# plane = Nematics3D.PlotPlaneGrid((1,0,0), 10, 10, 200, axis1=(0,1,0), corners_limit=Q._corners, origin=(64,64,64))
-# mlab.points3d(*(plane._grid.T))
-# interpolator = Q.update_interpolator()
-# Nematics3D.PlotnPlane((1,1,1), 5, 200, Q._interpolator, corners_limit=Q._corners, origin=(64,64,64))
-# Nematics3D.PlotnPlane((1,0,0), 3, index_max, Q._interpolator, axis1=(0,1,0), corners_limit=Q._corners, origin=(0,index_max/2,index_max/2))
-# test = Nematics3D.PlotnPlane((0,0,1), 2, 0.9*index_max, Q._interpolator, axis1=(1,0,0), corners_limit=Q._corners, origin=(index_max/2,index_max/2,index_max/2), length=2, opacity=0.2, radius=0.25)
-
-# test.update(normal=(1,1,1), size=100)
-# normal = test.plane._normal
-# axis1 = test.plane._axis1
-# axis_both = np.array([axis1, np.cross(normal, axis1)])
-# shape_all = np.shape(test.plane._grid_all)[:2]
-# grid_all_flatten = np.reshape(test.plane._grid_all, (-1,3))
-# Q_all = test._QInterpolator.interpolate(grid_all_flatten)
-# _, n_all = Nematics3D.Q_diagonalize(Q_all)
-# n_all = np.reshape(n_all, (1, *shape_all, 3))
-# defect_plane_index = Nematics3D.defect_detect(n_all, planes=(True, False, False))
-# defect_vicinity_index = Nematics3D.defect_vicinity_grid(defect_plane_index, num_shell=1).reshape((-1,3))[:, 1:]
-
-# others_index, defect_vicinity_index = Nematics3D.split_points(test.plane._grid_i  nt, defect_vicinity_index)
-
-# defect_vicinity = np.einsum('ai, ib -> ab', defect_vicinity_index, axis_both) * test.plane._space1 + test.plane._offset
-# defect_vicinity = Nematics3D.select_grid_in_box(defect_vicinity, Q._corners)
-# others = np.einsum('ai, ib -> ab', others_index, axis_both) * test.plane._space1 + test.plane._offset
-# others = Nematics3D.select_grid_in_box(others, Q._corners)
-
-# # defect_vicinity = Nematics3D.select_grid_in_box(defect_vicinity, Q._corners)
-# mlab.points3d(*(defect_vicinity.T), scale_factor=2, color=(1,0,0))
-# mlab.points3d(*(others.T), scale_factor=2, color=(0,0,1))
-# mlab.points3d(*(Q._defect_indices.T), scale_factor=1)
-# # temp = np.einsum('ai, ib -> ab', defect_plane_index[:,1:], axis_both) * test.plane._space1
-# # temp = temp + test.plane._offset
-# # temp = Nematics3D.select_grid_in_box(temp, Q._corners)
-# # mlab.points3d(*(temp.T), scale_factor=2, color=(1,0,0))
-# # mlab.points3d(*(Q._defect_indices.T), scale_factor=1)
-
-
-
-
-
-
-
-# space_index_ratio = 128 / np.array(np.shape(n)[:-1])
-
-# # Nematics3D.visualize_nematics_field(n=n, plotn=True, plotdefects=True, plotS=False, defect_indices=defect_indices,
-# #                                     space_index_ratio=space_index_ratio,
-# #                                     n_opacity=0.1, defect_n_opacity=1, n_plane_index=[[0],[0],[0]], n_interval=15,
-# #                                     S_is_colorbar=False, n_is_colorbar=False,
-# #                                     n_is_color_immerse=False)
-# # mlab.view(distance=450)
-
-# defect_indices = Nematics3D.defect_detect(n, is_boundary_periodic=1)
-# lines = Nematics3D.disclination.defect_classify_into_lines(defect_indices, box_size_periodic = (128, 128, 128))
 

@@ -119,7 +119,7 @@ class OptsBase:
                 return value
 
         # --- host commit (only after functioning) ---
-        if not key.startswith("_") and is_final and key in self.__class__._validators:
+        if not key.startswith("_") and is_final and key in self.__class__.__descriptions__:
             self._helper_host_apply(key, value)
             return value
 
