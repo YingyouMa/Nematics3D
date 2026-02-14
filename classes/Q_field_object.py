@@ -3,6 +3,7 @@ import time
 from typing import Union
 from dataclasses import replace, dataclass, field, fields
 from pyvistaqt import BackgroundPlotter
+import pyvista as pv
 import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -465,7 +466,7 @@ class QFieldObject(ClassBase):
                         figure = PlotFigure(opts=opts_figure, name=title)
                 elif isinstance(figure, PlotFigure):
                     figure.act_commit(opts_figure)
-                elif isinstance(figure, BackgroundPlotter):
+                elif isinstance(figure, (BackgroundPlotter, pv.Plotter)):
                     figure = PlotFigure(plotter=figure, opts=opts_figure, name=title)
                 else:
                     raise ValueError(

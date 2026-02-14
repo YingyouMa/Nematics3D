@@ -6,6 +6,7 @@ from typing import Mapping, Any
 from .Interpolator import Interpolator
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from .plane_grid import PlaneGrid, OptsPlaneGrid
+from .plane_grid_polar import PlaneGridPolar, OptsPlaneGridPolar
 from .class_base import ClassBase
 
 #!!! class name
@@ -31,8 +32,8 @@ class InterpolatePlane(ClassBase):
         self,
         interpolator: Interpolator,
         name: str = "interpolate plane",
-        grid: PlaneGrid | None = None,
-        opts: OptsPlaneGrid | None = None,
+        grid: PlaneGrid | PlaneGridPolar | None = None,
+        opts: OptsPlaneGrid | OptsPlaneGridPolar | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -44,13 +45,15 @@ class InterpolatePlane(ClassBase):
             object.__setattr__(self, "_entity_plane", grid)
             self._entity_plane.act_commit(
                 opts=opts, 
-                name=self.name +"-grid"
+                name=self.name +"-grid",
+                **kwargs
                 )
         else:
             grid = PlaneGrid(
                 opts=opts,
                 opts_defaults_override=opts_defaults_override,
-                name=self.name +"-grid")
+                name=self.name +"-grid",
+                **kwargs)
             object.__setattr__(self, "_entity_plane", grid)
                 
         object.__setattr__(

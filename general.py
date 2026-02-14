@@ -750,20 +750,21 @@ def find_nearest_point(query_pt, coords):
 
     Parameters
     ----------
-    query_pt : array-like, shape (3,)
+    query_pt : array-like, shape (d,)
         Query point in world coordinates.
-    coords : array-like, shape (N, 3)
+    coords : array-like, shape (N, d)
         Candidate points.
 
     Returns
     -------
-    nearest : np.ndarray, shape (3,)
+    nearest : np.ndarray, shape (d,)
         The nearest point in coords.
     """
-    q = np.asarray(query_pt, dtype=float).reshape(3,)
+    q = np.asarray(query_pt, dtype=float).reshape()
     pts = np.asarray(coords, dtype=float)
-    if pts.ndim != 2 or pts.shape[1] != 3:
-        raise ValueError(f"`coords` must be (N,3). Got shape={pts.shape}.")
+    if pts.ndim != 2 or pts.shape[1] != len(q):
+        raise ValueError(f"`coords` shape is {pts.shape},"
+                         f"while `query_pt` shape is {query_pt.shape}")
 
     d = pts - q
     d2 = np.einsum("ij,ij->i", d, d)

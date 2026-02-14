@@ -86,8 +86,10 @@ class PlaneGridPolar(HostBase):
     __descriptions__ = {
         **dict(HostBase.__descriptions__),
         "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
+        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 × num2 × 3)",
         "_entity_polar": "The polar coordinates of points",
         "_calc_ring_offsets": "Cumulative offsets defining the start/end indices of each polar ring",
+        "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
         "_impl_field_ref": (
             "Quantity field evaluated on the 2D plane grid."
             "To assess it, use .field or ._impl_field."
@@ -121,7 +123,7 @@ class PlaneGridPolar(HostBase):
         object.__setattr__(self, '_impl_field_ref', None)
         
         for name, value in {
-            "origin": self.opts.normal,
+            "origin": self.opts.origin,
             "normal": self.opts.normal,
             "R_max": self.opts.R_max,
             "dr": self.opts.dr,
@@ -227,11 +229,36 @@ class PlaneGridPolar(HostBase):
         ring_offsets = np.empty(len(ring_sizes) + 1, dtype=np.int64)
         ring_offsets[0] = 0
         ring_offsets[1:] = np.cumsum(ring_sizes, dtype=np.int64)  # last one is N
+        
+        points = apply_linear_transform(
+            points, transform=self.opts.grid_transform, offset=self.opts.grid_offset
+        )
+        points_select, mask = select_grid_in_box(points, self.opts.corners_limit, is_return_mask=True)
 
-        object.__setattr__(self, "_entity_grid", points)
+        object.__setattr__(self, "_entity_grid_all", points)
+        object.__setattr__(self, "_entity_grid", points_select)
         object.__setattr__(self, "_entity_polar", polar)
         object.__setattr__(self, "_calc_ring_offsets", ring_offsets)
-            
+        object.__setattr__(self, '_calc_box_mask', mask)
+     
+    
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        msg = f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, origin={self.opts.origin} at {self.opts.alignment}"
+        return msg
+    
+    def __iter__(self):
+        return iter(self._entity_grid)
+    
+    def __getitem__(self, idx):
+        return self._entity_grid[idx]
+    
+    def __array__(self, dtype=None):
+        arr = self._entity_grid
+        return np.asarray(arr, dtype=dtype) if dtype is not None else arr
+    
+    def __call__(self):
+        return self._entity_grid
         
         
     @property

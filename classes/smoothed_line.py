@@ -86,9 +86,10 @@ class SmoothedLine(HostBase):
         **dict(HostBase.__descriptions__),
         "raw_name":                 "The name identifier of the original line",    
         "raw_coords":               "Raw input line coordinates (shape: N x D)",
-        "_calc_N_init":             "Number of input points (before smoothing)",
+        "_calc_N_init":             "Number of input points (before smoothing)",   #!!! property
         "_calc_N_out":              "Number of output points (after smoothing)",
         "_calc_result":             "The smoothed output coordinates (shape: M x D)",
+        "_entity_tck":              "B-spline representation (tck) used for evaluating curve derivatives",
         "_state_is_smoothed":       "Boolean flag indicating whether smoothing was applied",
         
         "_state_status": (
@@ -147,6 +148,7 @@ class SmoothedLine(HostBase):
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_calc_result", self.raw_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
+        object.__setattr__(self, "_entity_tck", None)
         object.__setattr__(
             self,
             "_state_status",
@@ -265,8 +267,10 @@ class SmoothedLine(HostBase):
             uspline = np.arange(self._calc_N_init) / self._calc_N_init
 
             logger.detail("Fitting and evaluate spline")
+            u_out = np.linspace(0, 100, self._calc_N_out)
             tck = splprep(line_points.T, u=uspline, s=0)[0]
-            result = np.array(splev(np.linspace(0, 1, self._calc_N_out), tck)).T
+            result = np.array(splev(u_out, tck)).T
+            object.__setattr__(self, "_entity_tck", tck)
             object.__setattr__(self, "_calc_result", result)
 
             object.__setattr__(self, "_state_is_smoothed", True)
@@ -287,6 +291,39 @@ class SmoothedLine(HostBase):
             self._helper_fallback_no_smooth("system error")
 
         self._helper_trigger_sync_batch(**kwargs)
+        
+
+
+
+        def act_calc_tgt(self, x_param, is_return_coord=False):
+            
+            tck = getattr(self, "_entity_tck", None)
+            if not tck:
+                raise RuntimeError(
+                    "Spline cache `_calc_tck` is missing."
+                    "Probably the line is not properly initialized or successfully smoothed."
+                )
+            
+            x_param = as_Number(x_param, value_range=(0,100), name="Continuous spline parameter along the curve")
+            dr_dx = np.asarray(splev(x_param, self._calc_tck, der=1), dtype=float)
+            
+            length = float(np.linalg.norm(dr_dx))
+            if (not np.isfinite(length)) or length < 1e-9:
+                raise ValueError(
+                    f"Degenerate spline derivative at {x_param}: ||dr/dx||={length}."
+                )
+        
+            t_hat = dr_dx / length
+            
+            if is_return_coord:
+                coord = np.asarray(splev(x_param, self._calc_tck, der=0), dtype=float)
+                
+            return (t_hat, coord) if is_return_coord else t_hat
+            
+            
+        
+        
+        
 
     def __array__(self, dtype=None):
         arr = self._calc_result

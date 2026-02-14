@@ -395,7 +395,7 @@ class HostBase(ClassBase):
     def _helper_commit_apply_opts(self, **kwargs):
         raise NotImplementedError(...)
 
-    def _helper_trigger_sync_batch(self, **kwargs):
+    def _helper_trigger_sync_batch(self, **kwargs):   #!!! not pass kwargs
         for attr in kwargs.keys():
             sync_func = self.opts._impl_sync_func.get(attr, {})
             for func in sync_func.values():

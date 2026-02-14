@@ -473,8 +473,7 @@ class PlotFigure(HostBase, RegistryBase):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_register(self, term, is_contain_ok=False, logger=None):
+    def act_register(self, term, is_contain_ok=False):
         super().act_register(term, is_contain_ok=is_contain_ok)
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
@@ -498,3 +497,37 @@ class PlotFigure(HostBase, RegistryBase):
 
     def __str__(self):
         return HostBase.__repr__(self)
+    
+
+@logging_and_warning_decorator()
+def as_PlotFigure(figure, opts_figure, logger=None):
+
+    if not isinstance(opts_figure, OptsFigure):
+        try:
+            raise TypeError("The variable `opts_figure` must be instance of OptsFigure."
+                            f"Got {type(opts_figure).__name__!r} instead.")
+        except TypeError:
+            logger.exception("Check input.")
+            logger.recovery("Ignore this options in the following.")
+            opts_figure = None
+
+    try:
+        if figure is None:
+            figure = PlotFigure(opts=opts_figure)
+        elif isinstance(figure, PlotFigure):
+            figure.act_commit(opts_figure)
+        elif isinstance(figure, (BackgroundPlotter, pv.Plotter)):
+            figure = PlotFigure(plotter=figure, opts=opts_figure)
+        else:
+            raise ValueError(
+                "`figure` input must be a valid PlotFigure object, "
+                "or a valid pyvista plotter object (including BackgroundPlotter) "
+                "or None (creating a new figure) "
+                "Got type {type(figure)!r} instead."
+            )
+    except:
+        logger.exception("Invalid figure input")
+        logger.recovery("Create a new figure instead.")
+        figure = PlotFigure(opts=opts_figure)
+
+    return figure

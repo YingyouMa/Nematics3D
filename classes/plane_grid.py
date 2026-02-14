@@ -241,11 +241,10 @@ class PlaneGrid(HostBase):
             
         if self.field:
             self.field._helper_commit()
-
-
-    def __str__(self) -> str:
-        header = f"<{self.__class__.__name__} object>"
-        return header + "\n" + self.act_log_parameters(is_return=True) 
+            
+        self._helper_trigger_sync_batch(**kwargs)
+        
+        
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

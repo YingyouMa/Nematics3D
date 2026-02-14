@@ -428,7 +428,7 @@ class PickManager:
         x, y = vtk_iren.GetEventPosition()
 
         picker = vtk.vtkCellPicker()
-        picker.SetTolerance(0.0005)  # 你可按需调
+        picker.SetTolerance(0.0005)  
         picker.Pick(x, y, 0.0, fig.pl.renderer)
 
         actor = picker.GetActor()
