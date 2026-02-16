@@ -19,6 +19,10 @@ class FigureManager(RegistryBase):
     def active_name(self):
         return self._state_active_name
     
+    @property
+    def active_fig(self):
+        return self[self.active_name]
+    
     def act_set_active(self, id_fig: str):
         figure = self[id_fig]
         if figure:

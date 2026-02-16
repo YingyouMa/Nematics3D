@@ -347,7 +347,7 @@ class InteractPlane(PanelBase):
 
 
     def commit(self):
-        # ----alignment ----
+        # ---- alignment ----
         alignment = "center" if self.state["is_origin_center"] else "bottom-left"
 
         # ---- spacing_extra ----

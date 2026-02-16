@@ -42,14 +42,15 @@ from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
 from .visual.plot_delaunay import OptsDelaunay
 from .visual.plot_figure import PlotFigure, OptsFigure
-from .Q_plane import QPlane
+from .Q_plane import QPlane, QPlanePolar
 from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
+from .plane_grid_polar import OptsPlaneGridPolar
 from .opts import merge_opts_all, cover_value
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
-from .disclination_line import DisclinationLine
+from .disclination_line import DisclinationLine, DisclinationLineSmooth
 from .class_base import ClassBase
 
 
@@ -61,9 +62,9 @@ class InputQ:
     box_periodic_flag: DimensionFlagInput = False
     grid_offset: Vect(3) = (0, 0, 0)
     grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
-    default_miminum_line_length_smooth: Number = 61
-    default_smooth_window_length: Number = 41
-    default_miminum_line_length_visual: Number = 75
+    const_miminum_line_length_smooth: Number = 61
+    const_smooth_window_length: Number = 41
+    const_miminum_line_length_visual: Number = 75
 
     __descriptions__ = {
         "Q": "Q field (tensor order parameter)",
@@ -72,9 +73,9 @@ class InputQ:
         "box_periodic_flag": "flag indicating whether periodic boundary condition is applied along each dimension",
         "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3)",
-        "default_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
-        "default_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
-        "default_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized",
+        "const_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
+        "const_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
+        "const_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized",
     }
 
     _validators = {
@@ -84,13 +85,13 @@ class InputQ:
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
-        "default_miminum_line_length_smooth": lambda v, d: as_Number(
+        "const_miminum_line_length_smooth": lambda v, d: as_Number(
             v, name=d, value_range=(1, np.inf)
         ),
-        "default_smooth_window_length": lambda v, d: as_Number(
+        "const_smooth_window_length": lambda v, d: as_Number(
             v, name=d, value_range=(2, np.inf)
         ),
-        "default_miminum_line_length_visual": lambda v, d: as_Number(
+        "const_miminum_line_length_visual": lambda v, d: as_Number(
             v, name=d, value_range=(2, np.inf)
         ),
     }
@@ -115,11 +116,11 @@ class QFieldObject(ClassBase):
         "_raw_box_periodic_flag": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
         "_raw_grid_offset": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
         "_raw_grid_transform": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
-        # --- Defaults / thresholds ---
-        "default_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
-        "default_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
-        "default_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
-        "default_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
+        # --- consts / thresholds ---
+        "const_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
+        "const_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
+        "const_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
+        "const_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
         # --- Derived grids / geometry ---
         "_calc_grid_index": "Lattice coordinate grid in index space (before applying transform/offset).",
         "_calc_grid": "Coordinate grid in real space after applying grid_transform and grid_offset.",
@@ -170,7 +171,7 @@ class QFieldObject(ClassBase):
         for f in fields(inputValue):
             k = f.name
             v = getattr(inputValue, k)
-            if k.startswith("default"):
+            if k.startswith("const"):
                 object.__setattr__(self, k, v)
             else:
                 object.__setattr__(self, f"_raw_{k}", v)
@@ -357,9 +358,9 @@ class QFieldObject(ClassBase):
         opts.is_window_warning = False
 
         if opts.min_line_length is UNSET:
-            opts.min_line_length = self.default_miminum_line_length_smooth
+            opts.min_line_length = self.const_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_smooth_window_length}."
+            msg += f"Using the default value self.const_miminum_line_length_smooth={self.const_smooth_window_length}."
             logger.info(msg)
 
         opts.act_finalize()
@@ -371,9 +372,9 @@ class QFieldObject(ClassBase):
             opts.window_ratio = None
 
         if opts.window_length is None and opts.window_ratio is None:
-            opts.window_length = self.default_smooth_window_length
+            opts.window_length = self.const_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += f"Using the default value self.default_smooth_window_length={self.default_smooth_window_length}."
+            msg += f"Using the default value self.const_smooth_window_length={self.const_smooth_window_length}."
             logger.info(msg)
 
         msg = f"Start to smooth disclination lines in Q tensor {self.name!r} With paramaters: \n"
@@ -435,7 +436,7 @@ class QFieldObject(ClassBase):
     def _helper_set_figure(
         self,
         is_new: bool,
-        figure: PlotFigure | str | int | BackgroundPlotter | None,
+        figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None,
         opts_figure: OptsFigure,
         title: str,
         logger=None,
@@ -490,7 +491,7 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
-        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
+        figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
         is_new: bool = False,
         is_wrap: bool = True,
         is_smooth: bool = True,
@@ -532,9 +533,9 @@ class QFieldObject(ClassBase):
         if min_line_length is None:
             logger.info(
                 "No minimum line length has been provided for the plotted lines. "
-                f"Use the default value {self.default_miminum_line_length_visual}"
+                f"Use the default value {self.const_miminum_line_length_visual}"
             )
-            min_line_length = self.default_miminum_line_length_visual
+            min_line_length = self.const_miminum_line_length_visual
 
         logger.debug(f"min_line_length = {min_line_length}")
 
@@ -595,7 +596,7 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_visualize_n_plane(
         self,
-        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
+        figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
         is_new: bool = False,
         is_extent: bool = True,
         is_defect: bool = False,
@@ -692,7 +693,7 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_visualize_S_plane(
         self,
-        figure: PlotFigure | str | int | BackgroundPlotter | None = None,
+        figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
         is_new: bool = False,
         is_extent: bool = True,
         opts_grid: OptsPlaneGrid | None = None,
@@ -763,6 +764,98 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
+
+    @logging_and_warning_decorator()
+    def act_visualize_n_near_defect(
+        self,
+        x_param: float,
+        smooth: DisclinationLineSmooth,
+        figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
+        is_new: bool = False,
+        is_extent: bool = False,
+        opts_grid: OptsPlaneGridPolar | None = None,
+        opts_n: OptsRod | None = None,
+        opts_nb: OptsRod | None = None,
+        opts_nd: OptsRod | None = None,
+        opts_figure: OptsFigure | None = None,
+        opts_extent: OptsTube | None = None,
+        opts_defect: OptsSphere | None = None,
+        title: str = "visualization of n near defect",
+        logger=None,
+        **kwargs,
+    ):
+
+        logger.detail("Dealing with the parameters")
+        if opts_grid is None:
+            opts_grid = OptsPlaneGridPolar()
+        if opts_extent is None:
+            opts_extent = OptsTube()
+        if opts_figure is None:
+            opts_figure = OptsFigure()
+        if opts_n is None:
+            opts_n = OptsRod()
+        if opts_nb is None:
+            opts_nb = OptsRod()
+        if opts_nd is None:
+            opts_nd = OptsRod()
+        if opts_defect is None:
+            opts_defect = OptsSphere()
+
+        merge = merge_opts_all(
+            {
+                "figure_": opts_figure,
+                "grid_": opts_grid,
+                "extent_": opts_extent,
+                "n_": opts_n,
+                "nb_": opts_nb,
+                "nd_": opts_nd,
+                "defect_": opts_defect,
+            },
+            kwargs,
+            type(self).__name__,
+        )
+
+        opts_figure = merge["figure_"]
+        opts_grid = merge["grid_"]
+        opts_extent = merge["extent_"]
+        opts_n = merge["n_"]
+        opts_nb = merge["nb_"]
+        opts_nd = merge["nd_"]
+        opts_defect = merge["defect_"]
+
+        cover_value(opts_nb, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
+        cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
+
+        figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+
+        if not hasattr(self, "_calc_interpolator"):
+            self.act_add_interpolator()
+
+        logger.detail("Create the plane.")
+        plane_grid = smooth.act_add_local_plane(x_param, opts=opts_grid)
+        n_plane_name = plane_grid.name + " of " + smooth.name 
+        n_plane = QPlanePolar(
+            self._calc_interpolator,
+            name=n_plane_name,
+            grid=plane_grid._entity
+        )
+        self.objs.act_register(n_plane)
+
+        n_plane.act_visualize_n(
+            figure=figure,
+            opts_nb=opts_nb,
+            opts_nd=opts_nd,
+        )
+
+        if is_extent:
+            PlotExtent(
+                self._calc_corners,
+                figure=figure,
+                opts=opts_extent,
+                is_reset_camera=False,
+            )
+
 
     @property
     def lines(self):

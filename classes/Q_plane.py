@@ -3,6 +3,7 @@ import pyvista as pv
 import numpy as np
 import weakref
 from typing import Mapping, Any
+from copy import deepcopy
 
 from .Interpolator import Interpolator
 from Nematics3D.field import Q_diagonalize, n_color_immerse, apply_linear_transform, align_directors
@@ -35,12 +36,19 @@ class QPlane(InterpolatePlane):
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
+        "const_visual_opts": "The default opts_defaults_override for different visualization."
     }
 
     __slots__ = tuple(
             k for k, v in __descriptions__.items() 
             if not v.startswith("Property:") and k not in InterpolatePlane.__slots__
         )
+    
+    _origin_default_visual_opts = {
+        "nb":   {"color": n_color_immerse, "opacity": 0.2},
+        "nd":   {"color": n_color_immerse},
+        "S":    {"scalar_bar_title": "S"}
+    }
 
     def __init__(
         self,
@@ -49,8 +57,15 @@ class QPlane(InterpolatePlane):
         grid: PlaneGrid | None = None,
         opts: OptsPlaneGrid | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
+        visual_default: Mapping[str, Any] | None = None,
         **kwargs,
     ):
+        
+        const_visual_opts = deepcopy(self._origin_default_visual_opts)
+        for key, value in const_visual_opts.items():
+            new = getattr(self, "visual_default", {})
+            value = value | new
+        object.__setattr__(self, "const_visual_opts", const_visual_opts)
         
         object.__setattr__(self, '_entity_visual_nb', None)
         object.__setattr__(self, '_entity_visual_nd', None)
@@ -91,7 +106,7 @@ class QPlane(InterpolatePlane):
         
         object.__setattr__(self, '_calc_is_near_defect', adjacent_mask[plane_grid._calc_box_mask])
         
-        if len(defect_centers) == 0:
+        if defect_centers is None:
             object.__setattr__(self, '_calc_defect_pos', None)
         else:
             defect_centers = select_grid_in_box(defect_centers, plane_grid.opts.corners_limit)
@@ -241,7 +256,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                opts_defaults_override={"color": n_color_immerse, "opacity": 0.2}
+                opts_defaults_override=self.const_visual_opts["nb"]
             )
             
         else:
@@ -253,7 +268,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                opts_defaults_override={"color": n_color_immerse, "opacity": 0.2},
+                opts_defaults_override=self.const_visual_opts["nb"],
                 is_visible=False
             )
             
@@ -269,7 +284,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                opts_defaults_override={"color": n_color_immerse}
+                opts_defaults_override=self.const_visual_opts["nd"]
             )
             
             visual_defect = PlotSphere(
@@ -290,7 +305,7 @@ class QPlane(InterpolatePlane):
                 opts=opts_nd,
                 figure=figure,
                 is_visible=False,
-                opts_defaults_override={"color": n_color_immerse}
+                opts_defaults_override=self.const_visual_opts["nd"]
             )
             
             visual_defect = PlotSphere(
@@ -351,6 +366,7 @@ class QPlane(InterpolatePlane):
             figure=figure,
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
+            opts_defaults_override=self.const_visual_opts["S"]
             )
         
         object.__setattr__(visual_S, "_impl_owner_ref", weakref.ref(self))
@@ -367,6 +383,12 @@ class QPlanePolar(QPlane):
             k for k, v in __descriptions__.items() 
             if not v.startswith("Property:") and k not in QPlane.__slots__
         )
+    
+    _origin_default_visual_opts = {
+        "nb":   {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
+        "nd":   {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
+        "S":    {"scalar_bar_title": "S"}
+    }
 
     def __init__(
         self,
@@ -375,6 +397,7 @@ class QPlanePolar(QPlane):
         grid: PlaneGridPolar | None = None,
         opts: OptsPlaneGridPolar | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
+        visual_default: Mapping[str, Any] | None = None,
         **kwargs,
     ):
 
@@ -545,7 +568,7 @@ class QPlanePolar(QPlane):
         defect_centers = (
             np.concatenate(defect_centers_chunks, axis=0).astype(float)
             if defect_centers_chunks
-            else np.zeros((0, 3), dtype=float)
+            else None
         )
     
         return defect_centers, adjacent_mask

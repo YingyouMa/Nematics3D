@@ -64,7 +64,7 @@ class OptsPlaneGrid(OptsBase):
                                 v, name=d,
                                 pool=("circle", "rectangle"),
                                 ),
-        "corners_limit":    lambda v, d: as_Tensor(v, (8, 3), name=d),
+        "corners_limit":    lambda v, d: None if v is None else as_Tensor(v, (8, 3), name=d),
         "origin":           lambda v, d: as_Vect(v, name=d),
         "alignment":        lambda v, d: as_str(
                                 v, name=d,
@@ -280,15 +280,13 @@ class PlaneGrid(HostBase):
                        ):
     
         if opts_extent is None:
-            opts_extent = OptsTube(category="plane_grid_test", name="grid_extent")
+            opts_extent = OptsTube()
         if opts_points is None:
-            opts_points = OptsSphere(category="plane_grid_test", name="grid")
-            opts_points.act_finalize()
+            opts_points = OptsSphere()
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_origin is None:
-            opts_origin = OptsSphere(color=(1,0,0), category="plane_grid_test", name="origin")
-            opts_origin.radius = 1.2 * opts_points.radius
+            opts_origin = OptsSphere()
             
         merge = merge_opts_all(
             {
@@ -304,13 +302,38 @@ class PlaneGrid(HostBase):
         opts_extent = merge["extent_"]
         opts_origin = merge["origin_"]
         
-        figure = PlotFigure(opts=opts_figure)
-        PlotSphere(coords=self._entity_grid, opts=opts_points, figure=figure)
-        PlotSphere(coords=self.opts.origin, opts=opts_origin, figure=figure)
+        figure = PlotFigure(
+            opts=opts_figure, 
+            name=f"Diagnostic plot of plane {self.name!r}"
+        )
+        bulk = PlotSphere(
+            coords=self._entity_grid, 
+            opts=opts_points, 
+            figure=figure,
+            category="plane_grid_test", 
+            name="grid"
+            )
+        PlotSphere(
+            coords=self.opts.origin, 
+            opts=opts_origin, 
+            figure=figure,
+            opts_defaults_override={
+                "color": (1,0,0),
+                "radius": 1.2*bulk._calc_radius[0]
+            },
+            category="plane_grid_test", 
+            name="origin"
+        )
         if self.opts.corners_limit is not None:
-            PlotExtent(corners=self.opts.corners_limit, opts=opts_extent, figure=figure)
+            PlotExtent(
+                corners=self.opts.corners_limit, 
+                opts=opts_extent, 
+                figure=figure,
+                category="plane_grid_test", 
+                name="grid_extent"
+            )
             
-        self._entity_fig_demo = figure
+        object.__setattr__(self, "_entity_fig_demo", figure)
             
         return figure
         

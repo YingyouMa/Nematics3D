@@ -60,7 +60,6 @@ class ClassBase:
             "Managed via 'act_add_attr'."
         ),
         "_impl_extra_attrs_docs": "Documentation strings for user-defined extra attributes.",
-        "_impl_opts_backup": "Internal storage for backing up configuration options.",
     }
 
     __slots__ = tuple(

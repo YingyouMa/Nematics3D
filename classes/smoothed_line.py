@@ -267,7 +267,7 @@ class SmoothedLine(HostBase):
             uspline = np.arange(self._calc_N_init) / self._calc_N_init
 
             logger.detail("Fitting and evaluate spline")
-            u_out = np.linspace(0, 100, self._calc_N_out)
+            u_out = np.linspace(0, 1, self._calc_N_out)
             tck = splprep(line_points.T, u=uspline, s=0)[0]
             result = np.array(splev(u_out, tck)).T
             object.__setattr__(self, "_entity_tck", tck)
@@ -295,30 +295,31 @@ class SmoothedLine(HostBase):
 
 
 
-        def act_calc_tgt(self, x_param, is_return_coord=False):
-            
-            tck = getattr(self, "_entity_tck", None)
-            if not tck:
-                raise RuntimeError(
-                    "Spline cache `_calc_tck` is missing."
-                    "Probably the line is not properly initialized or successfully smoothed."
-                )
-            
-            x_param = as_Number(x_param, value_range=(0,100), name="Continuous spline parameter along the curve")
-            dr_dx = np.asarray(splev(x_param, self._calc_tck, der=1), dtype=float)
-            
-            length = float(np.linalg.norm(dr_dx))
-            if (not np.isfinite(length)) or length < 1e-9:
-                raise ValueError(
-                    f"Degenerate spline derivative at {x_param}: ||dr/dx||={length}."
-                )
+    def act_calc_tangent(self, x_param, is_return_coord=False):
         
-            t_hat = dr_dx / length
+        tck = getattr(self, "_entity_tck", None)
+        if not tck:
+            raise RuntimeError(
+                "Spline cache `_calc_tck` is missing."
+                "Probably the line is not properly initialized or successfully smoothed."
+            )
+        
+        x_param = as_Number(x_param, value_range=(0,100), name="Continuous spline parameter along the curve")
+        x_param /= 100
+        dr_dx = np.asarray(splev(x_param, self._entity_tck, der=1), dtype=float)
+        
+        length = float(np.linalg.norm(dr_dx))
+        if (not np.isfinite(length)) or length < 1e-9:
+            raise ValueError(
+                f"Degenerate spline derivative at {x_param}: ||dr/dx||={length}."
+            )
+    
+        t_hat = dr_dx / length
+        
+        if is_return_coord:
+            coord = np.asarray(splev(x_param, self._entity_tck, der=0), dtype=float)
             
-            if is_return_coord:
-                coord = np.asarray(splev(x_param, self._calc_tck, der=0), dtype=float)
-                
-            return (t_hat, coord) if is_return_coord else t_hat
+        return (t_hat, coord) if is_return_coord else t_hat
             
             
         

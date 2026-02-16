@@ -94,7 +94,7 @@ class OptsBase:
                 except TypeError:
                     logger.exception("Check input.")
                     logger.recovery("Ignore this modification")
-                return value  # ignored
+                return value
             object.__setattr__(self, key, value)
             return value
 

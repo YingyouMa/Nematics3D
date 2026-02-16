@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
-from types import MappingProxyType
+from scipy.interpolate import splev
 
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
@@ -29,6 +29,8 @@ from .opts import merge_opts_all
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..general import pop_exclusive
 from .class_base import ClassBase
+from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
+from .registry_base import RegistryBase
 
 
 # extra attr
@@ -228,7 +230,7 @@ class DisclinationLine(ClassBase):
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}({self.name!r}), type {self._calc_end2end_kind} with {self._calc_defect_num} defect points"
+        msg = f"{cls_name}({self.name!r}), type {self._calc_end2end_kind}, {self._calc_defect_num} defect points"
         return msg
 
     def __iter__(self):
@@ -264,6 +266,7 @@ class DisclinationLineSmooth(SmoothedLine):
         "_calc_result": "The smoothed disclination indices in lattice grid",
         "_calc_result_coords": "The smoothed disclination coords in real space",
         "_entity_visual": "The PlotTube object as the visualization of this smoothed disclination line",
+        "_entity_planes": "The DefectPlane objects as the cross-sections along the smoothed disclination line",
         "_state_is_silhouette": "Whether to add silhouette when setting values of opts. Only used in control window.",
     }
 
@@ -288,6 +291,8 @@ class DisclinationLineSmooth(SmoothedLine):
             )
 
         object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
+        object.__setattr__(self, "_entity_planes", RegistryBase(name="Planes"))
+        object.__setattr__(self._entity_planes, "_impl_owner_ref", weakref.ref(self))
         object.__setattr__(self, "_state_is_silhouette", True)
 
         if name is None:
@@ -387,7 +392,6 @@ class DisclinationLineSmooth(SmoothedLine):
         if tube:
             tube.act_commit(is_remesh=True, is_silhouette=self._state_is_silhouette)
 
-    @logging_and_warning_decorator()
     def act_visualize(
         self,
         figure: PlotFigure | None = None,
@@ -395,7 +399,6 @@ class DisclinationLineSmooth(SmoothedLine):
         is_smooth: bool = True,
         opts: OptsTube | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
 
@@ -412,6 +415,10 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, "_entity_visual", tube)
 
         return tube
+    
+    def act_add_local_plane(self, x_param, **kwargs):
+        plane = DefectPlane(self, x_param, **kwargs)
+        return plane
 
 
 class DisclinationLineSmoothPlot:
@@ -428,11 +435,6 @@ class DisclinationLineSmoothPlot:
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
-
-    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
-        "state_is_smooth": lambda v, d: as_bool(v, name=d),
-        "state_is_wrap": lambda v, d: as_bool(v, name=d),
-    }
 
     def __init__(
         self,
@@ -483,26 +485,15 @@ class DisclinationLineSmoothPlot:
         sync_func = dict(state_is_smooth={}, state_is_wrap={})
         object.__setattr__(self, "_impl_sync_func", sync_func)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def __setattr__(self, key, value, logger=None):
 
-        if key in self.__class__._validators:
-            desc = f"{key!r}: {self.__class__.__descriptions__[key]}"
-            try:
-                value = self.__class__._validators[key](value, desc)
-            except Exception:
-                logger.exception("Check input.")
-                logger.recovery("Automatically ignore this modification.")
-        else:
+    def __setattr__(self, key, value):
+        if key not in self._impl_sync_func.keys():
             raise AttributeError(
-                f"{key!r} is not an editable attribute of DisclinationLineSmooth instance."
+                f"{key!r} is not an editable attribute of DisclinationLineSmooth instance, "
+                f"which only include {self._impl_sync_func.keys()}"
             )
-
         self.act_commit(**{key: value})
-
-        sync_func = self._impl_sync_func.get(key, {})
-        for func in sync_func.values():
-            func()
+        
 
     @property
     def owner(self):
@@ -596,6 +587,9 @@ class DisclinationLineSmoothPlot:
                 )
                 object.__setattr__(self, "state_is_smooth", is_smooth)
                 is_remesh = True
+                sync_func = self._impl_sync_func.get("is_smooth", {})
+                for func in sync_func.values():
+                    func()
             except Exception:
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification.")
@@ -609,6 +603,9 @@ class DisclinationLineSmoothPlot:
                 )
                 object.__setattr__(self, "state_is_wrap", is_wrap)
                 is_remesh = True
+                sync_func = self._impl_sync_func.get("is_wrap", {})
+                for func in sync_func.values():
+                    func()
             except Exception:
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification.")
@@ -622,3 +619,167 @@ class DisclinationLineSmoothPlot:
             kwargs.pop("line_index", None)
             
         self._entity.act_commit(opts=opts, is_silhouette=is_silhouette, **kwargs)
+
+
+class DefectPlane(ClassBase):
+
+    __descriptions__: ClassVar[Mapping[str, str]] = {
+        **(ClassBase.__descriptions__),
+        "x_param": "Continuous spline parameter along the curve", 
+        "state_normal": "The plane normal, provided either as a key from 'const_normals' or as a direct vector.",
+        "const_normals": "A mapping of named constant vectors for convenient reuse as plane normals.",
+        "_entity": "The PlaneGridPolar instance as lattice grid surrounding the defect.",
+        "_impl_sync_func": "Mapping from attribute names to synchronization callbacks.",
+    }
+
+    __slots__ = tuple(
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in ClassBase.__slots__
+    )
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __init__(
+        self,
+        line: DisclinationLineSmooth,
+        x_param: float,
+        name: str = "defect",
+        name_replace: str = "defect",
+        state_normal: Unset | Vect(3) = UNSET,
+        const_normals: dict = {},
+        opts: OptsPlaneGridPolar | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        logger=None,
+        **kwargs,
+    ):
+        
+        super().__init__(name=name, name_replace=name_replace)
+        
+        sync_func = dict(x_param={}, state_normal={})
+        object.__setattr__(self, "_impl_sync_func", sync_func)
+
+        if not isinstance(line, DisclinationLineSmooth):
+            raise TypeError(
+                "The `line` input should be DisclinationLineSmooth instance."
+                f"Got {type(line).__name__!r} instead"
+            )
+        line._entity_planes.act_register(self)
+        
+        x_param = self._helper_check_x_param(x_param)
+        object.__setattr__(self, "x_param", x_param)
+        
+        object.__setattr__(self, "const_normals", {})
+        for key, value in const_normals.items():
+            self.act_add_const_normal(key, value)
+        
+        state_normal = self._helper_check_state_normal(state_normal)
+        object.__setattr__(self, 'state_normal', state_normal)
+        
+        normal, origin = self._helper_resolve()
+        plane_polar = PlaneGridPolar(
+            normal=normal,
+            origin=origin,
+            opts=opts,
+            opts_defaults_override=opts_defaults_override
+            )
+        
+        object.__setattr__(plane_polar, "_impl_owner_ref", weakref.ref(self))
+        object.__setattr__(self, "_entity", plane_polar)
+        
+        
+    def _helper_resolve(self):
+        
+        smooth = self.registry._impl_owner_ref()
+        normal, origin = smooth.act_calc_tangent(self.x_param, is_return_coord=True)
+        self.const_normals[UNSET] = normal
+        
+        if self.state_normal is not UNSET:
+            normal = self.state_normal if not isinstance(self.state_normal, str) else self.const_normals[self.state_normal]
+            
+        return normal, origin
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_commit(
+        self,
+        opts: OptsPlaneGridPolar = None,
+        logger=None,
+        **kwargs,
+    ):
+        
+        x_param = kwargs.get("x_param", None)
+        if x_param:
+            x_param = self._helper_check_x_param(x_param)
+            object.__setattr__(self, "x_param", x_param)
+            for func in self._impl_sync_func.get("x_param", {}).values():
+                func()
+            kwargs.pop("x_param")
+        
+        state_normal = kwargs.get("state_normal", None)
+        if state_normal:
+            state_normal = self._helper_check_state_normal(state_normal)
+            object.__setattr__(self, "state_normal", state_normal)
+            for func in self._impl_sync_func.get("state_normal", {}).values():
+                func()
+            kwargs.pop("state_normal")
+            
+        normal, origin = self._helper_resolve()
+        kwargs["normal"] = normal
+        kwargs["origin"] = origin
+            
+        self._entity.act_commit(opts=opts, **kwargs)
+
+
+        
+    def __setattr__(self, key, value):
+        if key in self._impl_sync_func.keys():
+            self.act_commit(**{key: value})
+        else:
+            super().__setattr__(key, value)
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_check_x_param(self, x_param, logger=None):
+        x_param = as_Number(
+            x_param,
+            name="x_param: "+self.__descriptions__["x_param"], 
+            value_range=(0,100)
+            )
+        return x_param
+        
+        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_add_const_normal(self, key, value, logger=None):
+        try:
+            key = as_str(key)
+            value = as_Vect(value, is_norm=True)
+            self.const_normals[key] = value
+        except Exception:
+            logger.exception("Check input.")
+            logger.recovery(
+                f"Got key={key} and value={value} in `const_normals`.\n"
+                "However, key must be string while value must be 3-element-vector.\n"
+                "Automatically skip them."
+            )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_check_state_normal(self, state_normal, logger=None):
+        try:
+            if state_normal is UNSET:
+                pass
+            elif isinstance(state_normal, str):
+                state_normal = as_str(
+                    state_normal, 
+                    name="state_normal",
+                    pool=self.const_normals.keys()
+                )
+            else:
+                state_normal = as_Vect(state_normal, is_norm=True)
+        except Exception:
+            logger.exception("Check input.")
+            logger.recovery(
+                f"Invalid `state_normal` provided: {state_normal!r}. "
+                "Expected one of: 1) None (defaults to tangent), "
+                "2) a valid key from `const_normals`, or "
+                "3) a 3-element vector. "
+                "Reverting `state_normal` to None."
+            )
+        return state_normal

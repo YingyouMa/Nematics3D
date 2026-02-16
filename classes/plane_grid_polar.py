@@ -73,6 +73,8 @@ class OptsPlaneGridPolar(OptsBase):
         **(OptsBase._DEFAULTS_FROZEN),
         "tag":                  "polar plane grid options",
         "theta0_axis":          None,
+        "R_max":                5,
+        "dr":                   0.5,
         "arc_dist":             None,
         "start_layer":          2,
         "corners_limit":        None,
@@ -125,8 +127,6 @@ class PlaneGridPolar(HostBase):
         for name, value in {
             "origin": self.opts.origin,
             "normal": self.opts.normal,
-            "R_max": self.opts.R_max,
-            "dr": self.opts.dr,
         }.items():
             if value is UNSET:
                 raise ValueError(
@@ -233,18 +233,95 @@ class PlaneGridPolar(HostBase):
         points = apply_linear_transform(
             points, transform=self.opts.grid_transform, offset=self.opts.grid_offset
         )
+        
         points_select, mask = select_grid_in_box(points, self.opts.corners_limit, is_return_mask=True)
-
+        
         object.__setattr__(self, "_entity_grid_all", points)
         object.__setattr__(self, "_entity_grid", points_select)
         object.__setattr__(self, "_entity_polar", polar)
         object.__setattr__(self, "_calc_ring_offsets", ring_offsets)
         object.__setattr__(self, '_calc_box_mask', mask)
+        
+        if self._entity_fig_demo:
+            self._entity_fig_demo['grid'].raw_coords = self._entity_grid
+            self._entity_fig_demo['origin'].raw_coords = self.opts.origin
+        
+        if self.field:
+            self.field._helper_commit()
+            
+        self._helper_trigger_sync_batch(**kwargs)
+        
+        
+    def act_debug_plot(self,
+                       opts_extent: OptsTube | None = None,
+                       opts_points: OptsSphere | None = None,
+                       opts_figure: OptsFigure | None = None,
+                       opts_origin: OptsSphere | None = None,
+                       **kwargs
+                       ):
+    
+        if opts_extent is None:
+            opts_extent = OptsTube()
+        if opts_points is None:
+            opts_points = OptsSphere()
+        if opts_figure is None:
+            opts_figure = OptsFigure()
+        if opts_origin is None:
+            opts_origin = OptsSphere()
+            
+        merge = merge_opts_all(
+            {
+                "figure_": opts_figure, 
+                "point_": opts_points,
+                "extent_": opts_extent,
+                "origin_": opts_origin
+            },
+            kwargs, type(self).__name__)
+        
+        opts_figure = merge["figure_"]
+        opts_points = merge["point_"]
+        opts_extent = merge["extent_"]
+        opts_origin = merge["origin_"]
+        
+        figure = PlotFigure(
+            opts=opts_figure, 
+            name=f"Diagnostic plot of plane {self.name!r}"
+        )
+        bulk = PlotSphere(
+            coords=self._entity_grid, 
+            opts=opts_points, 
+            figure=figure,
+            category="plane_grid_test", 
+            name="grid"
+            )
+        PlotSphere(
+            coords=self.opts.origin, 
+            opts=opts_origin, 
+            figure=figure,
+            opts_defaults_override={
+                "color": (1,0,0),
+                "radius": 1.2*bulk._calc_radius[0]
+            },
+            category="plane_grid_test", 
+            name="origin"
+        )
+        if self.opts.corners_limit is not None:
+            PlotExtent(
+                corners=self.opts.corners_limit, 
+                opts=opts_extent, 
+                figure=figure,
+                category="plane_grid_test", 
+                name="grid_extent"
+            )
+            
+        object.__setattr__(self, "_entity_fig_demo", figure)
+            
+        return figure
      
     
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, origin={self.opts.origin} at {self.opts.alignment}"
+        msg = f"{cls_name}, with normal={self.opts.normal} and origin={self.opts.origin}"
         return msg
     
     def __iter__(self):

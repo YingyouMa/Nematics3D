@@ -12,11 +12,19 @@ from .glyph import OptsGlyph, PlotGlyph
 
 @dataclass(slots=True, repr=False)
 class OptsDelaunay(OptsGlyph):
-
+    
     __descriptions__: ClassVar[Mapping[str, str]] = {
-        k: v
-        for k, v in OptsGlyph.__descriptions__.items()
-        if k not in ( "radius", "sides")
+        **(OptsGlyph.__descriptions__),
+        "radius": (
+            "Deprecated placeholder. "
+            "Currently has no effect in Delaunay plots. "
+            "Kept temporarily to avoid refactoring overhead."
+        ),
+        "sides": (
+            "Deprecated placeholder. "
+            "Currently has no effect in Delaunay plots. "
+            "Kept temporarily to avoid refactoring overhead."
+        ),
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -26,11 +34,7 @@ class OptsDelaunay(OptsGlyph):
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
-        **{
-        k: v
-        for k, v in OptsGlyph._DEFAULTS_FROZEN.items()
-        if k not in ( "radius", "sides")
-    },
+        **(OptsGlyph._DEFAULTS_FROZEN),
         "ambient": 0.5
     })
 

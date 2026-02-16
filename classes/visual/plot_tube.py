@@ -8,7 +8,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
-from Nematics3D.general import pop_exclusive
+from Nematics3D.general import pop_exclusive, closest_point_on_polyline, fmt_value
 
 #! clip_geometry
 #! light dark pbr
@@ -211,4 +211,28 @@ class PlotTube(PlotGlyph):
                     logger.recovery("Ignore this modification in the following")
                     
         return is_new_topology, kwargs
+    
+    
+    def _helper_resolve_pick(self, picked_point):
+        
+        pos_close, msg, idx = super()._helper_resolve_pick(picked_point)
+        x_param = idx / len(self.raw_coords) * 100
+        msg_head = (
+            f"The closest point on the tube is {fmt_value(pos_close)}, where: \n"
+            f"The normalized position along the tube is {x_param:2f} \n"
+            )
+        try:
+            smooth = self.owner.owner
+            tgt = smooth.act_calc_tgt(x_param)
+            msg_head += f"Local tangent: {fmt_value(tgt)} \n"
+        except:
+            pass
+        msg = msg_head + msg
+        
+        pos = closest_point_on_polyline(picked_point, self.raw_coords)
+        
+        return pos, msg, idx
+        
+        
+        
 

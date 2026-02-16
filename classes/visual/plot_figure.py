@@ -66,7 +66,7 @@ class OptsFigure(OptsBase):
         {
             **(OptsBase._DEFAULTS_FROZEN),
             "tag":          "figure options",
-            "size":         (2542, 1305),
+            "size":         (1900, 1000),
             "bg_color":     (1, 1, 1),
         }
     )

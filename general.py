@@ -744,7 +744,7 @@ def pop_exclusive(kwargs: dict, k1: str, k2: str):    #1
     return False, None
 
 
-def find_nearest_point(query_pt, coords):
+def find_nearest_point(query_pt, coords, is_return_idx=False):
     """
     Find the nearest point in coords to query_pt (Euclidean).
 
@@ -754,13 +754,18 @@ def find_nearest_point(query_pt, coords):
         Query point in world coordinates.
     coords : array-like, shape (N, d)
         Candidate points.
+    is_return_idx: bool,
+        Whether to return the index of the nearest point.
 
     Returns
     -------
     nearest : np.ndarray, shape (d,)
         The nearest point in coords.
+    idx : int
+        The index of the nearest point.
+        This is returned only if is_return_idx=True
     """
-    q = np.asarray(query_pt, dtype=float).reshape()
+    q = np.asarray(query_pt, dtype=float).reshape(-1)
     pts = np.asarray(coords, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != len(q):
         raise ValueError(f"`coords` shape is {pts.shape},"
@@ -769,7 +774,7 @@ def find_nearest_point(query_pt, coords):
     d = pts - q
     d2 = np.einsum("ij,ij->i", d, d)
     idx = int(np.argmin(d2))
-    return pts[idx]
+    return (pts[idx], idx) if is_return_idx else pts[idx]
 
 
 def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.ndarray:
@@ -818,6 +823,17 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
 
 def is_given_str(a, b):
     return True if isinstance(a, str) and a==b else False
+
+def fmt_value(v, ndigits=2):
+    """Format scalar or ndarray with fixed decimals (zero-padded)."""
+    if isinstance(v, np.ndarray):
+        fmt = np.vectorize(lambda x: f"{float(x):.{ndigits}f}", otypes=[str])
+        return "[" + ", ".join(fmt(v).ravel()) + "]" if v.ndim == 1 else \
+               np.array2string(fmt(v), separator=", ")
+    try:
+        return f"{float(v):.{ndigits}f}"
+    except Exception:
+        return str(v)
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist

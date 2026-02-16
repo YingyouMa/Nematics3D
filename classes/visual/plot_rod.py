@@ -10,6 +10,7 @@ from .plot_figure import PlotFigure
 from .glyph import OptsGlyph,PlotGlyph
 from Nematics3D.general import pop_exclusive
 from Nematics3D.datatypes import as_points
+from Nematics3D.general import fmt_value
 
 LengthMode = float | Callable | Sequence
 
@@ -177,6 +178,13 @@ class PlotRod(PlotGlyph):
             raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
                     
         return is_new_topology, kwargs
+    
+    
+    def _helper_resolve_pick(self, picked_point):
+        pos, msg, idx = super()._helper_resolve_pick(picked_point)
+        value = fmt_value(self.raw_orient[idx])
+        msg = f"Local orientation: {value} \n" + msg
+        return pos, msg, idx
 
     
 

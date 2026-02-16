@@ -22,7 +22,7 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from .plot_figure import PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import pop_exclusive
+from Nematics3D.general import pop_exclusive, find_nearest_point, fmt_value
 
 #!!! resolver source
 #!!! colorbar name args
@@ -313,8 +313,6 @@ class PlotGlyph(HostBase):
         figure = self.fig
         figure.pl.render()
         figure.act_register(self)
-        # if figure.pl_type == "P":
-        #     figure.pl.show(interactive_update=True)
         
     
     @property
@@ -738,6 +736,26 @@ class PlotGlyph(HostBase):
         silhouette = getattr(self, '_entity_silhouette', None)
         if silhouette:
             self._entity_silhouette.visibility = False
+            
+    
+    def _helper_resolve_pick(self, picked_point):
+        pos, idx = find_nearest_point(picked_point, self.raw_coords, is_return_idx=True)
+        with np.printoptions(precision=2, suppress=True):
+            if self.opts.paint_by == "color":
+                msg = f"Local color: {fmt_value(self._calc_color[idx])} \n"
+            else:
+                msg = f"Local scalar: {fmt_value(self._calc_scalar[idx])} \n"
+            for attr in self._pending_resolution_attrs:
+                if attr in ("color", "scalars"):
+                    pass
+                else:
+                    attr_name = "_calc_" + attr
+                    value = object.__getattribute__(self, attr_name)[idx]
+                    value = fmt_value(value)
+                    msg += f"Local {attr}: {value} \n"
+        return pos, msg, idx
+        
+        
             
             
     def __repr__(self) -> str:

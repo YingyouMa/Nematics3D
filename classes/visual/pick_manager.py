@@ -187,28 +187,15 @@ class PickManager:
         # Always update last-click state after printing.
         object.__setattr__(self, "_state_last_click_time", now)
         object.__setattr__(self, "_state_last_click_actor", actor)
-        
-        if hasattr(owner, '_entity_silhouette'):
-            if owner._entity_silhouette.visibility == True:
-                owner.act_dehighlight()
-            else:
-                owner.act_highlight(
-                    color=self.opts.sil_color,
-                    opacity=self.opts.sil_opacity,
-                    width=self.opts.sil_width
-                    )
 
-        # Single click: print only.
+        # Single click: do nothing.
         if not is_double:
-            self.owner.console.println(owner.name)
             return
 
         # Double click: delete nearest marker if close; otherwise add a new marker.
-        resolved = self._helper_resolve_marker_pos(owner, point)
-        if resolved is None:
-            return
-        
-        
+        resolved, msg, _ = owner._helper_resolve_pick(point)
+        # resolved = self._helper_resolve_marker_pos(owner, point)
+    
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
         # World-space threshold (tune as needed)
@@ -216,7 +203,11 @@ class PickManager:
         if nearest_pack is not None and nearest_d2 is not None and nearest_d2 <= thr:
             self._helper_remove_marker_pack(nearest_pack)
             pos = nearest_pack['world_xyz']
-            self.owner.console.println(f"remove point #{nearest_pack['id']}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f})")
+            self.owner.console.println(
+                f"remove point #{nearest_pack['id']}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}) "
+                f"on {str(owner)}"
+            )
+            self.owner.console.println(msg)
 
             object.__setattr__(self, "_state_last_click_time", None)
             object.__setattr__(self, "_state_last_click_actor", None)
@@ -224,7 +215,11 @@ class PickManager:
 
         # No nearby marker -> add a new marker at resolved position.
         self._helper_add_marker(resolved)
-        self.owner.console.println(f"picked point #{self._state_pick_count}: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f})")
+        self.owner.console.println(
+            f"picked point #{self._state_pick_count}: ({resolved[0]:.2f}, {resolved[1]:.2f}, {resolved[2]:.2f}) "
+            f"on {owner.name!r}"
+            )
+        self.owner.console.println(msg)
 
         object.__setattr__(self, "_state_last_click_time", None)
         object.__setattr__(self, "_state_last_click_actor", None)
@@ -289,7 +284,7 @@ class PickManager:
         }
         return pack
 
-    def _helper_add_marker(self, xyz):
+    def _helper_add_marker(self, xyz, marker_id=None):
 
         pack = self._helper_create_marker_pack()
         if pack is None:
@@ -309,9 +304,12 @@ class PickManager:
         pack["poly"].Modified()
         pack["actor"].SetVisibility(True)
 
-        object.__setattr__(self, "_state_pick_count", self._state_pick_count + 1)
-        k = self._state_pick_count
-        pack["id"] = k
+        if marker_id is None:
+            object.__setattr__(self, "_state_pick_count", self._state_pick_count + 1)
+            k = self._state_pick_count
+            pack["id"] = k
+        else:
+            pack["id"] = marker_id
 
         text = pack["text_actor"]
         text.SetInput(str(k))
@@ -430,10 +428,12 @@ class PickManager:
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.0005)  
         picker.Pick(x, y, 0.0, fig.pl.renderer)
+        picked_xyz = np.asarray(picker.GetPickPosition(), dtype=float).reshape(3,)
 
-        actor = picker.GetActor()
+        actor = picker.GetActor() if picker is not None else None
         if actor is None or actor not in self._impl_registry:
             return
+        owner = self._impl_registry[actor]
 
         # 2) right-double-click detect (time + same actor)
         now = time.monotonic()
@@ -449,11 +449,24 @@ class PickManager:
         object.__setattr__(self, "_state_last_rclick_time", now)
         object.__setattr__(self, "_state_last_rclick_actor", actor)
 
+
+        # Once clicked, switch the highlight status
+        if hasattr(owner, '_entity_silhouette'):
+            if owner._entity_silhouette.visibility == True:
+                owner.act_dehighlight()
+            else:
+                owner.act_highlight(
+                    color=self.opts.sil_color,
+                    opacity=self.opts.sil_opacity,
+                    width=self.opts.sil_width
+                    )
+
+        # Single click: print only.
         if not is_double:
+            self.owner.console.println(str(owner))
             return
 
         # 3) on right-double-click: PlotSphere && _state_is_interactable => InteractSphere(owner)
-        owner = self._impl_registry[actor]
 
         if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
             
@@ -481,6 +494,12 @@ class PickManager:
                 from .qt.interact_plane import InteractPlane
                 control = InteractPlane(owner, figure)
                 control.show()
+            elif type(owner).__name__ == "QPlanePolar" and getattr(owner, "_state_is_interactable", False):
+                defectPlane = owner.plane.owner
+                if type(defectPlane).__name__ == "DefectPlane":
+                    from .qt.interact_defect_plane import InteractDefectPlane
+                    control = InteractDefectPlane(owner, figure)
+                    control.show()
                 
         if type(owner).__name__ == "PlotDelaunay" and getattr(owner, "_state_is_interactable", False):
             
