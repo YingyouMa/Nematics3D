@@ -326,7 +326,7 @@ class InteractPlane(PanelBase):
 
         self.host.opts._impl_sync_func["origin"][self.str_now] = self._sync_origin
         self.host.opts._impl_sync_func["alignment"][self.str_now] = (
-            lambda: self.chk_is_center_origin.setChecked(
+            lambda: self.chk_is_origin_center.setChecked(
                 self.host.opts.alignment == "center"
             )
         )
@@ -369,8 +369,8 @@ class InteractPlane(PanelBase):
         y = np.sin(normal_poalr_angle) * np.sin(normal_azimuth)
         z = np.cos(normal_poalr_angle)
         normal_now = (x, y, z)
-        self.normal_info.setText(self._vect_text(normal_now, "normal"))
-        self.visual_normal.act_commit(orient=normal_now, is_silhouette=False)
+        # self.normal_info.setText(self._vect_text(normal_now, "normal"))
+        # self.visual_normal.act_commit(orient=normal_now, is_silhouette=False)
 
         # ---- axis1 ----
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
@@ -379,7 +379,7 @@ class InteractPlane(PanelBase):
         axisy = _rotation_matrix @ np.array([0, 1, 0])
         axis1_now = np.cos(axis1_azimuth) * axisx
         axis1_now += np.sin(axis1_azimuth) * axisy
-        self.axis1_info.setText(self._vect_text(axis1_now, "axis1"))
+        # self.axis1_info.setText(self._vect_text(axis1_now, "axis1"))
 
         self.host.act_commit(
             alignment=alignment,
@@ -456,7 +456,7 @@ class InteractPlane(PanelBase):
         self.normal_info.setText(
             self._vect_text(self.host.opts.normal, "normal")
         )
-        self.visual_normal.orient = self.host.opts.normal
+        self.visual_normal.act_commit(orient=self.host.opts.normal)
         
     def _sync_axis1(self):
         self._sync_from_host(
@@ -464,7 +464,7 @@ class InteractPlane(PanelBase):
             self.get_axis1_azimuth(self.host.opts.axis1, self.host.opts.normal)
         )
         self.axis1_info.setText(
-            self._vect_text(self.host.opts.axis1, "axis1"), self
+            self._vect_text(self.host.opts.axis1, "axis1")
         )
         
     def _sync_origin(self):

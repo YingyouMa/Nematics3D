@@ -744,7 +744,7 @@ class PlotGlyph(HostBase):
             if self.opts.paint_by == "color":
                 msg = f"Local color: {fmt_value(self._calc_color[idx])} \n"
             else:
-                msg = f"Local scalar: {fmt_value(self._calc_scalar[idx])} \n"
+                msg = f"Local scalar: {fmt_value(self._calc_scalars[idx])} \n"
             for attr in self._pending_resolution_attrs:
                 if attr in ("color", "scalars"):
                     pass
