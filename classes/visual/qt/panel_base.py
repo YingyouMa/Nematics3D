@@ -226,6 +226,7 @@ class PressHoldButtonItem:
     def _on_pressed(self) -> None:
         self._pressed = True
         self._hold_active = False
+        self._fire()
         # start long-press detection
         assert self._timer_long is not None
         self._timer_long.start(int(self.long_press_ms))
@@ -248,10 +249,6 @@ class PressHoldButtonItem:
         assert self._timer_repeat is not None
         self._timer_long.stop()
         self._timer_repeat.stop()
-
-        # If it was not a long press, treat as a single click (fire once).
-        if not self._hold_active:
-            self._fire()
 
         self._hold_active = False
 
@@ -364,7 +361,7 @@ class MovePointConsole:
         grid.setVerticalSpacing(6)
         self.gl.addWidget(grid_widget)
 
-        grid.addWidget(QtWidgets.QLabel("Center:", self.group), 0, 0, 1, 1)
+        grid.addWidget(QtWidgets.QLabel("Location:", self.group), 0, 0, 1, 1)
         self.lab_center = QtWidgets.QLabel("", self.group)
         self.lab_center.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
         grid.addWidget(self.lab_center, 0, 1, 1, 2)
@@ -528,3 +525,29 @@ class PanelBase(QtWidgets.QWidget):
         sync = getattr(self.host.opts, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)
+            
+    @staticmethod
+    def _vect_text(vect, name):
+        text = f"{name}: ({vect[0]:.2f}, {vect[1]:.2f}, {vect[2]:.2f})"
+        return text
+    
+    @staticmethod
+    def _helper_calc_vec(azimuth, polar_angle):
+        x = np.sin(polar_angle) * np.cos(azimuth)
+        y = np.sin(polar_angle) * np.sin(azimuth)
+        z = np.cos(polar_angle)
+        result = (x, y, z)
+        return result
+    
+    @staticmethod
+    def get_azimuth(vec):
+        az_rad = np.arctan2(vec[1], vec[0])
+        azimuth = np.degrees(az_rad) % 360
+        return azimuth
+
+    @staticmethod
+    def get_polar_angle(vec):
+        vec /= np.linalg.norm(vec, axis=-1, keepdims=True)
+        polar = np.arccos(vec[2])
+        polar = np.degrees(polar)
+        return polar

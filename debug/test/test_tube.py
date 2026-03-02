@@ -93,7 +93,7 @@ tube5 = Nematics3D.PlotTube(
     metallic=1,
     roughness=0.4,
     scalars_clim=(0,0.2),
-    scalar_bar_title='tube5 scalars'
+    # scalar_bar_title='tube5 scalars'
 )
 
 

@@ -44,8 +44,15 @@ class InteractPlane(PanelBase):
         
         def _on_toggle_show_axes():
             checked = self.chk_is_show_axes.isChecked()
-            self.visual_normal.opts.is_visible = checked
-            self.visual_origin.opts.is_visible = checked
+            if checked:
+                self.visual_origin.act_commit(coords=self.state['origin'], is_visible=True)
+                normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
+                normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
+                normal_now = self._helper_calc_vec(normal_azimuth, normal_polar_angle)
+                self.visual_normal.act_commit(orient=normal_now, coords=self.state['origin'], is_visible=True)
+            else:
+                self.visual_normal.opts.is_visible = False
+                self.visual_origin.opts.is_visible = False
             
         self.chk_is_show_axes = QtWidgets.QCheckBox(
             "Whether to visualize normal and origin",
@@ -93,8 +100,6 @@ class InteractPlane(PanelBase):
         
         def _origin_commit(center):
             self.host.act_commit(origin=center)
-            self.visual_normal.act_commit(coords=[center], is_silhouette=False)
-            self.visual_origin.act_commit(coords=[center], is_silhouette=False)
         
         def _origin_on_press(_x, _y):
             for entity in (
@@ -364,13 +369,8 @@ class InteractPlane(PanelBase):
 
         # ---- normal ----
         normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
-        normal_poalr_angle = np.deg2rad(self.state["normal_polar_angle"])
-        x = np.sin(normal_poalr_angle) * np.cos(normal_azimuth)
-        y = np.sin(normal_poalr_angle) * np.sin(normal_azimuth)
-        z = np.cos(normal_poalr_angle)
-        normal_now = (x, y, z)
-        # self.normal_info.setText(self._vect_text(normal_now, "normal"))
-        # self.visual_normal.act_commit(orient=normal_now, is_silhouette=False)
+        normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
+        normal_now = self._helper_calc_vec(normal_azimuth, normal_polar_angle)
 
         # ---- axis1 ----
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
@@ -379,7 +379,6 @@ class InteractPlane(PanelBase):
         axisy = _rotation_matrix @ np.array([0, 1, 0])
         axis1_now = np.cos(axis1_azimuth) * axisx
         axis1_now += np.sin(axis1_azimuth) * axisy
-        # self.axis1_info.setText(self._vect_text(axis1_now, "axis1"))
 
         self.host.act_commit(
             alignment=alignment,
@@ -456,7 +455,9 @@ class InteractPlane(PanelBase):
         self.normal_info.setText(
             self._vect_text(self.host.opts.normal, "normal")
         )
-        self.visual_normal.act_commit(orient=self.host.opts.normal)
+        if self.chk_is_show_axes.isChecked():
+            is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
+            self.visual_normal.act_commit(orient=self.host.opts.normal, is_silhouette=is_silhouette)
         
     def _sync_axis1(self):
         self._sync_from_host(
@@ -470,14 +471,13 @@ class InteractPlane(PanelBase):
     def _sync_origin(self):
         self.state["origin"] = self.host.opts.origin
         self.point_console._update_center_label()
-        self.visual_normal.coords=[self.host.opts.origin]
-        self.visual_origin.coords=[self.host.opts.origin]
+        if self.chk_is_show_axes.isChecked():
+            is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
+            self.visual_normal.act_commit(coords=self.host.opts.origin, is_silhouette=is_silhouette)
+            self.visual_origin.act_commit(coords=self.host.opts.origin, is_silhouette=is_silhouette)
         
 
-    @staticmethod
-    def _vect_text(vect, name):
-        text = f"{name}: ({vect[0]:.2f}, {vect[1]:.2f}, {vect[2]:.2f})"
-        return text
+
     
     def on_close(self):
         super().on_close()

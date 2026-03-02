@@ -500,6 +500,15 @@ class PickManager:
                     from .qt.interact_defect_plane import InteractDefectPlane
                     control = InteractDefectPlane(owner, figure)
                     control.show()
+                    # DEFECT_PLANE_GUI_ONLY_WARNING = (
+                    #     "WARNING!!! \n"
+                    #     "Due to incomplete implementation of the related functionality, "
+                    #     "please modify the DefectPlane ONLY through the GUI during interactive adjustments. "
+                    #     "Do NOT manually change its properties from the command line, "
+                    #     "as this may cause the internal state and the GUI to become out of sync."
+                    # )
+                    # self.owner.console.println(DEFECT_PLANE_GUI_ONLY_WARNING)
+                    # print(DEFECT_PLANE_GUI_ONLY_WARNING)
                 
         if type(owner).__name__ == "PlotDelaunay" and getattr(owner, "_state_is_interactable", False):
             

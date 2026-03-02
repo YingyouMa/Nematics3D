@@ -666,52 +666,111 @@ def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) 
     
     return rot.as_matrix()
 
-def fit_plane(points):
-    #! how good are points lying in a plane
-    #! average rotation vector
+
+def find_rotation_axis(directors, is_return_metric=False):
     """
-    Calculate the normal vector of the best-fit plane to a set of 3D points
-    using Singular Value Decomposition (SVD).
-
-    Parameters
-    ----------
-    points : numpy.ndarray, (..., N, 3)
-             Array containing the 3D coordinates of the points.
-             The last dimension represents the coordinates (x, y, z).
-             It will find the averaged normal vector for each group of N points.
-
-    Returns
-    -------
-    normal_vector : numpy.ndarray, (..., 3)
-                    Array representing the normal vector of the best-fit plane.
-
-    Dependencies
-    ------------
-    - numpy: 1.22.0
+    Finds the common rotation axis for a sequence of normalized vectors.
     """
-    ndim = points.ndim
-    if ndim == 2:
-        points = np.array([points])
+    # 1. Solve the optimization problem using SVD on the scatter matrix.
+    # We find the vector 'a' that minimizes sum((v_i . a)^2).
+    # This is equivalent to finding the eigenvector with the smallest eigenvalue.
+    M = np.dot(directors.T, directors)
+    eigenvalues, eigenvectors = np.linalg.eigh(M)
+    
+    # The first eigenvector corresponds to the smallest eigenvalue (the axis).
+    axis = eigenvectors[:, 0]
+    
+    # 2. Determine rotation direction if requested.
+    # We look at the cross product of consecutive vectors: v_i x v_{i+1}.
+    # The sum of these cross products points in the direction of the rotation.
+    cross_prods = np.cross(directors[:-1], directors[1:])
+    avg_cross = np.sum(cross_prods, axis=0)
+        
+    # If the dot product between our calculated axis and the rotation 
+    # flow is negative, flip the axis to align with the "Up" direction.
+    if np.dot(axis, avg_cross) < 0:
+        axis = -axis
+        
+    if not is_return_metric:
+        return axis
+    
+    else:
 
-    # Calculate the center of the points
-    center = points.mean(axis=-2)
+        # 3. Calculate metrics
+        # How much of the total "energy" is captured by the axis (0 to 1).
+        total_var = np.sum(eigenvalues)
+        # Orthogonality score: 1.0 means all vectors are perfectly in the plane perpendicular to the axis.
+        orthogonality_score = 1.0 - (eigenvalues[0] / total_var)
+        
+        # RMS of sin(theta), where theta is the angle between the vector and the plane.
+        # Ideally, this should be near 0.
+        rms_sin_theta = np.sqrt(eigenvalues[0] / len(directors))
+        
+        # Calculate the average tilt angle from the perpendicular plane in degrees.
+        tilt_angle_deg = np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
+        
+        metric = {
+            "orthogonality_score": orthogonality_score,
+            "rms_sin_theta": rms_sin_theta,
+            "tilt_angle_degrees": tilt_angle_deg,
+            "eigenvalues": eigenvalues
+        }
+        
+        return axis, metric
 
-    # Translate the points to be relative to the center
-    N = np.shape(points)[-2]
-    relative = points - np.tile(
-        center[:, np.newaxis, :], (*(np.ones(points.ndim - 2).astype(int)), N, 1)
-    )
 
-    # Perform Singular Value Decomposition (SVD) on the transposed relative points
-    svd = np.linalg.svd(np.swapaxes(relative, -1, -2), full_matrices=False)[0]
 
-    # Extract the left singular vector corresponding to the smallest singular value
-    normal_vector = svd[:, :, -1]
+def find_plane_normal(points, is_return_metric=False):
+    """
+    Estimates the normal vector of a point cloud and evaluates its planarity.
+    """
+    if len(points) < 3:
+        raise ValueError("At least 3 points are required to define a plane.")
 
-    if ndim == 2:
-        normal_vector = normal_vector[0]
+    # 1. Center the points (Subtract the mean)
+    # This ensures we are looking at the spread around the centroid
+    centroid = np.mean(points, axis=0)
+    centered_points = points - centroid
+    
+    # 2. Compute the Scatter Matrix (or Covariance Matrix)
+    # M = (P - mean)^T * (P - mean)
+    M = np.dot(centered_points.T, centered_points)
+    
+    # 3. Eigenvalue decomposition
+    # eigenvalues are sorted in ascending order by np.linalg.eigh
+    eigenvalues, eigenvectors = np.linalg.eigh(M)
+    
+    # The normal vector is the eigenvector corresponding to the smallest eigenvalue
+    normal = eigenvectors[:, 0]
+    
+    if not is_return_metric:
+        return normal
+    else:
 
-    return normal_vector
+        # 4. Metrics calculation
+        total_variance = np.sum(eigenvalues)
+        
+        # Planarity Score (0 to 1): How well the points fit a flat plane.
+        # 1.0 means perfectly flat.
+        planarity = 1.0 - (3.0 * eigenvalues[0] / total_variance) if total_variance > 0 else 1.0
+        
+        # Thickness: The RMS distance of points from the fitted plane
+        thickness_rms = np.sqrt(eigenvalues[0] / len(points))
+        
+        # Aspect Ratio (Anisotropy): 
+        # Compares the smallest spread to the medium spread to see if the plane is well-defined
+        # If this is close to 1, the points might be distributed like a line rather than a plane.
+        linearity_risk = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] > 1e-9 else 1.0
+    
+        metric =  {
+            "centroid": centroid,
+            "planarity_score": np.clip(planarity, 0, 1),
+            "thickness_rms": thickness_rms,
+            "eigenvalues": eigenvalues,
+            "linearity_risk": linearity_risk  # High risk if the 'plane' thickness is similar to its width
+        }
+        
+        return normal, metric
 
 
 def pop_exclusive(kwargs: dict, k1: str, k2: str):    #1

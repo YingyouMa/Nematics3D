@@ -55,18 +55,22 @@ def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
 
     n = check_Sn(n, "n")
 
-    from .field import align_directors
-
-    a = n[:-1, :-1]
-    b = align_directors(a, n[1:, :-1])
-    c = align_directors(b, n[1:, 1:])
-    d = align_directors(c, n[:-1, 1:])
+    from .field import align_stack
+    
+    a_orig = n[:-1, :-1]
+    b_orig = n[1:, :-1]
+    c_orig = n[1:, 1:]
+    d_orig = n[:-1, 1:]
+    stack = np.stack([a_orig, b_orig, c_orig, d_orig], axis=0)
+    aligned_stack = align_stack(stack)
+    a, b, c, d = aligned_stack
+    
+    
     test = np.einsum("...i,...i->...", a, d)
     
     #print(test[:, :-1])
     #print(np.array(np.where(test < threshold)).T.astype(float))
     
-
     coords = np.array(np.where(test < threshold)).T.astype(float)
     coords[:, [0, 1]] += 0.5
     

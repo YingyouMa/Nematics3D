@@ -26,7 +26,6 @@ class PlotExtent(PlotTube):
     _OPTS_DEFAULT_EXTENT = MappingProxyType({
         "color":        (0.0, 0.0, 0.0),  # black
         "radius":       0.35,             # thinner than PlotTube default
-        "is_pickable":  False,
     })
 
     _EDGES = (

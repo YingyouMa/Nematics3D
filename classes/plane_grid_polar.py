@@ -23,33 +23,33 @@ class OptsPlaneGridPolar(OptsBase):
     Options for generating a polar (concentric-ring) point lattice on a plane.
 
     This option set targets the "ring + equal arc-length" strategy:
-    - Rings are placed at radii r_i = (i + 0.5) * dr up to R_max
+    - Rings are placed at radii r_i = (i + 0.5) * dr 
     - Points on each ring are spaced by approximately constant arc length
       (via N_theta(i) ≈ round(2π r_i / arc_dist))
     - Rings are angularly staggered using the golden angle for reduced aliasing
       (a deterministic, reproducible staggering scheme)
     """
 
-    origin:                     Vect(3) | Unset                  = UNSET  # disk center in 3D
-    normal:                     Vect(3) | Unset                  = UNSET  # plane normal (unit)
-    theta0_axis:                Vect(3) | None | Unset           = UNSET  # in-plane reference axis for theta=0 (unit after projection)
-    R_max:                      Number | Unset                   = UNSET  # maximum radius of disk
-    dr:                         Number | Unset                   = UNSET  # radial ring spacing
-    arc_dist:                   Number | Unset                   = UNSET  # target arc-length spacing along each ring
-    start_layer:                int | Unset                      = UNSET  # 0 includes center; 1 starts from first ring; 2 starts from second ring; ...
-    corners_limit:              Tensor((8, 3)) | None | UNSET    = UNSET
-    grid_offset:                Vect(3) | Unset                  = UNSET
-    grid_transform:             Tensor((3, 3)) | Unset           = UNSET
+    origin:                     Vect(3) | Unset                 = UNSET  
+    normal:                     Vect(3) | Unset                 = UNSET  
+    theta0_axis:                Vect(3) | None | Unset          = UNSET  
+    R_min:                      float | Unset                   = UNSET 
+    layers:                     int | Unset                     = UNSET
+    dr:                         float | Unset                   = UNSET  
+    arc_dist:                   float | Unset                   = UNSET  
+    corners_limit:              Tensor((8, 3)) | None | UNSET   = UNSET
+    grid_offset:                Vect(3) | Unset                 = UNSET
+    grid_transform:             Tensor((3, 3)) | Unset          = UNSET
 
     __descriptions__ = {
         **(OptsBase.__descriptions__),
         "origin":               "center of the polar grid in index coordinates",
         "normal":               "normal of the plane (unit vector)",
         "theta0_axis":          "in-plane reference axis defining theta=0; will be projected onto the plane and normalized (None uses the default axis)",
-        "R_max":                "maximum radius of the disk (sampling domain)",
+        "R_min":                "minimum radius of the first ring (or 0 for center point)",
+        "layers":               "total number of rings/layers to generate",
         "dr":                   "radial spacing between rings; rings at r_i = (i + 0.5) * dr",
         "arc_dist":             "target arc-length spacing between adjacent points along each ring",
-        "start_layer":          "starting layer index: 0 includes the center point; 1 starts from the first ring (r=0.5*dr); 2 starts from the second ring, etc.",
         "corners_limit":        "bounding box corners (8×3 array)",
         "grid_offset":          "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform":       "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
@@ -60,10 +60,10 @@ class OptsPlaneGridPolar(OptsBase):
         "origin":               lambda v, d: as_Vect(v, name=d),
         "normal":               lambda v, d: as_Vect(v, name=d, is_norm=True),
         "theta0_axis":          lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
-        "R_max":                lambda v, d: as_Number(v, name=d, value_range=(1e-6, np.inf)),
+        "R_min":                lambda v, d: None if v is None else as_Number(v, name=d, value_range=(0, np.inf)),
+        "layers":               lambda v, d: as_Number(v, name=d, value_range=(1, np.inf), is_int=True),
         "dr":                   lambda v, d: as_Number(v, name=d, value_range=(1e-6, np.inf)),
         "arc_dist":             lambda v, d: None if v is None else as_Number(v, name=d, value_range=(1e-6, np.inf)),
-        "start_layer":          lambda v, d: as_Number(v, name=d, value_range=(0, np.inf), is_int=True),
         #!!! corner limit
         "grid_offset":          lambda v, d: as_Vect(v, name=d),
         "grid_transform":       lambda v, d: as_Tensor(v, (3, 3), name=d),
@@ -73,10 +73,10 @@ class OptsPlaneGridPolar(OptsBase):
         **(OptsBase._DEFAULTS_FROZEN),
         "tag":                  "polar plane grid options",
         "theta0_axis":          None,
-        "R_max":                5,
+        "R_min":                None,
+        "layers":               4,
         "dr":                   0.5,
         "arc_dist":             None,
-        "start_layer":          2,
         "corners_limit":        None,
         "grid_offset":          (0, 0, 0),
         "grid_transform":       np.diag((1, 1, 1)),
@@ -137,7 +137,7 @@ class PlaneGridPolar(HostBase):
         self._helper_commit_apply_opts()
         
         
-    @logging_and_warning_decorator()
+    @logging_and_warning_decorator
     def _helper_commit_apply_opts(self, logger=None, **kwargs):
 
         with self.opts._helper_internal_update():
@@ -151,13 +151,17 @@ class PlaneGridPolar(HostBase):
             arc_dist = self.opts.arc_dist
         else:
             arc_dist = self.opts.dr
+            
+        if self.opts.R_min is not None:
+            R_min = self.opts.R_min
+        else:
+            R_min = self.opts.dr
 
         origin = self.opts.origin
         dr = self.opts.dr
-        R_max = self.opts.R_max
         normal = self.opts.normal
         theta0_axis = self.opts.theta0_axis
-        start_layer = self.opts.start_layer  # 0: include center; 1: start from first ring; ...
+        layers = self.opts.layers
 
         if theta0_axis is not None:
             dot_product = normal @ theta0_axis
@@ -187,40 +191,30 @@ class PlaneGridPolar(HostBase):
         # ---- Generate rings ----
         points_list = []
         polar_list  = []
-        ring_sizes  = []   # n_theta for each appended "block" (including center block if start_layer==0)
+        ring_sizes  = []   
 
-        # layer 0: center point
-        if start_layer == 0:
-            points_list.append(origin.copy()[None, :])          # (1,3)
-            polar_list.append(np.array([[0.0, 0.0]]))           # (1,2)
-            ring_sizes.append(1)
 
-        # layers k>=1: rings at r_k = (k - 0.5) * dr
-        k = max(1, int(start_layer))
-        while True:
-            r = (k - 0.5) * dr
-            if r > R_max:
-                break
+        for i in range(layers):
+            r = R_min + i * dr
+            
+            if np.isclose(r, 0):
+                points_list.append(origin.copy()[None, :])
+                polar_list.append(np.array([[0.0, 0.0]]))
+                ring_sizes.append(1)
+            else:
+                n_theta = int(np.round(2.0 * np.pi * r / arc_dist))
+                n_theta = max(1, n_theta)
 
-            # Points per ring: approx equal arc length
-            n_theta = int(np.round(2.0 * np.pi * r / arc_dist))
-            n_theta = max(1, n_theta)
+                phi = (i * golden_angle) % (2.0 * np.pi)
+                thetas = (2.0 * np.pi * np.arange(n_theta) / n_theta + phi) % (2.0 * np.pi)
 
-            phi = ((k - 1) * golden_angle) % (2.0 * np.pi)
+                cos_t = np.cos(thetas)
+                sin_t = np.sin(thetas)
+                ring_points = origin + (r * cos_t)[:, None] * e1[None, :] + (r * sin_t)[:, None] * e2[None, :]
 
-            # Angles on this ring
-            thetas = (2.0 * np.pi * np.arange(n_theta) / n_theta + phi) % (2.0 * np.pi)
-
-            # Convert to 3D: origin + r*cos(theta)*e1 + r*sin(theta)*e2
-            cos_t = np.cos(thetas)
-            sin_t = np.sin(thetas)
-            ring_points = origin + (r * cos_t)[:, None] * e1[None, :] + (r * sin_t)[:, None] * e2[None, :]
-
-            points_list.append(ring_points)                                      # (n_theta,3)
-            polar_list.append(np.column_stack([np.full(n_theta, r), thetas]))    # (n_theta,2)
-            ring_sizes.append(n_theta)
-
-            k += 1
+                points_list.append(ring_points)
+                polar_list.append(np.column_stack([np.full(n_theta, r), thetas]))
+                ring_sizes.append(n_theta)
 
         # ---- Flatten + ring offsets ----
         points = np.vstack(points_list)   # (N,3)

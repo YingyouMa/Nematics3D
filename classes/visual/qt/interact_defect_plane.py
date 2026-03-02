@@ -2,8 +2,7 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
-from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper, MovePointConsole
-from Nematics3D.general import rotation_matrix_from_vectors
+from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper
 from ..plot_rod import PlotRod
 from Nematics3D.datatypes import UNSET
 
@@ -36,7 +35,17 @@ class InteractDefectPlane(PanelBase):
         
         def _on_toggle_show_axes():
             checked = self.chk_is_show_axes.isChecked()
-            self.visual_normal.opts.is_visible = checked
+            if checked:
+                normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
+                normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
+                normal_now = self._helper_calc_vec(normal_azimuth, normal_polar_angle)
+                self.visual_normal.act_commit(
+                    orient=normal_now, 
+                    coords=self.host.opts.origin, 
+                    is_visible=True
+                )
+            else:
+                self.visual_normal.opts.is_visible = False
             
         self.chk_is_show_axes = QtWidgets.QCheckBox(
             "Whether to visualize normal",
@@ -175,18 +184,13 @@ class InteractDefectPlane(PanelBase):
                     
         self.on_changed(0, is_commit=False)
         
-        # self.defect_plane._impl_sync_func["x_param"][self.str_now] = self._sync_origin
-        # self.defect_plane._impl_sync_func["state_normal"][self.str_now] = self._sync_normal
         
     def commit(self):
         # ---- normal ----
         if self.state["is_use_control_normal"]:
             normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
-            normal_poalr_angle = np.deg2rad(self.state["normal_polar_angle"])
-            x = np.sin(normal_poalr_angle) * np.cos(normal_azimuth)
-            y = np.sin(normal_poalr_angle) * np.sin(normal_azimuth)
-            z = np.cos(normal_poalr_angle)
-            normal_now = (x, y, z)
+            normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
+            normal_now = self._helper_calc_vec(normal_azimuth, normal_polar_angle)
         else:
             normal_now = UNSET
         
@@ -198,6 +202,20 @@ class InteractDefectPlane(PanelBase):
             state_normal=normal_now
         )
         
+        self.normal_info.setText(
+            self._vect_text(self.host.opts.normal, "normal")
+        )
+        self.origin_info.setText(
+            self._vect_text(self.host.opts.origin, "origin")
+        )
+        
+        if self.chk_is_show_axes.isChecked():
+            self.visual_normal.act_commit(
+                coords=self.host.opts.origin, 
+                orient=self.host.opts.normal,
+                is_silhouette=False
+            )
+        
         
         
     def _on_toggle_use_normal(self, _state: int):
@@ -206,35 +224,6 @@ class InteractDefectPlane(PanelBase):
         self.sliders["normal_azimuth"].set_enabled(result)
         self.sliders["normal_polar_angle"].set_enabled(result)
         self.commit()
-        
-      
-    def _sync_origin(self):
-        self._sync_from_host("x_param", self.defect_plane.x_param)
-        self.origin_info.setText(
-            self._vect_text(self.host.opts.origin, "origin")
-        )
-        # self.visual_normal.act_commit(
-        #     coords=self.host.opts.origin, 
-        #     orient=self.host.opts.normal,
-        #     is_silhouette=False
-        # )
-        
-    def _sync_normal(self):
-        if self.defect_plane.state_normal is UNSET:
-            self.chk_use_normal.setChecked(False)
-        else: #!!! other const normals
-            self.chk_use_normal.setChecked(True)
-            self._sync_from_host("normal_azimuth", self.get_azimuth(self.host.opts.normal))
-            self._sync_from_host(
-                "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
-            )
-        self.normal_info.setText(
-            self._vect_text(self.host.opts.normal, "normal")
-        )
-        # self.visual_normal.act_commit(
-        #     orient=self.host.opts.normal,
-        #     is_silhouette=False
-        # )       
 
         
     def on_close(self):
@@ -244,30 +233,4 @@ class InteractDefectPlane(PanelBase):
         sync = getattr(self.defect_plane, "_impl_sync_func", None)
         for k, sub in sync.items():
             sub.pop(self.str_now, None)
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    @staticmethod
-    def get_azimuth(vec):
-        az_rad = np.arctan2(vec[1], vec[0])
-        azimuth = np.round(np.degrees(az_rad)) % 360
-        return azimuth
 
-    @staticmethod
-    def get_polar_angle(vec):
-        vec /= np.linalg.norm(vec, axis=-1, keepdims=True)
-        polar = np.arccos(vec[2])
-        polar = np.degrees(polar)
-        return polar
-    
-    @staticmethod
-    def _vect_text(vect, name):
-        text = f"{name}: ({vect[0]:.2f}, {vect[1]:.2f}, {vect[2]:.2f})"
-        return text

@@ -782,6 +782,7 @@ class QFieldObject(ClassBase):
         opts_extent: OptsTube | None = None,
         opts_defect: OptsSphere | None = None,
         title: str = "visualization of n near defect",
+        plane_name: str | None = None,
         logger=None,
         **kwargs,
     ):
@@ -833,8 +834,8 @@ class QFieldObject(ClassBase):
             self.act_add_interpolator()
 
         logger.detail("Create the plane.")
-        plane_grid = smooth.act_add_local_plane(x_param, opts=opts_grid)
-        n_plane_name = plane_grid.name + " of " + smooth.name 
+        plane_grid = smooth.act_add_local_plane(x_param, opts=opts_grid, name=plane_name)
+        n_plane_name = plane_grid.name + " of " + smooth.name
         n_plane = QPlanePolar(
             self._calc_interpolator,
             name=n_plane_name,
