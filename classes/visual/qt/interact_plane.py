@@ -37,7 +37,7 @@ class InteractPlane(PanelBase):
             is_visible=False
         )
 
-        super().__init__(field.plane, title=f"Controls of {field.plane.name!r}")
+        super().__init__(field.plane, figure, title=f"Controls of {field.plane.name!r}")
 
     def build_ui(self):
         

@@ -15,7 +15,10 @@ class SliderItem:
     tick_to_value: Callable[[int], float]
     value_to_tick: Callable[[float], int]
     state_key: str
+    value_min: int
+    value_max: int
     value_fmt: str = "{:.2f}"
+
     
     def get_value(self) -> float:
         return float(self.tick_to_value(int(self.slider.value())))
@@ -35,7 +38,12 @@ class SliderItem:
         if is_block_signals:
             self.slider.blockSignals(True)
         try:
+            tick_max = self.value_to_tick(float(self.value_max))
+            if tick > tick_max:
+                tick_max = int(tick*1.2)
+                self.slider.setMaximum(tick_max)
             self.slider.setValue(int(tick))
+            self.set_label()
         finally:
             if is_block_signals:
                 self.slider.blockSignals(False)
@@ -105,6 +113,8 @@ def make_labeled_slider_row(
         value_to_tick=value_to_tick,
         state_key=(name if state_key is None else state_key),
         value_fmt=value_fmt,
+        value_min=value_min,
+        value_max=value_max
     )
     item.set_label()  # initialize label text
 
@@ -470,14 +480,17 @@ class MovePointConsole:
 
 class PanelBase(QtWidgets.QWidget):
     
-    def __init__(self, host, title: str = "Panel"):
+    def __init__(self, host, figure, title: str = "Panel"):
         
         title = as_str(title, name="The title of panel", replace="Panel")
         
         super().__init__()
         
         self.host = host
+        self.fig = figure
         self.str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        self.host.act_save_opts(self.str_now)
+        self.str_now += "_live"
         self.host.act_save_opts(self.str_now)
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", False)
@@ -495,7 +508,29 @@ class PanelBase(QtWidgets.QWidget):
         
         self.build_ui()
         
-    def _sync_from_host(self, attr: str, value: float):
+        # ----------------------------
+        # Reset Actions group
+        # ----------------------------
+        group_reset = QtWidgets.QGroupBox("Reset", self)
+        hl_reset = QtWidgets.QHBoxLayout(group_reset)
+        self.layout.addWidget(group_reset)
+
+        self.btn_reset_live = QtWidgets.QPushButton("Reset to Live", group_reset)
+        self.btn_reset_live.setToolTip("Discard UI changes and revert to the current live baseline.")
+        self.btn_reset_live.clicked.connect(self._on_reset_to_live)
+        hl_reset.addWidget(self.btn_reset_live)
+
+        self.btn_reset_orig = QtWidgets.QPushButton("Restore Original", group_reset)
+        self.btn_reset_orig.setToolTip("Discard all console overrides and restore the initial state.")
+        self.btn_reset_orig.clicked.connect(self._on_reset_to_original)
+        hl_reset.addWidget(self.btn_reset_orig)
+        
+        self.host.act_attach_sync_task(
+            name = self.str_now,
+            func = self._sync_func
+        )
+        
+    def _sync_from_host_slider(self, attr: str, value: float):
         s = self.sliders[attr]
         s.set_tick(value, is_block_signals=True)
         self.on_changed(0, is_commit=False)
@@ -512,6 +547,18 @@ class PanelBase(QtWidgets.QWidget):
 
     def commit(self):
         raise NotImplementedError
+        
+    def _sync_func(self):
+        raise NotImplementedError
+        
+    def _on_reset_to_live(self):
+        self.host.act_commit(**self.host._opts_backup[self.str_now])
+        
+    def _on_reset_to_original(self):
+        original = self.host._opts_backup[self.str_now[:-5]]
+        self.host.act_commit(**original)
+        self.host._opts_backup[self.str_now] = self.host._opts_backup[self.str_now] | original
+        
 
     def closeEvent(self, event: QtGui.QCloseEvent):
         try:
@@ -522,9 +569,7 @@ class PanelBase(QtWidgets.QWidget):
     def on_close(self):
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", True)
-        sync = getattr(self.host.opts, "_impl_sync_func", None)
-        for k, sub in sync.items():
-            sub.pop(self.str_now, None)
+        self.host.act_detach_sync_task(self.str_now)
             
     @staticmethod
     def _vect_text(vect, name):

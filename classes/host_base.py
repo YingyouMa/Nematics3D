@@ -33,7 +33,6 @@ class OptsBase:
         * Setting an attribute to ``UNSET`` is strictly forbidden after finalization.
         * Any subsequent modification to public attributes will be treated as a
           request and forwarded to the associated Host via the commit pipeline.
-        * These updates will trigger ``_impl_sync_func`` for downstream listeners.
     4.  **Data Export**: The current state of all non-hidden attributes can
         be retrieved as a standard dictionary via ``act_asdict()``.
     """
@@ -44,9 +43,6 @@ class OptsBase:
         default=None, repr=False, init=False
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
-    _impl_sync_func: dict[str, dict[str, Callable[[], Any]]] = field(
-        default_factory=dict, init=False, repr=False
-    )
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         "tag": "name identifier of the option settings",
@@ -57,11 +53,6 @@ class OptsBase:
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({"tag": "options"})
-
-    def __post_init__(self):
-        object.__setattr__(
-            self, "_impl_sync_func", {k: {} for k in self.__descriptions__.keys()}
-        )
 
     @property
     def host(self):
@@ -294,8 +285,8 @@ class HostBase(ClassBase):
         MUST write the resolved value back to opts. This write-back must bypass
         the normal opts assignment path (e.g. via object.__setattr__ or
         OptsBase._helper_internal_update) to avoid recursive commit loops.
-        The host is also responsible for calling self._helper_trigger_sync_batch()
-        all downstream listeners are notified of the resolved value.
+        The host is also responsible for calling self._impl_sync_func() to update
+        all downstream listeners by the resolved value.
     * Other inheritance guidelines of ClassBase class.
     """
 
@@ -307,6 +298,10 @@ class HostBase(ClassBase):
         "_opts_backup": (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
+        ),
+        "_impl_sync_func": (
+                    "A dictionary of callback functions for post-commit synchronization. "
+                    "Key: unique identifier (str); Value: callable task(host, **kwargs)."
         ),
     }
 
@@ -348,6 +343,7 @@ class HostBase(ClassBase):
         )
         object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
+        object.__setattr__(self, "_impl_sync_func", {})
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
@@ -386,25 +382,47 @@ class HostBase(ClassBase):
         if found:
             self.act_set_name(name)
         return kwargs
-
-    def act_commit(self, opts=None, **kwargs):
+    
+    @logging_and_warning_decorator()
+    def act_commit(self, opts=None, logger=None, **kwargs):
         kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         self._helper_commit_apply_opts(**kwargs)
+        for name, func in self._impl_sync_func.items():
+            try:
+                func(**kwargs)
+            except Exception as e:
+                logger.exception(f"Sync task '{name}' failed: {e}")
+                logger.recovery("Automatically skip this function.")
 
     def _helper_commit_apply_opts(self, **kwargs):
+        self._helper_commit_apply_opts_main(**kwargs)
+        self._helper_trigger_sync_batch(**kwargs)
+        
+    def _helper_commit_apply_opts_main(self, **kwargs):
         raise NotImplementedError(...)
-
-    def _helper_trigger_sync_batch(self, **kwargs):   #!!! not pass kwargs
-        for attr in kwargs.keys():
-            sync_func = self.opts._impl_sync_func.get(attr, {})
-            for func in sync_func.values():
-                func()
 
     def act_save_opts(self, name=None):
         if not name:
             name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         self._opts_backup[name] = self.opts.act_asdict()
+        
+    def act_attach_sync_task(self, name: str, func: Callable):
+        if not callable(func):
+            raise TypeError(f"The sync task '{name}' must be callable.")
+        self._impl_sync_func[name] = func
+        
+    def act_detach_sync_task(self, name: str):
+        self._impl_sync_func.pop(name, None)
+       
+    @logging_and_warning_decorator()
+    def _helper_trigger_sync_batch(self, logger=None, **kwargs):
+        for name, func in self._impl_sync_func.items():
+            try:
+                func(**kwargs)
+            except Exception as e:
+                logger.exception(f"Sync task '{name}' failed: {e}")
+                logger.recovery("Automatically skip this function.")
 
     # -----------------------------------------------------------------
     # OVERRIDE:
@@ -422,7 +440,7 @@ class HostBase(ClassBase):
     # _helper_commit_apply_opts(...), where consistency checks and side
     # effects are centrally managed.
     # -----------------------------------------------------------------
-
+    
     def _helper_setattr_basic(self, key, value, allowed_extra=None):
 
         if allowed_extra is None:

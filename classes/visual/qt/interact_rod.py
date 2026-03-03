@@ -3,8 +3,8 @@ from qtpy import QtWidgets
 from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider, LogTickMapper
 
 class InteractRod(PanelBase):
-    def __init__(self, host):
-        super().__init__(host, title=f"Rod Controls of {host.name!r}")
+    def __init__(self, host, figure):
+        super().__init__(host, figure, title=f"Rod Controls of {host.name!r}")
 
     def build_ui(self):
 
@@ -42,6 +42,9 @@ class InteractRod(PanelBase):
             tick_to_value=log_mapper.tick_to_value,
             value_to_tick=log_mapper.value_to_tick
         )
+        self.lbl_radius = QtWidgets.QLabel(group_geometry)
+        gl_geometry.addWidget(self.lbl_radius)
+        self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
         
         self.sliders["length_rescale"] = make_labeled_slider_row(
             parent=group_geometry,
@@ -54,6 +57,9 @@ class InteractRod(PanelBase):
             tick_to_value=log_mapper.tick_to_value,
             value_to_tick=log_mapper.value_to_tick
         )
+        self.lbl_length = QtWidgets.QLabel(group_geometry)
+        gl_geometry.addWidget(self.lbl_length)
+        self.lbl_length.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
 
     
         self.sliders["sides"] = make_labeled_slider_row(
@@ -61,7 +67,7 @@ class InteractRod(PanelBase):
             layout=gl_geometry,
             name="sides",
             state_key="sides",
-            value_min=4,
+            value_min=3,
             value_max=30,
             value_init=self.state["sides"],
             value_fmt="{:.0f}",
@@ -122,12 +128,6 @@ class InteractRod(PanelBase):
             item.slider.sliderPressed.connect(self.host._helper_clear_silhouette)
             item.slider.sliderReleased.connect(self.host._helper_add_silhouette)
 
-        self.on_changed(0, is_commit=False)
-        
-        self.host.opts._impl_sync_func["sides"][self.str_now] = (
-            lambda: self._sync_from_host("sides", self.host.opts.sides)
-        )
-
 
     def commit(self):
         # ---- radius ----
@@ -164,15 +164,19 @@ class InteractRod(PanelBase):
         else:
             opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
-        self.host.act_commit(
-            radius=radius_now,
-            length=length_now,
-            color=color_now,
-            opacity=opacity_now,
-            paint_by=paint_by_now,
-            sides=int(self.state["sides"]),
-            is_silhouette=False,
-        )
+        self._is_gui_updating = True
+        try:
+            self.host.act_commit(
+                radius=radius_now,
+                length=length_now,
+                color=color_now,
+                opacity=opacity_now,
+                paint_by=paint_by_now,
+                sides=int(self.state["sides"]),
+                is_silhouette=False,
+            )
+        finally:
+            self._is_gui_updating = False
 
     def _on_toggle_use_color(self, _state: int):
         is_color = bool(self.chk_use_color.isChecked())
@@ -186,3 +190,26 @@ class InteractRod(PanelBase):
         self.state["is_use_control_opacity"] = is_opacity
         self.sliders["opacity"].set_enabled(is_opacity)
         self.commit()
+
+    def _sync_func(self, **kwargs):
+        sides = kwargs.get("sides", None)
+        if sides is not None:
+            self._sync_from_host_slider("sides", sides)
+        self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
+        
+        if not getattr(self, "_is_gui_updating", False):
+            self.host._opts_backup[self.str_now].update(kwargs)
+            
+            if 'radius' in kwargs.keys():
+                self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
+                self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
+                
+            if 'length' in kwargs.keys():
+                self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
+                self.lbl_radius.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
+                
+            if 'color' in kwargs.keys():
+                self.chk_use_color.setChecked(False)
+                
+            if 'opacity' in kwargs.keys():
+                self.chk_use_opacity.setChecked(False)

@@ -8,22 +8,27 @@ class RegistryBase:
 
     # fmt: off
     __descriptions__ = {
-        "raw_name":     "The name of the Registry.",
-        "_entity":      "The container storing the objects.",
+        "raw_name":         "The name of the Registry.",
+        "_raw_info":        "The extra introduction for this instance for clarity",
+        "_entity":          "The container storing the objects.",
 
-        "_impl_owner_ref": (
+        "_impl_owner_ref":  (
             "A weak reference to the owner object associated with this instance. "
             "To access it, use .owner or ._impl_owner."
         ),
     }
     # fmt: on
 
-    def __init__(self, name):
+    def __init__(self, name, info=None):
 
         name = as_str(name, name="The name of the Registry")
         object.__setattr__(self, "raw_name", name)
         object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
+        
+        if info is not None:
+            info = as_str(info, name="extra information of the RegistryBase instance", replace=None)
+        object.__setattr__(self, "_raw_info", None)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_name(self, name: str, logger=None):
@@ -60,7 +65,7 @@ class RegistryBase:
             return
 
         if not hasattr(term, "name"):
-            raise TypeError("term must have attribute `.name`.")
+            raise TypeError("term must have attribute `name`.")
         name = self._helper_check_name(term.name)
         term.name = name
         self._entity.append(term)

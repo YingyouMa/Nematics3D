@@ -25,7 +25,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import pop_exclusive, find_nearest_point, fmt_value
 
 #!!! resolver source
-#!!! colorbar name args
+#!!! colorbar name args manager
 #!!! is_reset_camera commit
 
 # --- Type aliases ---
@@ -554,7 +554,7 @@ class PlotGlyph(HostBase):
                 title=self.opts.scalar_bar_title,
                 mapper=mapper,
                 render=False
-                )
+            )
         
 
             
@@ -618,17 +618,29 @@ class PlotGlyph(HostBase):
     def act_commit(self, opts=None, is_silhouette=True, **kwargs):
         is_new_topology, kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply_opts(is_new_topology, 
-                                       is_silhouette=is_silhouette, 
-                                       **kwargs)
+        self._helper_commit_apply_opts(
+            is_new_topology, 
+            is_silhouette=is_silhouette, 
+            **kwargs
+        )
+        
+    def _helper_commit_apply_opts(self, is_new_topology, is_silhouette=True, **kwargs):
+        self._helper_commit_apply_opts_main(
+            is_new_topology,
+            is_silhouette=is_silhouette,
+            **kwargs
+        )
+        self._helper_trigger_sync_batch(**kwargs)
     
     
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_apply_opts(self, 
-                             is_new_topology, 
-                             is_silhouette=True,
-                             logger=None, 
-                             **kwargs):
+    def _helper_commit_apply_opts_main(
+            self, 
+            is_new_topology, 
+            is_silhouette=True,
+            logger=None, 
+            **kwargs
+    ):
         
         if not is_new_topology and not kwargs:
             return
@@ -704,8 +716,6 @@ class PlotGlyph(HostBase):
             self._helper_update_scalars()
             
         self.fig.pl.render()
-        
-        self._helper_trigger_sync_batch(**kwargs)
 
          
     

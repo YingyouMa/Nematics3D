@@ -471,7 +471,7 @@ class PickManager:
         if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
             
             from .qt.interact_sphere import InteractSphere
-            control = InteractSphere(owner)
+            control = InteractSphere(owner, owner.fig)
             control.show()
             
         elif type(owner).__name__ == "PlotTube" and getattr(owner, "_state_is_interactable", False):
@@ -485,7 +485,7 @@ class PickManager:
         if type(owner).__name__ == "PlotRod" and getattr(owner, "_state_is_interactable", False):
             
             from .qt.interact_rod import InteractRod
-            control = InteractRod(owner)
+            control = InteractRod(owner, owner.fig)
             control.show()
             
             figure = owner.fig
