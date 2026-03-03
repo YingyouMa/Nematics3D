@@ -175,7 +175,7 @@ class SmoothedLine(HostBase):
         self._helper_commit_apply_opts(**kwargs)
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts_main(self, logger=None, **kwargs):
 
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
@@ -289,8 +289,6 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth("system error")
-
-        self._helper_trigger_sync_batch(**kwargs)
         
 
 

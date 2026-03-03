@@ -303,6 +303,12 @@ class HostBase(ClassBase):
                     "A dictionary of callback functions for post-commit synchronization. "
                     "Key: unique identifier (str); Value: callable task(host, **kwargs)."
         ),
+        "_impl_attrs_wrapped": (
+            "Protected attributes under wrapping. When wrapped, these attributes cannot be modified "
+            "unless within _helper_wrapped_update() context."
+        ),
+        "_impl_wrapper_ref": "A weak reference to the wrapper object that controls this host. ",
+        "_entity_wrapped": "The host object being wrapped and controlled by this wrapper."
     }
 
     __slots__ = tuple(
@@ -344,6 +350,9 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_impl_sync_func", {})
+        object.__setattr__(self, "_impl_attrs_wrapped", ())
+        object.__setattr__(self, "_impl_wrapper_ref", None)
+        object.__setattr__(self, "_entity_wrapped", None)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
@@ -388,14 +397,22 @@ class HostBase(ClassBase):
         kwargs = self._helper_commit_pre_opts(**kwargs)
         kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
         self._helper_commit_apply_opts(**kwargs)
-        for name, func in self._impl_sync_func.items():
-            try:
-                func(**kwargs)
-            except Exception as e:
-                logger.exception(f"Sync task '{name}' failed: {e}")
-                logger.recovery("Automatically skip this function.")
 
-    def _helper_commit_apply_opts(self, **kwargs):
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts(self, logger=None, **kwargs):
+        
+        blocked = [k for k in kwargs.keys() if k in self._impl_attrs_wrapped]
+        for key in blocked:
+            kwargs.pop(key)
+            try:
+                raise AttributeError(
+                    f"{key!r} is protected by self.wrapper and could not be directly modified"
+                )
+            except AttributeError:
+                logger.exception("Invalid attr")
+                logger.recovery("Automatically ignore this attr")
+                
+        
         self._helper_commit_apply_opts_main(**kwargs)
         self._helper_trigger_sync_batch(**kwargs)
         
@@ -423,6 +440,60 @@ class HostBase(ClassBase):
             except Exception as e:
                 logger.exception(f"Sync task '{name}' failed: {e}")
                 logger.recovery("Automatically skip this function.")
+                
+                
+    @logging_and_warning_decorator()
+    def act_register_wrapped_attr(self, attrs: Sequence[str] | str, logger=None) -> None:
+        """Register a group of public attribute as protected under wrapping."""
+        
+        if isinstance(attrs, str):
+            attrs = [attrs]
+        elif not isinstance(attrs, (list, tuple)):
+            raise TypeError(
+                "attrs must be a string or a sequence of strings, "
+                f"got {type(attrs).__name__}."
+            )
+        
+        for attr in attrs:
+            try:
+                attr = as_str(attr, name="The name of attr to be wrapped")
+                if attr.startswith("raw_"):
+                    if attr in self.__descriptions__:
+                        self._impl_attrs_wrapped.update([attr, attr[4:]])
+                    else:
+                        raise AttributeError(
+                            f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__}."
+                        )
+                else:
+                    if attr in self.opts.__class__.__descriptions__:
+                        self._impl_attrs_wrapped.add(attr)
+                    else:
+                        raw_attr = "raw_" + attr
+                        if raw_attr in self.__descriptions__:
+                            self._impl_attrs_wrapped.update([raw_attr, raw_attr[4:]])
+                        else:
+                            raise AttributeError(
+                                f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__} or its opts."
+                        )
+            except Exception:
+                logger.exception("Invalid attr name.")
+                logger.recovery("Automatically ignore this attr.")
+                
+    @contextmanager
+    def _helper_wrapped_update(self):
+        protected = self._impl_attrs_wrapped
+        backup = set(protected)
+        protected.clear()
+        try:
+            yield
+        finally:
+            protected.update(backup)
+            
+    @property
+    def wrapper(self):
+        ref = self._impl_wrapper_ref
+        return ref() if ref is not None else None
+                
 
     # -----------------------------------------------------------------
     # OVERRIDE:
