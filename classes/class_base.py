@@ -178,25 +178,40 @@ class ClassBase:
         if overwrite or (name not in data):
             data[name] = default
 
-    def _helper_setattr_basic(self, key, value, allowed_extra=None):
-
-        if allowed_extra is None:
-            allowed_extra = []
-        allowed_core = list(allowed_extra) + ["name", "raw_name"]
-
-        extra = object.__getattribute__(self, "_impl_extra_attrs")
-        docs = object.__getattribute__(self, "_impl_extra_attrs_docs")
-        if key in docs:
-            extra[key] = value
+    def _helper_setattr_basic(self, key, value):
+            
+        if key in ("name", "raw_name"):
+            self.act_set_name(value)
+            return
+        
+        if key in self._impl_extra_attrs_docs:
+            self._impl_extra_attrs[key] = value
             return
 
-        if key not in allowed_core:
+        target_key = key
+        if key not in self.__descriptions__:
+            potential_raw = f"raw_{key}"
+            if potential_raw in self.__descriptions__:
+                target_key = potential_raw
+            else:
+                cls_name = self.__class__.__name__
+                obj_name = getattr(self, "raw_name", "Uninitialized")
+                raise AttributeError(
+                    f"[{cls_name}: {obj_name!r}] Assignment blocked: "
+                    f"{key!r} is not a valid or registered attribute."
+                )
+        
+        if target_key.startswith("_"):
+            cls_name = self.__class__.__name__
+            obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
-                f"Invalid attribute assignment: {key!r}. "
-                f"Only attributes in {allowed_core} can be modified directly, "
-                f"or a registered extra attribute."
+                f"[{cls_name}: {obj_name!r}] Assignment blocked: "
+                f"{key!r} is not a valid or registered attribute."
             )
-
+            
+        self._helper_setattr_final(target_key, value)
+            
+    def _helper_setattr_final(self, key, value):
         object.__setattr__(self, key, value)
 
     def __setattr__(self, key, value):

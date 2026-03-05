@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping, Type, Sequence
@@ -5,6 +6,7 @@ import weakref
 from contextlib import contextmanager
 import numpy as np
 import datetime
+
 
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
@@ -353,6 +355,10 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_impl_attrs_wrapped", ())
         object.__setattr__(self, "_impl_wrapper_ref", None)
         object.__setattr__(self, "_entity_wrapped", None)
+        
+        # remaining tasks for __init__():
+        # - finalizing opts at the appropriate lifecycle stage, and
+        # - defining how finalized opts are consumed and applied.
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
@@ -391,12 +397,29 @@ class HostBase(ClassBase):
         if found:
             self.act_set_name(name)
         return kwargs
+        # Remember to modify the returned kwargs so they are passed to the wrapped object.
+        # This includes adding any fields that were modified by the wrapper itself into kwargs.
     
     @logging_and_warning_decorator()
-    def act_commit(self, opts=None, logger=None, **kwargs):
+    def act_commit(self, opts=None, opts_wrapped=None, logger=None, **kwargs):
+        
         kwargs = self._helper_commit_pre_opts(**kwargs)
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply_opts(**kwargs)
+        
+        self_descriptions = self.opts.__class__.__descriptions__
+        self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
+        
+        if self_kwargs or opts:
+            self_kwargs = self._helper_merge_opts_kwargs(opts=opts, **self_kwargs)
+            self._helper_commit_apply_opts(**self_kwargs)
+            
+        if kwargs or opts_wrapped:
+            if self.wrapped is not None:
+                self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
+            else:
+                cls_name = self.__class__.__name__
+                obj_name = getattr(self, "raw_name", "Uninitialized")
+                logger.warning(f"[{cls_name}: {obj_name!r}] Invalid arguments: {list(kwargs.keys())}")
+                
 
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts(self, logger=None, **kwargs):
@@ -418,6 +441,8 @@ class HostBase(ClassBase):
         
     def _helper_commit_apply_opts_main(self, **kwargs):
         raise NotImplementedError(...)
+        # Remember to modify the returned kwargs so they are passed to the wrapped object.
+        # This includes adding any fields that were modified by the wrapper itself into kwargs.
 
     def act_save_opts(self, name=None):
         if not name:
@@ -493,42 +518,34 @@ class HostBase(ClassBase):
     def wrapper(self):
         ref = self._impl_wrapper_ref
         return ref() if ref is not None else None
-                
-
-    # -----------------------------------------------------------------
-    # OVERRIDE:
-    #
-    # This method intentionally overrides ClassBase._helper_setattr_basic
-    # by changing setattr to act_commit at the end.
-    #
-    # For Host objects, direct assignment to public (non-underscore)
-    # attributes does NOT mutate the host instance immediately.
-    # Instead, such assignments are forwarded to act_commit(...) and
-    # handled by the commit pipeline.
-    #
-    # This enforces a strict "commit-driven" update model for hosts:
-    # all externally visible state changes must pass through
-    # _helper_commit_apply_opts(...), where consistency checks and side
-    # effects are centrally managed.
-    # -----------------------------------------------------------------
     
-    def _helper_setattr_basic(self, key, value, allowed_extra=None):
-
-        if allowed_extra is None:
-            allowed_extra = []
-        allowed_core = list(allowed_extra) + ["name", "raw_name"]
-
-        extra = object.__getattribute__(self, "_impl_extra_attrs")
-        docs = object.__getattribute__(self, "_impl_extra_attrs_docs")
-        if key in docs:
-            extra[key] = value
-            return
-
-        if key not in allowed_core:
-            raise AttributeError(
-                f"Invalid attribute assignment: {key!r}. "
-                f"Only attributes in {allowed_core} can be modified directly, "
-                f"or a registered extra attribute."
+    @property
+    def wrapped(self):
+        return self._entity_wrapped
+    
+    def act_bind_wrapper(
+        self,
+        wrapper: HostBase,
+        protected_attrs: Sequence[str] | str | None = None,
+    ):
+        
+        old = self.wrapper
+        if old is not None and (old is not wrapper):
+            raise RuntimeError(
+                f"{type(self).__name__} is already wrapped by {type(old).__name__}."
             )
 
+        object.__setattr__(wrapper, "_entity_wrapped", self)
+        object.__setattr__(self, "_impl_wrapper_ref", weakref.ref(wrapper))
+
+        if protected_attrs:
+            self.act_register_wrapped_attr(protected_attrs)
+    
+    
+    # Rewrite from ClassBase. To handle opts.
+    def _helper_setattr_final(self, key, value):
         self.act_commit(**{key: value})
+
+# 一个类似的全局validator
+# setattr自动走到act_commit
+# getattr也包括opts

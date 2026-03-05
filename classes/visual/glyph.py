@@ -219,10 +219,10 @@ class PlotGlyph(HostBase):
         "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
         
-        "_impl_name_pv":            "The unique identifier of this glyph stored in the PyVista plotter.",
-        "_impl_resolver_source":    "Field used to drive visual variations (e.g. color, opacity)",
+        "_impl_name_pv":                "The unique identifier of this glyph stored in the PyVista plotter.",
+        "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
         
-        "_impl_figure_ref":          ("A weak reference to the PlotFigure instance containing this glyph."
+        "_impl_figure_ref":             ("A weak reference to the PlotFigure instance containing this glyph."
                                          "To access it, use .fig or ._impl_figure."),
         
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
