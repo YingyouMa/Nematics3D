@@ -431,12 +431,13 @@ class HostBase(ClassBase):
         # updates intended for ``self.wrapped``. If a wrapped host exists, they
         # are forwarded by calling ``self.wrapped.act_commit(...)``. If no wrapped
         # host exists, they are treated as invalid leftover arguments.
-
-        applied_kwargs = {}
-
-        self._helper_commit_pre_opts(kwargs, applied_kwargs=applied_kwargs)
-        self._helper_commit_self(kwargs, opts=opts)
-            
+        
+        kwargs_applied_raw = self._helper_commit_pre_opts(kwargs)
+        kwargs, kwargs_applied_opts = self._helper_commit_self(opts=opts, **kwargs)
+        kwargs_sync = kwargs_applied_raw | kwargs_applied_opts
+        if kwargs_sync:
+            self._helper_trigger_sync_batch(**kwargs_sync)
+        
         if kwargs or opts_wrapped:
             if self.wrapped is not None:
                 self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
@@ -444,6 +445,7 @@ class HostBase(ClassBase):
                 cls_name = self.__class__.__name__
                 obj_name = getattr(self, "raw_name", "Uninitialized")
                 logger.warning(f"[{cls_name}: {obj_name!r}] Invalid arguments: {list(kwargs.keys())}")
+        
                 
     # -----------------------           
     # _helper_commit_pre_opts
@@ -451,8 +453,9 @@ class HostBase(ClassBase):
     def _helper_commit_pre_opts(self, kwargs):
         
         self._helper_check_wrapped_attr(kwargs)
-        self._helper_commit_name(kwargs)
-        self._helper_commit_raw(kwargs)
+        kwargs_applied_name = self._helper_commit_name(kwargs)
+        kwargs_applied_raw = self._helper_commit_raw(kwargs)
+        return kwargs_applied_raw | kwargs_applied_name
         # Any value modified by the wrapper must be written back to ``kwargs``
         # so the updated parameters are forwarded to the wrapped object.
         # For example, the wrapped object only accepts ``radius``, while the wrapper
@@ -478,38 +481,45 @@ class HostBase(ClassBase):
                 
     def _helper_commit_name(self, kwargs):
         if not kwargs:
-            return
+            return {}
         found, name = pop_exclusive(kwargs, "name", "raw_name")
         if found:
             self.act_set_name(name)
+            return {"name": self.name}
+        else:
+            return {}
                 
     def _helper_commit_raw(self, kwargs):
         if not kwargs:
-            return
+            return {}
+        kwargs_applied_raw = {}
         for key in list(kwargs.keys()):
             if key in self.__descriptions__ or ("raw_" + key) in self.__descriptions__:
-                self._helper_commit_pop_raw(kwargs, key)
+                kwargs_applied_here = self._helper_commit_pop_raw(kwargs, key)
+                kwargs_applied_raw = kwargs_applied_raw | kwargs_applied_here
+        return kwargs_applied_raw
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_pop_raw(
         self,
         kwargs: dict[str, Any],
-        attr_name: str,
+        attr_name_origin: str,
         validator: Callable | None = None,
         exception_msg: str | None = None,
         recovery_msg: str | None = None,
         logger=None,
     ):
         
-        if attr_name.startswith('raw_'):
-            raw_attr_name = attr_name
-            attr_name = attr_name[4:]
+        if attr_name_origin.startswith('raw_'):
+            raw_attr_name = attr_name_origin
+            attr_name = attr_name_origin[4:]
         else:
-            raw_attr_name = "raw_" + attr_name
+            raw_attr_name = "raw_" + attr_name_origin
+            attr_name = attr_name_origin
     
         found, attr_value = pop_exclusive(kwargs, attr_name, raw_attr_name)
         if not found:
-            return False
+            return {}
     
         if exception_msg is None:
             exception_msg = (
@@ -532,44 +542,49 @@ class HostBase(ClassBase):
                     
                 )
                 object.__setattr__(self, raw_attr_name, value_valid)
-                return True
+                return {attr_name: value_valid}
         
             except Exception:
                 logger.exception(exception_msg)
                 logger.recovery(recovery_msg)
-                return False
+                return {}
         else:
             object.__setattr__(self, raw_attr_name, attr_value)
-            return True
+            return {attr_name: attr_value}
             
             
     # -----------------------           
     # _helper_commit_self
     # -----------------------
-    def _helper_commit_self(self, kwargs, opts=None):
+    def _helper_commit_self(self, opts=None, **kwargs):
         if kwargs or opts:
-            self_descriptions = self.opts.__class__.__descriptions__ | self.__descriptions__
-            self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
-            self._helper_merge_opts_kwargs(self_kwargs, opts=opts)
-            self._helper_commit_apply_opts(**self_kwargs)
+            self_keys = self.opts.__class__.__descriptions__
+            kwargs_self = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys}
+            kwargs_self = self._helper_merge_opts_kwargs(opts=opts, **kwargs_self)
+            kwargs, kwargs_applied_opts = self._helper_commit_apply_opts(**kwargs_self)
+            return kwargs, kwargs_applied_opts
         else:
-            return
+            return {}, {}
 
-    def _helper_merge_opts_kwargs(self, kwargs, opts=None):
+    def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
         if kwargs or opts:
             opts = self._helper_check_opts(opts)
             opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-            kwargs = opts.act_asdict()
-            if "tag" in kwargs.keys():
-                object.__setattr__(self.opts, "tag", kwargs["tag"])
-                kwargs.pop("tag")
+            return opts.act_asdict()
         else:
-            return
+            return {}
+
         
     def _helper_commit_apply_opts(self, **kwargs):
         self._helper_check_wrapped_attr(kwargs)
-        kwargs = self._helper_commit_apply_opts_main(**kwargs)
-        self._helper_trigger_sync_batch(**kwargs)
+        kwargs_applied_opts = {}
+        if "tag" in kwargs:
+            object.__setattr__(self.opts, "tag", kwargs["tag"])
+            kwargs_applied_opts["tag"] =  kwargs["tag"]
+            kwargs.pop("tag")
+        kwargs, kwargs_applied_opts_main = self._helper_commit_apply_opts_main(**kwargs)
+        kwargs_applied_opts = kwargs_applied_opts | kwargs_applied_opts_main
+        return kwargs, kwargs_applied_opts
         # the input kwargs should only include the attributes in options
         
     def _helper_commit_apply_opts_main(self, **kwargs):

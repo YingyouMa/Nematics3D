@@ -160,7 +160,7 @@ class SmoothedLine(HostBase):
 
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(self, logger=None, **kwargs):
-
+        
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
         if kwargs:

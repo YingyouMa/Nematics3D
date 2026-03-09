@@ -173,10 +173,6 @@ class ClassBase:
             data[name] = default
 
     def _helper_setattr_basic(self, key, value):
-            
-        if key in ("name", "raw_name"):
-            self.act_set_name(value)
-            return
         
         if key in self._impl_extra_attrs_docs:
             self._impl_extra_attrs[key] = value
@@ -206,6 +202,8 @@ class ClassBase:
         self._helper_setattr_final(target_key, value)
             
     def _helper_setattr_final(self, key, value):
+        if key in ("name", "raw_name"):
+            self.act_set_name(value)
         object.__setattr__(self, key, value)
 
     def __setattr__(self, key, value):
