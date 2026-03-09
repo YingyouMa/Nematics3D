@@ -6,6 +6,7 @@ import weakref
 from contextlib import contextmanager
 import numpy as np
 import datetime
+from copy import deepcopy
 
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -318,6 +319,11 @@ class HostBase(ClassBase):
         for k, v in __descriptions__.items()
         if not v.startswith("Property:") and k not in ClassBase.__slots__
     )
+    
+    _validators = {}
+    # Validator keys correspond to the public name (without the ``raw_`` prefix).
+    # For example, ``raw_coords`` will use the validator registered under ``coords``.
+    # The validator must accept two arguments: (value, description).
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -352,7 +358,7 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_impl_sync_func", {})
-        object.__setattr__(self, "_impl_attrs_wrapped", ())
+        object.__setattr__(self, "_impl_attrs_wrapped", set())
         object.__setattr__(self, "_impl_wrapper_ref", None)
         object.__setattr__(self, "_entity_wrapped", None)
         
@@ -382,35 +388,54 @@ class HostBase(ClassBase):
                 opts = opts_type()
 
         return opts
-
-    def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
-        opts = self._helper_check_opts(opts)
-        opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
-        kwargs = opts.act_asdict()
-        if "tag" in kwargs.keys():
-            object.__setattr__(self.opts, "tag", kwargs["tag"])
-            kwargs.pop("tag")
-        return kwargs
-
-    def _helper_commit_pre_opts(self, **kwargs):
-        found, name = pop_exclusive(kwargs, "name", "raw_name")
-        if found:
-            self.act_set_name(name)
-        return kwargs
-        # Remember to modify the returned kwargs so they are passed to the wrapped object.
-        # This includes adding any fields that were modified by the wrapper itself into kwargs.
+    
+    # -------------------------------
+    # -------------------------------
+    # The functions to commit update
+    # -------------------------------
+    # -------------------------------
     
     @logging_and_warning_decorator()
     def act_commit(self, opts=None, opts_wrapped=None, logger=None, **kwargs):
         
-        kwargs = self._helper_commit_pre_opts(**kwargs)
-        
-        self_descriptions = self.opts.__class__.__descriptions__
-        self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
-        
-        if self_kwargs or opts:
-            self_kwargs = self._helper_merge_opts_kwargs(opts=opts, **self_kwargs)
-            self._helper_commit_apply_opts(**self_kwargs)
+        # _helper_commit_pre_opts:  Preprocess kwargs for this host prior to opts-level processing,
+        #                           especially handle mutable attributes that are managed outside the opts system.
+        #       _helper_check_wrapped_attr:  remove attributes protected by the wrapper, so they cannot be modified
+        #                                    directly from this level.
+        #       _helper_commit_name: extract ``name`` / ``raw_name`` from ``kwargs``
+        #                            and apply host naming updates immediately.
+        #       _helper_commit_raw:  extract host-side raw/public attributes from
+        #                            ``kwargs``, validate them if needed, and write
+        #                            them directly to the host instead of routing
+        #                            them through opts.
+        #
+        # _helper_commit_self: handle all updates that belong to this host itself.
+        #       _helper_merge_opts_kwargs:   merge explicit ``opts`` input with the
+        #                                   relevant entries in ``kwargs`` and convert
+        #                                   them into a normalized dictionary of
+        #                                   opts-level updates for this host.
+        #       _helper_commit_apply_opts: apply the normalized updates to this host.
+        #       _helper_check_wrapped_attr: perform one more protection check before
+        #                                   the actual application step.
+        #       _helper_commit_apply_opts_main: perform the real host-side state
+        #                                       update, write resolved values back
+        #                                       to ``self.opts`` by bypassing the
+        #                                       normal opts assignment path, and
+        #                                       remove any keys that fail or are
+        #                                       intentionally consumed so they are
+        #                                       not forwarded further.
+        #       _helper_trigger_sync_batch: notify all registered downstream sync
+        #                                   callbacks using the final successfully
+        #                                   applied updates.
+        # Remaining ``kwargs`` after the self-handling stage are treated as
+        # updates intended for ``self.wrapped``. If a wrapped host exists, they
+        # are forwarded by calling ``self.wrapped.act_commit(...)``. If no wrapped
+        # host exists, they are treated as invalid leftover arguments.
+
+        applied_kwargs = {}
+
+        self._helper_commit_pre_opts(kwargs, applied_kwargs=applied_kwargs)
+        self._helper_commit_self(kwargs, opts=opts)
             
         if kwargs or opts_wrapped:
             if self.wrapped is not None:
@@ -420,10 +445,26 @@ class HostBase(ClassBase):
                 obj_name = getattr(self, "raw_name", "Uninitialized")
                 logger.warning(f"[{cls_name}: {obj_name!r}] Invalid arguments: {list(kwargs.keys())}")
                 
+    # -----------------------           
+    # _helper_commit_pre_opts
+    # -----------------------
+    def _helper_commit_pre_opts(self, kwargs):
+        
+        self._helper_check_wrapped_attr(kwargs)
+        self._helper_commit_name(kwargs)
+        self._helper_commit_raw(kwargs)
+        # Any value modified by the wrapper must be written back to ``kwargs``
+        # so the updated parameters are forwarded to the wrapped object.
+        # For example, the wrapped object only accepts ``radius``, while the wrapper
+        # expose a convenience parameter ``radius_scale``. If the wrapper receives 
+        # ``radius_scale=2``, it should delete ``radius_scale`` and replace
+        # ``radius`` with the doubled value (radius=2*radius) before forwarding
+        # ``kwargs`` to the wrapped object.
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts(self, logger=None, **kwargs):
-        
+    def _helper_check_wrapped_attr(self, kwargs, logger=None):
+        if not kwargs:
+            return
         blocked = [k for k in kwargs.keys() if k in self._impl_attrs_wrapped]
         for key in blocked:
             kwargs.pop(key)
@@ -435,14 +476,128 @@ class HostBase(ClassBase):
                 logger.exception("Invalid attr")
                 logger.recovery("Automatically ignore this attr")
                 
+    def _helper_commit_name(self, kwargs):
+        if not kwargs:
+            return
+        found, name = pop_exclusive(kwargs, "name", "raw_name")
+        if found:
+            self.act_set_name(name)
+                
+    def _helper_commit_raw(self, kwargs):
+        if not kwargs:
+            return
+        for key in list(kwargs.keys()):
+            if key in self.__descriptions__ or ("raw_" + key) in self.__descriptions__:
+                self._helper_commit_pop_raw(kwargs, key)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_commit_pop_raw(
+        self,
+        kwargs: dict[str, Any],
+        attr_name: str,
+        validator: Callable | None = None,
+        exception_msg: str | None = None,
+        recovery_msg: str | None = None,
+        logger=None,
+    ):
         
-        self._helper_commit_apply_opts_main(**kwargs)
+        if attr_name.startswith('raw_'):
+            raw_attr_name = attr_name
+            attr_name = attr_name[4:]
+        else:
+            raw_attr_name = "raw_" + attr_name
+    
+        found, attr_value = pop_exclusive(kwargs, attr_name, raw_attr_name)
+        if not found:
+            return False
+    
+        if exception_msg is None:
+            exception_msg = (
+                f"Validation failed for attribute {attr_name!r}. "
+                f"This may be due to an invalid value or an incorrectly implemented validator. "
+                f"The validator must accept two arguments: (value, description)."
+            )
+        if recovery_msg is None:
+            recovery_msg = f"Ignore this modification of {attr_name!r}."
+        
+        if validator is None:
+            if attr_name in self._validators:
+                validator = self._validators[attr_name]
+            
+        if validator is not None:
+            try:
+                value_valid = validator(
+                    attr_value, 
+                    self.__descriptions__[raw_attr_name]
+                    
+                )
+                object.__setattr__(self, raw_attr_name, value_valid)
+                return True
+        
+            except Exception:
+                logger.exception(exception_msg)
+                logger.recovery(recovery_msg)
+                return False
+        else:
+            object.__setattr__(self, raw_attr_name, attr_value)
+            return True
+            
+            
+    # -----------------------           
+    # _helper_commit_self
+    # -----------------------
+    def _helper_commit_self(self, kwargs, opts=None):
+        if kwargs or opts:
+            self_descriptions = self.opts.__class__.__descriptions__ | self.__descriptions__
+            self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
+            self._helper_merge_opts_kwargs(self_kwargs, opts=opts)
+            self._helper_commit_apply_opts(**self_kwargs)
+        else:
+            return
+
+    def _helper_merge_opts_kwargs(self, kwargs, opts=None):
+        if kwargs or opts:
+            opts = self._helper_check_opts(opts)
+            opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
+            kwargs = opts.act_asdict()
+            if "tag" in kwargs.keys():
+                object.__setattr__(self.opts, "tag", kwargs["tag"])
+                kwargs.pop("tag")
+        else:
+            return
+        
+    def _helper_commit_apply_opts(self, **kwargs):
+        self._helper_check_wrapped_attr(kwargs)
+        kwargs = self._helper_commit_apply_opts_main(**kwargs)
         self._helper_trigger_sync_batch(**kwargs)
+        # the input kwargs should only include the attributes in options
         
     def _helper_commit_apply_opts_main(self, **kwargs):
         raise NotImplementedError(...)
-        # Remember to modify the returned kwargs so they are passed to the wrapped object.
-        # This includes adding any fields that were modified by the wrapper itself into kwargs.
+        # Any value modified by the wrapper must be written back to ``kwargs``
+        # so the updated parameters are forwarded to the wrapped object.
+        # For example, the wrapped object only accepts ``radius``, while the wrapper
+        # expose a convenience parameter ``radius_scale``. If the wrapper receives 
+        # ``radius_scale=2``, it should delete ``radius_scale`` and replace
+        # ``radius`` with the doubled value (radius=2*radius) before forwarding
+        # ``kwargs`` to the wrapped object.
+        # This is the same with _helper_commit_pre_opts()
+        # Additionally, if assigning a value from ``kwargs`` fails at this stage,
+        # the corresponding key should also be removed from ``kwargs`` so it is not
+        # forwarded to the wrapped object or the sync func.
+        
+    @logging_and_warning_decorator()
+    def _helper_trigger_sync_batch(self, logger=None, **kwargs):
+        for name, func in self._impl_sync_func.items():
+            try:
+                func(**kwargs)
+            except Exception as e:
+                logger.exception(f"Sync task '{name}' failed: {e}")
+                logger.recovery("Automatically skip this function.")
+
+
+        
+
 
     def act_save_opts(self, name=None):
         if not name:
@@ -457,23 +612,14 @@ class HostBase(ClassBase):
     def act_detach_sync_task(self, name: str):
         self._impl_sync_func.pop(name, None)
        
-    @logging_and_warning_decorator()
-    def _helper_trigger_sync_batch(self, logger=None, **kwargs):
-        for name, func in self._impl_sync_func.items():
-            try:
-                func(**kwargs)
-            except Exception as e:
-                logger.exception(f"Sync task '{name}' failed: {e}")
-                logger.recovery("Automatically skip this function.")
-                
-                
+
     @logging_and_warning_decorator()
     def act_register_wrapped_attr(self, attrs: Sequence[str] | str, logger=None) -> None:
         """Register a group of public attribute as protected under wrapping."""
         
         if isinstance(attrs, str):
             attrs = [attrs]
-        elif not isinstance(attrs, (list, tuple)):
+        elif not isinstance(attrs, (list, tuple, set)):
             raise TypeError(
                 "attrs must be a string or a sequence of strings, "
                 f"got {type(attrs).__name__}."
@@ -539,13 +685,12 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_impl_wrapper_ref", weakref.ref(wrapper))
 
         if protected_attrs:
-            self.act_register_wrapped_attr(protected_attrs)
+            self.act_register_wrapped_attr(set(protected_attrs))
     
     
     # Rewrite from ClassBase. To handle opts.
     def _helper_setattr_final(self, key, value):
         self.act_commit(**{key: value})
+    
+    
 
-# 一个类似的全局validator
-# setattr自动走到act_commit
-# getattr也包括opts

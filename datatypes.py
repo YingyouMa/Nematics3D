@@ -846,16 +846,20 @@ def check_bool_flags(d: dict, prefix: str = "is_"):
                 raise TypeError(f"{name} must be a bool, got {type(value)}")
 
 
-def as_points(coords, name="input data"):
+def as_points(coords, name="input data", dim=3):
     try:
         coords = np.asarray(coords, dtype=float)
         if coords.ndim == 1:
             coords = np.asarray([coords], dtype=float)
-        if coords.ndim != 2 or coords.shape[1] != 3:
+        if coords.ndim != 2:
             raise ValueError(
-                f"{name!r} must be an (N, 3) array. Got {coords.shape} instead."
+                f"{name!r} must be a 2D array of shape (N, D). Got shape={coords.shape}."
             )
-        return coords
+        if dim is not None and coords.shape[1] != dim:
+            raise ValueError(
+                f"{name!r} must be an (N, {dim}) array. Got shape={coords.shape}."
+            )
+        return coords.copy()
     except (ValueError, TypeError) as e:
         raise TypeError(f"Invalid `coords` input: {e}")
 

@@ -206,7 +206,7 @@ class InteractRod(PanelBase):
                 
             if 'length' in kwargs.keys():
                 self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
-                self.lbl_radius.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
+                self.lbl_length.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
                 
             if 'color' in kwargs.keys():
                 self.chk_use_color.setChecked(False)

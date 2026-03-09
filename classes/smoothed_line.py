@@ -7,7 +7,6 @@ from types import MappingProxyType
 from typing import Mapping, Any
 
 from ..logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import pop_exclusive
 from .host_base import OptsBase, HostBase
 from .opts import cover_value
 from ..datatypes import (
@@ -17,6 +16,7 @@ from ..datatypes import (
     as_bool,
     UNSET,
     Unset,
+    as_points
 )
 
 # fmt: off
@@ -49,7 +49,7 @@ class OptsSmooth(OptsBase):
         "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
         "N_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
-        "min_line_length":      lambda v, d: as_Number(v, name=d, value_range=(2, np.inf)),
+        "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
         "is_window_warning":    lambda v, d: as_bool(v, name=d)
     }
     
@@ -107,6 +107,11 @@ class SmoothedLine(HostBase):
         for k, v in __descriptions__.items()
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
+    
+    _validators = {
+        **HostBase._validators,
+        "coords": lambda v, d: as_points(v, name=d, dim=None),
+    }
 
     def __init__(
         self,
@@ -117,11 +122,10 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        line_coord_input = np.asarray(line_coord_input)
-        if line_coord_input.ndim != 2:
-            raise ValueError(
-                "line_coord_input for smoothing must be a 2D array of shape (N, D)"
-            )
+        line_coord_input = self._validators["coords"](
+            line_coord_input,
+            self.__descriptions__["raw_coords"]
+        )
 
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
@@ -141,8 +145,6 @@ class SmoothedLine(HostBase):
         self.opts.act_finalize()
         self._helper_commit_apply_opts()
 
-    def __setattr__(self, key, value):
-        self._helper_setattr_basic(key, value, allowed_extra=["coords", "raw_coords"])
 
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
@@ -155,24 +157,6 @@ class SmoothedLine(HostBase):
             f"The line `{self.name}` is not smoothed, reason: {reason}.",
         )
 
-    @logging_and_warning_decorator()
-    def act_commit(self, opts: OptsSmooth | None = None, logger=None, **kwargs):
-
-        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
-        if found:
-            try:
-                if coords.ndim == 2:
-                    object.__setattr__(self, "raw_coords", coords)
-                else:
-                    raise ValueError(
-                        "line_coord_input for smoothing must be a 2D array of shape (N, D)"
-                    )
-            except ValueError:
-                logger.exception("Check input")
-                logger.recovery("Automatically ignore this modification.")
-
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply_opts(**kwargs)
 
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(self, logger=None, **kwargs):
@@ -180,9 +164,9 @@ class SmoothedLine(HostBase):
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
 
         if kwargs:
-            if "window_ratio" in kwargs.keys() and "window_length" not in kwargs.keys():
+            if "window_ratio" in kwargs and "window_length" not in kwargs:
                 object.__setattr__(self.opts, "window_length", None)
-            if "window_ratio" not in kwargs.keys() and "window_length" in kwargs.keys():
+            if "window_ratio" not in kwargs and "window_length" in kwargs:
                 object.__setattr__(self.opts, "window_ratio", None)
 
         with self.opts._helper_internal_update():
@@ -224,6 +208,10 @@ class SmoothedLine(HostBase):
                         f"Window_length is manual input as {self.opts.window_length}. "
                         f"window_ratio ({self.opts.window_ratio}) would be ignored and reset."
                     )
+                window_length = int(self.opts.window_length)
+                if window_length % 2 == 0:
+                    window_length += 1
+                object.__setattr__(self.opts, "window_length", window_length)
                 object.__setattr__(
                     self.opts,
                     "window_ratio",
@@ -233,7 +221,7 @@ class SmoothedLine(HostBase):
             if self._calc_N_init < self.opts.min_line_length:
                 reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
                 self._helper_fallback_no_smooth(reason)
-                return
+                raise SmoothingConfigError(reason)
 
             if self.opts.window_length >= self._calc_N_init:
                 reason = f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"
@@ -275,6 +263,12 @@ class SmoothedLine(HostBase):
 
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
+            
+            if ("window_length" in kwargs) or ("window_ratio" in kwargs):
+                kwargs["window_length"] = self.opts.window_length
+                kwargs.pop("window_ratio", None)
+                
+            return kwargs
 
         except SmoothingConfigError as e:
             logger.exception("Smoothing aborted (manual check)")
@@ -282,6 +276,7 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth(str(e))
+            return {}
 
         except Exception:
             logger.exception("Smoothing aborted (system error)")
@@ -289,6 +284,7 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth("system error")
+            return {}
         
 
 
@@ -296,9 +292,9 @@ class SmoothedLine(HostBase):
     def act_calc_tangent(self, x_param, is_return_coord=False):
         
         tck = getattr(self, "_entity_tck", None)
-        if not tck:
+        if tck is None:
             raise RuntimeError(
-                "Spline cache `_calc_tck` is missing."
+                "Spline cache `_entity_tck` is missing."
                 "Probably the line is not properly initialized or successfully smoothed."
             )
         

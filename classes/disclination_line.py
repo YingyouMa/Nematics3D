@@ -32,6 +32,7 @@ from .class_base import ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from .registry_base import RegistryBase
+from .visual.qt.interact_disclination_line import InteractDisclinationLine
 
 
 # extra attr
@@ -254,7 +255,7 @@ class DisclinationLine(ClassBase):
             smooth_obj = self.act_smooth(is_new=True, opts=smooth_obj.opts)
 
         line_plot = smooth_obj.act_visualize(
-            figure=figure, is_wrap=is_wrap, is_smooth=is_smooth, opts=opts, **kwargs
+            figure=figure, is_wrap=is_wrap, is_smooth=is_smooth, opts_tube=opts, **kwargs
         )
         
         return line_plot
@@ -434,9 +435,9 @@ class DisclinationLineSmooth(SmoothedLine):
         )
         object.__setattr__(self, "_calc_result_coords", result)
 
-        tube = getattr(self, "_entity_visual", None)
-        if tube:
-            tube.act_commit(is_remesh=True, is_silhouette=self._state_is_silhouette)
+        tube_wrapper = getattr(self, "_entity_visual", None)
+        if tube_wrapper:
+            tube_wrapper.act_commit()
 
     def act_visualize(
         self,
@@ -501,16 +502,19 @@ class DisclinationLineSmoothPlot(HostBase):
         "raw_name": "The name of this instance for visualization of defect line (smoothed/unsmoothed)"
     }
 
-    __slots__ = tuple(__descriptions__.keys())
+    __slots__ = tuple(
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in HostBase.__slots__
+    )
     
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         line: DisclinationLineSmooth,
-        *,
         figure: PlotFigure | None = None,
-        opts_tube: OptsTube | None = None,
         opts: OptsDefectLinePlot | None = None,
+        opts_tube: OptsTube | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         opts_tube_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
@@ -523,6 +527,9 @@ class DisclinationLineSmoothPlot(HostBase):
                 "The `line` input should be DisclinationLineSmooth instance. "
                 f"Got {type(line).__name__!r} instead"
             )
+            
+        self_descriptions = OptsDefectLinePlot.__descriptions__
+        self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
 
         super().__init__(
             opts_type=OptsDefectLinePlot,
@@ -530,6 +537,7 @@ class DisclinationLineSmoothPlot(HostBase):
             opts_defaults_override=opts_defaults_override,
             name=line.name,
             name_replace="visualization of smoothed disclination line",
+            **self_kwargs
         )
 
         object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
@@ -548,7 +556,8 @@ class DisclinationLineSmoothPlot(HostBase):
             **kwargs,
         )
 
-        tube.act_bind_wrapper(self, protected_attrs=["coords"])
+        tube.act_bind_wrapper(self, protected_attrs=["coords", "line_index"])
+        tube.act_set_interact_func(lambda: InteractDisclinationLine(tube).show())
 
 
     @logging_and_warning_decorator()
@@ -621,71 +630,21 @@ class DisclinationLineSmoothPlot(HostBase):
 
         return line_coords, line_index
     
-    @logging_and_warning_decorator()
-    def act_commit(
-        self,
-        opts: OptsDefectLinePlot | None = None,
-        opts_tube: OptsTube | None = None,
-        is_silhouette: bool = True,
-        logger=None,
-        **kwargs,
-    ):
+    def _helper_commit_apply_opts_main(self, **kwargs):
+        valid_keys = self.opts.act_asdict().keys() - {"tag"}
+        update_keys = valid_keys & kwargs.keys()
+        with self.opts._helper_internal_update():
+            for k in update_keys:
+                setattr(self.opts, k, kwargs[k])
         
-        kwargs = self._helper_commit_pre_opts(**kwargs)
-        
-        kwargs_host = {key: kwargs[key] for key in self.opts.__class__.__descriptions__}
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_commit(
-        self,
-        opts: OptsTube = None,
-        is_silhouette=True,
-        is_remesh=False,
-        logger=None,
-        **kwargs,
-    ):
-
-        found, is_smooth = pop_exclusive(kwargs, "is_smooth", "state_is_smooth")
-        if found:
-            try:
-                is_smooth = as_bool(
-                    is_smooth,
-                    name="Whether to apply geometric smoothing to defect lines during visualization",
-                )
-                object.__setattr__(self, "state_is_smooth", is_smooth)
-                is_remesh = True
-                sync_func = self._impl_sync_func.get("is_smooth", {})
-                for func in sync_func.values():
-                    func()
-            except Exception:
-                logger.exception("Check input.")
-                logger.recovery("Automatically ignore this modification.")
-
-        found, is_wrap = pop_exclusive(kwargs, "is_wrap", "state_is_wrap")
-        if found:
-            try:
-                is_wrap = as_bool(
-                    is_wrap,
-                    name="Whether to apply periodic-boundary wrapping when visualizing defect lines",
-                )
-                object.__setattr__(self, "state_is_wrap", is_wrap)
-                is_remesh = True
-                sync_func = self._impl_sync_func.get("is_wrap", {})
-                for func in sync_func.values():
-                    func()
-            except Exception:
-                logger.exception("Check input.")
-                logger.recovery("Automatically ignore this modification.")
-
-        if is_remesh:
-            line_coords, line_index = self._helper_get_coords()
-            kwargs["coords"] = line_coords
-            kwargs["line_index"] = line_index
-        else:
-            kwargs.pop("coords", None)
-            kwargs.pop("line_index", None)
-            
-        self._entity.act_commit(opts=opts, is_silhouette=is_silhouette, **kwargs)
+            if update_keys:
+                line_coords, line_index = self._helper_get_coords()
+                with self.wrapped._helper_wrapped_update():
+                    self.wrapped.act_commit(
+                        coords=line_coords,
+                        line_index=line_index,
+                        is_silhouette=self.owner._state_is_silhouette,
+                    )
 
 
 class DefectPlane(ClassBase):

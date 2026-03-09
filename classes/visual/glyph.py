@@ -204,27 +204,22 @@ class OptsGlyph(OptsBase):
 class PlotGlyph(HostBase):
     
     __descriptions__: ClassVar[Mapping[str, str]] = {
-        **dict(HostBase.__descriptions__),
+        **(HostBase.__descriptions__),
         
         "raw_category":                 "The category of the glyph, used in the classfication of PlotFigure",
         "raw_coords":                   "The N x 3 input coordinates of each glyph",
-        
         "_calc_poly":                   "The generated PyVista PolyData",
-        
         "_calc_color":                  "The resolved per-point RGB color array of the glyph.",
         "_calc_opacity":                "The resolved per-point opacity array of the glyph.",
         "_calc_radius":                 "The resolved per-point radius array used for glyph thickness.",
         "_calc_scalars":                "The resolved per-point scalar array used for scalar coloring.",
-        
         "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
-        
         "_impl_name_pv":                "The unique identifier of this glyph stored in the PyVista plotter.",
         "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
-        
         "_impl_figure_ref":             ("A weak reference to the PlotFigure instance containing this glyph."
                                          "To access it, use .fig or ._impl_figure."),
-        
+        "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     
@@ -236,6 +231,12 @@ class PlotGlyph(HostBase):
     _pending_resolution_attrs: List[str] = [
         "radius", "opacity", "color", "scalars"
         ]
+    
+    _validators = {
+        **(HostBase._validators),
+        "coords":       lambda v, d: as_points(v, name=d),
+        "category":     lambda v, d: as_str(v, name=d) 
+        }
 
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -251,7 +252,7 @@ class PlotGlyph(HostBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger = None,
         **kwargs
-            ):
+    ):
         
         coords = as_points(coords, name="The positions of PlotGlyph") 
         object.__setattr__(self, "raw_coords", coords)
@@ -287,7 +288,7 @@ class PlotGlyph(HostBase):
                 if not isinstance(figure, PlotFigure):
                     raise TypeError('`figure` for plotting must be PlotFigure object!')
                 else:
-                    if not figure:
+                    if not figure.is_alive:
                         raise RuntimeError("The plotting window has been closed. Cannot update an inactive plotter.") 
             except (TypeError, RuntimeError):
                 logger.exception("Check input")
@@ -303,6 +304,8 @@ class PlotGlyph(HostBase):
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         unique_id = self.name + str_now
         object.__setattr__(self, "_impl_name_pv", unique_id)
+        
+        object.__setattr__(self, "_impl_interact_func", None)
             
     def _helper_init_end(self):
         
@@ -321,13 +324,6 @@ class PlotGlyph(HostBase):
         return ref() if ref is not None else None
     
     _impl_figure = fig
-        
-    
-        
-    def _helper_setattr_glyph_basic(self, key, value, allowed_extra=[]):
-        allowed_extra = ['raw_category', 'category', "raw_coords", "coords"] + list(allowed_extra)
-        self._helper_setattr_basic(key, value, allowed_extra=allowed_extra)
-        
         
     # ----------------------------------------------------------------------------------------------------
     # Resolver function: to resolve point-wise properties (color, opacity, etc) for each inidividual glyph
@@ -584,53 +580,42 @@ class PlotGlyph(HostBase):
         
     # ----------------------------------------------------------------------------------------------------
     # The functions to apply modications.
+    # Important: GlyphBase does NOT support for wrapping other instances!
     # ----------------------------------------------------------------------------------------------------
         
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_pre_opts(self, logger=None, **kwargs):
-        
-        kwargs = super()._helper_commit_pre_opts(**kwargs)
-        
-        found, category = pop_exclusive(kwargs, "category", "raw_category")
+    def _helper_commit_pre_opts(self, **kwargs):
+        found, name = pop_exclusive(kwargs, "name", "raw_name")
         if found:
-            try:
-                category = as_str(category, name=self.__descriptions__["raw_category"])
-                object.__setattr__(self, "raw_category", category)
-            except:
-                logger.exception("Check input.")
-                logger.recovery("Automatically ignore this modification.")
-        
-        is_new_topology = False
-        
-        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
-        if found:
-            try:
-                object.__setattr__(self, "raw_coords", as_points(coords))
-                is_new_topology = True
-            except:
-                logger.exception("Invalid input of coords for PlotGlyph.")
-                logger.recovery("Ignore this modification in the following")
-                
-        
+            self.act_set_name(name)
+        is_new_topology = self._helper_commit_pop_raw(kwargs, "coords")
         return is_new_topology, kwargs
     
     
     def act_commit(self, opts=None, is_silhouette=True, **kwargs):
-        is_new_topology, kwargs = self._helper_commit_pre_opts(**kwargs)
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply_opts(
-            is_new_topology, 
-            is_silhouette=is_silhouette, 
-            **kwargs
-        )
+        self._helper_check_wrapped_attr(kwargs)
+        if kwargs:
+            is_new_topology, kwargs = self._helper_commit_pre_opts(**kwargs)
+            kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
+            self._helper_commit_apply_opts(
+                is_new_topology, 
+                is_silhouette=is_silhouette, 
+                **kwargs
+            )
         
     def _helper_commit_apply_opts(self, is_new_topology, is_silhouette=True, **kwargs):
-        self._helper_commit_apply_opts_main(
-            is_new_topology,
-            is_silhouette=is_silhouette,
-            **kwargs
-        )
-        self._helper_trigger_sync_batch(**kwargs)
+        super()._helper_check_wrapped_attr(kwargs)
+        if kwargs or is_new_topology:
+            kwargs = self._helper_commit_apply_opts_main(
+                is_new_topology,
+                is_silhouette=is_silhouette,
+                **kwargs
+            )
+            self._helper_trigger_sync_batch(**kwargs)
+        
+    def _helper_commit_pop_raw(self, kwargs, attr_name):
+        super()._helper_commit_pop_raw(kwargs, "category")
+        is_new_topology = super()._helper_commit_pop_raw(kwargs, "coords")
+        return is_new_topology
     
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -640,8 +625,7 @@ class PlotGlyph(HostBase):
             is_silhouette=True,
             logger=None, 
             **kwargs
-    ):
-        
+    ):   
         if not is_new_topology and not kwargs:
             return
         
@@ -659,7 +643,6 @@ class PlotGlyph(HostBase):
             
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
         current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
-        
         
         is_needs_remesh = is_new_topology
         for attr in self._pending_resolution_attrs:
@@ -716,6 +699,8 @@ class PlotGlyph(HostBase):
             self._helper_update_scalars()
             
         self.fig.pl.render()
+        
+        return kwargs
 
          
     
@@ -764,9 +749,28 @@ class PlotGlyph(HostBase):
                     value = fmt_value(value)
                     msg += f"Local {attr}: {value} \n"
         return pos, msg, idx
-        
-        
+    
+    
+    def act_interact(self):
+        if getattr(self, "_state_is_interactable", False):
+            func = getattr(self, "_impl_interact_func", None)
+            if callable(func):
+                func()
+            else:
+                raise RuntimeError("_impl_interact_func is not callable.")
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_set_interact_func(self, func, logger=None):
+        if callable(func):
+            object.__setattr__(self, "_impl_interact_func", func)
+        else:
+            try:
+                raise RuntimeError("_impl_interact_func is not callable.")
+            except:
+                logger.warning('Check input.')
+                logger.recovery("Automatically ignore this modification")
             
+                
             
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

@@ -1,273 +1,152 @@
 from qtpy import QtWidgets
 import numpy as np
 
-from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider, LogTickMapper
+from .panel_base import make_labeled_slider_row
 from Nematics3D.datatypes import boundary_periodic_size_to_flag
 from ..plot_sphere import PlotSphere
+from .interact_glyph_base import InteractGlyphBase 
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 
-class InteractDisclinationLine(PanelBase):
+
+class InteractDisclinationLine(InteractGlyphBase):
     
-    def __init__(self, obj):
-        self.obj = obj
-        self.owner = obj.owner
-        object.__setattr__(self.owner, "_state_is_silhouette", False)
+    # @logging_and_warning_decorator()
+    def __init__(self, host, logger=None):
+        # host is the PlotTube
+        self.wrapper = host.wrapper          # DisclinationLineSmoothPlot
+        self.smooth = host.wrapper.owner     # DisclinationLineSmooth
+
+        object.__setattr__(self.smooth, "_state_is_silhouette", False)
         
+        super().__init__(
+            host=host, 
+            figure=host.fig, 
+            title="Smoothed disclination line control",
+            is_radius=True, is_sides=True, is_color=True, is_opacity=True
+        )
         
-        super().__init__(self.obj._entity, title="Smoothed disclination line control")
-        self.owner.act_save_opts(name=self.str_now)
-        object.__setattr__(self.owner.opts, "min_line_length", 2)
+        self.wrapper.act_save_opts(name=self.str_now)
+        self.smooth.act_save_opts(name=self.str_now)
+        self.wrapper.act_save_opts(name=self.str_now_live)
+        self.smooth.act_save_opts(name=self.str_now_live)
+        
+        # logger.warning(
+        #     "To tune smoothing parameter for short lines, "
+        #     "The parameter `min_line_length` is set to 2."
+        #     "You could find the original settings in _opts_backup of ths line."
+        # )
+        object.__setattr__(self.smooth.opts, "min_line_length", 2)
         
         self.spheres = PlotSphere(
-            self._helper_create_sphere_coords(self.obj.state_is_wrap),
+            self._helper_create_sphere_coords(self.wrapper.opts.is_wrap),
             figure=self.host.fig,
-            name="raw defect points",
-            color=(0,0,0),
+            name="raw defect points of {self.smooth!r}",
+            color=(0, 0, 0),
             is_reset_camera=False
-            )
-        
-    def _helper_create_sphere_coords(self, is_wrap):
-        if is_wrap:
-            boundary_flag = boundary_periodic_size_to_flag(
-                self.owner.owner._raw_box_size_periodic_index
-            )
-            coords = np.where(
-                boundary_flag,
-                self.owner.owner._calc_defect_coords % self.owner.owner._raw_box_size_periodic_index,
-                self.owner.owner._calc_defect_coords,
-            )
-        else:
-            coords = self.owner.owner._calc_defect_coords
-        return coords
-        
-        
-    def build_ui(self):
-        # ----------------------------
-        # initial state
-        # ----------------------------
-        self.state = {
-            "window_length":            int(self.owner.opts.window_length),
-            "is_smooth":                bool(self.obj.state_is_smooth),
-            "radius_rescale":           1.0,
-            "sides":                    int(self.host.opts.sides),
-            "is_wrap":                  bool(self.obj.state_is_wrap),
-            "is_use_control_color":     False,
-            "is_use_control_opacity":   False,
-            "color":                    self.host._calc_color[0],
-            "opacity":                  self.host.opts.opacity,
-            }
-        
-        # ----------------------------
-        # Smooth group
-        # ----------------------------
+        )
+
+    def _build_extra_group(self):
+
         group_smooth = QtWidgets.QGroupBox("Smooth", self)
         gl_smooth = QtWidgets.QVBoxLayout(group_smooth)
-        self.layout.addWidget(group_smooth)
-        
+        self.layout.insertWidget(0, group_smooth)
+
+        self.state["window_length"] = int(self.smooth.opts.window_length)
+        self.state["is_smooth"] = bool(self.wrapper.opts.is_smooth)
+
         self.sliders["window_length"] = make_labeled_slider_row(
-            parent=group_smooth,
-            layout=gl_smooth,
-            name="window_length",
+            parent=group_smooth, layout=gl_smooth,
+            name="window_length", state_key="window_length",
             value_min=5,
-            value_max=np.min([100, self.owner.owner._calc_defect_num-1]),
-            value_init=int(self.owner.opts.window_length),   
+            value_max=np.min([100, self.smooth.owner._calc_defect_num - 1]),
+            value_init=self.state["window_length"],
             value_fmt="{:.0f}",
         )
         
+        self.sliders["window_length"].slider.valueChanged.connect(
+            lambda: self.on_changed(is_only_smooth=True)
+        )
+        self._custom_sliders.append(self.sliders["window_length"])
+
         self.chk_is_smooth = QtWidgets.QCheckBox("Use smoothed coordinates", group_smooth)
         self.chk_is_smooth.setChecked(self.state["is_smooth"])
         gl_smooth.addWidget(self.chk_is_smooth)
         self.chk_is_smooth.stateChanged.connect(self._on_toggle_is_smooth)
-        self.sliders["window_length"].set_enabled(self.chk_is_smooth.isChecked())
-
-        # ----------------------------
-        # Geometry group
-        # ----------------------------
-        group_geometry = QtWidgets.QGroupBox("Geometry", self)
-        gl_geometry = QtWidgets.QVBoxLayout(group_geometry)
-        self.layout.addWidget(group_geometry)
+        self.sliders["window_length"].set_enabled(self.state["is_smooth"])
+    
         
-        self.chk_is_wrap = QtWidgets.QCheckBox("Use wrapped coordinates", group_geometry)
+        self.smooth.act_attach_sync_task(
+            name = self.str_now_live,
+            func = self._sync_func_smooth
+        )
+        
+    def _build_extra_geometry(self, parent, layout):
+
+        self.state["is_wrap"] = bool(self.wrapper.opts.is_wrap)
+        
+        self.chk_is_wrap = QtWidgets.QCheckBox("Use wrapped coordinates", parent)
         self.chk_is_wrap.setChecked(self.state["is_wrap"])
-        gl_geometry.addWidget(self.chk_is_wrap)
+        layout.addWidget(self.chk_is_wrap) 
         self.chk_is_wrap.stateChanged.connect(self._on_toggle_is_wrap)
-
-        log_mapper = LogTickMapper(
-            value_min=0.2,
-            value_max=5,
-            base=10.0,
+        
+        self.wrapper.act_attach_sync_task(
+            name = self.str_now_live,
+            func = self._sync_func_wrapper
         )
-        
-        self.sliders["radius_rescale"] = make_labeled_slider_row(
-            parent=group_geometry,
-            layout=gl_geometry,
-            name="radius_rescale",
-            state_key="radius_rescale",
-            value_min=log_mapper.value_min,
-            value_max=log_mapper.value_max,
-            value_init=1.0,
-            tick_to_value=log_mapper.tick_to_value,
-            value_to_tick=log_mapper.value_to_tick
-        )
-
-        self.sliders["sides"] = make_labeled_slider_row(
-            parent=group_geometry,
-            layout=gl_geometry,
-            name="sides",
-            state_key="sides",
-            value_min=4,
-            value_max=30,
-            value_init=self.state["sides"],
-            value_fmt="{:.0f}",
-        )
-        
-        # ----------------------------
-        # RGB group
-        # ----------------------------
-        
-        group_RGB = QtWidgets.QGroupBox("Color (RGB 0..1)", self)
-        gl_RGB = QtWidgets.QVBoxLayout(group_RGB)
-        self.layout.addWidget(group_RGB)
-        
-        make_RGB_slider(
-            parent=group_RGB,
-            layout=gl_RGB,
-            sliders=self.sliders,
-            prefix="color",
-            init_rgb=self.state['color'],
-        )
-        
-        self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
-        self.chk_use_color.setChecked(self.state["is_use_control_color"])
-        gl_RGB.addWidget(self.chk_use_color)
-        self.chk_use_color.stateChanged.connect(self._on_toggle_use_color)
-        for k in ("color_r", "color_g", "color_b"):
-            self.sliders[k].set_enabled(self.chk_use_color.isChecked())
-        
-        # ----------------------------
-        # Opacity group
-        # ----------------------------
-        
-        group_opacity = QtWidgets.QGroupBox("Opacity (0..1)", self)
-        gl_opacity = QtWidgets.QVBoxLayout(group_opacity)
-        self.layout.addWidget(group_opacity)
-        
-        self.sliders["opacity"] = make_labeled_slider_row(
-            parent=group_opacity,
-            layout=gl_opacity,
-            name="opacity",
-            state_key="opacity",
-            value_min=0,
-            value_max=1,
-            value_init=self.state["opacity"],
-            tick_to_value=lambda t: float(t / 100.0),
-            value_to_tick=lambda v: int(v * 100)
-        )
-        
-        self.chk_use_opacity = QtWidgets.QCheckBox("Use controlled opacity", group_opacity)
-        self.chk_use_opacity.setChecked(self.state["is_use_control_opacity"])
-        gl_opacity.addWidget(self.chk_use_opacity)
-        self.chk_use_opacity.stateChanged.connect(self._on_toggle_use_opacity)
-        self.sliders["opacity"].set_enabled(self.chk_use_opacity.isChecked())
-
-
-        for key, item in self.sliders.items():
-            if key == "window_length":
-                item.slider.valueChanged.connect(lambda: self.on_changed(is_only_smooth=True))
-            else:
-                item.slider.valueChanged.connect(self.on_changed)
-            item.slider.sliderPressed.connect(self.host._helper_clear_silhouette)
-            item.slider.sliderReleased.connect(self.host._helper_add_silhouette)
-
-        self.on_changed(0, is_commit=False)
-        
-        self.host.opts._impl_sync_func["sides"][self.str_now] = lambda: self._sync_from_host("sides", self.host.opts.sides)
-        self.owner.opts._impl_sync_func["window_length"][self.str_now] = lambda: self._sync_from_host("window_length", self.owner.opts.window_length)
-        self.obj._impl_sync_func["state_is_smooth"][self.str_now] = lambda: self._sync_from_host("state_is_smooth", self.obj.state_is_smooth)
-        self.obj._impl_sync_func["state_is_wrap"][self.str_now] = lambda: self._sync_from_host("state_is_wrap", self.obj.state_is_wrap)
-
 
     def on_changed(self, _v=0, is_commit=True, is_only_smooth=False):
         for item in self.sliders.values():
             item.sync_to_state(self.state)
-
         if is_commit:
-            self.commit(is_only_smooth=is_only_smooth)
-            
+            if is_only_smooth:            
+                self.smooth.opts.window_length = int(self.state["window_length"])
+            else:
+                self.commit()
+        
+                
+    def _sync_func_wrapper(self, **kwargs):
+        if not getattr(self, "_is_gui_updating", False):
+            if 'is_smooth' in kwargs:
+                self._is_block_chk_commit = True
+                self.chk_is_smooth.setChecked(bool(kwargs["is_smooth"]))
+                self._is_block_chk_commit = False
+            if 'is_wrap' in kwargs:
+                self._is_block_chk_commit = True
+                self.chk_is_wrap.setChecked(bool(kwargs["is_wrap"]))
+                self._is_block_chk_commit = False
 
-    def commit(self, is_only_smooth=False):
+    def _sync_func_smooth(self, **kwargs):
+        if not getattr(self, "_is_gui_updating", False):
+            self._sync_from_host_slider("window_length", kwargs["window_length"])
         
-        if is_only_smooth:
-            self.owner.opts.window_length = int(self.state["window_length"])
-            return
-        
-        # ---- radius ----
-        current_radius = self.host._opts_backup[self.str_now]["radius"]
-        scale = float(self.state["radius_rescale"])
-        if callable(current_radius):
-            radius_now = lambda x: scale * current_radius(x)
-        else:
-            radius_now = scale * float(current_radius)
-            
-        # ---- color (controlled or restore) ----
-        if bool(self.state.get("is_use_control_color", False)):
-            color_now = (
-                float(self.state["color_r"]),
-                float(self.state["color_g"]),
-                float(self.state["color_b"]),
+
+    def _helper_create_sphere_coords(self, is_wrap):
+        if is_wrap:
+            boundary_flag = boundary_periodic_size_to_flag(self.smooth.owner._raw_box_size_periodic_index)
+            coords = np.where(
+                boundary_flag,
+                self.smooth.owner._calc_defect_coords % self.smooth.owner._raw_box_size_periodic_index,
+                self.smooth.owner._calc_defect_coords
             )
-            paint_by_now = 'color'
         else:
-            color_now = self.host._opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
-            
-        # ---- opacity (controlled or restore) ----
-        if bool(self.state.get("is_use_control_opacity", False)):
-            opacity_now = self.state["opacity"]
-        else:
-            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
+            coords = self.smooth.owner._calc_defect_coords
+        return coords
 
-        self.obj.act_commit(
-            radius=radius_now,
-            color=color_now,
-            opacity=opacity_now,
-            paint_by=paint_by_now,
-            sides=int(self.state["sides"]),
-            is_silhouette=False,
-        )
-        
-    def _on_toggle_is_wrap(self, _state: int):
-        is_wrap = bool(self.chk_is_wrap.isChecked())
+    def _on_toggle_is_wrap(self, _state):
+        is_wrap = self.chk_is_wrap.isChecked()
         self.state["is_wrap"] = is_wrap
-        self.spheres.act_commit(coords=self._helper_create_sphere_coords(is_wrap))
-        self.obj.act_commit(is_wrap=is_wrap)
-        
-    def _on_toggle_is_smooth(self, _state: int):
-        is_smooth = bool(self.chk_is_smooth.isChecked())
+        self.wrapper.act_commit(is_wrap=is_wrap)
+
+    def _on_toggle_is_smooth(self, _state):
+        is_smooth = self.chk_is_smooth.isChecked()
         self.state["is_smooth"] = is_smooth
         self.sliders['window_length'].set_enabled(is_smooth)
-        self.obj.act_commit(is_smooth=is_smooth)
+        self.wrapper.act_commit(is_smooth=is_smooth)
 
-    def _on_toggle_use_color(self, _state: int):
-        is_color = bool(self.chk_use_color.isChecked())
-        self.state["is_use_control_color"] = is_color
-        for k in ("color_r", "color_g", "color_b"):
-            self.sliders[k].set_enabled(is_color)
-        self.commit()
-        
-    def _on_toggle_use_opacity(self, _state: int):
-        is_opacity = bool(self.chk_use_opacity.isChecked())
-        self.state["is_use_control_opacity"] = is_opacity
-        self.sliders["opacity"].set_enabled(is_opacity)
-        self.commit()
-        
-        
     def on_close(self):
         super().on_close()
-        sync = getattr(self.owner.opts, "_impl_sync_func", None)
-        for k, sub in sync.items():
-            sub.pop(self.str_now, None)
-        sync = getattr(self.obj, "_impl_sync_func", None)
-        for k, sub in sync.items():
-            sub.pop(self.str_now, None)
-        object.__setattr__(self.owner, "_state_is_silhouette", True)
+        self.wrapper.act_detach_sync_task(self.str_now_live)
+        self.smooth.act_detach_sync_task(self.str_now_live)
+        object.__setattr__(self.smooth, "_state_is_silhouette", True)
         self.spheres.act_remove()
+

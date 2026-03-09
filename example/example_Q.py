@@ -11,14 +11,14 @@ import Nematics3D
 
 from Nematics3D.debug.debug_store import DEBUG_VARS
 
-# index_max =  128
-# n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
-# S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+index_max =  128
+n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
-# Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
-# Q.act_lines_smooth()
+Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128, name="testQ")
+Q.act_lines_smooth()
 # Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5,0.5,0.5))
-# Q.act_visualize_disclination_lines(is_new=True, is_wrap=True, line_shading_type='pbr', figure_azimuth=0, figure_elevation=45)
+Q.act_visualize_disclination_lines(is_new=True, is_wrap=True, line_shading_type='pbr', figure_azimuth=0, figure_elevation=45)
 
 
 
@@ -42,25 +42,25 @@ from Nematics3D.debug.debug_store import DEBUG_VARS
 # )
 
    
-figure = Nematics3D.PlotFigure(is_off_screen=False)  
-# figure = pyqt.BackgroundPlotter()
+# figure = Nematics3D.PlotFigure(is_off_screen=False)  
+# # figure = pyqt.BackgroundPlotter()
    
-index_max =  60
-n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
-S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+# index_max =  60
+# n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+# S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
-Q.act_lines_smooth(window_length=21, min_line_length=40)
-Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4, figure=figure)
+# Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
+# Q.act_lines_smooth(window_length=21, min_line_length=40)
+# Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4, figure=figure)
     
-trans = 7.5
-spacing = 2.5
+# trans = 7.5
+# spacing = 2.5
 
-Q.act_visualize_n_plane(grid_normal=(1,1,1), grid_spacing=spacing, grid_size=100, grid_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), grid_corners_limit=Q._calc_corners, is_extent=False)
-Q.figs.active_fig.act_view_yz()
-Q.figs.active_fig.opts.azimuth = 90
+# Q.act_visualize_n_plane(grid_normal=(1,1,1), grid_spacing=spacing, grid_size=100, grid_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), grid_corners_limit=Q._calc_corners, is_extent=False)
+# Q.figs.active_fig.act_view_yz()
+# Q.figs.active_fig.opts.azimuth = 90
 
-Q.act_visualize_n_near_defect(75, Q.lines[3].smooth)
+# Q.act_visualize_n_near_defect(75, Q.lines[3].smooth)
 
 
 # testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), corners_limit=Q._calc_corners)

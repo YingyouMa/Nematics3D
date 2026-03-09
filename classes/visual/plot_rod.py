@@ -90,9 +90,6 @@ class PlotRod(PlotGlyph):
 
         self._helper_init_end()
 
-    def __setattr__(self, key, value):
-        self._helper_setattr_glyph_basic(key, value, allowed_extra = ("raw_orient", "orient"))
-
     
     def __getattribute__(self, name):
         value = object.__getattribute__(self, name)
@@ -180,6 +177,8 @@ class PlotRod(PlotGlyph):
         return is_new_topology, kwargs
     
     
+    # Rewrite _helper_resolve_pick
+    # Provide specific information about rods
     def _helper_resolve_pick(self, picked_point):
         pos, msg, idx = super()._helper_resolve_pick(picked_point)
         value = fmt_value(self.raw_orient[idx])

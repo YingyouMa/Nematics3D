@@ -8,6 +8,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from .qt.interact_sphere import InteractSphere
 
 
 @dataclass(slots=True, repr=False)
@@ -62,9 +63,7 @@ class PlotSphere(PlotGlyph):
         )
 
         self._helper_init_end()
-        
-    def __setattr__(self, key, value):
-        self._helper_setattr_glyph_basic(key, value, allowed_extra = ())
+        self.act_set_interact_func(lambda: InteractSphere(self, self.fig).show())
             
             
     @logging_and_warning_decorator(start_finish_level=5)    

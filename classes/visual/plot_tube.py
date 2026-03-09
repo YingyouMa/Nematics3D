@@ -8,7 +8,9 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
-from Nematics3D.general import pop_exclusive, closest_point_on_polyline, fmt_value
+from Nematics3D.general import closest_point_on_polyline, fmt_value
+from .qt.interact_tube import InteractTube
+from Nematics3D.classes.host_base import HostBase
 
 #! clip_geometry
 #! light dark pbr
@@ -97,33 +99,35 @@ class PlotTube(PlotGlyph):
         )
         
         # tube-specific
-        if line_index is not None:
-            try:
-                line_index = self._helper_check_index(line_index)
-            except:
-                logger.exception("Invalid `line_index` input")
-                logger.recovery("Set line_index=None in the following (no stop points within the tube)")
-                line_index = None
+        try:
+            line_index = self._helper_check_index(
+                line_index,
+                self.__descriptions__["raw_line_index"]
+            )
+        except:
+            logger.exception("Invalid `line_index` input")
+            logger.recovery("Set line_index=None in the following (no stop points within the tube)")
+            line_index = None
         object.__setattr__(self, "raw_line_index", line_index)
 
         self._helper_init_end()
+        self.act_set_interact_func(lambda: InteractTube(self, self.fig).show())
 
         
-    def _helper_check_index(self, line_index):
+    def _helper_check_index(self, line_index, name):
+        if line_index is None:
+            return None
         try:
             line_index = np.asarray(line_index, dtype=int)
             if line_index.ndim != 1 or len(line_index) != self.raw_coords.shape[0]:
                 raise ValueError(
-                    f"`line_index` must be a ({self.raw_coords.shape[0]},) array. "
+                    f"`line_index` is {name}. "
+                    f"It must be a ({self.raw_coords.shape[0]},) array. "
                     f"Got shape {line_index.shape} instead."
                 )
             return line_index
         except (ValueError, TypeError):
             raise
-            
-            
-    def __setattr__(self, key, value):
-        self._helper_setattr_glyph_basic(key, value, allowed_extra = ("raw_line_index", "line_index"))
         
         
         
@@ -191,28 +195,19 @@ class PlotTube(PlotGlyph):
 
         return mesh
     
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_pre_opts(self, logger=None, **kwargs):
+    def _helper_commit_pre_opts(self, **kwargs):
         
         is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
-        
-        found, line_index = pop_exclusive(kwargs, "line_index", "raw_line_index")
-        if found:
-            if line_index is None:
-                object.__setattr__(self, "raw_line_index", line_index)
-                is_new_topology = True
-            else:
-                try:
-                    line_index = self._helper_check_index(line_index)
-                    object.__setattr__(self, "raw_line_index", line_index)
-                    is_new_topology = True
-                except:
-                    logger.exception("Invalid `line_index` input")
-                    logger.recovery("Ignore this modification in the following")
+        is_new_topology2 = HostBase._helper_commit_pop_raw(
+            self, kwargs, "line_index",
+            validator=self._helper_check_index
+        )
+        is_new_topology = is_new_topology or is_new_topology2
                     
         return is_new_topology, kwargs
     
-    
+    # Rewrite _helper_resolve_pick
+    # To privide more specific information about tube
     def _helper_resolve_pick(self, picked_point):
         
         pos_close, msg, idx = super()._helper_resolve_pick(picked_point)

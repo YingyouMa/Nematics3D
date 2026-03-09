@@ -134,14 +134,8 @@ class ClassBase:
 
         return name
 
-    def __getattr__(self, key):
-        extra = object.__getattribute__(self, "_impl_extra_attrs")
-        if key in extra:
-            return extra[key]
-        else:
-            raise AttributeError(
-                f"{type(self).__name__!s} object has no attribute {key!r}."
-            )
+    def act_get_attr(self, key):
+        return self._impl_extra_attrs[key]
 
     def act_add_attr(
         self,

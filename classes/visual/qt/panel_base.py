@@ -123,7 +123,6 @@ def make_labeled_slider_row(
 
 
 def make_RGB_slider(
-    *,
     parent: QtWidgets.QWidget,
     layout: QtWidgets.QBoxLayout,
     sliders: dict[str, SliderItem],
@@ -490,10 +489,12 @@ class PanelBase(QtWidgets.QWidget):
         self.fig = figure
         self.str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         self.host.act_save_opts(self.str_now)
-        self.str_now += "_live"
-        self.host.act_save_opts(self.str_now)
+        self.str_now_live = self.str_now + "_live"
+        self.host.act_save_opts(self.str_now_live)
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", False)
+        
+        self._is_block_chk_commit = False
         
         self.state: dict[str, object] = {}
         self.sliders: dict[str, SliderItem] = {}
@@ -526,7 +527,7 @@ class PanelBase(QtWidgets.QWidget):
         hl_reset.addWidget(self.btn_reset_orig)
         
         self.host.act_attach_sync_task(
-            name = self.str_now,
+            name = self.str_now_live,
             func = self._sync_func
         )
         
@@ -552,12 +553,12 @@ class PanelBase(QtWidgets.QWidget):
         raise NotImplementedError
         
     def _on_reset_to_live(self):
-        self.host.act_commit(**self.host._opts_backup[self.str_now])
+        self.host.act_commit(**self.host._opts_backup[self.str_now_live])
         
     def _on_reset_to_original(self):
-        original = self.host._opts_backup[self.str_now[:-5]]
+        original = self.host._opts_backup[self.str_now]
         self.host.act_commit(**original)
-        self.host._opts_backup[self.str_now] = self.host._opts_backup[self.str_now] | original
+        self.host._opts_backup[self.str_now_live] = self.host._opts_backup[self.str_now_live] | original
         
 
     def closeEvent(self, event: QtGui.QCloseEvent):
@@ -569,7 +570,7 @@ class PanelBase(QtWidgets.QWidget):
     def on_close(self):
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", True)
-        self.host.act_detach_sync_task(self.str_now)
+        self.host.act_detach_sync_task(self.str_now_live)
             
     @staticmethod
     def _vect_text(vect, name):

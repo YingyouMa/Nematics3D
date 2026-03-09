@@ -25,7 +25,7 @@ class FigureManager(RegistryBase):
     
     def act_set_active(self, id_fig: str):
         figure = self[id_fig]
-        if figure:
+        if figure.is_alive:
             self._state_active_name = figure.name
         else:
             raise KeyError("This figure is deleted and could not be set to active figure.")

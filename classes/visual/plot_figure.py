@@ -312,8 +312,16 @@ class PlotFigure(HostBase, RegistryBase):
         except Exception:
             return False
 
-    def __bool__(self):
+    @property
+    def is_alive(self):
         return self.act_check_is_alive()
+
+    def __bool__(self):
+        raise RuntimeError(
+            "Boolean evaluation of this object is deprecated and no longer supported. "
+            "This method is retained only to detect legacy usage during debugging. "
+            "Please explicitly call 'is_alive()' instead."
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_init_overlay_renderer(self, logger=None) -> vtk.vtkRenderer:

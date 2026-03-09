@@ -194,7 +194,6 @@ class PickManager:
 
         # Double click: delete nearest marker if close; otherwise add a new marker.
         resolved, msg, _ = owner._helper_resolve_pick(point)
-        # resolved = self._helper_resolve_marker_pos(owner, point)
     
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
@@ -398,22 +397,7 @@ class PickManager:
         for pack in self._entity_markers:
             text = pack.get("text_actor", None)
             if text is not None:
-                text.SetVisibility(True)
-                
-                
-    def _helper_resolve_marker_pos(self, owner, picked_point):
-        p = np.asarray(picked_point, dtype=float).reshape(3,)
-    
-        name = type(owner).__name__
-    
-        if name in ("PlotTube",):
-            return closest_point_on_polyline(p, owner.raw_coords)
-    
-        if name in ("PlotSphere", "PlotRod"):
-            return find_nearest_point(p, owner.raw_coords)
-    
-        return None
-    
+                text.SetVisibility(True)   
 
 
     def _vtk_on_right_button_press(self, vtk_iren, _evt):
@@ -428,7 +412,6 @@ class PickManager:
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.0005)  
         picker.Pick(x, y, 0.0, fig.pl.renderer)
-        picked_xyz = np.asarray(picker.GetPickPosition(), dtype=float).reshape(3,)
 
         actor = picker.GetActor() if picker is not None else None
         if actor is None or actor not in self._impl_registry:
@@ -466,7 +449,10 @@ class PickManager:
             self.owner.console.println(str(owner))
             return
 
-        # 3) on right-double-click: PlotSphere && _state_is_interactable => InteractSphere(owner)
+        # 3) on right-double-click
+        
+        if getattr(owner, "_state_is_interactable", False):
+            owner.act_interact()
 
         if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
             
