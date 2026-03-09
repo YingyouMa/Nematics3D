@@ -2,6 +2,7 @@ from dataclasses import fields, is_dataclass, replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET
+from Nematics3D.general import is_equal
 
 @logging_and_warning_decorator(start_finish_level=5)
 def merge_opts(opts, kwargs, prefix="", logger=None):
@@ -279,6 +280,31 @@ def cover_value(
         except Exception:
             logger.exception("Check input.")
             logger.recovery("Automatically ignore this modification")
+            
+            
+@logging_and_warning_decorator(start_finish_level=5)
+def diff_dict_values(dict1: dict, dict2: dict, logger=None):
+
+    diff1 = {}
+    diff2 = {}
+
+    keys = set(dict1.keys()) | set(dict2.keys())
+    for k in keys:
+        has1 = k in dict1
+        has2 = k in dict2
+
+        if (not has1) or (not has2):
+            if has1:
+                diff1[k] = dict1[k]
+            if has2:
+                diff2[k] = dict2[k]
+            continue
+
+        if not is_equal(dict1[k], dict2[k]):
+            diff1[k] = dict1[k]
+            diff2[k] = dict2[k]
+
+    return diff1, diff2
 
 
 

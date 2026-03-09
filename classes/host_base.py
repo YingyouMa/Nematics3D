@@ -12,7 +12,7 @@ from copy import deepcopy
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
-from .opts import merge_opts_all, build_dict_override
+from .opts import merge_opts_all, build_dict_override, diff_dict_values
 from .class_base import ClassBase
 
 
@@ -311,7 +311,15 @@ class HostBase(ClassBase):
             "unless within _helper_wrapped_update() context."
         ),
         "_impl_wrapper_ref": "A weak reference to the wrapper object that controls this host. ",
-        "_entity_wrapped": "The host object being wrapped and controlled by this wrapper."
+        "_entity_wrapped": "The host object being wrapped and controlled by this wrapper.",
+        "_impl_enrich_kwargs_wrapped_func": (
+                    "A dictionary of callback functions to enrich kwargs before forwarding to wrapped host. "
+                    "Key: unique identifier (str); Value: callable task(host, kwargs, kwargs_sync)."
+        ),
+        "_impl_enrich_kwargs_sync_func": (
+                    "A dictionary of callback functions to enrich kwargs_sync before sync task execution. "
+                    "Key: unique identifier (str); Value: callable task(host, kwargs_sync)."
+        ),
     }
 
     __slots__ = tuple(
@@ -358,6 +366,8 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_impl_sync_func", {})
+        object.__setattr__(self, "_impl_enrich_kwargs_wrapped_func", {})
+        object.__setattr__(self, "_impl_enrich_kwargs_sync_func", {})
         object.__setattr__(self, "_impl_attrs_wrapped", set())
         object.__setattr__(self, "_impl_wrapper_ref", None)
         object.__setattr__(self, "_entity_wrapped", None)
@@ -435,9 +445,11 @@ class HostBase(ClassBase):
         kwargs_applied_raw = self._helper_commit_pre_opts(kwargs)
         kwargs, kwargs_applied_opts = self._helper_commit_self(opts=opts, **kwargs)
         kwargs_sync = kwargs_applied_raw | kwargs_applied_opts
+        kwargs_sync = self._helper_commit_enrich_kwargs_sync(kwargs_sync)
         if kwargs_sync:
             self._helper_trigger_sync_batch(**kwargs_sync)
         
+        kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs, kwargs_sync=kwargs_sync)
         if kwargs or opts_wrapped:
             if self.wrapped is not None:
                 self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
@@ -561,7 +573,8 @@ class HostBase(ClassBase):
             self_keys = self.opts.__class__.__descriptions__
             kwargs_self = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys}
             kwargs_self = self._helper_merge_opts_kwargs(opts=opts, **kwargs_self)
-            kwargs, kwargs_applied_opts = self._helper_commit_apply_opts(**kwargs_self)
+            kwargs_left, kwargs_applied_opts = self._helper_commit_apply_opts(**kwargs_self)
+            kwargs = kwargs | kwargs_left
             return kwargs, kwargs_applied_opts
         else:
             return {}, {}
@@ -577,14 +590,21 @@ class HostBase(ClassBase):
         
     def _helper_commit_apply_opts(self, **kwargs):
         self._helper_check_wrapped_attr(kwargs)
+        opts_before = self.opts.act_asdict()
         kwargs_applied_opts = {}
         if "tag" in kwargs:
             object.__setattr__(self.opts, "tag", kwargs["tag"])
             kwargs_applied_opts["tag"] =  kwargs["tag"]
             kwargs.pop("tag")
-        kwargs, kwargs_applied_opts_main = self._helper_commit_apply_opts_main(**kwargs)
+        return_main = self._helper_commit_apply_opts_main(**kwargs)
+        if return_main is None:
+            kwargs_left = {}
+            opts_after = self.opts.act_asdict()
+            _, kwargs_applied_opts_main = diff_dict_values(opts_before, opts_after)
+        else:
+            kwargs_left, kwargs_applied_opts_main = return_main
         kwargs_applied_opts = kwargs_applied_opts | kwargs_applied_opts_main
-        return kwargs, kwargs_applied_opts
+        return kwargs_left, kwargs_applied_opts
         # the input kwargs should only include the attributes in options
         
     def _helper_commit_apply_opts_main(self, **kwargs):
@@ -609,6 +629,54 @@ class HostBase(ClassBase):
             except Exception as e:
                 logger.exception(f"Sync task '{name}' failed: {e}")
                 logger.recovery("Automatically skip this function.")
+                
+    @logging_and_warning_decorator()
+    def _helper_commit_enrich_kwargs_sync(self, kwargs_sync: dict[str, Any], logger=None):
+        kwargs_sync_out = dict(kwargs_sync)
+        for name, func in self._impl_enrich_kwargs_sync_func.items():
+            try:
+                output = func(host=self, kwargs_sync=kwargs_sync_out)
+                if output is not None:
+                    kwargs_sync_out = output
+            except Exception as e:
+                logger.exception(f"Sync kwargs task {name!r} failed: {e}")
+                logger.recovery("Automatically skip this function.")
+        return kwargs_sync_out
+                
+    @logging_and_warning_decorator()
+    def _helper_commit_enrich_kwargs_wrapped(self, kwargs: dict[str, Any], kwargs_sync=None, logger=None):
+        if kwargs_sync is None:
+            kwargs_sync = {}
+
+        kwargs_wrapped = dict(kwargs)
+        for name, func in self._impl_enrich_kwargs_wrapped_func.items():
+            try:
+                output = func(host=self, kwargs=kwargs_wrapped, kwargs_sync=kwargs_sync)
+                if output is not None:
+                    kwargs_wrapped = output
+            except Exception as e:
+                logger.exception(f"Wrapped kwargs task {name!r} failed: {e}")
+                logger.recovery("Automatically skip this function.")
+        return kwargs_wrapped
+    
+    
+    
+    
+    def act_attach_enrich_kwargs_sync_task(self, name: str, func: Callable):
+        if not callable(func):
+            raise TypeError(f"The sync kwargs task {name!r} must be callable.")
+        self._impl_enrich_kwargs_sync_func[name] = func
+
+    def act_detach_enrich_kwargs_sync_task(self, name: str):
+        self._impl_enrich_kwargs_sync_func.pop(name, None) 
+    
+    def act_attach_enrich_kwargs_wrapped_task(self, name: str, func: Callable):
+        if not callable(func):
+            raise TypeError(f"The wrapped kwargs task {name!r} must be callable.")
+        self._impl_enrich_kwargs_wrapped_func[name] = func
+
+    def act_detach_enrich_kwargs_wrapped_task(self, name: str):
+        self._impl_enrich_kwargs_wrapped_func.pop(name, None)
 
 
         
