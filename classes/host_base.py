@@ -328,10 +328,13 @@ class HostBase(ClassBase):
         if not v.startswith("Property:") and k not in ClassBase.__slots__
     )
     
-    _validators = {}
+    _impl_validators = {}
     # Validator keys correspond to the public name (without the ``raw_`` prefix).
     # For example, ``raw_coords`` will use the validator registered under ``coords``.
     # The validator must accept two arguments: (value, description).
+    _impl_attrs_reapply_opts_after_raw: set()
+    # Public attribute names (without "raw_") that should force an opts re-apply
+    # after raw/public assignment in a commit even if no explicit opts update is provided.
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -442,9 +445,20 @@ class HostBase(ClassBase):
         # are forwarded by calling ``self.wrapped.act_commit(...)``. If no wrapped
         # host exists, they are treated as invalid leftover arguments.
         
+        opts_keys = self.opts.__class__.__descriptions__
+        is_opts_request = (opts is not None) or any(k in opts_keys for k in kwargs)
+        
         kwargs_applied_raw = self._helper_commit_pre_opts(kwargs)
-        kwargs, kwargs_applied_opts = self._helper_commit_self(opts=opts, **kwargs)
-        kwargs_sync = kwargs_applied_raw | kwargs_applied_opts
+        
+        is_reapply = kwargs["is_reapply"]
+        if is_reapply or is_opts_request:
+            kwargs, kwargs_applied_opts = self._helper_commit_self(
+                opts=opts, 
+                is_reapply=is_reapply,
+                **kwargs
+            )
+            kwargs_sync = kwargs_applied_raw | kwargs_applied_opts
+            
         kwargs_sync = self._helper_commit_enrich_kwargs_sync(kwargs_sync)
         if kwargs_sync:
             self._helper_trigger_sync_batch(**kwargs_sync)
@@ -505,10 +519,14 @@ class HostBase(ClassBase):
         if not kwargs:
             return {}
         kwargs_applied_raw = {}
+        is_reapply_opts = False
         for key in list(kwargs.keys()):
             if key in self.__descriptions__ or ("raw_" + key) in self.__descriptions__:
                 kwargs_applied_here = self._helper_commit_pop_raw(kwargs, key)
-                kwargs_applied_raw = kwargs_applied_raw | kwargs_applied_here
+                kwargs_applied_raw, is_reapply_opts_here = kwargs_applied_raw | kwargs_applied_here
+                is_reapply_opts = is_reapply_opts or is_reapply_opts_here
+        if not kwargs.get("is_reapply_opts", False):
+            kwargs["is_reapply_opts"] = is_reapply_opts
         return kwargs_applied_raw
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -531,7 +549,7 @@ class HostBase(ClassBase):
     
         found, attr_value = pop_exclusive(kwargs, attr_name, raw_attr_name)
         if not found:
-            return {}
+            return {}, False
     
         if exception_msg is None:
             exception_msg = (
@@ -543,8 +561,8 @@ class HostBase(ClassBase):
             recovery_msg = f"Ignore this modification of {attr_name!r}."
         
         if validator is None:
-            if attr_name in self._validators:
-                validator = self._validators[attr_name]
+            if attr_name in self._impl_validators:
+                validator = self._impl_validators[attr_name]
             
         if validator is not None:
             try:
@@ -554,7 +572,9 @@ class HostBase(ClassBase):
                     
                 )
                 object.__setattr__(self, raw_attr_name, value_valid)
-                return {attr_name: value_valid}
+                return {attr_name: attr_value}, (
+                    attr_name in self.__class__._impl_attrs_reapply_opts_after_raw
+                )
         
             except Exception:
                 logger.exception(exception_msg)
@@ -562,7 +582,9 @@ class HostBase(ClassBase):
                 return {}
         else:
             object.__setattr__(self, raw_attr_name, attr_value)
-            return {attr_name: attr_value}
+            return {attr_name: attr_value}, (
+                attr_name in self.__class__._impl_attrs_reapply_opts_after_raw
+            )
             
             
     # -----------------------           
@@ -573,11 +595,10 @@ class HostBase(ClassBase):
             self_keys = self.opts.__class__.__descriptions__
             kwargs_self = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys}
             kwargs_self = self._helper_merge_opts_kwargs(opts=opts, **kwargs_self)
+            kwargs_self["is_reapply"] = kwargs.pop("is_reapply")
             kwargs_left, kwargs_applied_opts = self._helper_commit_apply_opts(**kwargs_self)
             kwargs = kwargs | kwargs_left
             return kwargs, kwargs_applied_opts
-        else:
-            return {}, {}
 
     def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
         if kwargs or opts:
@@ -608,6 +629,7 @@ class HostBase(ClassBase):
         # the input kwargs should only include the attributes in options
         
     def _helper_commit_apply_opts_main(self, **kwargs):
+        is_reapply = kwargs.pop("is_reapply")
         raise NotImplementedError(...)
         # Any value modified by the wrapper must be written back to ``kwargs``
         # so the updated parameters are forwarded to the wrapped object.
@@ -625,7 +647,7 @@ class HostBase(ClassBase):
     def _helper_trigger_sync_batch(self, logger=None, **kwargs):
         for name, func in self._impl_sync_func.items():
             try:
-                func(**kwargs)
+                func(host=self, **kwargs)
             except Exception as e:
                 logger.exception(f"Sync task '{name}' failed: {e}")
                 logger.recovery("Automatically skip this function.")
