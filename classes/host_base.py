@@ -639,8 +639,14 @@ class HostBase(ClassBase):
         opts_before = self.opts.act_asdict()
         kwargs_applied_opts = {}
         if "tag" in kwargs:
-            object.__setattr__(self.opts, "tag", kwargs["tag"])
-            kwargs_applied_opts["tag"] =  kwargs["tag"]
+            tag_value = kwargs["tag"]
+            validator = self.opts.__class__._validators["tag"]
+            tag_value = validator(
+                tag_value,
+                self.act_attr_desc("tag"),
+            )
+            object.__setattr__(self.opts, "tag", tag_value)
+            kwargs_applied_opts["tag"] = tag_value
             kwargs.pop("tag")
         return_main = self._helper_commit_apply_opts_main(is_reapply_opts=is_reapply_opts, **kwargs)
         if return_main is None:
@@ -720,6 +726,40 @@ class HostBase(ClassBase):
 
     def act_detach_enrich_kwargs_wrapped_task(self, name: str):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
+        
+        
+    def act_attr_desc(self, attr_name: str) -> str:
+        descriptions_host = self.__class__.__descriptions__
+        descriptions_opts = self.opts.__class__.__descriptions__
+        description = descriptions_host.get(attr_name, descriptions_opts.get(attr_name, ""))
+        return f"{attr_name!r}: {description}"
+    
+    def act_show_modifiable_attrs(self) -> str:
+        lines = [
+            "Modifiable attributes (note: the 'raw_' prefix can be omitted when assigning values):",
+        ]
+
+        
+        attrs_raw = sorted(
+            k for k in self.__class__.__descriptions__.keys() if k.startswith("raw_")
+        )
+        attrs_opts = sorted(self.opts.__class__.__descriptions__.keys())
+
+        if attrs_raw:
+            lines.append("[Host raw attributes]")
+            for attr_name in attrs_raw:
+                lines.append(f"  - {self.act_attr_desc(attr_name)}")
+
+        if attrs_opts:
+            lines.append("[Opts attributes]")
+            for attr_name in attrs_opts:
+                lines.append(f"  - {self.act_attr_desc(attr_name)}")
+
+        if (not attrs_raw) and (not attrs_opts):
+            lines.append("  (None)")
+
+        output = "\n".join(lines)
+        print(output)
 
 
         
