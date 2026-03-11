@@ -232,8 +232,8 @@ class PlotGlyph(HostBase):
         "radius", "opacity", "color", "scalars"
         ]
     
-    _validators = {
-        **(HostBase._validators),
+    _impl_validators = {
+        **(HostBase._impl_validators),
         "coords":       lambda v, d: as_points(v, name=d),
         "category":     lambda v, d: as_str(v, name=d) 
         }

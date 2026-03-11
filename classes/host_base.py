@@ -68,7 +68,7 @@ class OptsBase:
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
         
         is_functioning = bool(getattr(self, "_state_is_functioning", False))
-        is_has_host =  self.host is not None
+        is_has_host = getattr(self, "host", None) is not None
 
         if not key.startswith("_") and key not in self.__class__.__descriptions__:
             raise AttributeError(
@@ -402,7 +402,7 @@ class HostBase(ClassBase):
 
         return opts
     
-    @property()
+    @property
     def opts(self):
         return self._opts
     
@@ -415,39 +415,35 @@ class HostBase(ClassBase):
     @logging_and_warning_decorator()
     def act_commit(self, opts=None, opts_wrapped=None, is_reapply_opts=False, logger=None, **kwargs):
         
-        # _helper_commit_pre_opts:  Preprocess kwargs for this host prior to opts-level processing,
-        #                           especially handle mutable attributes that are managed outside the opts system.
-        #       _helper_check_wrapped_attr:  remove attributes protected by the wrapper, so they cannot be modified
-        #                                    directly from this level.
-        #       _helper_commit_name: extract ``name`` / ``raw_name`` from ``kwargs``
-        #                            and apply host naming updates immediately.
-        #       _helper_commit_raw:  extract host-side raw/public attributes from
-        #                            ``kwargs``, validate them if needed, and write
-        #                            them directly to the host instead of routing
-        #                            them through opts.
+        # _helper_pop_private_key:
+        #       remove keys starting with '_' from ``kwargs``.
+        #       These keys are treated as non-public commit inputs and are ignored.
         #
-        # _helper_commit_self: handle all updates that belong to this host itself.
-        #       _helper_merge_opts_kwargs:   merge explicit ``opts`` input with the
-        #                                   relevant entries in ``kwargs`` and convert
-        #                                   them into a normalized dictionary of
-        #                                   opts-level updates for this host.
-        #       _helper_commit_apply_opts: apply the normalized updates to this host.
-        #       _helper_check_wrapped_attr: perform one more protection check before
-        #                                   the actual application step.
-        #       _helper_commit_apply_opts_main: perform the real host-side state
-        #                                       update, write resolved values back
-        #                                       to ``self.opts`` by bypassing the
-        #                                       normal opts assignment path, and
-        #                                       remove any keys that fail or are
-        #                                       intentionally consumed so they are
-        #                                       not forwarded further.
-        #       _helper_trigger_sync_batch: notify all registered downstream sync
-        #                                   callbacks using the final successfully
-        #                                   applied updates.
-        # Remaining ``kwargs`` after the self-handling stage are treated as
-        # updates intended for ``self.wrapped``. If a wrapped host exists, they
-        # are forwarded by calling ``self.wrapped.act_commit(...)``. If no wrapped
-        # host exists, they are treated as invalid leftover arguments.
+        # _helper_commit_pre_opts:
+        #       preprocess kwargs for this host before opts-level application.
+        #       _helper_check_wrapped_attr: remove attrs protected by wrapper.
+        #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
+        #       _helper_commit_raw: consume host-side raw/public attrs, validate if configured,
+        #                           then write directly to host (not through opts).
+        #
+        # _helper_commit_self:
+        #       handle updates that belong to this host's opts domain.
+        #       _helper_merge_opts_kwargs: merge explicit ``opts`` + opts-like kwargs,
+        #                                  normalize to opts-dict payload.
+        #       _helper_commit_apply_opts: perform wrapped-attr check + apply opts updates.
+        #       _helper_commit_apply_opts_main: subclass-defined real apply logic;
+        #                                       should write resolved values back to ``self.opts``
+        #
+        # sync stage:
+        #       merge pre-opts sync kwargs and opts-applied kwargs,
+        #       then run _helper_commit_enrich_kwargs_sync(...) to enrich/transform sync payload.
+        #       if non-empty, call _helper_trigger_sync_batch(**kwargs_sync).
+        #
+        # forwarding stage:
+        #       call _helper_kwargs_to_wrapped(kwargs, opts_wrapped=opts_wrapped).
+        #       _helper_commit_enrich_kwargs_wrapped(...) can enrich kwargs before forwarding.
+        #       if wrapped exists, forward via self.wrapped.act_commit(...);
+        #       otherwise warn about unhandled remaining kwargs/opts_wrapped.
         
         self._helper_pop_private_key(kwargs)
         kwargs_sync, is_reapply_opts_from_raw = self._helper_commit_pre_opts(kwargs)
@@ -815,7 +811,7 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_impl_wrapper_ref", weakref.ref(wrapper))
 
         if protected_attrs:
-            self.act_register_wrapped_attr(set(protected_attrs))
+            self.act_register_wrapped_attr(protected_attrs)
     
     
     # Rewrite from ClassBase. To handle opts.

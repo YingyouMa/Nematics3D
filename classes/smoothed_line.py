@@ -108,10 +108,12 @@ class SmoothedLine(HostBase):
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
     
-    _validators = {
-        **HostBase._validators,
+    _impl_validators = {
+        **HostBase._impl_validators,
         "coords": lambda v, d: as_points(v, name=d, dim=None),
     }
+    
+    _impl_attrs_reapply_opts_after_raw = {"coords"}
 
     def __init__(
         self,
@@ -122,7 +124,7 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        line_coord_input = self._validators["coords"](
+        line_coord_input = self._impl_validators["coords"](
             line_coord_input,
             self.__descriptions__["raw_coords"]
         )
@@ -143,7 +145,7 @@ class SmoothedLine(HostBase):
         )
 
         self.opts.act_finalize()
-        self._helper_commit_apply_opts()
+        self._helper_commit_apply_opts(is_reapply_opts=True)
 
 
     def _helper_fallback_no_smooth(self, reason: str) -> None:
@@ -159,9 +161,12 @@ class SmoothedLine(HostBase):
 
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts_main(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
         
         object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
+        
+        if not is_reapply_opts and not kwargs:
+            return
 
         if kwargs:
             if "window_ratio" in kwargs and "window_length" not in kwargs:
@@ -263,12 +268,7 @@ class SmoothedLine(HostBase):
 
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
-            
-            if ("window_length" in kwargs) or ("window_ratio" in kwargs):
-                kwargs["window_length"] = self.opts.window_length
-                kwargs.pop("window_ratio", None)
-                
-            return kwargs
+ 
 
         except SmoothingConfigError as e:
             logger.exception("Smoothing aborted (manual check)")
@@ -276,7 +276,6 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth(str(e))
-            return {}
 
         except Exception:
             logger.exception("Smoothing aborted (system error)")
@@ -284,7 +283,6 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth("system error")
-            return {}
         
 
 
