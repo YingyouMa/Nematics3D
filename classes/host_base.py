@@ -6,7 +6,6 @@ import weakref
 from contextlib import contextmanager
 import numpy as np
 import datetime
-from copy import deepcopy
 
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -67,10 +66,9 @@ class OptsBase:
     # ---------------------------------------------------------------------
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> Any:
-
-        is_final = bool(getattr(self, "_state_is_functioning", False)) and (
-            self.host is not None
-        )
+        
+        is_functioning = bool(getattr(self, "_state_is_functioning", False))
+        is_has_host =  self.host is not None
 
         if not key.startswith("_") and key not in self.__class__.__descriptions__:
             raise AttributeError(
@@ -80,7 +78,7 @@ class OptsBase:
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
-            if is_final:
+            if is_functioning:
                 try:
                     raise TypeError(
                         "Attribute could not be set as UNSET after first functioning!"
@@ -100,7 +98,7 @@ class OptsBase:
                 value = value2
             except Exception:
                 logger.exception(f"Assignment to {key!r} failed")
-                if is_final:
+                if is_functioning:
                     logger.recovery("Automatically ignore this modification")
                     return value  # ignored
                 else:
@@ -108,12 +106,14 @@ class OptsBase:
                     object.__setattr__(self, key, UNSET)
                     value = UNSET
         else:
-            if key.startswith("_") or not is_final:
+            if key.startswith("_") or not is_functioning:
                 object.__setattr__(self, key, value)
                 return value
 
         # --- host commit (only after functioning) ---
-        if not key.startswith("_") and is_final and key in self.__class__.__descriptions__:
+        if (not key.startswith("_") 
+        and is_functioning and is_has_host
+        and key in self.__class__.__descriptions__):
             self._helper_host_apply(key, value)
             return value
 
@@ -191,7 +191,7 @@ class OptsBase:
 
         # --- header line ---
         host = self.host
-        if host:
+        if host is not None:
             lines = [f"{cls_name}: the options of {str(host)}"]
         else:
             lines = [f"{cls_name}"]
@@ -296,15 +296,15 @@ class HostBase(ClassBase):
     __descriptions__ = {
         **(ClassBase.__descriptions__),
         "raw_name": "The name identifier of the host object",
-        "opts": "The Opts instance controlling options.",
+        "_opts": "The Opts instance controlling options.",
         "_opts_defaults": "The default option settings.",
         "_opts_backup": (
             "A dictionary storing potentially useful options, indexed by timestamp."
             "Key: Current time, or manualy set value; Value: A dictionary of options (opts)."
         ),
         "_impl_sync_func": (
-                    "A dictionary of callback functions for post-commit synchronization. "
-                    "Key: unique identifier (str); Value: callable task(host, **kwargs)."
+            "A dictionary of callback functions for post-commit synchronization. "
+            "Key: unique identifier (str); Value: callable task(host, **kwargs)."
         ),
         "_impl_attrs_wrapped": (
             "Protected attributes under wrapping. When wrapped, these attributes cannot be modified "
@@ -313,12 +313,12 @@ class HostBase(ClassBase):
         "_impl_wrapper_ref": "A weak reference to the wrapper object that controls this host. ",
         "_entity_wrapped": "The host object being wrapped and controlled by this wrapper.",
         "_impl_enrich_kwargs_wrapped_func": (
-                    "A dictionary of callback functions to enrich kwargs before forwarding to wrapped host. "
-                    "Key: unique identifier (str); Value: callable task(host, kwargs, kwargs_sync)."
+            "A dictionary of callback functions to enrich kwargs before forwarding to wrapped host. "
+            "Key: unique identifier (str); Value: callable task(host, kwargs, kwargs_sync)."
         ),
         "_impl_enrich_kwargs_sync_func": (
-                    "A dictionary of callback functions to enrich kwargs_sync before sync task execution. "
-                    "Key: unique identifier (str); Value: callable task(host, kwargs_sync)."
+            "A dictionary of callback functions to enrich kwargs_sync before sync task execution. "
+            "Key: unique identifier (str); Value: callable task(host, kwargs_sync)."
         ),
     }
 
@@ -332,7 +332,7 @@ class HostBase(ClassBase):
     # Validator keys correspond to the public name (without the ``raw_`` prefix).
     # For example, ``raw_coords`` will use the validator registered under ``coords``.
     # The validator must accept two arguments: (value, description).
-    _impl_attrs_reapply_opts_after_raw: set()
+    _impl_attrs_reapply_opts_after_raw = set()
     # Public attribute names (without "raw_") that should force an opts re-apply
     # after raw/public assignment in a commit even if no explicit opts update is provided.
 
@@ -354,7 +354,7 @@ class HostBase(ClassBase):
         opts = self._helper_check_opts(opts, opts_type=opts_type)
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_impl_host_ref", weakref.ref(self))
-        object.__setattr__(self, "opts", opts)
+        object.__setattr__(self, "_opts", opts)
 
         logger.detail("Building default option values ...")
         opts_defaults = {
@@ -382,7 +382,7 @@ class HostBase(ClassBase):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(self, opts, opts_type=None, logger=None):
 
-        if not opts_type:
+        if opts_type is None:
             opts_type = self.opts.__class__
 
         if opts is None:
@@ -402,6 +402,10 @@ class HostBase(ClassBase):
 
         return opts
     
+    @property()
+    def opts(self):
+        return self._opts
+    
     # -------------------------------
     # -------------------------------
     # The functions to commit update
@@ -409,7 +413,7 @@ class HostBase(ClassBase):
     # -------------------------------
     
     @logging_and_warning_decorator()
-    def act_commit(self, opts=None, opts_wrapped=None, logger=None, **kwargs):
+    def act_commit(self, opts=None, opts_wrapped=None, is_reapply_opts=False, logger=None, **kwargs):
         
         # _helper_commit_pre_opts:  Preprocess kwargs for this host prior to opts-level processing,
         #                           especially handle mutable attributes that are managed outside the opts system.
@@ -445,43 +449,66 @@ class HostBase(ClassBase):
         # are forwarded by calling ``self.wrapped.act_commit(...)``. If no wrapped
         # host exists, they are treated as invalid leftover arguments.
         
+        self._helper_pop_private_key(kwargs)
+        kwargs_sync, is_reapply_opts_from_raw = self._helper_commit_pre_opts(kwargs)
+        is_reapply_opts = is_reapply_opts or is_reapply_opts_from_raw
+        
         opts_keys = self.opts.__class__.__descriptions__
         is_opts_request = (opts is not None) or any(k in opts_keys for k in kwargs)
-        
-        kwargs_applied_raw = self._helper_commit_pre_opts(kwargs)
-        
-        is_reapply = kwargs["is_reapply"]
-        if is_reapply or is_opts_request:
+        if is_reapply_opts or is_opts_request:
             kwargs, kwargs_applied_opts = self._helper_commit_self(
                 opts=opts, 
-                is_reapply=is_reapply,
+                is_reapply_opts=is_reapply_opts,
                 **kwargs
             )
-            kwargs_sync = kwargs_applied_raw | kwargs_applied_opts
+            kwargs_sync = kwargs_sync | kwargs_applied_opts
             
         kwargs_sync = self._helper_commit_enrich_kwargs_sync(kwargs_sync)
         if kwargs_sync:
             self._helper_trigger_sync_batch(**kwargs_sync)
+            
+        self._helper_kwargs_to_wrapped(kwargs, opts_wrapped=opts_wrapped)
         
-        kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs, kwargs_sync=kwargs_sync)
+
+    @logging_and_warning_decorator()
+    def _helper_kwargs_to_wrapped(self, kwargs, opts_wrapped=None, logger=None):
+        kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs)
         if kwargs or opts_wrapped:
             if self.wrapped is not None:
                 self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
             else:
                 cls_name = self.__class__.__name__
                 obj_name = getattr(self, "raw_name", "Uninitialized")
-                logger.warning(f"[{cls_name}: {obj_name!r}] Invalid arguments: {list(kwargs.keys())}")
+                lines = [f"[{cls_name}: {obj_name!r}] Unhandled commit arguments."]
+                if kwargs:
+                    lines.append(f"  Remaining kwargs keys: {list(kwargs.keys())}")
+                if opts_wrapped is not None:
+                    lines.append(f"  opts_wrapped: {opts_wrapped!r}")
+                logger.warning("\n".join(lines))
+    
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_pop_private_key(self, kwargs, logger=None):
+        private_keys = [k for k in list(kwargs.keys()) if k.startswith("_")]
+        for key in private_keys:
+            kwargs.pop(key)
+            logger.warning(
+                f"{key!r} is not a valid public commit key. "
+                "Names starting with '_' are not accepted by act_commit(). "
+                "If you intentionally need to modify an internal attribute, use object.__setattr__() directly."
+            )
+        
         
                 
     # -----------------------           
     # _helper_commit_pre_opts
     # -----------------------
     def _helper_commit_pre_opts(self, kwargs):
-        
+        if not kwargs:
+            return {}, False
         self._helper_check_wrapped_attr(kwargs)
         kwargs_applied_name = self._helper_commit_name(kwargs)
-        kwargs_applied_raw = self._helper_commit_raw(kwargs)
-        return kwargs_applied_raw | kwargs_applied_name
+        kwargs_applied_raw, is_reapply_opts = self._helper_commit_raw(kwargs)
+        return kwargs_applied_raw | kwargs_applied_name, is_reapply_opts
         # Any value modified by the wrapper must be written back to ``kwargs``
         # so the updated parameters are forwarded to the wrapped object.
         # For example, the wrapped object only accepts ``radius``, while the wrapper
@@ -517,17 +544,15 @@ class HostBase(ClassBase):
                 
     def _helper_commit_raw(self, kwargs):
         if not kwargs:
-            return {}
+            return {}, False
         kwargs_applied_raw = {}
         is_reapply_opts = False
         for key in list(kwargs.keys()):
             if key in self.__descriptions__ or ("raw_" + key) in self.__descriptions__:
-                kwargs_applied_here = self._helper_commit_pop_raw(kwargs, key)
-                kwargs_applied_raw, is_reapply_opts_here = kwargs_applied_raw | kwargs_applied_here
+                kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(kwargs, key)
+                kwargs_applied_raw |= kwargs_applied_here
                 is_reapply_opts = is_reapply_opts or is_reapply_opts_here
-        if not kwargs.get("is_reapply_opts", False):
-            kwargs["is_reapply_opts"] = is_reapply_opts
-        return kwargs_applied_raw
+        return kwargs_applied_raw, is_reapply_opts
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_pop_raw(
@@ -572,14 +597,14 @@ class HostBase(ClassBase):
                     
                 )
                 object.__setattr__(self, raw_attr_name, value_valid)
-                return {attr_name: attr_value}, (
+                return {attr_name: value_valid}, (
                     attr_name in self.__class__._impl_attrs_reapply_opts_after_raw
                 )
         
             except Exception:
                 logger.exception(exception_msg)
                 logger.recovery(recovery_msg)
-                return {}
+                return {}, False
         else:
             object.__setattr__(self, raw_attr_name, attr_value)
             return {attr_name: attr_value}, (
@@ -590,15 +615,19 @@ class HostBase(ClassBase):
     # -----------------------           
     # _helper_commit_self
     # -----------------------
-    def _helper_commit_self(self, opts=None, **kwargs):
+    def _helper_commit_self(self, opts=None, is_reapply_opts=False, **kwargs):
         if kwargs or opts:
             self_keys = self.opts.__class__.__descriptions__
             kwargs_self = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys}
             kwargs_self = self._helper_merge_opts_kwargs(opts=opts, **kwargs_self)
-            kwargs_self["is_reapply"] = kwargs.pop("is_reapply")
-            kwargs_left, kwargs_applied_opts = self._helper_commit_apply_opts(**kwargs_self)
-            kwargs = kwargs | kwargs_left
+            kwargs_left, kwargs_applied_opts = self._helper_commit_apply_opts(
+                is_reapply_opts=is_reapply_opts,
+                **kwargs_self
+            )
+            kwargs |= kwargs_left
             return kwargs, kwargs_applied_opts
+        else:
+            return kwargs, {}
 
     def _helper_merge_opts_kwargs(self, opts=None, **kwargs):
         if kwargs or opts:
@@ -609,7 +638,7 @@ class HostBase(ClassBase):
             return {}
 
         
-    def _helper_commit_apply_opts(self, **kwargs):
+    def _helper_commit_apply_opts(self, is_reapply_opts=False, **kwargs):
         self._helper_check_wrapped_attr(kwargs)
         opts_before = self.opts.act_asdict()
         kwargs_applied_opts = {}
@@ -617,7 +646,7 @@ class HostBase(ClassBase):
             object.__setattr__(self.opts, "tag", kwargs["tag"])
             kwargs_applied_opts["tag"] =  kwargs["tag"]
             kwargs.pop("tag")
-        return_main = self._helper_commit_apply_opts_main(**kwargs)
+        return_main = self._helper_commit_apply_opts_main(is_reapply_opts=is_reapply_opts, **kwargs)
         if return_main is None:
             kwargs_left = {}
             opts_after = self.opts.act_asdict()
@@ -628,8 +657,7 @@ class HostBase(ClassBase):
         return kwargs_left, kwargs_applied_opts
         # the input kwargs should only include the attributes in options
         
-    def _helper_commit_apply_opts_main(self, **kwargs):
-        is_reapply = kwargs.pop("is_reapply")
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         raise NotImplementedError(...)
         # Any value modified by the wrapper must be written back to ``kwargs``
         # so the updated parameters are forwarded to the wrapped object.
@@ -666,16 +694,13 @@ class HostBase(ClassBase):
         return kwargs_sync_out
                 
     @logging_and_warning_decorator()
-    def _helper_commit_enrich_kwargs_wrapped(self, kwargs: dict[str, Any], kwargs_sync=None, logger=None):
-        if kwargs_sync is None:
-            kwargs_sync = {}
-
+    def _helper_commit_enrich_kwargs_wrapped(self, kwargs: dict[str, Any], logger=None):
         kwargs_wrapped = dict(kwargs)
         for name, func in self._impl_enrich_kwargs_wrapped_func.items():
             try:
-                output = func(host=self, kwargs=kwargs_wrapped, kwargs_sync=kwargs_sync)
+                output = func(host=self, kwargs=kwargs_wrapped)
                 if output is not None:
-                    kwargs_wrapped = output
+                    kwargs_wrapped |= output
             except Exception as e:
                 logger.exception(f"Wrapped kwargs task {name!r} failed: {e}")
                 logger.recovery("Automatically skip this function.")
