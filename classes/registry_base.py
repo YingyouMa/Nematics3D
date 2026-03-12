@@ -9,7 +9,7 @@ class RegistryBase:
     # fmt: off
     __descriptions__ = {
         "raw_name":         "The name of the Registry.",
-        "_raw_info":        "The extra introduction for this instance for clarity",
+        "raw_info":        "The extra introduction for this instance for clarity",
         "_entity":          "The container storing the objects.",
 
         "_impl_owner_ref":  (
@@ -26,9 +26,8 @@ class RegistryBase:
         object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
         
-        if info is not None:
-            info = as_str(info, name="extra information of the RegistryBase instance", replace=None)
-        object.__setattr__(self, "_raw_info", None)
+        info = None if info is None else as_str(info, name="extra information of the RegistryBase instance", replace=None)
+        object.__setattr__(self, "raw_info", info)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_name(self, name: str, logger=None):

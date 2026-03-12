@@ -209,7 +209,7 @@ class PlotFigure(HostBase, RegistryBase):
         self._helper_sync_from_plotter(
             is_allow_cover_target_set=False, is_only_camera=True
         )
-        self._helper_commit_apply_opts()
+        self._helper_commit_apply_opts(is_reapply_opts=True)
 
         scalar_bars = RegistryBase("scalar bars manager")
         scalar_bars._impl_owner_ref = weakref.ref(self)
@@ -266,7 +266,12 @@ class PlotFigure(HostBase, RegistryBase):
             self.pl.app_window.setWindowTitle(name)
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_apply_opts(self, **kwargs):
+    def _helper_commit_apply_opts_main(
+        self, is_reapply_opts=False, logger=None, **kwargs
+    ):
+
+        if not is_reapply_opts and not kwargs:
+            return
 
         with self.opts._helper_internal_update():
             cover_value(
@@ -277,7 +282,7 @@ class PlotFigure(HostBase, RegistryBase):
             )
 
         self._helper_sync_from_opts()
-        self._helper_trigger_sync_batch(**kwargs)
+
 
     @property
     def pl(self):
