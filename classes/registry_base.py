@@ -25,9 +25,23 @@ class RegistryBase:
         object.__setattr__(self, "raw_name", name)
         object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
-        
-        info = None if info is None else as_str(info, name="extra information of the RegistryBase instance", replace=None)
+
+        info = (
+            None
+            if info is None
+            else as_str(
+                info,
+                name="extra information of the RegistryBase instance",
+                replace=None,
+            )
+        )
         object.__setattr__(self, "raw_info", info)
+
+    def _helper_show_name_info(self) -> str:
+        info = getattr(self, "raw_info", None)
+        if info:
+            return f"Registry {self.name!r} ({info})"
+        return f"Registry {self.name!r}"
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_name(self, name: str, logger=None):
@@ -42,7 +56,7 @@ class RegistryBase:
                 new_name = f"{name_input}_{index}"
                 index += 1
             logger.warning(
-                f"{name_input!r} already exists in Registry {self.name!r}! Renamed to {new_name!r}."
+                f"{name_input!r} already exists in {self._helper_show_name_info()}! Renamed to {new_name!r}."
             )
             name = new_name
         return name
@@ -50,13 +64,15 @@ class RegistryBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def act_register(self, term, is_contain_ok=False, logger=None):
 
-        logger.detail(f"Register term into Registry {self.name!r}: term={term!r}")
+        logger.detail(
+            f"Register term into {self._helper_show_name_info()}: term={term!r}"
+        )
 
         if term in self._entity:
             if not is_contain_ok:
                 try:
                     raise ValueError(
-                        f"term {term!r} is already registered in Registry {self.name!r}"
+                        f"term {term!r} is already registered in {self._helper_show_name_info()}"
                     )
                 except ValueError:
                     logger.exception("Check input.")
@@ -65,17 +81,51 @@ class RegistryBase:
 
         if not hasattr(term, "name"):
             raise TypeError("term must have attribute `name`.")
-        name = self._helper_check_name(term.name)
-        term.name = name
-        self._entity.append(term)
 
         old_ref = getattr(term, "_impl_registry_ref", None)
         old_registry = old_ref() if callable(old_ref) else None
         if old_registry is not None and old_registry is not self:
             logger.warning(
-                f"{term!r} already has a registry {old_registry!r}. Overwrite registry to {self!r}."
+                f"{term!r} already has a registry {old_registry!r}. Move it to {self._helper_show_name_info()}."
             )
-        object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
+            old_registry.act_unregister(term, is_missing_ok=True)
+
+        name = self._helper_check_name(term.name)
+        term.name = name
+        self._entity.append(term)
+
+        try:
+            object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
+        except Exception as e:
+            logger.warning(
+                f"Failed to assign '_impl_registry_ref' for {term!r}: {e}. "
+                "This registration is one-way only."
+            )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_unregister(self, term, is_missing_ok=False, logger=None):
+
+        logger.detail(
+            f"Unregister term from {self._helper_show_name_info()}: term={term!r}"
+        )
+
+        if term not in self._entity:
+            if not is_missing_ok:
+                try:
+                    raise KeyError(
+                        f"term {term!r} is not registered in {self._helper_show_name_info()}"
+                    )
+                except KeyError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this process.")
+            return
+
+        self._entity.remove(term)
+
+        ref = getattr(term, "_impl_registry_ref", None)
+        registry = ref() if callable(ref) else None
+        if registry is self:
+            object.__setattr__(term, "_impl_registry_ref", None)
 
     @property
     def name(self):
@@ -115,11 +165,11 @@ class RegistryBase:
                 if obj.name == key:
                     return obj
             raise KeyError(
-                f"No object with name '{key}' found in Registry {self.name!r}."
+                f"No object with name '{key}' found in {self._helper_show_name_info()}."
             )
         else:
             raise TypeError(
-                f"`key` must be str or int for Registry {self.name!r} indexing, "
+                f"`key` must be str or int for {self._helper_show_name_info()} indexing, "
                 f"got {type(key).__name__} instead."
             )
 

@@ -5,7 +5,7 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number, as_str
+from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 from Nematics3D.general import closest_point_on_polyline, fmt_value
@@ -65,6 +65,9 @@ class PlotTube(PlotGlyph):
             k for k, v in __descriptions__.items() 
             if not v.startswith("Property:") and k not in PlotGlyph.__slots__
         )
+    _impl_attrs_reapply_opts_after_raw = (
+        PlotGlyph._impl_attrs_reapply_opts_after_raw | {"line_index"}
+    )
     
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -82,8 +85,6 @@ class PlotTube(PlotGlyph):
         **kwargs
     ):
     
-        category = as_str(category, name="The category of the PlotTube object", replace="tube")
-        object.__setattr__(self, 'raw_category', category)
 
         super().__init__(
             coords=coords,
@@ -98,17 +99,8 @@ class PlotTube(PlotGlyph):
             **kwargs,
         )
         
-        # tube-specific
-        try:
-            line_index = self._helper_check_index(
-                line_index,
-                self.__descriptions__["raw_line_index"]
-            )
-        except:
-            logger.exception("Invalid `line_index` input")
-            logger.recovery("Set line_index=None in the following (no stop points within the tube)")
-            line_index = None
-        object.__setattr__(self, "raw_line_index", line_index)
+        object.__setattr__(self, "raw_line_index", None)
+        self._helper_commit_line_index({"line_index": line_index})
 
         self._helper_init_end()
         self.act_set_interact_func(lambda: InteractTube(self, self.fig).show())
@@ -128,9 +120,17 @@ class PlotTube(PlotGlyph):
             return line_index
         except (ValueError, TypeError):
             raise
-        
-        
-        
+
+    def _helper_commit_line_index(self, kwargs):
+        return HostBase._helper_commit_pop_raw(
+            self,
+            kwargs,
+            "line_index",
+            validator=self._helper_check_index,
+            exception_msg="Invalid `line_index` input",
+            recovery_msg="Set line_index=None in the following (no stop points within the tube)",
+        )
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None): 
         
@@ -195,16 +195,13 @@ class PlotTube(PlotGlyph):
 
         return mesh
     
-    def _helper_commit_pre_opts(self, **kwargs):
-        
-        is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
-        is_new_topology2 = HostBase._helper_commit_pop_raw(
-            self, kwargs, "line_index",
-            validator=self._helper_check_index
+    def _helper_commit_pre_opts(self, kwargs):
+        kwargs_applied, is_reapply_opts = super()._helper_commit_pre_opts(kwargs)
+        kwargs_applied_line, is_reapply_opts_line = self._helper_commit_line_index(kwargs)
+        return (
+            kwargs_applied | kwargs_applied_line,
+            is_reapply_opts or is_reapply_opts_line,
         )
-        is_new_topology = is_new_topology or is_new_topology2
-                    
-        return is_new_topology, kwargs
     
     # Rewrite _helper_resolve_pick
     # To privide more specific information about tube
@@ -230,4 +227,5 @@ class PlotTube(PlotGlyph):
         
         
         
+
 
