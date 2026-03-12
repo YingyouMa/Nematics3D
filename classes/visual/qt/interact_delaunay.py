@@ -97,12 +97,12 @@ class InteractDelaunay(PanelBase):
         else:
             opacity_now = self.host._opts_backup[self.str_now]["opacity"]
 
-        self.host.act_commit(
-            color=color_now,
-            opacity=opacity_now,
-            paint_by=paint_by_now,
-            is_silhouette=False,
-        )
+        with self.host._helper_temporarily_set_silhouette(False):
+            self.host.act_commit(
+                color=color_now,
+                opacity=opacity_now,
+                paint_by=paint_by_now,
+            )
 
     def _on_toggle_use_color(self, _state: int):
         is_color = bool(self.chk_use_color.isChecked())

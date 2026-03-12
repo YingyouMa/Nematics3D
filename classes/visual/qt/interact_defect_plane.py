@@ -210,11 +210,11 @@ class InteractDefectPlane(PanelBase):
         )
         
         if self.chk_is_show_axes.isChecked():
-            self.visual_normal.act_commit(
-                coords=self.host.opts.origin, 
-                orient=self.host.opts.normal,
-                is_silhouette=False
-            )
+            with self.visual_normal._helper_temporarily_set_silhouette(False):
+                self.visual_normal.act_commit(
+                    coords=self.host.opts.origin, 
+                    orient=self.host.opts.normal,
+                )
         
         
         

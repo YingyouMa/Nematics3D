@@ -335,6 +335,7 @@ class HostBase(ClassBase):
     # Validator keys correspond to the public name (without the ``raw_`` prefix).
     # For example, ``raw_coords`` will use the validator registered under ``coords``.
     # The validator must accept two arguments: (value, description).
+
     _impl_attrs_reapply_opts_after_raw = set()
     # Public attribute names (without "raw_") that should force an opts re-apply
     # after raw/public assignment in a commit even if no explicit opts update is provided.
@@ -611,7 +612,7 @@ class HostBase(ClassBase):
     # _helper_commit_self
     # -----------------------
     def _helper_commit_self(self, opts=None, is_reapply_opts=False, **kwargs):
-        if kwargs or opts:
+        if kwargs or opts or is_reapply_opts:
             self_keys = self.opts.__class__.__descriptions__
             kwargs_self = {
                 k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys

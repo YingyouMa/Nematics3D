@@ -147,7 +147,8 @@ class InteractGlyphBase(PanelBase):
 
         self._is_gui_updating = True
         try:
-            self.host.act_commit(**params, is_silhouette=False)
+            with self.host._helper_temporarily_set_silhouette(False):
+                self.host.act_commit(**params)
         finally:
             self._is_gui_updating = False
 

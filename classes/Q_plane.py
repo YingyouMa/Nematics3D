@@ -168,41 +168,41 @@ class QPlane(InterpolatePlane):
         if self._entity_visual_nb or self._entity_visual_nd:
             
             if np.sum(~self._calc_is_near_defect) > 0:
-                self._entity_visual_nb.act_commit(       
-                    coords=self._entity_plane()[~self._calc_is_near_defect],
-                    orient=self._calc_n[~self._calc_is_near_defect],
-                    is_silhouette=self._state_is_interactable,
-                    is_visible=True
-                    )
+                with self._entity_visual_nb._helper_temporarily_set_silhouette(self._state_is_interactable):
+                    self._entity_visual_nb.act_commit(       
+                        coords=self._entity_plane()[~self._calc_is_near_defect],
+                        orient=self._calc_n[~self._calc_is_near_defect],
+                        is_visible=True
+                        )
             else:
                 self._entity_visual_nb.opts.is_visible = False
             
             if np.sum(self._calc_is_near_defect) > 0:
-                self._entity_visual_nd.act_commit(       
-                    coords=self._entity_plane()[self._calc_is_near_defect],
-                    orient=self._calc_n[self._calc_is_near_defect],
-                    is_silhouette=self._state_is_interactable,
-                    is_visible=True
-                    )
+                with self._entity_visual_nd._helper_temporarily_set_silhouette(self._state_is_interactable):
+                    self._entity_visual_nd.act_commit(       
+                        coords=self._entity_plane()[self._calc_is_near_defect],
+                        orient=self._calc_n[self._calc_is_near_defect],
+                        is_visible=True
+                        )
             else:
                 self._entity_visual_nd.opts.is_visible = False
                 
                 
             if getattr(self, "_calc_defect_pos", None) is not None and len(self._calc_defect_pos)>0:   
-                self._entity_visual_defect.act_commit( 
-                    coords=self._calc_defect_pos,
-                    is_silhouette=self._state_is_interactable,
-                    is_visible=self._entity_visual_defect.is_show_defect
-                    )
+                with self._entity_visual_defect._helper_temporarily_set_silhouette(self._state_is_interactable):
+                    self._entity_visual_defect.act_commit( 
+                        coords=self._calc_defect_pos,
+                        is_visible=self._entity_visual_defect.is_show_defect
+                        )
             else:
                 self._entity_visual_defect.opts.is_visible = False
                 
         if getattr(self, "_entity_visual_S", None):
-            self._entity_visual_S.act_commit(
-                coords=self.plane(),
-                scalars=self._calc_S,
-                is_silhouette=self._state_is_interactable,
-                )
+            with self._entity_visual_S._helper_temporarily_set_silhouette(self._state_is_interactable):
+                self._entity_visual_S.act_commit(
+                    coords=self.plane(),
+                    scalars=self._calc_S,
+                    )
             
             
             

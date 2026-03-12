@@ -77,15 +77,15 @@ class DisclinationLine(ClassBase):
         "raw_name":                         "Name identifier of this disclination line",
         
         # ========== raw (copied directly from InputLine or computed) ==========
-        "_raw_defect_indices":              "Lattice indices of defect points forming the line (array of shape N×3)",
+        "_raw_defect_indices":              "Lattice indices of defect points forming the line (array of shape Nx3)",
         "_raw_box_size_periodic_index":     "Box size along each dimension in index space (finite for periodic boundaries, np.inf for non-periodic)",
         "_raw_grid_offset":                 "Grid translation offset mapping lattice indices to real-space coordinates (3-vector)",
-        "_raw_grid_transform":              "Grid transformation matrix (3×3) mapping lattice indices to real-space coordinates",
+        "_raw_grid_transform":              "Grid transformation matrix (3x3) mapping lattice indices to real-space coordinates",
         
         # ========== derived quantities ==========
         "_calc_end2end_kind":               "kind of line ends: 'loop' (closed loop), 'cross' (wraps across boundary), or 'seg' (open segment)",
         "_calc_defect_num":                 "Number of defect points forming this line (integer)",
-        "_calc_defect_coords":              "Real-space coordinates of defect line (array of shape N×3)",
+        "_calc_defect_coords":              "Real-space coordinates of defect line (array of shape Nx3)",
         "_calc_box_size_periodic_coord":    "Box size expressed in real-space coordinates (3-vector, transformed from indices)",
         "_calc_norm":                       "Estimated average plane normal vector of the disclination line (3-vector)",
         "_calc_norm_metric":                "A collection of confidence scores for the plane-fitting result",
@@ -640,11 +640,11 @@ class DisclinationLineSmoothPlot(HostBase):
             if update_keys:
                 line_coords, line_index = self._helper_get_coords()
                 with self.wrapped._helper_wrapped_update():
-                    self.wrapped.act_commit(
-                        coords=line_coords,
-                        line_index=line_index,
-                        is_silhouette=self.owner._state_is_silhouette,
-                    )
+                    with self.wrapped._helper_temporarily_set_silhouette(self.owner._state_is_silhouette):
+                        self.wrapped.act_commit(
+                            coords=line_coords,
+                            line_index=line_index,
+                        )
 
 
 class DefectPlane(ClassBase):

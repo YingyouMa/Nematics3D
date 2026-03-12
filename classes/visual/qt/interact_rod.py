@@ -166,15 +166,15 @@ class InteractRod(PanelBase):
 
         self._is_gui_updating = True
         try:
-            self.host.act_commit(
-                radius=radius_now,
-                length=length_now,
-                color=color_now,
-                opacity=opacity_now,
-                paint_by=paint_by_now,
-                sides=int(self.state["sides"]),
-                is_silhouette=False,
-            )
+            with self.host._helper_temporarily_set_silhouette(False):
+                self.host.act_commit(
+                    radius=radius_now,
+                    length=length_now,
+                    color=color_now,
+                    opacity=opacity_now,
+                    paint_by=paint_by_now,
+                    sides=int(self.state["sides"]),
+                )
         finally:
             self._is_gui_updating = False
 

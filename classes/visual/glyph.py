@@ -5,6 +5,7 @@ import pyvista as pv
 import weakref
 import numpy as np
 import datetime
+from contextlib import contextmanager
 
 from Nematics3D.datatypes import (
     UNSET,
@@ -22,7 +23,7 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from .plot_figure import PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import pop_exclusive, find_nearest_point, fmt_value
+from Nematics3D.general import find_nearest_point, fmt_value
 
 #!!! resolver source
 #!!! colorbar name args manager
@@ -35,7 +36,7 @@ RadiusMode = float | Callable | Sequence
 ScalarsMode = Callable | Sequence | None
 ClipGeometryLike = list[float] | pv.PolyData | None
 
-
+# fmt: off
 @dataclass(slots=True, repr=False)
 class OptsGlyph(OptsBase):
     # --- Visibility & Global ---
@@ -199,10 +200,12 @@ class OptsGlyph(OptsBase):
         if self.host:
             self.host.act_commit(**{key: value})
             return value
-    
-  
+# fmt: on    
+
+
 class PlotGlyph(HostBase):
-    
+ 
+    # fmt: off
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **(HostBase.__descriptions__),
         
@@ -220,6 +223,7 @@ class PlotGlyph(HostBase):
         "_impl_figure_ref":             ("A weak reference to the PlotFigure instance containing this glyph."
                                          "To access it, use .fig or ._impl_figure."),
         "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
+        "_state_is_silhouette":         "Whether silhouette actors should be rebuilt during glyph updates.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     
@@ -237,6 +241,10 @@ class PlotGlyph(HostBase):
         "coords":       lambda v, d: as_points(v, name=d),
         "category":     lambda v, d: as_str(v, name=d) 
         }
+    _impl_attrs_reapply_opts_after_raw = (
+        HostBase._impl_attrs_reapply_opts_after_raw | {"coords"}
+    )
+    # fmt: on
 
     
     @logging_and_warning_decorator(start_finish_level=5)
@@ -261,6 +269,7 @@ class PlotGlyph(HostBase):
         
         object.__setattr__(self, "_impl_resolver_source", "raw_coords")
         object.__setattr__(self, "_opts_backup", {})
+        object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_interactable", True)
         
         super().__init__(
@@ -475,7 +484,10 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_entity", actor)
         self._helper_register_pick(actor)
         
-        self._helper_add_silhouette()
+        if self._state_is_silhouette:
+            self._helper_add_silhouette()
+        else:
+            self._helper_clear_silhouette()
         
     
     def _helper_add_silhouette(self):
@@ -583,102 +595,71 @@ class PlotGlyph(HostBase):
     # Important: GlyphBase does NOT support for wrapping other instances!
     # ----------------------------------------------------------------------------------------------------
         
-    def _helper_commit_pre_opts(self, **kwargs):
-        found, name = pop_exclusive(kwargs, "name", "raw_name")
-        if found:
-            self.act_set_name(name)
-        is_new_topology = self._helper_commit_pop_raw(kwargs, "coords")
-        return is_new_topology, kwargs
-    
-    
-    def act_commit(self, opts=None, is_silhouette=True, **kwargs):
-        self._helper_check_wrapped_attr(kwargs)
-        if kwargs:
-            is_new_topology, kwargs = self._helper_commit_pre_opts(**kwargs)
-            kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-            self._helper_commit_apply_opts(
-                is_new_topology, 
-                is_silhouette=is_silhouette, 
-                **kwargs
-            )
-        
-    def _helper_commit_apply_opts(self, is_new_topology, is_silhouette=True, **kwargs):
-        super()._helper_check_wrapped_attr(kwargs)
-        if kwargs or is_new_topology:
-            kwargs = self._helper_commit_apply_opts_main(
-                is_new_topology,
-                is_silhouette=is_silhouette,
-                **kwargs
-            )
-            self._helper_trigger_sync_batch(**kwargs)
-        
-    def _helper_commit_pop_raw(self, kwargs, attr_name):
-        super()._helper_commit_pop_raw(kwargs, "category")
-        is_new_topology = super()._helper_commit_pop_raw(kwargs, "coords")
-        return is_new_topology
-    
-    
+    @contextmanager
+    def _helper_temporarily_set_silhouette(self, is_enabled: bool):
+        state_before = self._state_is_silhouette
+        object.__setattr__(self, "_state_is_silhouette", bool(is_enabled))
+        try:
+            yield
+        finally:
+            object.__setattr__(self, "_state_is_silhouette", state_before)
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
-            self, 
-            is_new_topology, 
-            is_silhouette=True,
-            logger=None, 
+            self,
+            is_reapply_opts=False,
+            logger=None,
             **kwargs
-    ):   
-        if not is_new_topology and not kwargs:
+    ):
+        if not is_reapply_opts and not kwargs:
             return
-        
+
         logger.detail("Check if a recoloring is requested by input kwargs; if so, determine the paint method")
         paint_method = kwargs.pop('paint_by', None)
         if paint_method is None:
             has_color, has_scalars = 'color' in kwargs, 'scalars' in kwargs
-            if has_color ^ has_scalars:   # exactly one is provided
+            if has_color ^ has_scalars:
                 paint_method = 'scalars' if has_scalars else 'color'
         if paint_method is None:
             paint_method = self.opts.paint_by
         else:
             object.__setattr__(self.opts, 'paint_by', paint_method)
-            
-            
+
         current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
-        current_shading = as_str(current_shading, name='shading_type', replace=getattr(self.opts, "shading_type"), pool=('phong', 'pbr'))
-        
-        is_needs_remesh = is_new_topology
+
+        is_needs_remesh = is_reapply_opts
         for attr in self._pending_resolution_attrs:
-            if attr not in kwargs.keys():
-                if is_new_topology: 
+            if attr not in kwargs:
+                if is_reapply_opts:
                     self._helper_resolver_spec(attr)
             else:
-                self._helper_resolver_spec(attr, attr_value=kwargs[attr])
-                kwargs.pop(attr)
+                self._helper_resolver_spec(attr, attr_value=kwargs.pop(attr))
                 is_needs_remesh = True
-                
+
         if "sides" in kwargs:
             object.__setattr__(self.opts, 'sides', kwargs['sides'])
             is_needs_remesh = True
-                
+
         if is_needs_remesh:
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
             self._entity.mapper.SetInputData(mesh)
             self._entity.mapper.Update()
-            if is_silhouette:
+            if self._state_is_silhouette:
                 self._helper_add_silhouette()
-                
+            else:
+                self._helper_clear_silhouette()
 
         pbr_params = ["metallic", "roughness"]
         phong_params = ["ambient", "diffuse", "specular", "specular_power", "specular_color"]
 
         for key, value in kwargs.items():
-            #!!! is_reset_camera is_colorbar scalars_name
             try:
-
                 if key in pbr_params and current_shading != "pbr":
                     logger.warning(f"Setting '{key}' but current shading_type is '{current_shading}'. PBR effects may not show.")
                 elif key in phong_params and current_shading == "pbr":
                     logger.warning(f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored.")
-                    
+
                 attr_path_actor = self.opts._actor_attr.get(key, None)
                 if attr_path_actor:
                     parts = attr_path_actor.split('.')
@@ -686,22 +667,18 @@ class PlotGlyph(HostBase):
                     for part in parts[:-1]:
                         obj = getattr(obj, part)
                     setattr(obj, parts[-1], value)
-                    
+
                 object.__setattr__(self.opts, key, value)
-            except:
+            except Exception:
                 logger.exception(f"Failed to reset value of {key!r}")
                 logger.recovery("Ignore this modification")
 
-        
         if paint_method == "color":
             self._helper_update_rgba()
         else:
             self._helper_update_scalars()
-            
-        self.fig.pl.render()
-        
-        return kwargs
 
+        self.fig.pl.render()
          
     
     def act_highlight(self, 

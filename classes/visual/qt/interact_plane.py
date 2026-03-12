@@ -456,8 +456,9 @@ class InteractPlane(PanelBase):
             self._vect_text(self.host.opts.normal, "normal")
         )
         if self.chk_is_show_axes.isChecked():
-            is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
-            self.visual_normal.act_commit(orient=self.host.opts.normal, is_silhouette=is_silhouette)
+            state_is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
+            with self.visual_normal._helper_temporarily_set_silhouette(state_is_silhouette):
+                self.visual_normal.act_commit(orient=self.host.opts.normal)
         
     def _sync_axis1(self):
         self._sync_from_host(
@@ -472,9 +473,11 @@ class InteractPlane(PanelBase):
         self.state["origin"] = self.host.opts.origin
         self.point_console._update_center_label()
         if self.chk_is_show_axes.isChecked():
-            is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
-            self.visual_normal.act_commit(coords=self.host.opts.origin, is_silhouette=is_silhouette)
-            self.visual_origin.act_commit(coords=self.host.opts.origin, is_silhouette=is_silhouette)
+            state_is_silhouette = getattr(self.visual_normal, "_entity_silhouette", None) is not None
+            with self.visual_normal._helper_temporarily_set_silhouette(state_is_silhouette):
+                self.visual_normal.act_commit(coords=self.host.opts.origin)
+            with self.visual_origin._helper_temporarily_set_silhouette(state_is_silhouette):
+                self.visual_origin.act_commit(coords=self.host.opts.origin)
         
 
 
