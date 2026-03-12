@@ -262,11 +262,21 @@ class PlotGlyph(HostBase):
         **kwargs
     ):
         
-        coords = as_points(coords, name="The positions of PlotGlyph") 
+        coords = self.__class__._impl_validators["coords"](
+            coords,
+            self.act_show_attr_desc("raw_coords"),
+        )
         object.__setattr__(self, "raw_coords", coords)
-        category = as_str(category, name="The category of the glyph")
+        category = self.__class__._impl_validators["category"](
+            category,
+            self.act_show_attr_desc("raw_category"),
+        )
         object.__setattr__(self, "raw_category", category)
-        
+        name = as_str(
+            name,
+            name=self.act_show_attr_desc("raw_name"),
+            replace=name_replace,
+        )        
         object.__setattr__(self, "_impl_resolver_source", "raw_coords")
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)

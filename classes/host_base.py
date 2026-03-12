@@ -725,12 +725,24 @@ class HostBase(ClassBase):
 
     def act_show_attr_desc(self, attr_name: str) -> str:
         descriptions_host = self.__class__.__descriptions__
-        descriptions_opts = self.opts.__class__.__descriptions__
-        description = descriptions_host.get(
-            attr_name, descriptions_opts.get(attr_name, "")
-        )
-        return f"{attr_name!r}: {description}"
+        if attr_name in descriptions_host:
+            return f"{attr_name!r}: {descriptions_host[attr_name]}"
 
+        opts = getattr(self, "_opts", None)
+        if opts is not None:
+            descriptions_opts = opts.__class__.__descriptions__
+            if attr_name in descriptions_opts:
+                return f"{attr_name!r}: {descriptions_opts[attr_name]}"
+            raise KeyError(
+                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__descriptions__ "
+                f"or {type(opts).__name__}.__descriptions__."
+            )
+
+        raise KeyError(
+            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__descriptions__. "
+            "The opts descriptions are not available yet because self._opts has not been initialized; "
+            "the attribute may belong to opts."
+        )
     @logging_and_warning_decorator()
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
         lines = [
