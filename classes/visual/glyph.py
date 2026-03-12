@@ -600,20 +600,6 @@ class PlotGlyph(HostBase):
             pm._impl_registry.pop(self._entity)
         self.fig._entity.remove(self)
 
-    # ----------------------------------------------------------------------------------------------------
-    # The functions to apply modications.
-    # Important: GlyphBase does NOT support for wrapping other instances!
-    # ----------------------------------------------------------------------------------------------------
-
-    @contextmanager
-    def _helper_temporarily_set_silhouette(self, is_enabled: bool):
-        state_before = self._state_is_silhouette
-        object.__setattr__(self, "_state_is_silhouette", bool(is_enabled))
-        try:
-            yield
-        finally:
-            object.__setattr__(self, "_state_is_silhouette", state_before)
-
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
