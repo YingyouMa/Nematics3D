@@ -171,9 +171,8 @@ class InteractGlyphBase(PanelBase):
         if hasattr(self.host, "_helper_add_silhouette"):
             self.host._helper_add_silhouette()
 
-    def commit(self):
+    def _helper_build_commit_params(self):
         params = {}
-
         if self.config["is_radius"]:
             current_radius = self.host._opts_backup[self.str_now_live]["radius"]
             scale = float(self.state["radius_rescale"])
@@ -183,7 +182,6 @@ class InteractGlyphBase(PanelBase):
                 params["radius"] = scale * float(current_radius)
             else:
                 params["radius"] = scale * np.asarray(current_radius, dtype=float)
-
         if self.config["is_color"]:
             if self.state.get("is_use_control_color"):
                 params["color"] = (
@@ -197,22 +195,26 @@ class InteractGlyphBase(PanelBase):
                 params["paint_by"] = self.host._opts_backup[self.str_now_live][
                     "paint_by"
                 ]
-
         if self.config["is_opacity"]:
             params["opacity"] = (
                 self.state["opacity"]
                 if self.state.get("is_use_control_opacity")
                 else self.host._opts_backup[self.str_now_live]["opacity"]
             )
-
         if self.config["is_sides"]:
             params["sides"] = int(self.state["sides"])
-
         self._extra_commit(params)
+        return params
+
+    def _helper_run_commit(self, params):
+        self.host.act_commit(**params)
+
+    def commit(self):
+        params = self._helper_build_commit_params()
 
         self._is_gui_updating = True
         try:
-            self.host.act_commit(**params)
+            self._helper_run_commit(params)
         finally:
             self._is_gui_updating = False
 

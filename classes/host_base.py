@@ -125,7 +125,7 @@ class OptsBase:
 
     def _helper_host_apply(self, key, value):
         if self.host is not None:
-            self.host._helper_commit_apply_opts(**{key: value})
+            self.host.act_commit(**{key: value})
             return value
 
     # ---------------------------------------------------------------------
@@ -313,6 +313,13 @@ class HostBase(ClassBase):
             "Protected attributes under wrapping. When wrapped, these attributes cannot be modified "
             "unless within _helper_wrapped_update() context."
         ),
+        "_impl_attrs_protected": (
+            "Additional protected attributes declared directly by this host. "
+            "These attrs cannot be modified through act_commit() by external callers."
+        ),
+        "attrs_forbidden": (
+            "Property: Union of wrapped-protected attrs and host-declared protected attrs."
+        ),
         "_impl_wrapper_ref": "A weak reference to the wrapper object that controls this host. ",
         "_entity_wrapped": "The host object being wrapped and controlled by this wrapper.",
         "_impl_enrich_kwargs_wrapped_func": (
@@ -373,6 +380,7 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_opts_defaults", opts_defaults)
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_impl_sync_func", {})
+        object.__setattr__(self, "_impl_attrs_protected", set())
         object.__setattr__(self, "_impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "_impl_enrich_kwargs_sync_func", {})
         object.__setattr__(self, "_impl_attrs_wrapped", set())
@@ -427,7 +435,7 @@ class HostBase(ClassBase):
         #
         # _helper_commit_pre_opts:
         #       preprocess kwargs for this host before opts-level application.
-        #       _helper_check_wrapped_attr: remove attrs protected by wrapper.
+        #       _helper_check_protected_attr: remove attrs protected by wrapper or by host declaration.
         #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
         #       _helper_commit_raw: consume host-side raw/public attrs, validate if configured,
         #                           then write directly to host (not through opts).
@@ -503,7 +511,7 @@ class HostBase(ClassBase):
     def _helper_commit_pre_opts(self, kwargs):
         if not kwargs:
             return {}, False
-        self._helper_check_wrapped_attr(kwargs)
+        self._helper_check_protected_attr(kwargs)
         kwargs_applied_name = self._helper_commit_name(kwargs)
         kwargs_applied_raw, is_reapply_opts = self._helper_commit_raw(kwargs)
         return kwargs_applied_raw | kwargs_applied_name, is_reapply_opts
@@ -516,15 +524,15 @@ class HostBase(ClassBase):
         # ``kwargs`` to the wrapped object.
 
     @logging_and_warning_decorator()
-    def _helper_check_wrapped_attr(self, kwargs, logger=None):
+    def _helper_check_protected_attr(self, kwargs, logger=None):
         if not kwargs:
             return
-        blocked = [k for k in kwargs.keys() if k in self._impl_attrs_wrapped]
+        blocked = [k for k in kwargs.keys() if k in self.attrs_forbidden]
         for key in blocked:
             kwargs.pop(key)
             try:
                 raise AttributeError(
-                    f"{key!r} is protected by self.wrapper and could not be directly modified"
+                    f"{key!r} is protected and could not be directly modified"
                 )
             except AttributeError:
                 logger.exception("Invalid attr")
@@ -636,7 +644,7 @@ class HostBase(ClassBase):
             return {}
 
     def _helper_commit_apply_opts(self, is_reapply_opts=False, **kwargs):
-        self._helper_check_wrapped_attr(kwargs)
+        self._helper_check_protected_attr(kwargs)
         opts_before = self.opts.act_asdict()
         kwargs_applied_opts = {}
         if "tag" in kwargs:
@@ -675,7 +683,7 @@ class HostBase(ClassBase):
     def _helper_trigger_sync_batch(self, logger=None, **kwargs):
         for name, func in self._impl_sync_func.items():
             try:
-                func(host=self, **kwargs)
+                func(**kwargs)
             except Exception as e:
                 logger.exception(f"Sync task '{name}' failed: {e}")
                 logger.recovery("Automatically skip this function.")
@@ -788,11 +796,9 @@ class HostBase(ClassBase):
         self._impl_sync_func.pop(name, None)
 
     @logging_and_warning_decorator()
-    def act_register_wrapped_attr(
-        self, attrs: Sequence[str] | str, logger=None
+    def _helper_register_protected_attr(
+        self, attrs: Sequence[str] | str, target_set: set[str], attr_name: str, logger=None
     ) -> None:
-        """Register a group of public attribute as protected under wrapping."""
-
         if isinstance(attrs, str):
             attrs = [attrs]
         elif not isinstance(attrs, (list, tuple, set)):
@@ -803,21 +809,21 @@ class HostBase(ClassBase):
 
         for attr in attrs:
             try:
-                attr = as_str(attr, name="The name of attr to be wrapped")
+                attr = as_str(attr, name=attr_name)
                 if attr.startswith("raw_"):
                     if attr in self.__descriptions__:
-                        self._impl_attrs_wrapped.update([attr, attr[4:]])
+                        target_set.update([attr, attr[4:]])
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__}."
                         )
                 else:
                     if attr in self.opts.__class__.__descriptions__:
-                        self._impl_attrs_wrapped.add(attr)
+                        target_set.add(attr)
                     else:
                         raw_attr = "raw_" + attr
                         if raw_attr in self.__descriptions__:
-                            self._impl_attrs_wrapped.update([raw_attr, raw_attr[4:]])
+                            target_set.update([raw_attr, raw_attr[4:]])
                         else:
                             raise AttributeError(
                                 f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__} or its opts."
@@ -825,6 +831,30 @@ class HostBase(ClassBase):
             except Exception:
                 logger.exception("Invalid attr name.")
                 logger.recovery("Automatically ignore this attr.")
+
+    def act_register_wrapped_attr(
+        self, attrs: Sequence[str] | str
+    ) -> None:
+        """Register a group of public attributes as protected under wrapping."""
+        self._helper_register_protected_attr(
+            attrs,
+            target_set=self._impl_attrs_wrapped,
+            attr_name="The name of attr to be wrapped",
+        )
+
+    def act_register_protected_attr(
+        self, attrs: Sequence[str] | str
+    ) -> None:
+        """Register a group of public attributes as directly protected by this host."""
+        self._helper_register_protected_attr(
+            attrs,
+            target_set=self._impl_attrs_protected,
+            attr_name="The name of attr to be protected",
+        )
+
+    @property
+    def attrs_forbidden(self):
+        return set(self._impl_attrs_wrapped) | set(self._impl_attrs_protected)
 
     @contextmanager
     def _helper_wrapped_update(self):
@@ -835,6 +865,7 @@ class HostBase(ClassBase):
             yield
         finally:
             protected.update(backup)
+
 
     @property
     def wrapper(self):
@@ -866,3 +897,10 @@ class HostBase(ClassBase):
     # Rewrite from ClassBase. To handle opts.
     def _helper_setattr_final(self, key, value):
         self.act_commit(**{key: value})
+
+
+
+
+
+
+

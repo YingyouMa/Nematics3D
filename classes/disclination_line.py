@@ -333,7 +333,6 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
         object.__setattr__(self, "_entity_planes", RegistryBase(name="Planes"))
         object.__setattr__(self._entity_planes, "_impl_owner_ref", weakref.ref(self))
-        object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_calc_padding_num", 0)
 
         if name is None:
@@ -346,20 +345,7 @@ class DisclinationLineSmooth(SmoothedLine):
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
-
-    # ==================== OVERRIDE ====================
-    # DisclinationLineSmooth overrides SmoothedLine/HostBase pre-opts
-    # handling to block external replacement of coords: this object
-    # must always smooth the owner's defect coordinates.
-    # ==================================================
-    @logging_and_warning_decorator()
-    def _helper_commit_pre_opts(self, kwargs, logger=None):
-        found, _ = pop_exclusive(kwargs, "coords", "raw_coords")
-        if found:
-            logger.warning(
-                "`coords` could not be modified because this object always smooths the owner defect coordinates."
-            )
-        return super()._helper_commit_pre_opts(kwargs)
+        self.act_register_protected_attr(["coords", "mode"])
 
     def _helper_resolve_coords(self):
         indices = self.owner._raw_defect_indices.copy()

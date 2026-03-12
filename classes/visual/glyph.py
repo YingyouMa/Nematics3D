@@ -645,25 +645,8 @@ class PlotGlyph(HostBase):
             else:
                 self._helper_clear_silhouette()
 
-        pbr_params = ["metallic", "roughness"]
-        phong_params = [
-            "ambient",
-            "diffuse",
-            "specular",
-            "specular_power",
-            "specular_color",
-        ]
-
         for key, value in kwargs.items():
             try:
-                if key in pbr_params and current_shading != "pbr":
-                    logger.warning(
-                        f"Setting '{key}' but current shading_type is '{current_shading}'. PBR effects may not show."
-                    )
-                elif key in phong_params and current_shading == "pbr":
-                    logger.warning(
-                        f"Setting '{key}' but current shading_type is 'pbr'. Phong lighting parameters may be ignored."
-                    )
 
                 attr_path_actor = self.opts._actor_attr.get(key, None)
                 if attr_path_actor:
@@ -777,3 +760,4 @@ class PlotGlyph(HostBase):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})"
         return msg
+
