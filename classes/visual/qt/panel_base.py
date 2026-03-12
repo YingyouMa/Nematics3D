@@ -19,7 +19,6 @@ class SliderItem:
     value_max: int
     value_fmt: str = "{:.2f}"
 
-    
     def get_value(self) -> float:
         return float(self.tick_to_value(int(self.slider.value())))
 
@@ -40,7 +39,7 @@ class SliderItem:
         try:
             tick_max = self.value_to_tick(float(self.value_max))
             if tick > tick_max:
-                tick_max = int(tick*1.2)
+                tick_max = int(tick * 1.2)
                 self.slider.setMaximum(tick_max)
             self.slider.setValue(int(tick))
             self.set_label()
@@ -51,7 +50,7 @@ class SliderItem:
     def set_enabled(self, enabled: bool) -> None:
         self.slider.setEnabled(bool(enabled))
         self.label.setEnabled(bool(enabled))
-    
+
 
 def make_labeled_slider_row(
     *,
@@ -72,7 +71,7 @@ def make_labeled_slider_row(
     tracking: bool = True,
     spacing: int = 8,
 ) -> SliderItem:
-    
+
     tick_min = value_to_tick(value_min)
     tick_max = value_to_tick(value_max)
     tick_init = value_to_tick(value_init)
@@ -114,7 +113,7 @@ def make_labeled_slider_row(
         state_key=(name if state_key is None else state_key),
         value_fmt=value_fmt,
         value_min=value_min,
-        value_max=value_max
+        value_max=value_max,
     )
     item.set_label()  # initialize label text
 
@@ -137,19 +136,19 @@ def make_RGB_slider(
 
     def _t2v(t: int) -> float:
         return t / 1000.0
-    
+
     def _v2t(v: float) -> int:
         return int(v * 1000.0)
 
     for i, ch in enumerate(("r", "g", "b")):
-        dict_key = f"{prefix}_{ch}"   # key in `sliders` dict
-        state_key = dict_key          # key in `state` dict
+        dict_key = f"{prefix}_{ch}"  # key in `sliders` dict
+        state_key = dict_key  # key in `state` dict
 
         sliders[dict_key] = make_labeled_slider_row(
             parent=parent,
             layout=layout,
-            name=ch.upper(),          # label on UI
-            state_key=state_key,      # where to write in state
+            name=ch.upper(),  # label on UI
+            state_key=state_key,  # where to write in state
             value_min=value_min,
             value_max=value_max,
             value_init=init_rgb[i],
@@ -159,8 +158,8 @@ def make_RGB_slider(
             single_step=single_step,
             page_step=page_step,
         )
-    
-    
+
+
 @dataclass(frozen=True, slots=True)
 class LogTickMapper:
     value_min: float
@@ -186,7 +185,7 @@ class LogTickMapper:
         log_min = math.log(self.value_min, self.base)
         log_max = math.log(self.value_max, self.base)
         log_v = log_min + alpha * (log_max - log_min)
-        return float(self.base ** log_v)
+        return float(self.base**log_v)
 
     def value_to_tick(self, v: float) -> int:
         v = float(v)
@@ -197,7 +196,7 @@ class LogTickMapper:
         alpha = (log_v - log_min) / float(log_max - log_min)
         t = self.tick_min + alpha * (self.tick_max - self.tick_min)
         return int(round(t))
-    
+
 
 @dataclass(slots=True, weakref_slot=True)
 class PressHoldButtonItem:
@@ -261,7 +260,7 @@ class PressHoldButtonItem:
 
     def set_enabled(self, enabled: bool) -> None:
         self.button.setEnabled(bool(enabled))
-        
+
 
 def make_press_hold_button(
     *,
@@ -285,7 +284,6 @@ def make_press_hold_button(
         long_press_ms=int(long_press_ms),
         repeat_ms=int(repeat_ms),
     )
-
 
 
 @dataclass(slots=True)
@@ -399,7 +397,6 @@ class MovePointConsole:
             grid.addWidget(cell, row, col)
             return item
 
-
         def _move_once(dir_: Vect(3), *, item_ref: PressHoldButtonItem):
             # pull latest step from state (slider may have changed)
             step = float(self.state[self.step_key])
@@ -432,32 +429,46 @@ class MovePointConsole:
         # Create 6 buttons.
         # Layout: row 1: X, row 2: Y, row 3: Z (neg left, pos right)
         self.btn_x_neg = _cell_button(
-            1, 0, "-X",
-            cb=lambda: _move_once((-1, 0, 0), item_ref=self.btn_x_neg),  # placeholder, fixed below
+            1,
+            0,
+            "-X",
+            cb=lambda: _move_once(
+                (-1, 0, 0), item_ref=self.btn_x_neg
+            ),  # placeholder, fixed below
             release_cb=lambda: _on_release((-1, 0, 0)),
         )
         self.btn_x_pos = _cell_button(
-            1, 1, "+X",
+            1,
+            1,
+            "+X",
             cb=lambda: _move_once((+1, 0, 0), item_ref=self.btn_x_pos),
             release_cb=lambda: _on_release((+1, 0, 0)),
         )
         self.btn_y_neg = _cell_button(
-            2, 0, "-Y",
+            2,
+            0,
+            "-Y",
             cb=lambda: _move_once((0, -1, 0), item_ref=self.btn_y_neg),
             release_cb=lambda: _on_release((0, -1, 0)),
         )
         self.btn_y_pos = _cell_button(
-            2, 1, "+Y",
+            2,
+            1,
+            "+Y",
             cb=lambda: _move_once((0, +1, 0), item_ref=self.btn_y_pos),
             release_cb=lambda: _on_release((0, +1, 0)),
         )
         self.btn_z_neg = _cell_button(
-            3, 0, "-Z",
+            3,
+            0,
+            "-Z",
             cb=lambda: _move_once((0, 0, -1), item_ref=self.btn_z_neg),
             release_cb=lambda: _on_release((0, 0, -1)),
         )
         self.btn_z_pos = _cell_button(
-            3, 1, "+Z",
+            3,
+            1,
+            "+Z",
             cb=lambda: _move_once((0, 0, +1), item_ref=self.btn_z_pos),
             release_cb=lambda: _on_release((0, 0, +1)),
         )
@@ -466,7 +477,9 @@ class MovePointConsole:
         assert self.lab_center is not None
         c = np.array(self.state[self.center_key], dtype=float)
         fmt = self.center_fmt
-        self.lab_center.setText(f"({fmt.format(c[0])}, {fmt.format(c[1])}, {fmt.format(c[2])})")
+        self.lab_center.setText(
+            f"({fmt.format(c[0])}, {fmt.format(c[1])}, {fmt.format(c[2])})"
+        )
 
     def set_enabled(self, enabled: bool) -> None:
         en = bool(enabled)
@@ -474,15 +487,14 @@ class MovePointConsole:
         self.group.setEnabled(en)
 
 
-
 class PanelBase(QtWidgets.QWidget):
-    
+
     def __init__(self, host, figure, title: str = "Panel"):
-        
+
         title = as_str(title, name="The title of panel", replace="Panel")
-        
+
         super().__init__()
-        
+
         required_methods = (
             "act_save_opts",
             "act_attach_sync_task",
@@ -490,13 +502,9 @@ class PanelBase(QtWidgets.QWidget):
             "act_commit",
         )
         missing_methods = [
-            name for name in required_methods
-            if not callable(getattr(host, name, None))
+            name for name in required_methods if not callable(getattr(host, name, None))
         ]
-        missing_attrs = [
-            name for name in ("_opts_backup",)
-            if not hasattr(host, name)
-        ]
+        missing_attrs = [name for name in ("_opts_backup",) if not hasattr(host, name)]
         if missing_methods or missing_attrs:
             lines = [
                 "PanelBase requires a host object compatible with the panel sync/reset workflow.",
@@ -515,22 +523,22 @@ class PanelBase(QtWidgets.QWidget):
         self.host.act_save_opts(self.str_now_live)
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", False)
-        
+
         self._is_block_chk_commit = False
-        
+
         self.state: dict[str, object] = {}
         self.sliders: dict[str, SliderItem] = {}
-        
+
         self.setWindowTitle(title)
-        self.setObjectName('panel')
+        self.setObjectName("panel")
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window)
-        
+
         self.layout = QtWidgets.QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(8)
-        
+
         self.build_ui()
-        
+
         # ----------------------------
         # Reset Actions group
         # ----------------------------
@@ -539,66 +547,66 @@ class PanelBase(QtWidgets.QWidget):
         self.layout.addWidget(group_reset)
 
         self.btn_reset_live = QtWidgets.QPushButton("Reset to Live", group_reset)
-        self.btn_reset_live.setToolTip("Discard UI changes and revert to the current live baseline.")
+        self.btn_reset_live.setToolTip(
+            "Discard UI changes and revert to the current live baseline."
+        )
         self.btn_reset_live.clicked.connect(self._on_reset_to_live)
         hl_reset.addWidget(self.btn_reset_live)
 
         self.btn_reset_orig = QtWidgets.QPushButton("Restore Original", group_reset)
-        self.btn_reset_orig.setToolTip("Discard all console overrides and restore the initial state.")
+        self.btn_reset_orig.setToolTip(
+            "Discard all console overrides and restore the initial state."
+        )
         self.btn_reset_orig.clicked.connect(self._on_reset_to_original)
         hl_reset.addWidget(self.btn_reset_orig)
-        
-        self.host.act_attach_sync_task(
-            name = self.str_now_live,
-            func = self._sync_func
-        )
-        
+
+        self.host.act_attach_sync_task(name=self.str_now_live, func=self._sync_func)
+
     def _sync_from_host_slider(self, attr: str, value: float):
         s = self.sliders[attr]
         s.set_tick(value, is_block_signals=True)
         self.on_changed(0, is_commit=False)
-        
+
     def on_changed(self, _v=0, is_commit=True):
         for item in self.sliders.values():
             item.sync_to_state(self.state)
 
         if is_commit:
             self.commit()
-        
+
     def build_ui(self):
         raise NotImplementedError
 
     def commit(self):
         raise NotImplementedError
-        
+
     def _sync_func(self):
         raise NotImplementedError
-        
+
     def _on_reset_to_live(self):
         self.host.act_commit(**self.host._opts_backup[self.str_now_live])
-        
+
     def _on_reset_to_original(self):
         original = self.host._opts_backup[self.str_now]
         self.host.act_commit(**original)
         self.host._opts_backup[self.str_now_live] = dict(original)
-        
 
     def closeEvent(self, event: QtGui.QCloseEvent):
         try:
             self.on_close()
         finally:
             event.accept()
-            
+
     def on_close(self):
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", True)
         self.host.act_detach_sync_task(self.str_now_live)
-            
+
     @staticmethod
     def _vect_text(vect, name):
         text = f"{name}: ({vect[0]:.2f}, {vect[1]:.2f}, {vect[2]:.2f})"
         return text
-    
+
     @staticmethod
     def _helper_calc_vec(azimuth, polar_angle):
         x = np.sin(polar_angle) * np.cos(azimuth)
@@ -606,7 +614,7 @@ class PanelBase(QtWidgets.QWidget):
         z = np.cos(polar_angle)
         result = (x, y, z)
         return result
-    
+
     @staticmethod
     def get_azimuth(vec):
         az_rad = np.arctan2(vec[1], vec[0])
