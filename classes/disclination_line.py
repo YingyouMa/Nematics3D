@@ -303,6 +303,7 @@ class DisclinationLineSmooth(SmoothedLine):
         "_entity_visual": "The PlotTube object as the visualization of this smoothed disclination line",
         "_entity_planes": "The DefectPlane objects as the cross-sections along the smoothed disclination line",
         "_state_is_silhouette": "Whether to add silhouette when setting values of opts. Only used in control window.",
+        "_calc_padding_num": "Temporary padding length used when smoothing a cross-boundary line.",
     }
 
     __slots__ = tuple(
@@ -329,6 +330,7 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, "_entity_planes", RegistryBase(name="Planes"))
         object.__setattr__(self._entity_planes, "_impl_owner_ref", weakref.ref(self))
         object.__setattr__(self, "_state_is_silhouette", True)
+        object.__setattr__(self, "_calc_padding_num", 0)
 
         if name is None:
             name = self.owner.name
@@ -342,98 +344,80 @@ class DisclinationLineSmooth(SmoothedLine):
         )
 
     @logging_and_warning_decorator()
-    def act_commit(self, opts: OptsSmooth | None = None, logger=None, **kwargs):
-        
-        found, coords = pop_exclusive(kwargs, "coords", "raw_coords")
+    def _helper_commit_pre_opts(self, kwargs, logger=None):
+        found, _ = pop_exclusive(kwargs, "coords", "raw_coords")
         if found:
-            try:
-                raise AttributeError(
-                    "`coords` could not be modified because this is the given defect coordinates"    
-                )
-            except:
-                logger.exception("Check input")
-                logger.recovery("Automatically ignore this modification")
-            
-
-        kwargs = self._helper_merge_opts_kwargs(opts=opts, **kwargs)
-        self._helper_commit_apply_opts(**kwargs)
-
-    @logging_and_warning_decorator()
-    def _helper_commit_apply_opts(self, logger=None, **kwargs):
-
-        v = kwargs.pop("mode", None)
-        if v is not None:
             logger.warning(
-                "'mode' is ignored and removed from kwargs because the smooth mode is determined by the kind of disclination line."
+                "`coords` could not be modified because this object always smooths the owner defect coordinates."
             )
+        return super()._helper_commit_pre_opts(kwargs)
 
+    def _helper_resolve_coords(self):
         indices = self.owner._raw_defect_indices.copy()
+        padding_num = 0
+        smooth_mode = "interp"
 
         if self.owner._calc_end2end_kind == "loop":
             smooth_mode = "wrap"
-            padding_num = 0
 
         elif self.owner._calc_end2end_kind == "cross":
-
             L = self.owner._raw_box_size_periodic_index
 
-            if kwargs.get("window_ratio", None):
-                padding_num = int(self._calc_N_init / kwargs["window_ratio"] / 2)
+            if self.opts.window_ratio is not None:
+                padding_num = int(len(indices) / self.opts.window_ratio / 2)
             else:
-                padding_num = (
-                    kwargs.get("window_length")
-                    or self.opts.window_length
-                    or self._calc_N_init
-                )
-                padding_num = int(padding_num / 2)
-
-            logger.debug(
-                f"line {self.name} is cross-kind. It has to deal with periodic boundary condition to smooth this line."
-            )
+                padding_num = int((self.opts.window_length or len(indices)) / 2)
 
             indices_origin = self.owner._raw_defect_indices.copy()
             tail = indices_origin[:padding_num].copy()
             head = indices_origin[-padding_num:].copy()
             indices = np.concatenate([head, indices_origin, tail])
 
-            logger.detail("Start the whole unwrap.")
             indices = unwrap_trajectory(indices, box_size_periodic=L)
 
-            logger.detail(
-                "Shift the unwrapped line to the periodic image (mirror branch) which is closed to the original line."
-            )
             start_origin = self.owner._raw_defect_indices[0]
             start_now = indices[padding_num]
             mask = np.isfinite(L)
             m = np.zeros(3, dtype=float)
             m[mask] = np.round((start_origin[mask] - start_now[mask]) / L[mask])
-            shift_vec = m * L
-            indices += shift_vec
+            indices += m * L
 
-            smooth_mode = "interp"
-        else:
-            smooth_mode = "interp"
-            padding_num = 0
+        object.__setattr__(self, "_calc_padding_num", padding_num)
+        object.__setattr__(self, "_calc_coords", indices)
+        object.__setattr__(self.opts, "mode", smooth_mode)
 
-        object.__setattr__(self, "raw_coords", indices)
-
-        super()._helper_commit_apply_opts(mode=smooth_mode, **kwargs)
-        result = self._calc_result
-
-        result = self._calc_result[
-            int(padding_num * self.opts.N_out_ratio) : int(
-                (-padding_num-1) * self.opts.N_out_ratio
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+        if "mode" in kwargs:
+            kwargs.pop("mode")
+            logger.warning(
+                "'mode' is ignored and removed from kwargs because the smooth mode is determined by the kind of disclination line."
             )
-        ]
-        object.__setattr__(self, "_calc_result", result)
-        object.__setattr__(self, "_calc_N_out", len(result))
 
-        result = apply_linear_transform(
-            result,
+        super()._helper_commit_apply_opts_main(
+            is_reapply_opts=is_reapply_opts,
+            logger=logger,
+            **kwargs,
+        )
+
+        padding_num = int(getattr(self, "_calc_padding_num", 0))
+        if self._state_is_smoothed and padding_num > 0 and len(self._calc_result) > 0:
+            trim = int(round(padding_num * float(self.opts.N_out_ratio)))
+            if trim > 0 and (2 * trim) < len(self._calc_result):
+                result = self._calc_result[trim:-trim]
+                object.__setattr__(self, "_calc_result", result)
+                object.__setattr__(self, "_calc_N_out", len(result))
+
+        if not self._state_is_smoothed:
+            object.__setattr__(self, "_calc_result", self.owner._raw_defect_indices.copy())
+            object.__setattr__(self, "_calc_N_out", len(self._calc_result))
+
+        result_coords = apply_linear_transform(
+            self._calc_result,
             transform=self.owner._raw_grid_transform,
             offset=self.owner._raw_grid_offset,
         )
-        object.__setattr__(self, "_calc_result_coords", result)
+        object.__setattr__(self, "_calc_result_coords", result_coords)
 
         tube_wrapper = getattr(self, "_entity_visual", None)
         if tube_wrapper:
@@ -466,7 +450,6 @@ class DisclinationLineSmooth(SmoothedLine):
     def act_add_local_plane(self, x_param, **kwargs):
         plane = DefectPlane(self, x_param, **kwargs)
         return plane
-    
 
 @dataclass(slots=True, repr=False)
 class OptsDefectLinePlot(OptsBase):
@@ -809,3 +792,4 @@ class DefectPlane(ClassBase):
                 "Reverting `state_normal` to None."
             )
         return state_normal
+

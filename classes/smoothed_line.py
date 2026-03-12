@@ -84,14 +84,14 @@ class SmoothedLine(HostBase):
     # fmt: off
     __descriptions__ = {
         **dict(HostBase.__descriptions__),
-        "raw_name":                 "The name identifier of the original line",    
+        "raw_name":                 "The name identifier of the original line",
         "raw_coords":               "Raw input line coordinates (shape: N x D)",
-        "_calc_N_init":             "Number of input points (before smoothing)",   #!!! property
+        "_calc_coords":             "The processed coordinates actually sent into the smoothing pipeline",
+        "_calc_N_init":             "Property: Number of processed input points actually used by the smoothing pipeline",
         "_calc_N_out":              "Number of output points (after smoothing)",
         "_calc_result":             "The smoothed output coordinates (shape: M x D)",
         "_entity_tck":              "B-spline representation (tck) used for evaluating curve derivatives",
         "_state_is_smoothed":       "Boolean flag indicating whether smoothing was applied",
-        
         "_state_status": (
             "Status indicator of the smoothing pipeline. "
             "Set to 'success' if smoothing completes normally. "
@@ -107,12 +107,12 @@ class SmoothedLine(HostBase):
         for k, v in __descriptions__.items()
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
-    
+
     _impl_validators = {
         **HostBase._impl_validators,
         "coords": lambda v, d: as_points(v, name=d, dim=None),
     }
-    
+
     _impl_attrs_reapply_opts_after_raw = {"coords"}
 
     def __init__(
@@ -126,11 +126,11 @@ class SmoothedLine(HostBase):
 
         line_coord_input = self._impl_validators["coords"](
             line_coord_input,
-            self.__descriptions__["raw_coords"]
+            self.__descriptions__["raw_coords"],
         )
 
         object.__setattr__(self, "raw_coords", line_coord_input)
-        object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
+        object.__setattr__(self, "_calc_coords", self.raw_coords)
 
         object.__setattr__(self, "_state_is_smoothed", False)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
@@ -147,10 +147,19 @@ class SmoothedLine(HostBase):
         self.opts.act_finalize()
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
+    def _helper_resolve_coords(self):
+        object.__setattr__(self, "_calc_coords", self.raw_coords)
+
+    @property
+    def _calc_N_init(self):
+        coords = getattr(self, "_calc_coords", None)
+        if coords is None:
+            coords = getattr(self, "raw_coords", None)
+        return 0 if coords is None else len(coords)
 
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "_calc_result", self.raw_coords)
+        object.__setattr__(self, "_calc_result", self._calc_coords)
         object.__setattr__(self, "_calc_N_out", self._calc_N_init)
         object.__setattr__(self, "_entity_tck", None)
         object.__setattr__(
@@ -159,12 +168,9 @@ class SmoothedLine(HostBase):
             f"The line `{self.name}` is not smoothed, reason: {reason}.",
         )
 
-
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
-        
-        object.__setattr__(self, "_calc_N_init", len(self.raw_coords))
-        
+
         if not is_reapply_opts and not kwargs:
             return
 
@@ -181,6 +187,8 @@ class SmoothedLine(HostBase):
                 is_allow_unset_source=False,
                 **kwargs,
             )
+
+        self._helper_resolve_coords()
 
         msg = f"Start to smooth line {self.name!r} with {self._calc_N_init} points.\n"
         msg += f"window length = {self.opts.window_length}\n"
@@ -222,18 +230,27 @@ class SmoothedLine(HostBase):
                     "window_ratio",
                     self._calc_N_init / self.opts.window_length,
                 )
-                
+
             if self._calc_N_init < self.opts.min_line_length:
-                reason = f"the minimum length of line smoothing is set to be {self.opts.min_line_length} points, while the current line has {self._calc_N_init} points"
+                reason = (
+                    f"the minimum length of line smoothing is set to be {self.opts.min_line_length} "
+                    f"points, while the current line has {self._calc_N_init} points"
+                )
                 self._helper_fallback_no_smooth(reason)
                 raise SmoothingConfigError(reason)
 
             if self.opts.window_length >= self._calc_N_init:
-                reason = f"Filter window length {self.opts.window_length} should not be larger than line length {self._calc_N_init}"
+                reason = (
+                    f"Filter window length {self.opts.window_length} should not be larger than "
+                    f"line length {self._calc_N_init}"
+                )
                 raise SmoothingConfigError(reason)
 
             if self.opts.window_length <= self.opts.order:
-                reason = f"Filter window length {self.opts.window_length} should not be smaller than filter order {self.opts.order}"
+                reason = (
+                    f"Filter window length {self.opts.window_length} should not be smaller than "
+                    f"filter order {self.opts.order}"
+                )
                 raise SmoothingConfigError(reason)
 
             logger.debug(
@@ -249,7 +266,7 @@ class SmoothedLine(HostBase):
 
             logger.detail("Applying Savitzky-Golay filter to smooth the curve")
             line_points = savgol_filter(
-                self.raw_coords,
+                self._calc_coords,
                 self.opts.window_length,
                 self.opts.order,
                 axis=0,
@@ -268,7 +285,6 @@ class SmoothedLine(HostBase):
 
             object.__setattr__(self, "_state_is_smoothed", True)
             object.__setattr__(self, "_state_status", "Success")
- 
 
         except SmoothingConfigError as e:
             logger.exception("Smoothing aborted (manual check)")
@@ -283,40 +299,32 @@ class SmoothedLine(HostBase):
                 "Fallback applied: smoothing disabled; using raw coordinates."
             )
             self._helper_fallback_no_smooth("system error")
-        
-
-
 
     def act_calc_tangent(self, x_param, is_return_coord=False):
-        
+
         tck = getattr(self, "_entity_tck", None)
         if tck is None:
             raise RuntimeError(
                 "Spline cache `_entity_tck` is missing."
                 "Probably the line is not properly initialized or successfully smoothed."
             )
-        
-        x_param = as_Number(x_param, value_range=(0,100), name="Continuous spline parameter along the curve")
+
+        x_param = as_Number(x_param, value_range=(0, 100), name="Continuous spline parameter along the curve")
         x_param /= 100
         dr_dx = np.asarray(splev(x_param, self._entity_tck, der=1), dtype=float)
-        
+
         length = float(np.linalg.norm(dr_dx))
         if (not np.isfinite(length)) or length < 1e-9:
             raise ValueError(
                 f"Degenerate spline derivative at {x_param}: ||dr/dx||={length}."
             )
-    
+
         t_hat = dr_dx / length
-        
+
         if is_return_coord:
             coord = np.asarray(splev(x_param, self._entity_tck, der=0), dtype=float)
-            
+
         return (t_hat, coord) if is_return_coord else t_hat
-            
-            
-        
-        
-        
 
     def __array__(self, dtype=None):
         arr = self._calc_result
@@ -334,3 +342,4 @@ class SmoothedLine(HostBase):
     @property
     def result(self):
         return self._calc_result
+
