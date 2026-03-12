@@ -1,5 +1,4 @@
 import numpy as np
-from dataclasses import dataclass
 from typing import Literal, Any, Mapping
 from types import MappingProxyType
 
@@ -17,7 +16,6 @@ from .visual.plot_figure import PlotFigure, OptsFigure
 from .visual.plot_sphere import PlotSphere, OptsSphere
 
 #!!! grid unit
-#!!! shape
 #!!! asdict
 #!!! axis normal figdemo
 
@@ -29,7 +27,6 @@ class OptsPlaneGrid(OptsBase):
     spacing_extra:          Number | Unset                              = UNSET
     size:                   Number | Unset                              = UNSET
     size_extra:             Number | Unset                              = UNSET
-    shape:                  Literal["circle", "rectangle"] | Unset      = UNSET #!!!!!!!!!
     origin:                 Vect(3) | Unset                             = UNSET
     alignment:              Literal["center", "bottom-left"] | Unset    = UNSET
     axis1:                  Vect(3) | None | Unset                      = UNSET
@@ -50,7 +47,6 @@ class OptsPlaneGrid(OptsBase):
         "corners_limit":    "bounding box corners (8×3 array)",
         "grid_offset":      "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform":   "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
-        "shape":            "plane shape (circle or rectangle) NOT VALID IN CURRENT VERSION",
     }
 
     _validators = {
@@ -60,10 +56,6 @@ class OptsPlaneGrid(OptsBase):
         "spacing_extra":    lambda v, d: None if v is None else as_Number(v, name=d),
         "size":             lambda v, d: as_Number(v, name=d),
         "size_extra":       lambda v, d: None if v is None else as_Number(v, name=d),
-        "shape":            lambda v, d: as_str(
-                                v, name=d,
-                                pool=("circle", "rectangle"),
-                                ),
         "corners_limit":    lambda v, d: None if v is None else as_Tensor(v, (8, 3), name=d),
         "origin":           lambda v, d: as_Vect(v, name=d),
         "alignment":        lambda v, d: as_str(
@@ -78,7 +70,6 @@ class OptsPlaneGrid(OptsBase):
     _DEFAULTS_FROZEN = MappingProxyType({
         **(OptsBase._DEFAULTS_FROZEN),
         "tag":              "plane grid options",
-        "shape":            "rectangle",
         "spacing_extra":    None,
         "size_extra":       None,
         "origin":           (0,0,0),
@@ -152,10 +143,12 @@ class PlaneGrid(HostBase):
         self.opts.act_finalize(defaults=self._opts_defaults)
 
         
-        self._helper_commit_apply_opts()
+        self._helper_commit_apply_opts(is_reapply_opts=True)
     
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts(self, logger=None, **kwargs):
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+        if not is_reapply_opts and not kwargs:
+            return
 
         with self.opts._helper_internal_update():
             cover_value(self.opts,
@@ -177,7 +170,6 @@ class PlaneGrid(HostBase):
         corners_limit = self.opts.corners_limit
         grid_transform = self.opts.grid_transform
         grid_offset = self.opts.grid_offset
-        shape = self.opts.shape
         alignment = self.opts.alignment
         
         if axis1 is not None:
@@ -203,7 +195,7 @@ class PlaneGrid(HostBase):
         logger.debug(f"axis2={axis2}")
         
         logger.detail("Start to generate coordinate grids.")
-        grid, grid_int, sizes = generate_fixed_step_grid(size1, size2, space1, space2)
+        grid, grid_int, sizes = generate_fixed_step_grid(size1, size2, space1, space2, alignment=alignment)
         size1, size2 = sizes
         target_shape = np.shape(grid)[:2]
         grid_int = np.reshape(grid_int, (-1, 2))
@@ -211,10 +203,7 @@ class PlaneGrid(HostBase):
         grid = np.einsum("ai, ib -> ab", grid, axis_both)
         
         logger.detail("Translate the grid according to the origin.")
-        if alignment == "bottom-left":
-            offset = origin
-        else:
-            offset = origin - np.average(grid, axis=0)
+        offset = origin
         grid = grid + offset
         
         logger.detail("Perform linear transform into real coordinates.")
@@ -242,7 +231,6 @@ class PlaneGrid(HostBase):
         if self.field:
             self.field._helper_commit()
             
-        self._helper_trigger_sync_batch(**kwargs)
         
         
     
@@ -396,3 +384,6 @@ class PlaneGrid(HostBase):
     #     return self.__class__(opts=opts_new)
     
     
+
+
+

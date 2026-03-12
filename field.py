@@ -282,6 +282,7 @@ def generate_fixed_step_grid(
     size2: float,
     step1: float,
     step2: float,
+    alignment: str = "bottom-left",
 ) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
     """
     Generate a 2D coordinate grid with fixed step sizes.
@@ -290,10 +291,14 @@ def generate_fixed_step_grid(
     ----------
     size1, size2 : float
         Extent of the domain along axis-1 and axis-2.
-        The grid starts at 0 and does not exceed the given size.
 
     step1, step2 : float
         Fixed step size along each axis.
+
+    alignment : {"bottom-left", "center"}
+        Grid generation mode. ``bottom-left`` starts the grid at 0 and grows
+        toward positive directions only. ``center`` guarantees that 0 is a real
+        grid point and expands symmetrically along positive/negative directions.
 
     Returns
     -------
@@ -302,37 +307,48 @@ def generate_fixed_step_grid(
         where grid[i, j] = (x, y).
 
     grid_int : np.ndarray
-        Integer index grid of shape (n1, n2, 2),
-        where grid_int[i, j] = (i, j).
+        Integer index grid of shape (n1, n2, 2).
 
     size_eff : tuple of float
-        The effective sizes (size1_eff, size2_eff) actually covered
-        by the grid, computed as:
-            size*_eff = (n* - 1) * step*
+        The effective sizes (size1_eff, size2_eff) actually covered.
     """
-    # number of grid points (including 0)
-    n1 = int(np.floor(size1 / step1)) + 1
-    n2 = int(np.floor(size2 / step2)) + 1
-    
-    # integer index grid
-    axis1_int = np.arange(n1)
-    axis2_int = np.arange(n2)
-    
+    alignment = str(alignment)
+    if alignment == "bottom-left":
+        n1 = int(np.floor(size1 / step1)) + 1
+        n2 = int(np.floor(size2 / step2)) + 1
+
+        axis1 = np.arange(n1, dtype=float) * step1
+        axis2 = np.arange(n2, dtype=float) * step2
+        axis1_int = np.arange(n1)
+        axis2_int = np.arange(n2)
+
+        size1_eff = (n1 - 1) * step1
+        size2_eff = (n2 - 1) * step2
+
+    elif alignment == "center":
+        n1_half = int(np.floor(size1 / step1 / 2))
+        n2_half = int(np.floor(size2 / step2 / 2))
+
+        axis1_int = np.arange(-n1_half, n1_half + 1)
+        axis2_int = np.arange(-n2_half, n2_half + 1)
+        axis1 = axis1_int.astype(float) * step1
+        axis2 = axis2_int.astype(float) * step2
+
+        size1_eff = 2 * n1_half * step1
+        size2_eff = 2 * n2_half * step2
+
+    else:
+        raise ValueError(
+            f"alignment must be 'bottom-left' or 'center', got {alignment!r}"
+        )
+
+    mesh = np.meshgrid(axis1, axis2, indexing="ij")
+    grid = np.stack(mesh, axis=-1)
+
     mesh_int = np.meshgrid(axis1_int, axis2_int, indexing="ij")
-    grid_int = np.stack(mesh_int, axis=-1)  # (n1, n2, 2)
-    
-    # continuous coordinate grid (mapped from integer indices)
-    grid = grid_int.astype(float)
-    grid[..., 0] *= step1
-    grid[..., 1] *= step2
-    
-    # effective sizes actually covered
-    size1_eff = (n1 - 1) * step1
-    size2_eff = (n2 - 1) * step2
+    grid_int = np.stack(mesh_int, axis=-1)
 
     return grid, grid_int, (size1_eff, size2_eff)
-
-
 
 def apply_linear_transform(
     points: np.ndarray,
@@ -702,4 +718,5 @@ def n_color_immerse(n: nField) -> List[Tuple]:
         colors.append(tuple(color))
 
     return colors
+
 
