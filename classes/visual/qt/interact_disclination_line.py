@@ -95,27 +95,34 @@ class InteractDisclinationLine(InteractGlyphBase):
             item.sync_to_state(self.state)
         if is_commit:
             if is_only_smooth:
-                self.smooth.act_commit(window_length=int(self.state["window_length"]))
+                self._is_gui_updating = True
+                try:
+                    self.smooth.act_commit(window_length=int(self.state["window_length"]))
+                finally:
+                    self._is_gui_updating = False
             else:
                 self.commit()
 
     def _sync_func_wrapper(self, **kwargs):
+        if "is_smooth" in kwargs:
+            self._is_block_chk_commit = True
+            self.chk_is_smooth.setChecked(bool(kwargs["is_smooth"]))
+            self._is_block_chk_commit = False
+        if "is_wrap" in kwargs:
+            self._is_block_chk_commit = True
+            self.chk_is_wrap.setChecked(bool(kwargs["is_wrap"]))
+            self._is_block_chk_commit = False
+            self.spheres.act_commit(
+                coords=self._helper_create_sphere_coords(bool(kwargs["is_wrap"]))
+            )
         if not getattr(self, "_is_gui_updating", False):
             self.wrapper._opts_backup[self.str_now_live].update(kwargs)
-            if "is_smooth" in kwargs:
-                self._is_block_chk_commit = True
-                self.chk_is_smooth.setChecked(bool(kwargs["is_smooth"]))
-                self._is_block_chk_commit = False
-            if "is_wrap" in kwargs:
-                self._is_block_chk_commit = True
-                self.chk_is_wrap.setChecked(bool(kwargs["is_wrap"]))
-                self._is_block_chk_commit = False
 
     def _sync_func_smooth(self, **kwargs):
         if not getattr(self, "_is_gui_updating", False):
-            self.smooth._opts_backup[self.str_now_live].update(kwargs)
             if "window_length" in kwargs:
                 self._sync_from_host_slider("window_length", kwargs["window_length"])
+            self.smooth._opts_backup[self.str_now_live].update(kwargs)
 
     def _helper_create_sphere_coords(self, is_wrap):
         if is_wrap:
@@ -141,17 +148,23 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.wrapper.act_commit(**params)
 
     def _on_toggle_is_wrap(self, _state):
-        # Keep the raw defect-point helper spheres consistent with the current wrap mode.
         is_wrap = self.chk_is_wrap.isChecked()
         self.state["is_wrap"] = is_wrap
-        self.wrapper.act_commit(is_wrap=is_wrap)
-        self.spheres.act_commit(coords=self._helper_create_sphere_coords(is_wrap))
+        self._is_gui_updating = True
+        try:
+            self.wrapper.act_commit(is_wrap=is_wrap)
+        finally:
+            self._is_gui_updating = False
 
     def _on_toggle_is_smooth(self, _state):
         is_smooth = self.chk_is_smooth.isChecked()
         self.state["is_smooth"] = is_smooth
         self.sliders["window_length"].set_enabled(is_smooth)
-        self.wrapper.act_commit(is_smooth=is_smooth)
+        self._is_gui_updating = True
+        try:
+            self.wrapper.act_commit(is_smooth=is_smooth)
+        finally:
+            self._is_gui_updating = False
 
     # ==================== OVERRIDE ====================
     # InteractDisclinationLine overrides PanelBase reset actions
@@ -210,4 +223,8 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.smooth.act_detach_sync_task(self.str_now_live)
         object.__setattr__(self.host, "_state_is_silhouette", True)
         self.spheres.act_remove()
+
+
+
+
 
