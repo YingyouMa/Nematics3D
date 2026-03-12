@@ -177,12 +177,7 @@ class PlotTube(PlotGlyph):
         object.__setattr__(self, "_calc_poly", poly)
         self._helper_set_poly(poly)
 
-        
-    # ==================== OVERRIDE ====================
-    # PlotTube overrides PlotGlyph._helper_build_mesh because
-    # tube geometry is generated with `poly.tube(...)` instead of
-    # the default point-glyph mesh construction.
-    # ==================================================
+
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_mesh(self, logger=None):
         """
@@ -227,8 +222,6 @@ class PlotTube(PlotGlyph):
     # tube-specific information such as normalized arc position
     # and, when available, the local tangent direction.
     # ==================================================
-    # Rewrite _helper_resolve_pick
-    # To privide more specific information about tube
     def _helper_resolve_pick(self, picked_point):
         
         pos_close, msg, idx = super()._helper_resolve_pick(picked_point)

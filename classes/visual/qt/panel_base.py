@@ -245,9 +245,7 @@ class PressHoldButtonItem:
         if not self._pressed:
             return
         self._hold_active = True
-        # fire once at the start of hold
-        self._fire()
-        # start repeating
+        # start repeating after the initial short-press fire
         assert self._timer_repeat is not None
         self._timer_repeat.start(int(self.repeat_ms))
 
@@ -412,11 +410,11 @@ class MovePointConsole:
 
             # callback classification
             if bool(item_ref._hold_active):
-                # during long hold repeats and also the first long-press fire
+                # during long hold repeats
                 if self.on_hold is not None:
                     self.on_hold(dir_, c_new)
             else:
-                # short press single fire (happens on release inside PressHoldButtonItem)
+                # short press single fire (happens on button press)
                 if self.on_press is not None:
                     self.on_press(dir_, c_new)
 
@@ -485,9 +483,33 @@ class PanelBase(QtWidgets.QWidget):
         
         super().__init__()
         
+        required_methods = (
+            "act_save_opts",
+            "act_attach_sync_task",
+            "act_detach_sync_task",
+            "act_commit",
+        )
+        missing_methods = [
+            name for name in required_methods
+            if not callable(getattr(host, name, None))
+        ]
+        missing_attrs = [
+            name for name in ("_opts_backup",)
+            if not hasattr(host, name)
+        ]
+        if missing_methods or missing_attrs:
+            lines = [
+                "PanelBase requires a host object compatible with the panel sync/reset workflow.",
+            ]
+            if missing_methods:
+                lines.append(f"Missing methods: {missing_methods}")
+            if missing_attrs:
+                lines.append(f"Missing attributes: {missing_attrs}")
+            raise TypeError("\n".join(lines))
+
         self.host = host
         self.fig = figure
-        self.str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        self.str_now = datetime.datetime.now().strftime("panel_%Y%m%d_%H%M%S_%f")[:-3]
         self.host.act_save_opts(self.str_now)
         self.str_now_live = self.str_now + "_live"
         self.host.act_save_opts(self.str_now_live)
@@ -558,7 +580,7 @@ class PanelBase(QtWidgets.QWidget):
     def _on_reset_to_original(self):
         original = self.host._opts_backup[self.str_now]
         self.host.act_commit(**original)
-        self.host._opts_backup[self.str_now_live] = self.host._opts_backup[self.str_now_live] | original
+        self.host._opts_backup[self.str_now_live] = dict(original)
         
 
     def closeEvent(self, event: QtGui.QCloseEvent):
