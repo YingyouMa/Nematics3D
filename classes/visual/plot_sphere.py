@@ -5,7 +5,6 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 from .qt.interact_sphere import InteractSphere
@@ -46,8 +45,6 @@ class PlotSphere(PlotGlyph):
     ):
         
         
-        category = as_str(category, name="The category of the PlotTube object", replace="tube")
-        object.__setattr__(self, 'raw_category', category)
 
         super().__init__(
             coords=coords,
