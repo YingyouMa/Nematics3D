@@ -25,7 +25,7 @@ from ..datatypes import (
 from ..field import apply_linear_transform, unwrap_trajectory
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
-from .opts import merge_opts_all
+from .opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..general import pop_exclusive, find_plane_normal
 from .class_base import ClassBase
@@ -302,7 +302,6 @@ class DisclinationLineSmooth(SmoothedLine):
         "_calc_result_coords": "The smoothed disclination coords in real space",
         "_entity_visual": "The PlotTube object as the visualization of this smoothed disclination line",
         "_entity_planes": "The DefectPlane objects as the cross-sections along the smoothed disclination line",
-        "_state_is_silhouette": "Whether to add silhouette when setting values of opts. Only used in control window.",
         "_calc_padding_num": "Temporary padding length used when smoothing a cross-boundary line.",
     }
 
@@ -311,6 +310,11 @@ class DisclinationLineSmooth(SmoothedLine):
             if not v.startswith("Property:") and k not in SmoothedLine.__slots__
         )
 
+    # ==================== OVERRIDE ====================
+    # DisclinationLineSmooth overrides SmoothedLine.__init__ because
+    # it must bind a DisclinationLine owner and initialize the
+    # defect-line-specific entities before the generic smoothing setup.
+    # ==================================================
     def __init__(
         self,
         line,
@@ -343,6 +347,10 @@ class DisclinationLineSmooth(SmoothedLine):
             **kwargs,
         )
 
+    # ==================== OVERRIDE ====================
+    # DisclinationLineSmooth overrides SmoothedLine/HostBase pre-opts
+    # must always smooth the owner's defect coordinates.
+    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit_pre_opts(self, kwargs, logger=None):
         found, _ = pop_exclusive(kwargs, "coords", "raw_coords")
@@ -491,6 +499,11 @@ class DisclinationLineSmoothPlot(HostBase):
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
     
+    # ==================== OVERRIDE ====================
+    # DisclinationLineSmoothPlot overrides HostBase.__init__ because
+    # it must create and bind an internal PlotTube wrapped by this
+    # visualization wrapper during initialization.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -540,6 +553,7 @@ class DisclinationLineSmoothPlot(HostBase):
         )
 
         tube.act_bind_wrapper(self, protected_attrs=["coords", "line_index"])
+        self.act_attach_enrich_kwargs_wrapped_task("visual_coords", self._helper_enrich_kwargs_wrapped_visual)
         tube.act_set_interact_func(lambda: InteractDisclinationLine(tube).show())
 
 
@@ -613,21 +627,22 @@ class DisclinationLineSmoothPlot(HostBase):
 
         return line_coords, line_index
     
-    def _helper_commit_apply_opts_main(self, **kwargs):
-        valid_keys = self.opts.act_asdict().keys() - {"tag"}
-        update_keys = valid_keys & kwargs.keys()
+    def _helper_enrich_kwargs_wrapped_visual(self, host=None, kwargs=None):
+        line_coords, line_index = self._helper_get_coords()
+        return {"coords": line_coords, "line_index": line_index}
+
+
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+        if not is_reapply_opts and not kwargs:
+            return
         with self.opts._helper_internal_update():
-            for k in update_keys:
-                setattr(self.opts, k, kwargs[k])
-        
-            if update_keys:
-                line_coords, line_index = self._helper_get_coords()
-                with self.wrapped._helper_wrapped_update():
-                    with self.wrapped._helper_temporarily_set_silhouette(self.owner._state_is_silhouette):
-                        self.wrapped.act_commit(
-                            coords=line_coords,
-                            line_index=line_index,
-                        )
+            cover_value(
+                self.opts,
+                is_allow_cover_target_set=True,
+                is_allow_unset_source=False,
+                **kwargs,
+            )
 
 
 class DefectPlane(ClassBase):
@@ -792,4 +807,5 @@ class DefectPlane(ClassBase):
                 "Reverting `state_normal` to None."
             )
         return state_normal
+
 

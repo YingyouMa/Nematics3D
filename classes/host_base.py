@@ -474,7 +474,8 @@ class HostBase(ClassBase):
         kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs)
         if kwargs or opts_wrapped:
             if self.wrapped is not None:
-                self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
+                with self.wrapped._helper_wrapped_update():
+                    self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
             else:
                 cls_name = self.__class__.__name__
                 obj_name = getattr(self, "raw_name", "Uninitialized")
