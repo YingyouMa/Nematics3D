@@ -349,6 +349,7 @@ class DisclinationLineSmooth(SmoothedLine):
 
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine/HostBase pre-opts
+    # handling to block external replacement of coords: this object
     # must always smooth the owner's defect coordinates.
     # ==================================================
     @logging_and_warning_decorator()
