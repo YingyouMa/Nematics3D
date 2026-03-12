@@ -70,6 +70,10 @@ class PlotTube(PlotGlyph):
     )
     
     
+    # ==================== OVERRIDE ====================
+    # PlotTube overrides PlotGlyph.__init__ only to accept
+    # and validate the tube-specific raw field `line_index`.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -131,6 +135,11 @@ class PlotTube(PlotGlyph):
             recovery_msg="Set line_index=None in the following (no stop points within the tube)",
         )
 
+    # ==================== OVERRIDE ====================
+    # PlotTube overrides PlotGlyph._helper_build_poly because
+    # a tube may represent one or multiple disconnected polylines,
+    # so the PolyData topology cannot reuse the glyph default.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None): 
         
@@ -169,6 +178,11 @@ class PlotTube(PlotGlyph):
         self._helper_set_poly(poly)
 
         
+    # ==================== OVERRIDE ====================
+    # PlotTube overrides PlotGlyph._helper_build_mesh because
+    # tube geometry is generated with `poly.tube(...)` instead of
+    # the default point-glyph mesh construction.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)    
     def _helper_build_mesh(self, logger=None):
         """
@@ -195,6 +209,11 @@ class PlotTube(PlotGlyph):
 
         return mesh
     
+    # ==================== OVERRIDE ====================
+    # PlotTube overrides HostBase/PlotGlyph pre-opts handling only
+    # to route the extra raw field `line_index` through the new
+    # commit-pop-raw validator path and trigger opts re-apply.
+    # ==================================================
     def _helper_commit_pre_opts(self, kwargs):
         kwargs_applied, is_reapply_opts = super()._helper_commit_pre_opts(kwargs)
         kwargs_applied_line, is_reapply_opts_line = self._helper_commit_line_index(kwargs)
@@ -203,6 +222,11 @@ class PlotTube(PlotGlyph):
             is_reapply_opts or is_reapply_opts_line,
         )
     
+    # ==================== OVERRIDE ====================
+    # PlotTube overrides PlotGlyph._helper_resolve_pick to report
+    # tube-specific information such as normalized arc position
+    # and, when available, the local tangent direction.
+    # ==================================================
     # Rewrite _helper_resolve_pick
     # To privide more specific information about tube
     def _helper_resolve_pick(self, picked_point):
