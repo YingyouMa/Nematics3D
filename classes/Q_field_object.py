@@ -40,7 +40,7 @@ from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
-from .visual.plot_delaunay import OptsDelaunay
+from .visual.plot_surface import OptsSurface
 from .visual.plot_figure import PlotFigure, OptsFigure
 from .Q_plane import QPlane, QPlanePolar
 from .visual.figure_manager import FigureManager
@@ -697,7 +697,7 @@ class QFieldObject(ClassBase):
         is_new: bool = False,
         is_extent: bool = True,
         opts_grid: OptsPlaneGrid | None = None,
-        opts_S: OptsDelaunay | None = None,
+        opts_S: OptsSurface | None = None,
         opts_figure: OptsFigure | None = None,
         opts_extent: OptsTube | None = None,
         title: str = "visualization of S plane",
@@ -714,7 +714,7 @@ class QFieldObject(ClassBase):
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_S is None:
-            opts_S = OptsDelaunay()
+            opts_S = OptsSurface()
 
         merge = merge_opts_all(
             {
@@ -892,3 +892,4 @@ class QFieldObject(ClassBase):
     def name(self, value: str):
         name = as_str(value, name="The name of the Q field")
         self.raw_name = name
+

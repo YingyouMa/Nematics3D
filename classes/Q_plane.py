@@ -14,7 +14,7 @@ from Nematics3D.datatypes import as_bool
 from .visual.plot_figure import PlotFigure, OptsFigure, as_PlotFigure
 from .visual.plot_sphere import PlotSphere, OptsSphere
 from .visual.plot_rod import PlotRod, OptsRod
-from .visual.plot_delaunay import OptsDelaunay, PlotDelaunay
+from .visual.plot_surface import OptsSurface, PlotSurface
 from .opts import merge_opts_all
 from .plane_grid import PlaneGrid, OptsPlaneGrid
 from .plane_grid_polar import PlaneGridPolar, OptsPlaneGridPolar
@@ -30,7 +30,7 @@ class QPlane(InterpolatePlane):
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
         "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
         "_entity_visual_defect": "The PlotSphere objects of visualized defects",
-        "_entity_visual_S": "The PlotDealunay object of visualized S",
+        "_entity_visual_S": "The PlotSurface object of visualized S",
         "_calc_n": "List of director field arrays (from Q-diagonalization)",
         "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
@@ -337,14 +337,14 @@ class QPlane(InterpolatePlane):
         self,
         figure: PlotFigure | BackgroundPlotter | None = None,
         opts_figure: OptsFigure | None = None,
-        opts_S: OptsDelaunay | None = None,
+        opts_S: OptsSurface | None = None,
         **kwargs,
     ):
     
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_S is None:
-            opts_S = OptsDelaunay()
+            opts_S = OptsSurface()
 
         merge = merge_opts_all(
             {
@@ -360,7 +360,7 @@ class QPlane(InterpolatePlane):
 
         figure = as_PlotFigure(figure, opts_figure)
             
-        visual_S = PlotDelaunay(
+        visual_S = PlotSurface(
             coords=self.plane(),
             scalars=self._calc_S,
             figure=figure,
@@ -572,3 +572,4 @@ class QPlanePolar(QPlane):
         )
     
         return defect_centers, adjacent_mask
+

@@ -2,9 +2,9 @@ from qtpy import QtWidgets
 
 from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider
 
-class InteractDelaunay(PanelBase):
+class InteractSurface(PanelBase):
     def __init__(self, host):
-        super().__init__(host, title="Colored Plane Controls")
+        super().__init__(host, title="Colored Surface Controls")
 
     def build_ui(self):
         # ----------------------------
@@ -116,3 +116,4 @@ class InteractDelaunay(PanelBase):
         self.state["is_use_control_opacity"] = is_opacity
         self.sliders["opacity"].set_enabled(is_opacity)
         self.commit()
+

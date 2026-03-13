@@ -496,10 +496,10 @@ class PickManager:
                     # self.owner.console.println(DEFECT_PLANE_GUI_ONLY_WARNING)
                     # print(DEFECT_PLANE_GUI_ONLY_WARNING)
                 
-        if type(owner).__name__ == "PlotDelaunay" and getattr(owner, "_state_is_interactable", False):
+        if type(owner).__name__ == "PlotSurface" and getattr(owner, "_state_is_interactable", False):
             
-            from .qt.interact_delaunay import InteractDelaunay
-            control = InteractDelaunay(owner)
+            from .qt.interact_surface import InteractSurface
+            control = InteractSurface(owner)
             control.show()
             
             figure = owner.fig
@@ -514,4 +514,7 @@ class PickManager:
         # reset to avoid triple-trigger
         object.__setattr__(self, "_state_last_rclick_time", None)
         object.__setattr__(self, "_state_last_rclick_actor", None)
+
+
+
 

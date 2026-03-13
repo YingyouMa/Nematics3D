@@ -40,8 +40,8 @@ colors = np.column_stack([
 
 
 figure = Nematics3D.PlotFigure()
-plane = Nematics3D.PlotDelaunay(coords, color=colors, figure=figure)
-# plane = Nematics3D.PlotDelaunay(coords, color='scalars',
+plane = Nematics3D.PlotSurface(coords, color=colors, figure=figure)
+# plane = Nematics3D.PlotSurface(coords, color='scalars',
 #                                 scalars= lambda x: np.linalg.norm(x, axis=-1),
 #                                 figure=figure)
-# plane = Nematics3D.PlotDelaunay(coords, color='scalars', scalars=np.sin,  figure=figure)
+# plane = Nematics3D.PlotSurface(coords, color='scalars', scalars=np.sin,  figure=figure)

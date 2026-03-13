@@ -5,24 +5,23 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import  as_str
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 
 
 @dataclass(slots=True, repr=False)
-class OptsDelaunay(OptsGlyph):
+class OptsSurface(OptsGlyph):
     
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **(OptsGlyph.__descriptions__),
         "radius": (
             "Deprecated placeholder. "
-            "Currently has no effect in Delaunay plots. "
+            "Currently has no effect in surface plots. "
             "Kept temporarily to avoid refactoring overhead."
         ),
         "sides": (
             "Deprecated placeholder. "
-            "Currently has no effect in Delaunay plots. "
+            "Currently has no effect in surface plots. "
             "Kept temporarily to avoid refactoring overhead."
         ),
     }
@@ -40,7 +39,7 @@ class OptsDelaunay(OptsGlyph):
 
     
     
-class PlotDelaunay(PlotGlyph):
+class PlotSurface(PlotGlyph):
     
     __descriptions__: ClassVar[Mapping[str, str]] = {
         k: v
@@ -63,19 +62,17 @@ class PlotDelaunay(PlotGlyph):
         name_replace: str = 'surface',
         category: str = 'surface',
         figure: PlotFigure | None = None,
-        opts: OptsDelaunay | None = None,
+        opts: OptsSurface | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger = None,
         **kwargs
     ):
         
         
-        category = as_str(category, name="The category of the PlotDelaunay object", replace="surface")
-        object.__setattr__(self, 'raw_category', category)
 
         super().__init__(
             coords=coords,
-            opts_type=OptsDelaunay,
+            opts_type=OptsSurface,
             category=category,
             name=name,
             name_replace=name_replace,
@@ -95,11 +92,11 @@ class PlotDelaunay(PlotGlyph):
         
         poly = self._calc_poly  
             
-        logger.detail("Creating the triangulation by Delaunay method.")
+        logger.detail("Creating the surface mesh by Delaunay triangulation.")
         mesh = poly.delaunay_2d(alpha=0.0)
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to sphere mesh")
+            logger.detail("Applying spatial clipping to surface mesh")
             if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):
@@ -135,6 +132,10 @@ class PlotDelaunay(PlotGlyph):
         actor_silhouette.pickable = False
         
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
+
+
+
+
 
 
 
