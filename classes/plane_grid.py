@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Literal, Any, Mapping
 from types import MappingProxyType
+import dataclass
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.field import generate_fixed_step_grid, apply_linear_transform

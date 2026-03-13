@@ -91,6 +91,4 @@ class InterpolatePlane(ClassBase):
     def plane(self):
         return self._entity_plane
     
-    def __setattr__(self, key, value):
-        super()._helper_setattr_basic(key, value)
     

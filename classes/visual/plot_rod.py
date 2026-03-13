@@ -5,69 +5,80 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import UNSET, Unset, as_str
+from Nematics3D.datatypes import UNSET, Unset
 from .plot_figure import PlotFigure
-from .glyph import OptsGlyph,PlotGlyph
-from Nematics3D.general import pop_exclusive
+from .glyph import OptsGlyph, PlotGlyph
 from Nematics3D.datatypes import as_points
 from Nematics3D.general import fmt_value
 
 LengthMode = float | Callable | Sequence
 
+
 @dataclass(slots=True, repr=False)
 class OptsRod(OptsGlyph):
 
     # --- Geometry & Topology (Tube-specific) ---
-    length:             LengthMode | Unset = UNSET
-
+    length: LengthMode | Unset = UNSET
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **dict(OptsGlyph.__descriptions__),
-        "length":       "The length of rods"
+        "length": "The length of rods",
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
-        **dict(OptsGlyph._DEFAULTS_FROZEN),
-        "length":       3,
-        "radius":       0.3,
-    })
+    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {
+            **dict(OptsGlyph._DEFAULTS_FROZEN),
+            "length": 3,
+            "radius": 0.3,
+        }
+    )
 
 
-        
 class PlotRod(PlotGlyph):
 
     __descriptions__ = {
         **dict(PlotGlyph.__descriptions__),
-        "raw_name":     "The name identifier of the PlotRod instance",
-        "raw_orient":   "The orientation of rods",
-        "_calc_length": "The resolved per-point length array used for rods length."
+        "raw_name": "The name identifier of the PlotRod instance",
+        "raw_orient": "The orientation of rods",
+        "_calc_length": "The resolved per-point length array used for rods length.",
     }
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in PlotGlyph.__slots__
-        )
-    
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+    )
+
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + ["length"]
-    
+    _impl_attrs_reapply_opts_after_raw = PlotGlyph._impl_attrs_reapply_opts_after_raw | {"orient"}
+    _impl_validators = {
+        **PlotGlyph._impl_validators,
+        "orient": lambda v, d: as_points(v, name=d),
+    }
+
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph.__init__ because it must accept
+    # rod-specific raw orientation data before the generic glyph
+    # initialization and mesh setup are performed.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
         orient: np.ndarray,
-        name: str = 'rod',
-        name_replace: str = 'rod',
-        category: str = 'rods',
+        name: str = "rod",
+        name_replace: str = "rod",
+        category: str = "rods",
         figure: PlotFigure | None = None,
         opts: OptsRod | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger = None,
-        **kwargs
+        logger=None,
+        **kwargs,
     ):
 
-        category = as_str(category, name="The category of the PlotRod object", replace="rods")
-        object.__setattr__(self, 'raw_category', category)
-
-        orient = as_points(orient, name="The orientation of PlotRod object") 
+        orient = self.__class__._impl_validators["orient"](
+            orient,
+            self.act_show_attr_desc("raw_orient"),
+        )
         object.__setattr__(self, "raw_orient", orient)
 
         super().__init__(
@@ -82,29 +93,31 @@ class PlotRod(PlotGlyph):
             logger=logger,
             **kwargs,
         )
-        
+
         if len(self.raw_orient) != len(self.raw_coords):
-            raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
-            
+            raise ValueError(
+                f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions."
+            )
+
         object.__setattr__(self, "_impl_resolver_source", "raw_orient")
 
         self._helper_init_end()
 
-    
+    # PlotRod expands each rod center into two endpoints, so per-rod arrays
+    # must be repeated to stay aligned with the endpoint-based polydata layout.
     def __getattribute__(self, name):
         value = object.__getattribute__(self, name)
         if name in ["_calc_color", "_calc_opacity", "_calc_radius", "_calc_scalars"]:
             value = np.repeat(value, 2, axis=0)
         return value
-    
-    
-    @logging_and_warning_decorator(start_finish_level=5)    
+
+    @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None):
-        
+
         points = self.raw_coords
         length = self._calc_length.reshape(-1, 1)
-        orient = self.raw_orient
-        
+        orient = self.raw_orient.copy()
+
         orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
         mask = orient_norm.squeeze() > 1e-5
         if not np.all(mask):
@@ -114,76 +127,57 @@ class PlotRod(PlotGlyph):
                 "Their directions are left unnormalized, which may lead to degenerate or invisible rods."
             )
         orient[mask] /= orient_norm[mask]
-        
+
         n_rods = points.shape[0]
         half = 0.5 * length
         p_minus = points - half * orient
-        p_plus  = points + half * orient
+        p_plus = points + half * orient
         endpoints = np.empty((2 * n_rods, 3), dtype=p_minus.dtype)
         endpoints[0::2] = p_minus
         endpoints[1::2] = p_plus
-        
+
         lines = np.empty((n_rods, 3), dtype=np.int64)
         lines[:, 0] = 2
         lines[:, 1] = 2 * np.arange(n_rods)
         lines[:, 2] = 2 * np.arange(n_rods) + 1
-        
+
         poly = pv.PolyData(endpoints, lines=lines.ravel())
-        
+
         object.__setattr__(self, "_calc_poly", poly)
         self._helper_set_poly(poly)
-        
-        
-    @logging_and_warning_decorator(start_finish_level=5)    
+
+    @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
-        
+
         poly = self._calc_poly
-            
+
         logger.detail("Applying tube filter with dynamic radius scaling")
         mesh = poly.tube(
-            scalars='radius', 
-            n_sides=self.opts.sides, 
-            absolute=True 
+            scalars="radius",
+            n_sides=self.opts.sides,
+            absolute=True,
         )
 
         if self.opts.clip_geometry is not None:
             logger.detail("Applying spatial clipping to tube mesh")
-            if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
+            if (
+                isinstance(self.opts.clip_geometry, (list, tuple))
+                and len(self.opts.clip_geometry) == 6
+            ):
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):
                 mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
 
         object.__setattr__(self, "_calc_poly", poly)
         return mesh
-    
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_commit_pre_opts(self, logger=None, **kwargs):
-        
-        is_new_topology, kwargs = super()._helper_commit_pre_opts(**kwargs)
-        
-        found, orient = pop_exclusive(kwargs, "orient", "raw_orient")
-        if found:
-            try:
-                object.__setattr__(self, "raw_orient", as_points(orient))
-                is_new_topology = True
-            except:
-                logger.exception("Invalid input of orient for PlotRod.")
-                logger.recovery("Ignore this modification in the following")
-                
-        if len(self.raw_orient) != len(self.raw_coords):
-            raise ValueError(f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions.")
-                    
-        return is_new_topology, kwargs
-    
-    
-    # Rewrite _helper_resolve_pick
-    # Provide specific information about rods
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph._helper_resolve_pick to expose
+    # the local rod orientation in addition to the generic glyph info.
+    # ==================================================
     def _helper_resolve_pick(self, picked_point):
         pos, msg, idx = super()._helper_resolve_pick(picked_point)
         value = fmt_value(self.raw_orient[idx])
         msg = f"Local orientation: {value} \n" + msg
         return pos, msg, idx
-
-    
 
