@@ -75,7 +75,7 @@ class OptsPickManager:
                     pack["text_actor"].GetTextProperty().SetFontSize(value)
             
             else:
-                for glyph in self._impl_registry.values():
+                for glyph in owner._impl_registry.values():
                     if hasattr(glyph, '_entity_silhouette') and glyph._entity_silhouette.visibility:
                         if key == "sil_color":
                             glyph._entity_silhouette.prop.color = value
