@@ -137,6 +137,16 @@ class ClassBase:
     def act_get_attr(self, key):
         return self._impl_extra_attrs[key]
 
+    def __getattr__(self, key):
+        extra = object.__getattribute__(self, "_impl_extra_attrs")
+        if key in extra:
+            return extra[key]
+        cls_name = type(self).__name__
+        try:
+            obj_name = object.__getattribute__(self, "raw_name")
+        except AttributeError:
+            obj_name = "Uninitialized"
+        raise AttributeError(f"[{cls_name}: {obj_name!r}] has no attribute {key!r}.")
     def act_add_attr(
         self,
         name: str,

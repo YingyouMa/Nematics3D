@@ -329,14 +329,13 @@ def generate_fixed_step_grid(
         n1_half = int(np.floor(size1 / step1 / 2))
         n2_half = int(np.floor(size2 / step2 / 2))
 
-        axis1_int = np.arange(-n1_half, n1_half + 1)
-        axis2_int = np.arange(-n2_half, n2_half + 1)
-        axis1 = axis1_int.astype(float) * step1
-        axis2 = axis2_int.astype(float) * step2
+        axis1 = np.arange(-n1_half, n1_half + 1, dtype=float) * step1
+        axis2 = np.arange(-n2_half, n2_half + 1, dtype=float) * step2
+        axis1_int = np.arange(axis1.shape[0])
+        axis2_int = np.arange(axis2.shape[0])
 
         size1_eff = 2 * n1_half * step1
         size2_eff = 2 * n2_half * step2
-
     else:
         raise ValueError(
             f"alignment must be 'bottom-left' or 'center', got {alignment!r}"
@@ -718,5 +717,6 @@ def n_color_immerse(n: nField) -> List[Tuple]:
         colors.append(tuple(color))
 
     return colors
+
 
 

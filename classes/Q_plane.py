@@ -62,11 +62,10 @@ class QPlane(InterpolatePlane):
     ):
         
         const_visual_opts = deepcopy(self._origin_default_visual_opts)
+        visual_default = {} if visual_default is None else dict(visual_default)
         for key, value in const_visual_opts.items():
-            new = getattr(self, "visual_default", {})
-            value = value | new
+            const_visual_opts[key] = value | visual_default
         object.__setattr__(self, "const_visual_opts", const_visual_opts)
-        
         object.__setattr__(self, '_entity_visual_nb', None)
         object.__setattr__(self, '_entity_visual_nd', None)
         object.__setattr__(self, '_entity_visual_defect', None)
@@ -168,45 +167,37 @@ class QPlane(InterpolatePlane):
         if self._entity_visual_nb or self._entity_visual_nd:
             
             if np.sum(~self._calc_is_near_defect) > 0:
-                with self._entity_visual_nb._helper_temporarily_set_silhouette(self._state_is_interactable):
-                    self._entity_visual_nb.act_commit(       
-                        coords=self._entity_plane()[~self._calc_is_near_defect],
-                        orient=self._calc_n[~self._calc_is_near_defect],
-                        is_visible=True
-                        )
+                self._entity_visual_nb.act_commit(       
+                    coords=self._entity_plane()[~self._calc_is_near_defect],
+                    orient=self._calc_n[~self._calc_is_near_defect],
+                    is_visible=True
+                    )
             else:
                 self._entity_visual_nb.opts.is_visible = False
             
             if np.sum(self._calc_is_near_defect) > 0:
-                with self._entity_visual_nd._helper_temporarily_set_silhouette(self._state_is_interactable):
-                    self._entity_visual_nd.act_commit(       
-                        coords=self._entity_plane()[self._calc_is_near_defect],
-                        orient=self._calc_n[self._calc_is_near_defect],
-                        is_visible=True
-                        )
+                self._entity_visual_nd.act_commit(       
+                    coords=self._entity_plane()[self._calc_is_near_defect],
+                    orient=self._calc_n[self._calc_is_near_defect],
+                    is_visible=True
+                    )
             else:
                 self._entity_visual_nd.opts.is_visible = False
                 
                 
             if getattr(self, "_calc_defect_pos", None) is not None and len(self._calc_defect_pos)>0:   
-                with self._entity_visual_defect._helper_temporarily_set_silhouette(self._state_is_interactable):
-                    self._entity_visual_defect.act_commit( 
-                        coords=self._calc_defect_pos,
-                        is_visible=self._entity_visual_defect.is_show_defect
-                        )
+                self._entity_visual_defect.act_commit( 
+                    coords=self._calc_defect_pos,
+                    is_visible=self._entity_visual_defect.is_show_defect
+                    )
             else:
                 self._entity_visual_defect.opts.is_visible = False
                 
         if getattr(self, "_entity_visual_S", None):
-            with self._entity_visual_S._helper_temporarily_set_silhouette(self._state_is_interactable):
-                self._entity_visual_S.act_commit(
-                    coords=self.plane(),
-                    scalars=self._calc_S,
-                    )
-            
-            
-            
-
+            self._entity_visual_S.act_commit(
+                coords=self.plane(),
+                scalars=self._calc_S,
+                )
     def act_visualize_n(
         self,
         figure: PlotFigure | BackgroundPlotter | None = None,
@@ -366,6 +357,7 @@ class QPlane(InterpolatePlane):
             figure=figure,
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
+            opts=opts_S,
             opts_defaults_override=self.const_visual_opts["S"]
             )
         
@@ -572,4 +564,9 @@ class QPlanePolar(QPlane):
         )
     
         return defect_centers, adjacent_mask
+
+
+
+
+
 

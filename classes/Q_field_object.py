@@ -459,7 +459,7 @@ class QFieldObject(ClassBase):
                 elif figure is None:
                     if (
                         hasattr(self.figs, "_state_active_name")
-                        and self.figs[self.figs._state_active_name]
+                        and self.figs.active_fig.is_alive
                     ):
                         figure = self.figs[self.figs._state_active_name]
                         figure.act_commit(opts_figure)
