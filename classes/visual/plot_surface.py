@@ -7,6 +7,7 @@ from types import MappingProxyType
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from .qt.interact_surface import InteractSurface
 
 
 @dataclass(slots=True, repr=False)
@@ -82,6 +83,8 @@ class PlotSurface(PlotGlyph):
             logger=logger,
             **kwargs,
         )
+
+        self.act_set_interact_func(lambda: InteractSurface(self, self.fig).show())
 
         self._helper_init_end()
         

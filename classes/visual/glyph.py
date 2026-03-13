@@ -740,11 +740,14 @@ class PlotGlyph(HostBase):
     def act_interact(self):
         if getattr(self, "_state_is_interactable", False):
             func = getattr(self, "_impl_interact_func", None)
+            if func is None:
+                raise RuntimeError(
+                    f"{type(self).__name__} is interactable but no interact function has been set."
+                )
             if callable(func):
                 func()
             else:
                 raise RuntimeError("_impl_interact_func is not callable.")
-
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_interact_func(self, func, logger=None):
         if callable(func):

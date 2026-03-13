@@ -8,6 +8,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset
 from .plot_figure import PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from .qt.interact_rod import InteractRod
 from Nematics3D.datatypes import as_points
 from Nematics3D.general import fmt_value
 
@@ -100,6 +101,9 @@ class PlotRod(PlotGlyph):
             )
 
         object.__setattr__(self, "_impl_resolver_source", "raw_orient")
+
+        self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
+
 
         self._helper_init_end()
 

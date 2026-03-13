@@ -1,215 +1,68 @@
+import numpy as np
 from qtpy import QtWidgets
 
-from .panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider, LogTickMapper
+from .interact_glyph_base import InteractGlyphBase
+from .panel_base import make_labeled_slider_row, LogTickMapper
 
-class InteractRod(PanelBase):
+
+class InteractRod(InteractGlyphBase):
+    # ==================== OVERRIDE ====================
+    # InteractRod overrides InteractGlyphBase.__init__ to enable
+    # the standard glyph controls while extending geometry with
+    # rod-specific length scaling.
+    # ==================================================
     def __init__(self, host, figure):
-        super().__init__(host, figure, title=f"Rod Controls of {host.name!r}")
-
-    def build_ui(self):
-
-        self.state = {
-            "radius_rescale":           1.0,
-            "length_rescale":           1.0,
-            "sides":                    int(self.host.opts.sides),
-            "is_use_control_color":     False,
-            "is_use_control_opacity":   False,
-            "color":                    self.host._calc_color[0],
-            "opacity":                  self.host._calc_opacity[0],
-            }
-
-        # ----------------------------
-        # Geometry group
-        # ----------------------------
-        group_geometry = QtWidgets.QGroupBox("Geometry", self)
-        gl_geometry = QtWidgets.QVBoxLayout(group_geometry)
-        self.layout.addWidget(group_geometry)
-        
-        log_mapper = LogTickMapper(
-            value_min=0.2,
-            value_max=5,
-            base=10.0,
+        super().__init__(
+            host,
+            figure,
+            title=f"Rod Controls of {host.name!r}",
+            is_radius=True,
+            is_sides=True,
+            is_geometry=True,
+            is_color=True,
+            is_opacity=True,
         )
 
-        self.sliders["radius_rescale"] = make_labeled_slider_row(
-            parent=group_geometry,
-            layout=gl_geometry,
-            name="radius_rescale",
-            state_key="radius_rescale",
-            value_min=log_mapper.value_min,
-            value_max=log_mapper.value_max,
-            value_init=1,
-            tick_to_value=log_mapper.tick_to_value,
-            value_to_tick=log_mapper.value_to_tick
-        )
-        self.lbl_radius = QtWidgets.QLabel(group_geometry)
-        gl_geometry.addWidget(self.lbl_radius)
-        self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
-        
+    def _build_extra_geometry(self, parent, layout):
+        self.state["length_rescale"] = 1.0
+        log_mapper = LogTickMapper(value_min=0.2, value_max=5, base=10.0)
         self.sliders["length_rescale"] = make_labeled_slider_row(
-            parent=group_geometry,
-            layout=gl_geometry,
+            parent=parent,
+            layout=layout,
             name="length_rescale",
             state_key="length_rescale",
             value_min=log_mapper.value_min,
             value_max=log_mapper.value_max,
-            value_init=1,
+            value_init=1.0,
             tick_to_value=log_mapper.tick_to_value,
-            value_to_tick=log_mapper.value_to_tick
+            value_to_tick=log_mapper.value_to_tick,
         )
-        self.lbl_length = QtWidgets.QLabel(group_geometry)
-        gl_geometry.addWidget(self.lbl_length)
-        self.lbl_length.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
+        self.lbl_length = QtWidgets.QLabel(parent)
+        layout.addWidget(self.lbl_length)
+        self._update_length_label()
 
-    
-        self.sliders["sides"] = make_labeled_slider_row(
-            parent=group_geometry,
-            layout=gl_geometry,
-            name="sides",
-            state_key="sides",
-            value_min=3,
-            value_max=30,
-            value_init=self.state["sides"],
-            value_fmt="{:.0f}",
-        )
-        
-        # ----------------------------
-        # RGB group
-        # ----------------------------
-        
-        group_RGB = QtWidgets.QGroupBox("Color (RGB 0..1)", self)
-        gl_RGB = QtWidgets.QVBoxLayout(group_RGB)
-        self.layout.addWidget(group_RGB)
-        
-        make_RGB_slider(
-            parent=group_RGB,
-            layout=gl_RGB,
-            sliders=self.sliders,
-            prefix="color",
-            init_rgb=self.state["color"],
-        )
-        
-        self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
-        self.chk_use_color.setChecked(self.state["is_use_control_color"])
-        gl_RGB.addWidget(self.chk_use_color)
-        self.chk_use_color.stateChanged.connect(self._on_toggle_use_color)
-        for k in ("color_r", "color_g", "color_b"):
-            self.sliders[k].set_enabled(self.chk_use_color.isChecked())
-        
-        # ----------------------------
-        # Opacity group
-        # ----------------------------
-        
-        group_opacity = QtWidgets.QGroupBox("Opacity (0..1)", self)
-        gl_opacity = QtWidgets.QVBoxLayout(group_opacity)
-        self.layout.addWidget(group_opacity)
-        
-        self.sliders["opacity"] = make_labeled_slider_row(
-            parent=group_opacity,
-            layout=gl_opacity,
-            name="opacity",
-            state_key="opacity",
-            value_min=0,
-            value_max=1,
-            value_init=self.state["opacity"],
-            tick_to_value=lambda t: float(t / 100.0),
-            value_to_tick=lambda v: int(v * 100)
-        )
-        
-        self.chk_use_opacity = QtWidgets.QCheckBox("Use controlled opacity", group_opacity)
-        self.chk_use_opacity.setChecked(self.state["is_use_control_opacity"])
-        gl_opacity.addWidget(self.chk_use_opacity)
-        self.chk_use_opacity.stateChanged.connect(self._on_toggle_use_opacity)
-        self.sliders["opacity"].set_enabled(self.chk_use_opacity.isChecked())
+    def _update_length_label(self):
+        if hasattr(self, "lbl_length") and hasattr(self.host, "_calc_length"):
+            self.lbl_length.setText(
+                f"The first length is {self.host._calc_length[0]:.2f}"
+            )
 
-
-        for item in self.sliders.values():
-            item.slider.valueChanged.connect(self.on_changed)
-            item.slider.sliderPressed.connect(self.host._helper_clear_silhouette)
-            item.slider.sliderReleased.connect(self.host._helper_add_silhouette)
-
-
-    def commit(self):
-        # ---- radius ----
-        current_radius = self.host._opts_backup[self.str_now]["radius"]
-        scale = float(self.state["radius_rescale"])
-        if callable(current_radius):
-            radius_now = lambda x: scale * current_radius(x)
-        else:
-            radius_now = scale * float(current_radius)
-            
-        # ---- length ----
-        current_length = self.host._opts_backup[self.str_now]["length"]
+    def _extra_commit(self, params):
+        current_length = self.host._opts_backup[self.str_now_live]["length"]
         scale = float(self.state["length_rescale"])
         if callable(current_length):
-            length_now = lambda x: scale * current_length(x)
+            params["length"] = lambda x: scale * current_length(x)
+        elif np.isscalar(current_length):
+            params["length"] = scale * float(current_length)
         else:
-            length_now = scale * float(current_length)
-            
-        # ---- color (controlled or restore) ----
-        if bool(self.state.get("is_use_control_color", False)):
-            color_now = (
-                float(self.state["color_r"]),
-                float(self.state["color_g"]),
-                float(self.state["color_b"]),
-            )
-            paint_by_now = 'color'
-        else:
-            color_now = self.host._opts_backup[self.str_now]["color"]
-            paint_by_now = self.host._opts_backup[self.str_now]["paint_by"]
-            
-        # ---- opacity (controlled or restore) ----
-        if bool(self.state.get("is_use_control_opacity", False)):
-            opacity_now = self.state["opacity"]
-        else:
-            opacity_now = self.host._opts_backup[self.str_now]["opacity"]
+            params["length"] = scale * np.asarray(current_length, dtype=float)
 
-        self._is_gui_updating = True
-        try:
-            with self.host._helper_temporarily_set_silhouette(False):
-                self.host.act_commit(
-                    radius=radius_now,
-                    length=length_now,
-                    color=color_now,
-                    opacity=opacity_now,
-                    paint_by=paint_by_now,
-                    sides=int(self.state["sides"]),
-                )
-        finally:
-            self._is_gui_updating = False
-
-    def _on_toggle_use_color(self, _state: int):
-        is_color = bool(self.chk_use_color.isChecked())
-        self.state["is_use_control_color"] = is_color
-        for k in ("color_r", "color_g", "color_b"):
-            self.sliders[k].set_enabled(is_color)
-        self.commit()
-        
-    def _on_toggle_use_opacity(self, _state: int):
-        is_opacity = bool(self.chk_use_opacity.isChecked())
-        self.state["is_use_control_opacity"] = is_opacity
-        self.sliders["opacity"].set_enabled(is_opacity)
-        self.commit()
-
+    # ==================== OVERRIDE ====================
+    # InteractRod extends InteractGlyphBase._sync_func to keep the
+    # rod-specific length slider and label in sync with host updates.
+    # ==================================================
     def _sync_func(self, **kwargs):
-        sides = kwargs.get("sides", None)
-        if sides is not None:
-            self._sync_from_host_slider("sides", sides)
-        self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
-        
-        if not getattr(self, "_is_gui_updating", False):
-            self.host._opts_backup[self.str_now].update(kwargs)
-            
-            if 'radius' in kwargs.keys():
-                self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
-                self.lbl_radius.setText(f"the radius of the first glyph is {self.host._calc_radius[0]:.2f}")
-                
-            if 'length' in kwargs.keys():
-                self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
-                self.lbl_length.setText(f"the length of the first glyph is {self.host._calc_length[0]:.2f}")
-                
-            if 'color' in kwargs.keys():
-                self.chk_use_color.setChecked(False)
-                
-            if 'opacity' in kwargs.keys():
-                self.chk_use_opacity.setChecked(False)
+        super()._sync_func(**kwargs)
+        if not getattr(self, "_is_gui_updating", False) and "length" in kwargs:
+            self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
+            self._update_length_label()
