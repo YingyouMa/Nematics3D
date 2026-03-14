@@ -21,6 +21,7 @@ from Nematics3D.datatypes import (
     as_points,
 )
 from ..host_base import OptsBase, HostBase
+from ..bounds import Bounds, as_bounds
 from .plot_figure import PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import find_nearest_point, fmt_value
@@ -222,6 +223,7 @@ class PlotGlyph(HostBase):
         "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
         "_impl_figure_ref":             ("A weak reference to the PlotFigure instance containing this glyph."
                                          "To access it, use .fig or ._impl_figure."),
+        "_impl_bounds_ref":             "A weak reference to the Bounds instance clipping this glyph.",
         "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
         "_state_is_silhouette":         "Whether silhouette actors should be rebuilt during glyph updates.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
@@ -256,6 +258,7 @@ class PlotGlyph(HostBase):
         name_replace: str,
         opts: OptsGlyph | None = None,
         figure: PlotFigure | None = None,
+        bounds: Bounds | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -280,6 +283,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_interactable", True)
+        object.__setattr__(self, "_impl_bounds_ref", None)
 
         super().__init__(
             opts_type,
@@ -328,6 +332,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_impl_name_pv", unique_id)
 
         object.__setattr__(self, "_impl_interact_func", None)
+        self.act_bind_bounds(bounds, is_apply=False)
 
     def _helper_init_end(self):
 
@@ -345,6 +350,59 @@ class PlotGlyph(HostBase):
         return ref() if ref is not None else None
 
     _impl_figure = fig
+
+    @property
+    def bounds(self):
+        ref = self._impl_bounds_ref
+        return ref() if ref is not None else None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_unbind_bounds(self, is_apply=True, logger=None):
+        bounds_old = self.bounds
+        if bounds_old is None:
+            return
+        bounds_old.act_detach_sync_task(self._impl_name_pv)
+        object.__setattr__(self, "_impl_bounds_ref", None)
+        if is_apply and getattr(self, "_entity", None) is not None:
+            self.act_commit(is_reapply_opts=True)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_bind_bounds(self, bounds, is_apply=True, is_replace=True, logger=None):
+        if bounds is None:
+            self.act_unbind_bounds(is_apply=is_apply)
+            return
+
+        try:
+            bounds = as_bounds(bounds, name="The bounds controlling this glyph")
+        except Exception:
+            logger.exception("Check input.")
+            logger.recovery("Ignore this bounds input and continue without modifying the current binding.")
+            return
+
+        bounds_old = self.bounds
+        if bounds_old is bounds:
+            if is_apply and getattr(self, "_entity", None) is not None:
+                self.act_commit(is_reapply_opts=True)
+            return
+
+        if bounds_old is not None:
+            if not is_replace:
+                raise RuntimeError("This glyph is already bound to a Bounds object.")
+            self.act_unbind_bounds(is_apply=False)
+
+        object.__setattr__(self, "_impl_bounds_ref", weakref.ref(bounds))
+        bounds.act_attach_sync_task(
+            self._impl_name_pv,
+            lambda **kwargs: self.act_commit(is_reapply_opts=True),
+        )
+        if is_apply and getattr(self, "_entity", None) is not None:
+            self.act_commit(is_reapply_opts=True)
+
+    def _helper_apply_bounds(self, mesh):
+        bounds = self.bounds
+        if bounds is None:
+            return mesh
+        return mesh.clip_surface(bounds.clip_geometry, invert=False)
 
     # ----------------------------------------------------------------------------------------------------
     # Resolver function: to resolve point-wise properties (color, opacity, etc) for each inidividual glyph
@@ -460,6 +518,7 @@ class PlotGlyph(HostBase):
         logger.detail("Creating glyph polydata and mesh")
         self._helper_build_poly()
         mesh = self._helper_build_mesh()
+        mesh = self._helper_apply_bounds(mesh)
 
         logger.detail("Removing the existing actor")
         plotter = self.fig.pl
@@ -594,6 +653,7 @@ class PlotGlyph(HostBase):
         pm.act_register(actor=actor, owner=self)
 
     def act_remove(self):
+        self.act_unbind_bounds(is_apply=False)
         self.fig.pl.remove_actor(self._entity)
         pm = getattr(self.fig, "_entity_pick_manager", None)
         if pm:
@@ -636,6 +696,7 @@ class PlotGlyph(HostBase):
         if is_needs_remesh:
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
+            mesh = self._helper_apply_bounds(mesh)
             self._entity.mapper.SetInputData(mesh)
             self._entity.mapper.Update()
             if self._state_is_silhouette:

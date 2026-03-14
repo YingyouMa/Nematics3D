@@ -722,12 +722,7 @@ class DefectSectionGrid(HostBase):
                 self.act_register_normal(key, value)
 
         tangent, origin = line.act_calc_tangent(self.opts.u_percent, is_return_coord=True)
-        normal = tangent if state_normal == "tangent" else state_normal
-        if isinstance(normal, str):
-            normal = self._impl_normals[normal]
-            if callable(normal):
-                normal = normal()
-        normal = as_Vect(normal, name="The initial normal of defect section grid", is_norm=True)
+        normal = self._helper_resolve_normal(tangent)
 
         grid = PlaneGridPolar(
             normal=normal,
@@ -737,7 +732,81 @@ class DefectSectionGrid(HostBase):
             **kwargs,
         )
         grid.act_bind_wrapper(self, protected_attrs=["origin", "normal"])
+        self.act_attach_enrich_kwargs_wrapped_task(
+            "section_pose", self._helper_enrich_kwargs_wrapped_section
+        )
         line._entity_sections.act_register(self)
+
+    def _helper_resolve_normal(self, tangent):
+        normal = tangent if self._state_normal == "tangent" else self._state_normal
+        if isinstance(normal, str):
+            normal = self._impl_normals[normal]
+            if callable(normal):
+                normal = normal()
+        return as_Vect(normal, name="The resolved normal of defect section grid", is_norm=True)
+
+    def _helper_resolve_pose(self):
+        tangent, origin = self.owner.act_calc_tangent(
+            self.opts.u_percent, is_return_coord=True
+        )
+        normal = self._helper_resolve_normal(tangent)
+        return {"origin": origin, "normal": normal}
+
+    def _helper_enrich_kwargs_wrapped_section(self, host=None, kwargs=None):
+        return self._helper_resolve_pose()
+
+    # OVERRIDE: HostBase.act_commit() only routes opts and host attrs.
+    # DefectSectionGrid also owns a non-opts runtime state `_state_normal`,
+    # so we consume it here before handing the rest back to the base flow.
+    @logging_and_warning_decorator()
+    def act_commit(
+        self,
+        opts=None,
+        opts_wrapped=None,
+        is_reapply_opts=False,
+        logger=None,
+        **kwargs,
+    ):
+        found, state_normal = pop_exclusive(kwargs, "state_normal")
+        if found:
+            if isinstance(state_normal, str):
+                state_normal = as_str(
+                    state_normal,
+                    name="The normal selector of defect section grid",
+                )
+                if state_normal != "tangent" and state_normal not in self._impl_normals:
+                    logger.warning(
+                        f"Unknown normal selector {state_normal!r}. Automatically keep the current state_normal."
+                    )
+                else:
+                    object.__setattr__(self, "_state_normal", state_normal)
+                    is_reapply_opts = True
+            else:
+                try:
+                    state_normal = as_Vect(
+                        state_normal,
+                        name="The direct normal of defect section grid",
+                        is_norm=True,
+                    )
+                    object.__setattr__(self, "_state_normal", state_normal)
+                    is_reapply_opts = True
+                except Exception:
+                    logger.warning(
+                        "Invalid direct state_normal. Automatically keep the current state_normal."
+                    )
+
+        super().act_commit(
+            opts=opts,
+            opts_wrapped=opts_wrapped,
+            is_reapply_opts=is_reapply_opts,
+            **kwargs,
+        )
+
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+        for key, value in kwargs.items():
+            object.__setattr__(self.opts, key, value)
+        return {}, kwargs
 
     @logging_and_warning_decorator()
     def act_register_normal(self, key, value, logger=None):
@@ -949,6 +1018,9 @@ class DefectSectionGrid(HostBase):
 #                 "Reverting `state_normal` to None."
 #             )
 #         return state_normal
+
+
+
 
 
 

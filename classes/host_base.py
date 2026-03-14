@@ -362,6 +362,15 @@ class HostBase(ClassBase):
         super().__init__(name=name, name_replace=name_replace)
 
         logger.detail("Handling explicit kwargs overrides ...")
+        kwargs_host = {}
+        for key in list(kwargs.keys()):
+            if key in self.__descriptions__ and (
+                key.startswith("raw_") or key.startswith("state_")
+            ):
+                kwargs_host[key] = kwargs.pop(key)
+            elif ("raw_" + key) in self.__descriptions__:
+                kwargs_host[key] = kwargs.pop(key)
+
         opts = self._helper_check_opts(opts, opts_type=opts_type)
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "_impl_host_ref", weakref.ref(self))
@@ -386,6 +395,9 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_impl_attrs_wrapped", set())
         object.__setattr__(self, "_impl_wrapper_ref", None)
         object.__setattr__(self, "_entity_wrapped", None)
+
+        if kwargs_host:
+            self._helper_commit_raw(kwargs_host)
 
         # remaining tasks for __init__():
         # - finalizing opts at the appropriate lifecycle stage, and
@@ -437,7 +449,7 @@ class HostBase(ClassBase):
         #       preprocess kwargs for this host before opts-level application.
         #       _helper_check_protected_attr: remove attrs protected by wrapper or by host declaration.
         #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
-        #       _helper_commit_raw: consume host-side raw/public attrs, validate if configured,
+        #       _helper_commit_raw: consume host-side raw/state attrs, validate if configured,
         #                           then write directly to host (not through opts).
         #
         # _helper_commit_self:
@@ -554,7 +566,11 @@ class HostBase(ClassBase):
         kwargs_applied_raw = {}
         is_reapply_opts = False
         for key in list(kwargs.keys()):
-            if key in self.__descriptions__ or ("raw_" + key) in self.__descriptions__:
+            is_host_attr = (
+                (key in self.__descriptions__ and (key.startswith("raw_") or key.startswith("state_")))
+                or (("raw_" + key) in self.__descriptions__)
+            )
+            if is_host_attr:
                 kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(
                     kwargs, key
                 )
@@ -573,38 +589,51 @@ class HostBase(ClassBase):
         logger=None,
     ):
 
+        is_state_attr = attr_name_origin.startswith("state_")
         if attr_name_origin.startswith("raw_"):
-            raw_attr_name = attr_name_origin
-            attr_name = attr_name_origin[4:]
+            host_attr_name = attr_name_origin
+            public_attr_name = attr_name_origin[4:]
+            found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
+            validator_key = public_attr_name
+            reapply_key = public_attr_name
+            attr_name_return = public_attr_name
+        elif is_state_attr:
+            host_attr_name = attr_name_origin
+            found = host_attr_name in kwargs
+            attr_value = kwargs.pop(host_attr_name) if found else None
+            validator_key = host_attr_name
+            reapply_key = host_attr_name
+            attr_name_return = host_attr_name
         else:
-            raw_attr_name = "raw_" + attr_name_origin
-            attr_name = attr_name_origin
-
-        found, attr_value = pop_exclusive(kwargs, attr_name, raw_attr_name)
+            host_attr_name = "raw_" + attr_name_origin
+            public_attr_name = attr_name_origin
+            found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
+            validator_key = public_attr_name
+            reapply_key = public_attr_name
+            attr_name_return = public_attr_name
         if not found:
             return {}, False
 
         if exception_msg is None:
             exception_msg = (
-                f"Validation failed for attribute {attr_name!r}. "
+                f"Validation failed for attribute {attr_name_return!r}. "
                 f"This may be due to an invalid value or an incorrectly implemented validator. "
                 f"The validator must accept two arguments: (value, description)."
             )
         if recovery_msg is None:
-            recovery_msg = f"Ignore this modification of {attr_name!r}."
+            recovery_msg = f"Ignore this modification of {attr_name_return!r}."
 
-        if validator is None:
-            if attr_name in self._impl_validators:
-                validator = self._impl_validators[attr_name]
+        if validator is None and validator_key in self._impl_validators:
+            validator = self._impl_validators[validator_key]
 
         if validator is not None:
             try:
                 value_valid = validator(
-                    attr_value, self.__descriptions__[raw_attr_name]
+                    attr_value, self.__descriptions__[host_attr_name]
                 )
-                object.__setattr__(self, raw_attr_name, value_valid)
-                return {attr_name: value_valid}, (
-                    attr_name in self.__class__._impl_attrs_reapply_opts_after_raw
+                object.__setattr__(self, host_attr_name, value_valid)
+                return {attr_name_return: value_valid}, (
+                    reapply_key in self.__class__._impl_attrs_reapply_opts_after_raw
                 )
 
             except Exception:
@@ -612,9 +641,9 @@ class HostBase(ClassBase):
                 logger.recovery(recovery_msg)
                 return {}, False
         else:
-            object.__setattr__(self, raw_attr_name, attr_value)
-            return {attr_name: attr_value}, (
-                attr_name in self.__class__._impl_attrs_reapply_opts_after_raw
+            object.__setattr__(self, host_attr_name, attr_value)
+            return {attr_name_return: attr_value}, (
+                reapply_key in self.__class__._impl_attrs_reapply_opts_after_raw
             )
 
     # -----------------------
@@ -755,11 +784,14 @@ class HostBase(ClassBase):
     @logging_and_warning_decorator()
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
         lines = [
-            "Modifiable attributes (note: the 'raw_' prefix can be omitted when assigning values):",
+            "Modifiable attributes (note: the 'raw_' prefix can be omitted when assigning values, while 'state_' must be written explicitly):",
         ]
 
         attrs_raw = sorted(
             k for k in self.__class__.__descriptions__.keys() if k.startswith("raw_")
+        )
+        attrs_state = sorted(
+            k for k in self.__class__.__descriptions__.keys() if k.startswith("state_")
         )
         attrs_opts = sorted(self.opts.__class__.__descriptions__.keys())
 
@@ -768,12 +800,17 @@ class HostBase(ClassBase):
             for attr_name in attrs_raw:
                 lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
 
+        if attrs_state:
+            lines.append("[Host state attributes]")
+            for attr_name in attrs_state:
+                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+
         if attrs_opts:
             lines.append("[Opts attributes]")
             for attr_name in attrs_opts:
                 lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
 
-        if (not attrs_raw) and (not attrs_opts):
+        if (not attrs_raw) and (not attrs_state) and (not attrs_opts):
             lines.append("  (None)")
 
         output = "\n".join(lines)
@@ -816,6 +853,13 @@ class HostBase(ClassBase):
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__}."
+                        )
+                elif attr.startswith("state_"):
+                    if attr in self.__descriptions__:
+                        target_set.add(attr)
+                    else:
+                        raise AttributeError(
+                            f"Attribute {attr!r} is not a valid public state attribute of {type(self).__name__}."
                         )
                 else:
                     if attr in self.opts.__class__.__descriptions__:
