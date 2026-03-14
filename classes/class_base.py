@@ -1,3 +1,5 @@
+import weakref
+
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import as_str
 
@@ -13,58 +15,44 @@ class ClassBase:
         automatic name conflict resolution via the Registry's helper methods.
     * **Attribute Control**: Uses ``__slots__`` to optimize memory and prevent
         accidental assignment of undefined variables.
-    * **Dynamic Extension**: Supports 'Human-added' attributes via ``act_add_attr``.
+    * **Dynamic Extension**: Supports human-added attributes via ``act_add_attr``.
 
-    ### Variables & Descriptions:
-    All attributes, properties, and internal implementations are documented
-    in the ``__descriptions__`` dictionary. Please refer to it for detailed
-    per-variable metadata.
-
-    ### Inheritance Guidelines:
-    1.  **Unique Relationships**: An instance can have at most **one owner** and
-        be registered in **one registry** at any given time.
-    2.  **Metadata Expansion**: When inheriting, subclasses should update or
-        extend the ``__descriptions__`` dictionary to reflect new attributes.
-        It is highly recommended to re-include ``raw_name`` in the subclass's 
-        descriptions to ensure consistent behavior for string representation.
-    3.  **Slot Maintenance**: To preserve memory efficiency and the strict
-        assignment policy, subclasses **MUST** define ``__slots__`` (or include
-        new fields) to prevent the accidental creation of a ``__dict__``.
+    ### Variables & Metadata:
+    Field-like variables are documented in ``__attrs__`` and relationships are
+    documented in ``__relations__``.
     """
 
-    __descriptions__ = {
-        "name": (
-            "Property: The display name of the instance. "
-            "Returns 'raw_name' and can be updated via the setter."
-        ),
-        "owner": (
-            "Property: The object that owns this instance. "
-            "An instance can belong to at most one owner at a time."
-        ),
-        "registry": (
-            "Property: The Registry object where this instance is registered. "
-            "An instance can belong to at most one registry at a time."
-        ),
-        # Internal Attributes
+    __attrs__ = {
         "raw_name": "The underlying string identifier for this instance.",
-        "_impl_owner_ref": (
-            "A weak reference to the owner object. "
-            "Use the 'owner' property for safe access."
-        ),
-        "_impl_registry_ref": (
-            "A weak reference to the associated Registry. "
-            "Use the 'registry' property for safe access."
-        ),
         "_impl_extra_attrs": (
             "A dictionary storing dynamic user-defined attributes. "
             "Managed via 'act_add_attr'."
         ),
         "_impl_extra_attrs_docs": "Documentation strings for user-defined extra attributes.",
+        "_impl_relations": (
+            "Runtime storage for object relations. "
+            "Key: relation name; value: target object or weakref.ref(target)."
+        ),
+        "_impl_getattr_names": (
+            "A set storing all public names that __getattr__ is allowed to resolve."
+        ),
     }
 
-    __slots__ = tuple(
-        k for k, v in __descriptions__.items() if not v.startswith("Property:")
-    ) + ("__weakref__",)
+    __relations__ = {
+        "owner": (
+            "The object that owns this instance. "
+            "An instance can belong to at most one owner at a time."
+        ),
+        "registry": (
+            "The Registry object where this instance is registered. "
+            "An instance can belong to at most one registry at a time."
+        ),
+    }
+
+    # Reserved for future reuse by downstream classes.
+    __descriptions__ = {}
+
+    __slots__ = tuple(__attrs__.keys()) + ("__weakref__",)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(self, *, name: str, name_replace: str, logger=None):
@@ -74,39 +62,83 @@ class ClassBase:
             object.__setattr__(self, "_impl_extra_attrs", {})
         if not hasattr(self, "_impl_extra_attrs_docs"):
             object.__setattr__(self, "_impl_extra_attrs_docs", {})
-        if not hasattr(self, "_impl_owner_ref"):
-            object.__setattr__(self, "_impl_owner_ref", None)
-        if not hasattr(self, "_impl_registry_ref"):
-            object.__setattr__(self, "_impl_registry_ref", None)
+        if not hasattr(self, "_impl_relations"):
+            object.__setattr__(self, "_impl_relations", {})
+        if not hasattr(self, "_impl_getattr_names"):
+            object.__setattr__(self, "_impl_getattr_names", set())
 
-        name = (
-            as_str(name, name=self.__descriptions__["raw_name"], replace=name_replace)
-            if name
-            else name_replace
+        self._helper_init_getattr_names_basic()
+        self._helper_init_relations_basic()
+
+        name = as_str(name, name=self.__attrs__["raw_name"], replace=name_replace)
+        self.act_set_name(name if name else name_replace)
+
+    def _helper_init_getattr_names_basic(self):
+        names = object.__getattribute__(self, "_impl_getattr_names")
+        for key in type(self).__attrs__.keys():
+            if key.startswith("_"):
+                continue
+            names.add(key)
+            if key.startswith("raw_"):
+                names.add(key[4:])
+        names.update(type(self).__relations__.keys())
+        names.update(object.__getattribute__(self, "_impl_extra_attrs_docs").keys())
+
+    def _helper_register_getattr_name(self, name, *, allow_existing=False):
+        name = as_str(name, name="Readable attribute name")
+        names = self._impl_getattr_names
+        if (name in names) and (not allow_existing):
+            raise AttributeError(
+                f"Cannot register readable name {name!r}: it conflicts with an existing readable name of {type(self).__name__}."
+            )
+        names.add(name)
+        return name
+
+    def _helper_resolve_relation_value(self, key):
+        value = self._impl_relations.get(key, None)
+        if isinstance(value, weakref.ReferenceType):
+            return value()
+        return value
+
+    def _helper_init_relations_basic(self):
+        relations = object.__getattribute__(self, "_impl_relations")
+        relations.setdefault("owner", None)
+        relations.setdefault("registry", None)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_bind_relation(
+        self,
+        name: str,
+        target,
+        *,
+        is_weak: bool = True,
+        is_replace: bool = True,
+        logger=None,
+    ):
+        name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
+        if not name.isidentifier():
+            raise ValueError(
+                f"Invalid relation name {name!r}: must be a valid Python identifier."
+            )
+
+        if name not in self._impl_relations:
+            self._helper_register_getattr_name(name)
+        old_target = self._helper_resolve_relation_value(name)
+        if old_target is not None and old_target is not target and (not is_replace):
+            raise RuntimeError(
+                f"Relation {name!r} of {type(self).__name__} is already bound."
+            )
+
+        self._impl_relations[name] = (
+            weakref.ref(target) if (is_weak and target is not None) else target
         )
-        self.act_set_name(name)
+        return target
 
-    @property
-    def owner(self):
-        ref = self._impl_owner_ref
-        return ref() if ref is not None else None
-
-    _impl_owner = owner
-
-    @property
-    def registry(self):
-        ref = self._impl_registry_ref
-        return ref() if ref is not None else None
-
-    _impl_registry = registry
-
-    @property
-    def name(self):
-        return self.raw_name
-
-    @name.setter
-    def name(self, value: str):
-        self.act_set_name(value)
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_unbind_relation(self, name: str, logger=None):
+        name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
+        if name in self._impl_relations:
+            self._impl_relations[name] = None
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_name(self, name, logger=None):
@@ -114,17 +146,13 @@ class ClassBase:
         logger.detail(f"Set name requested: {name!r}")
 
         try:
-            name = as_str(name, name=self.__descriptions__["raw_name"])
+            name = as_str(name, name=self.__attrs__["raw_name"])
         except (TypeError, ValueError):
             logger.exception("Invalid name.")
             logger.recovery("Ignore this modification.")
             return
 
-        check_name = (
-            getattr(self.registry, "_helper_check_name", None)
-            if self.registry
-            else None
-        )
+        check_name = getattr(self.registry, "_helper_check_name", None)
         if callable(check_name):
             logger.detail(
                 "The registry provides _helper_check_name; resolving name conflict."
@@ -138,15 +166,24 @@ class ClassBase:
         return self._impl_extra_attrs[key]
 
     def __getattr__(self, key):
+        if key in object.__getattribute__(self, "_impl_relations"):
+            return self._helper_resolve_relation_value(key)
+
+        potential_raw = f"raw_{key}"
+        if potential_raw in type(self).__attrs__:
+            return object.__getattribute__(self, potential_raw)
+
         extra = object.__getattribute__(self, "_impl_extra_attrs")
         if key in extra:
             return extra[key]
+
         cls_name = type(self).__name__
         try:
             obj_name = object.__getattribute__(self, "raw_name")
         except AttributeError:
             obj_name = "Uninitialized"
         raise AttributeError(f"[{cls_name}: {obj_name!r}] has no attribute {key!r}.")
+
     def act_add_attr(
         self,
         name: str,
@@ -163,13 +200,6 @@ class ClassBase:
                 f"Invalid extra attribute name {name!r}: must be a valid Python identifier."
             )
 
-        if hasattr(type(self), name) or (
-            name in getattr(type(self), "__descriptions__", ())
-        ):
-            raise AttributeError(
-                f"Cannot register extra attribute {name!r}: it conflicts with an existing attribute of {type(self).__name__}."
-            )
-
         docs = self._impl_extra_attrs_docs
         data = self._impl_extra_attrs
 
@@ -178,20 +208,32 @@ class ClassBase:
                 f"Extra attribute {name!r} is already registered. Use overwrite=True to override."
             )
 
+        if name not in docs:
+            self._helper_register_getattr_name(name)
+
         docs[name] = doc
         if overwrite or (name not in data):
             data[name] = default
 
-    def _helper_setattr_basic(self, key, value):
-        
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_setattr_basic(self, key, value, logger=None):
+
         if key in self._impl_extra_attrs_docs:
             self._impl_extra_attrs[key] = value
             return
 
+        if key in self._impl_relations:
+            logger.warning(
+                f"{key!r} is a relation of {type(self).__name__}. "
+                "Please modify it via act_bind_relation() / act_unbind_relation()."
+            )
+            return
+
         target_key = key
-        if key not in self.__descriptions__:
+        attrs_now = type(self).__attrs__
+        if key not in attrs_now:
             potential_raw = f"raw_{key}"
-            if potential_raw in self.__descriptions__:
+            if potential_raw in attrs_now:
                 target_key = potential_raw
             else:
                 cls_name = self.__class__.__name__
@@ -200,20 +242,24 @@ class ClassBase:
                     f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                     f"{key!r} is not a valid or registered attribute."
                 )
-        
-        if target_key.startswith("_"):
+
+        if target_key.startswith("_") or (
+            not target_key.startswith("raw_")
+            and not target_key.startswith("state_")
+        ):
             cls_name = self.__class__.__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
                 f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                 f"{key!r} is not a valid or registered attribute."
             )
-            
+
         self._helper_setattr_final(target_key, value)
-            
+
     def _helper_setattr_final(self, key, value):
-        if key in ("name", "raw_name"):
+        if key == "raw_name":
             self.act_set_name(value)
+            return
         object.__setattr__(self, key, value)
 
     def __setattr__(self, key, value):
