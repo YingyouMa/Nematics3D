@@ -204,7 +204,7 @@ class PlotFigure(HostBase, RegistryBase):
             **kwargs,
         )
         self.opts.act_finalize(is_allow_UNSET=True)
-        plotter.window_size = tuple(self.opts.size)
+        plotter.window_size = tuple(int(x) for x in self.opts.size)
 
         self._helper_sync_from_plotter(
             is_allow_cover_target_set=False, is_only_camera=True
@@ -405,7 +405,7 @@ class PlotFigure(HostBase, RegistryBase):
         self.pl.render()
 
         self.pl.set_background(self.opts.bg_color)
-        self.pl.window_size = tuple(self.opts.size)
+        self.pl.window_size = tuple(int(x) for x in self.opts.size)
 
     @staticmethod
     def _helper_convert_pos_to_spherical(position, focal_point, view_up):

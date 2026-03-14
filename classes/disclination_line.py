@@ -661,10 +661,13 @@ class OptsDefectSectionGrid(OptsBase):
 
 class DefectSectionGrid(HostBase):
 
+    _impl_attrs_reapply_opts_after_raw = {"state_normal"}
+
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **HostBase.__descriptions__,
         "raw_name": "The name identifier of this local defect section grid wrapper",
-        "_state_normal": "Current normal selector for the section; either tangent, a registered name, or a direct vector.",
+        "state_normal": "Current normal selector for the section; either tangent, a registered name, or a direct vector.",
+        "_calc_normal": "Resolved normal currently used by this defect section grid.",
         "_impl_normals": "Named normal providers used to resolve section normals.",
     }
 
@@ -714,12 +717,17 @@ class DefectSectionGrid(HostBase):
 
         object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
         object.__setattr__(self, "_impl_normals", {"tangent": None})
-        object.__setattr__(self, "_state_normal", state_normal)
+        object.__setattr__(self, "_calc_normal", None)
         self.opts.act_finalize(defaults=self._opts_defaults)
 
         if normals is not None:
             for key, value in normals.items():
                 self.act_register_normal(key, value)
+
+        state_normal = self._helper_check_state_normal(
+            state_normal, self.act_show_attr_desc("state_normal")
+        )
+        object.__setattr__(self, "state_normal", state_normal)
 
         tangent, origin = line.act_calc_tangent(self.opts.u_percent, is_return_coord=True)
         normal = self._helper_resolve_normal(tangent)
@@ -737,13 +745,25 @@ class DefectSectionGrid(HostBase):
         )
         line._entity_sections.act_register(self)
 
+    def _helper_check_state_normal(self, state_normal, desc):
+        if isinstance(state_normal, str):
+            state_normal = as_str(state_normal, name="The normal selector of defect section grid")
+            if state_normal != "tangent" and state_normal not in self._impl_normals:
+                raise ValueError(
+                    f"{desc} Got unknown registered normal name {state_normal!r}."
+                )
+            return state_normal
+        return as_Vect(state_normal, name="The direct normal of defect section grid", is_norm=True)
+
     def _helper_resolve_normal(self, tangent):
-        normal = tangent if self._state_normal == "tangent" else self._state_normal
+        normal = tangent if self.state_normal == "tangent" else self.state_normal
         if isinstance(normal, str):
             normal = self._impl_normals[normal]
             if callable(normal):
                 normal = normal()
-        return as_Vect(normal, name="The resolved normal of defect section grid", is_norm=True)
+        normal = as_Vect(normal, name="The resolved normal of defect section grid", is_norm=True)
+        object.__setattr__(self, "_calc_normal", normal)
+        return normal
 
     def _helper_resolve_pose(self):
         tangent, origin = self.owner.act_calc_tangent(
@@ -755,52 +775,17 @@ class DefectSectionGrid(HostBase):
     def _helper_enrich_kwargs_wrapped_section(self, host=None, kwargs=None):
         return self._helper_resolve_pose()
 
-    # OVERRIDE: HostBase.act_commit() only routes opts and host attrs.
-    # DefectSectionGrid also owns a non-opts runtime state `_state_normal`,
-    # so we consume it here before handing the rest back to the base flow.
-    @logging_and_warning_decorator()
-    def act_commit(
-        self,
-        opts=None,
-        opts_wrapped=None,
-        is_reapply_opts=False,
-        logger=None,
-        **kwargs,
-    ):
-        found, state_normal = pop_exclusive(kwargs, "state_normal")
-        if found:
-            if isinstance(state_normal, str):
-                state_normal = as_str(
-                    state_normal,
-                    name="The normal selector of defect section grid",
-                )
-                if state_normal != "tangent" and state_normal not in self._impl_normals:
-                    logger.warning(
-                        f"Unknown normal selector {state_normal!r}. Automatically keep the current state_normal."
-                    )
-                else:
-                    object.__setattr__(self, "_state_normal", state_normal)
-                    is_reapply_opts = True
-            else:
-                try:
-                    state_normal = as_Vect(
-                        state_normal,
-                        name="The direct normal of defect section grid",
-                        is_norm=True,
-                    )
-                    object.__setattr__(self, "_state_normal", state_normal)
-                    is_reapply_opts = True
-                except Exception:
-                    logger.warning(
-                        "Invalid direct state_normal. Automatically keep the current state_normal."
-                    )
-
-        super().act_commit(
-            opts=opts,
-            opts_wrapped=opts_wrapped,
-            is_reapply_opts=is_reapply_opts,
-            **kwargs,
+    # OVERRIDE: HostBase._helper_commit_pre_opts() only handles static host attrs.
+    # `state_normal` needs an instance-aware validator because valid string names
+    # depend on this section's currently registered normals.
+    def _helper_commit_pre_opts(self, kwargs):
+        kwargs_sync, is_reapply_opts = super()._helper_commit_pre_opts(kwargs)
+        kwargs_applied_state, is_reapply_state = self._helper_commit_pop_raw(
+            kwargs,
+            "state_normal",
+            validator=self._helper_check_state_normal,
         )
+        return kwargs_sync | kwargs_applied_state, (is_reapply_opts or is_reapply_state)
 
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
