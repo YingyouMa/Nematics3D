@@ -53,15 +53,14 @@ class ClassBase:
         ),
     }
 
-    # Reserved for future reuse by downstream classes.
-    __descriptions__ = {}
-
     __slots__ = tuple(__attrs__.keys()) + ("__weakref__",)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def __init__(self, *, name: str, name_replace: str, logger=None):
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+    
+    def __init__(self, *, name: str, name_replace: str):
 
-        logger.detail("Dealing with basic attributes and input")
         if not hasattr(self, "_impl_extra_attrs"):
             object.__setattr__(self, "_impl_extra_attrs", {})
         if not hasattr(self, "_impl_extra_attrs_docs"):
@@ -88,6 +87,15 @@ class ClassBase:
         names.update(type(self).__relations__.keys())
         names.update(object.__getattribute__(self, "_impl_extra_attrs_docs").keys())
 
+    def _helper_init_relations_basic(self):
+        relations = object.__getattribute__(self, "_impl_relations")
+        relations.setdefault("owner", None)
+        relations.setdefault("registry", None)
+
+    # ------------------------------------------------------------------
+    # Readable-name registry
+    # ------------------------------------------------------------------
+
     def _helper_register_getattr_name(self, name, *, allow_existing=False):
         name = as_str(name, name="Readable attribute name")
         names = self._impl_getattr_names
@@ -98,16 +106,15 @@ class ClassBase:
         names.add(name)
         return name
 
+    # ------------------------------------------------------------------
+    # Relations
+    # ------------------------------------------------------------------
+
     def _helper_resolve_relation_value(self, key):
         value = self._impl_relations.get(key, None)
         if isinstance(value, weakref.ReferenceType):
             return value()
         return value
-
-    def _helper_init_relations_basic(self):
-        relations = object.__getattribute__(self, "_impl_relations")
-        relations.setdefault("owner", None)
-        relations.setdefault("registry", None)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_bind_relation(
@@ -138,17 +145,17 @@ class ClassBase:
         )
         return target
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_unbind_relation(self, name: str, logger=None):
+    def act_unbind_relation(self, name: str):
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
         if name in self._impl_relations:
             self._impl_relations[name] = None
 
+    # ------------------------------------------------------------------
+    # Core identity
+    # ------------------------------------------------------------------
+
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_name(self, name, logger=None):
-
-        logger.detail(f"Set name requested: {name!r}")
-
         try:
             name = as_str(name, name=self.__attrs__["raw_name"])
         except (TypeError, ValueError):
@@ -158,16 +165,14 @@ class ClassBase:
 
         check_name = getattr(self.registry, "_helper_check_name", None)
         if callable(check_name):
-            logger.detail(
-                "The registry provides _helper_check_name; resolving name conflict."
-            )
             name = check_name(name)
         object.__setattr__(self, "raw_name", name)
 
         return name
 
-    def act_get_attr(self, key):
-        return self._impl_extra_attrs[key]
+    # ------------------------------------------------------------------
+    # Protected attributes
+    # ------------------------------------------------------------------
 
     def _helper_resolve_protected_target(self, name: str) -> str:
         name = as_str(name, name=f"Protected attribute name for instance {self.name!r}")
@@ -206,6 +211,10 @@ class ClassBase:
 
         for attr in attrs:
             self._impl_attrs_protected.discard(self._helper_resolve_protected_target(attr))
+
+    # ------------------------------------------------------------------
+    # Attribute inspection
+    # ------------------------------------------------------------------
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
@@ -263,24 +272,9 @@ class ClassBase:
         if is_return:
             return output
 
-    def __getattr__(self, key):
-        if key in object.__getattribute__(self, "_impl_relations"):
-            return self._helper_resolve_relation_value(key)
-
-        potential_raw = f"raw_{key}"
-        if potential_raw in type(self).__attrs__:
-            return object.__getattribute__(self, potential_raw)
-
-        extra = object.__getattribute__(self, "_impl_extra_attrs")
-        if key in extra:
-            return extra[key]
-
-        cls_name = type(self).__name__
-        try:
-            obj_name = object.__getattribute__(self, "raw_name")
-        except AttributeError:
-            obj_name = "Uninitialized"
-        raise AttributeError(f"[{cls_name}: {obj_name!r}] has no attribute {key!r}.")
+    # ------------------------------------------------------------------
+    # Dynamic extra attributes
+    # ------------------------------------------------------------------
 
     def act_add_attr(
         self,
@@ -312,6 +306,29 @@ class ClassBase:
         docs[name] = doc
         if overwrite or (name not in data):
             data[name] = default
+
+    # ------------------------------------------------------------------
+    # Attribute access
+    # ------------------------------------------------------------------
+
+    def __getattr__(self, key):
+        if key in object.__getattribute__(self, "_impl_relations"):
+            return self._helper_resolve_relation_value(key)
+
+        potential_raw = f"raw_{key}"
+        if potential_raw in type(self).__attrs__:
+            return object.__getattribute__(self, potential_raw)
+
+        extra = object.__getattribute__(self, "_impl_extra_attrs")
+        if key in extra:
+            return extra[key]
+
+        cls_name = type(self).__name__
+        try:
+            obj_name = object.__getattribute__(self, "raw_name")
+        except AttributeError:
+            obj_name = "Uninitialized"
+        raise AttributeError(f"[{cls_name}: {obj_name!r}] has no attribute {key!r}.")
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key, value, logger=None):
@@ -375,6 +392,10 @@ class ClassBase:
 
     def __setattr__(self, key, value):
         self._helper_setattr_basic(key, value)
+
+    # ------------------------------------------------------------------
+    # Representation
+    # ------------------------------------------------------------------
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
