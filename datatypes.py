@@ -1,4 +1,4 @@
-"""
+﻿"""
 datatypes.py
 
 This file defines semantic type aliases used throughout the package for clarity in
@@ -35,8 +35,8 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 # Notably, Number includes np.inf
 Number = numbers.Real
 
-# - scalar → broadcasted to all 3 dimensions
-# - list/tuple/array of 3 values → used directly
+# - scalar -> broadcasted to all 3 dimensions
+# - list/tuple/array of 3 values -> used directly
 NumericInput = Union[Number, Sequence[Number]]
 
 
@@ -134,8 +134,16 @@ def Vect(d):
 
 @logging_and_warning_decorator(start_finish_level=5)
 def as_Vect(
-    input_data, dim=3, name="input data", is_norm=False, replace=None, logger=None
+    input_data,
+    dim=3,
+    name="input data",
+    is_norm=False,
+    is_permit_zero=True,
+    replace=None,
+    logger=None,
 ):
+    if is_norm:
+        is_permit_zero = False
 
     try:
         if (
@@ -149,32 +157,23 @@ def as_Vect(
     except ValueError:
         if replace is None:
             raise
-        else:
-            logger.exception("Check input data.")
-            logger.recovery(f"Change {name!r} into {replace} in the following.")
-            input_data = replace
-            if not isinstance(input_data, (tuple, list, np.ndarray)):
-                return input_data
 
-    input_data = np.asarray(input_data)
+        logger.exception("Check input data.")
+        logger.recovery(f"Change {name!r} into {replace} in the following.")
+        input_data = replace
+        if not isinstance(input_data, (tuple, list, np.ndarray)):
+            return input_data
+
+    input_data = np.asarray(input_data, dtype=float)
+    norm = float(np.linalg.norm(input_data))
+
+    if (not np.isfinite(norm)) or ((not is_permit_zero) and norm <= 1e-12):
+        raise ValueError(
+            f"{name!r} must be a {'non-zero ' if not is_permit_zero else ''}vector. Got {input_data} instead."
+        )
 
     if is_norm:
-        if np.linalg.norm(input_data) >= 1e-3:
-            input_data = input_data / np.linalg.norm(input_data)
-        else:
-            try:
-                raise ValueError(
-                    f"The norm of input vector {input_data} is below the normalization threshold 1e-3."
-                )
-            except ValueError:
-                logger.exception(
-                    "Normalization is skipped to avoid numerical instability."
-                )
-                logger.recovery(
-                    "Subsequent processing is still performed using the unnormalized vector. "
-                    "Please check the input data. If this behavior is intentional, consider "
-                    "rescaling the vector before passing it in."
-                )
+        input_data = input_data / norm
 
     return input_data
 
@@ -454,8 +453,8 @@ def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
 DimensionInfo = np.ndarray
 
 # Input type for DimensionInfo:
-# - scalar → broadcasted to all 3 dimensions
-# - list/tuple/array of 3 values → used directly
+# - scalar -> broadcasted to all 3 dimensions
+# - list/tuple/array of 3 values -> used directly
 DimensionInfoInput = NumericInput
 
 
@@ -505,14 +504,14 @@ def as_dimension_info(
 # -------------------------
 
 # DimensionPeriodic is a **specific form of DimensionInfo** that encodes boundary condition per dimension.
-# - np.inf → non-periodic
-# - int → periodic, with value as the boundary size
+# - np.inf -> non-periodic
+# - int -> periodic, with value as the boundary size
 # Like DimensionInfo, it is a NumPy array of shape (3,).
 DimensionPeriodic = DimensionInfo
 
 # Input type for DimensionPeriodic
-# - scalar → broadcasted to all 3 dimensions
-# - list/tuple/array of 3 values → used directly
+# - scalar -> broadcasted to all 3 dimensions
+# - list/tuple/array of 3 values -> used directly
 DimensionPeriodicInput = NumericInput
 
 # -------------------------
@@ -525,8 +524,8 @@ DimensionPeriodicInput = NumericInput
 DimensionFlag = DimensionInfo  # conceptually a specialized DimensionInfo
 
 # Input type for DimensionFlag
-# - bool → broadcasted to all 3 dimensions
-# - list/tuple/array of 3 boolean values → used directly
+# - bool -> broadcasted to all 3 dimensions
+# - list/tuple/array of 3 boolean values -> used directly
 DimensionFlagInput = NumericInput
 
 
@@ -536,8 +535,8 @@ def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag
 
     This function converts a DimensionPeriodic array into a DimensionFlag,
     where each element is:
-        - True  → the corresponding dimension is non-periodic (value is np.inf)
-        - False → the dimension is periodic (value is an integer)
+        - True  -> the corresponding dimension is non-periodic (value is np.inf)
+        - False -> the dimension is periodic (value is an integer)
 
     Examples
     --------
@@ -636,7 +635,7 @@ QField9 = np.ndarray
 def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
     #! strict3d
     """
-    Convert a Q-tensor field into full 3×3 matrix form (QField9).
+    Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
 
     Accepts either:
     - a 5-component representation (QField5), shape (..., 5), or
@@ -645,12 +644,12 @@ def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
     Parameters
     ----------
     qtensor : QField
-        Input Q-tensor field, either in 5-component or 3×3 form.
+        Input Q-tensor field, either in 5-component or 3Ãƒâ€”3 form.
 
     Returns
     -------
     QField9
-        Converted Q-tensor field in full 3×3 matrix form.
+        Converted Q-tensor field in full 3Ãƒâ€”3 matrix form.
 
     Raises
     ------
@@ -695,18 +694,18 @@ def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
 
 def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
     """
-    Convert a Q-tensor field into full 3×3 matrix form (QField9).
+    Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
 
     Accepts either:
     - a 5-component representation (QField5), shape (..., 5), or
     - a full matrix representation (QField9), shape (..., 3, 3)
 
-    Assumes the input is a symmetric, traceless 3×3 tensor field.
+    Assumes the input is a symmetric, traceless 3Ãƒâ€”3 tensor field.
 
     Parameters
     ----------
     qtensor : QField
-        Input Q-tensor field, either in 5-component or 3×3 form.
+        Input Q-tensor field, either in 5-component or 3Ãƒâ€”3 form.
 
     Returns
     -------
@@ -759,7 +758,7 @@ def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
 # DefectIndex represents the index-based location of a topological defect
 # in a 3D discrete lattice of nematic directors. This is a **grid coordinate**, NOT a spatial position.
 #
-# The coordinate identifies the center of a 2×2 square loop of neighboring sites,
+# The coordinate identifies the center of a 2Ãƒâ€”2 square loop of neighboring sites,
 # where the winding number is computed.
 #
 # Format: (i, j+0.5, k+0.5), represented as (int, float, float)
@@ -768,13 +767,13 @@ def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
 #   the defect is located **between grid points** along those two directions (e.g. y and z)
 #
 # These half-integer values mean that the defect is not associated with a single lattice point,
-# but rather with a 2×2 square loop. The defect coordinate is assumped to correspond to the **center** of that loop.
+# but rather with a 2Ãƒâ€”2 square loop. The defect coordinate is assumped to correspond to the **center** of that loop.
 # The integer could be in any dimension.
 #
 # Example:
 #   A defect at (3, 4.5, 7.5) lies in the yz-face centered between:
 #     grid points (3, 4, 7), (3, 4, 8), (3, 5, 7), and (3, 5, 8)
-#   This defines a 2×2 loop over which the director field forms a closed path.
+#   This defines a 2Ãƒâ€”2 loop over which the director field forms a closed path.
 DefectIndex = np.ndarray
 
 
@@ -894,3 +893,5 @@ UNSET = _UnsetType()
 # Public alias for the sentinel's type, intended for use in type annotations,
 # e.g. `float | Unset`. Users should not instantiate this type directly.
 Unset = _UnsetType
+
+

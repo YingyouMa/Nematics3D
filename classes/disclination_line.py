@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
@@ -443,7 +443,7 @@ class DisclinationLineSmooth(SmoothedLine):
         return tube
     
     def act_add_local_plane(self, x_param, **kwargs):
-        plane = DefectSection(self, x_param, **kwargs)
+        plane = DefectSectionGrid(self, u_percent=x_param, **kwargs)
         return plane
 
 @dataclass(slots=True, repr=False)
@@ -632,6 +632,161 @@ class DisclinationLineSmoothPlot(HostBase):
             )
 
 
+
+@dataclass(slots=True, repr=False)
+class OptsDefectSectionGrid(OptsBase):
+
+    u_percent: float | Unset = UNSET
+
+    __descriptions__: ClassVar[Mapping[str, str]] = {
+        **OptsBase.__descriptions__,
+        "u_percent": (
+            "Normalized spline parameter percentage along the smoothed defect line. "
+            "0 means the start of the spline parameter domain and 100 means the end."
+        ),
+    }
+
+    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
+        **OptsBase._validators,
+        "u_percent": lambda v, d: as_Number(v, name=d, value_range=(0, 100)),
+    }
+
+    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {
+            **dict(getattr(OptsBase, "_DEFAULTS_FROZEN", {})),
+            "tag": "defect section grid options",
+            "u_percent": 50,
+        }
+    )
+
+class DefectSectionGrid(HostBase):
+
+    __descriptions__: ClassVar[Mapping[str, str]] = {
+        **HostBase.__descriptions__,
+        "raw_name": "The name identifier of this local defect section grid wrapper",
+        "_state_normal": "Current normal selector for the section; either tangent, a registered name, or a direct vector.",
+        "_impl_normals": "Named normal providers used to resolve section normals.",
+    }
+
+    __slots__ = tuple(
+        k
+        for k, v in __descriptions__.items()
+        if not v.startswith("Property:") and k not in HostBase.__slots__
+    )
+
+    def __init__(
+        self,
+        line: DisclinationLineSmooth,
+        u_percent: float | None = None,
+        name: str = "defect section grid",
+        name_replace: str = "defect section grid",
+        state_normal: str | Vect(3) = "tangent",
+        normals: Mapping[str, Any] | None = None,
+        opts: OptsDefectSectionGrid | None = None,
+        opts_grid: OptsPlaneGridPolar | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        opts_grid_defaults_override: Mapping[str, Any] | None = None,
+        **kwargs,
+    ):
+
+        if not isinstance(line, DisclinationLineSmooth):
+            raise TypeError(
+                "The `line` input should be DisclinationLineSmooth instance. "
+                f"Got {type(line).__name__!r} instead"
+            )
+
+        self_kwargs = {
+            k: kwargs.pop(k)
+            for k in list(kwargs.keys())
+            if k in OptsDefectSectionGrid.__descriptions__
+        }
+        if u_percent is not None:
+            self_kwargs["u_percent"] = u_percent
+
+        super().__init__(
+            opts_type=OptsDefectSectionGrid,
+            opts=opts,
+            opts_defaults_override=opts_defaults_override,
+            name=name,
+            name_replace=name_replace,
+            **self_kwargs,
+        )
+
+        object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
+        object.__setattr__(self, "_impl_normals", {"tangent": None})
+        object.__setattr__(self, "_state_normal", state_normal)
+        self.opts.act_finalize(defaults=self._opts_defaults)
+
+        if normals is not None:
+            for key, value in normals.items():
+                self.act_register_normal(key, value)
+
+        tangent, origin = line.act_calc_tangent(self.opts.u_percent, is_return_coord=True)
+        normal = tangent if state_normal == "tangent" else state_normal
+        if isinstance(normal, str):
+            normal = self._impl_normals[normal]
+            if callable(normal):
+                normal = normal()
+        normal = as_Vect(normal, name="The initial normal of defect section grid", is_norm=True)
+
+        grid = PlaneGridPolar(
+            normal=normal,
+            origin=origin,
+            opts=opts_grid,
+            opts_defaults_override=opts_grid_defaults_override,
+            **kwargs,
+        )
+        grid.act_bind_wrapper(self, protected_attrs=["origin", "normal"])
+        line._entity_sections.act_register(self)
+
+    @logging_and_warning_decorator()
+    def act_register_normal(self, key, value, logger=None):
+        try:
+            key = as_str(key, name="The name of a registered defect-section normal")
+        except Exception:
+            logger.warning(
+                f"Skip registering a defect-section normal because key={key!r} is not a valid string."
+            )
+            return
+
+        if key == "tangent":
+            logger.warning(
+                "The reserved normal name 'tangent' is built in and cannot be overwritten. Skip this registration."
+            )
+            return
+
+        if callable(value):
+            self._impl_normals[key] = value
+            return
+
+        try:
+            value = as_Vect(value, name=f"The normal {key!r} of defect section grid", is_norm=True)
+        except Exception:
+            logger.warning(
+                f"Skip registering defect-section normal {key!r} because the value is neither a callable nor a valid 3-vector."
+            )
+            return
+
+        self._impl_normals[key] = value
+
+    @logging_and_warning_decorator()
+    def act_show_normals(self, is_return=False, logger=None):
+        is_return = as_bool(is_return, name="Whether to return the normal summary", replace=False)
+
+        lines = [f"Registered normals of {self.name!r}:"]
+        for key, value in self._impl_normals.items():
+            if key == "tangent":
+                desc = "built-in tangent function"
+            elif callable(value):
+                desc = "given function"
+            else:
+                desc = np.array2string(np.asarray(value, dtype=float), precision=3, separator=", ")
+            lines.append(f"  - {key}: {desc}")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
 # class DefectSection(ClassBase):
 
 #     __descriptions__: ClassVar[Mapping[str, str]] = {
@@ -794,5 +949,6 @@ class DisclinationLineSmoothPlot(HostBase):
 #                 "Reverting `state_normal` to None."
 #             )
 #         return state_normal
+
 
 

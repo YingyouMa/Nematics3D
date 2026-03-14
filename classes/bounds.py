@@ -204,6 +204,7 @@ class Bounds(HostBase):
         object.__setattr__(self, "_calc_axis3", axis3)
         object.__setattr__(self, "_entity_corners", corners)
         object.__setattr__(self, "_entity_clip_geometry", clip_geometry)
+
     @property
     def corners(self):
         return self._entity_corners
@@ -212,4 +213,217 @@ class Bounds(HostBase):
     def clip_geometry(self):
         return self._entity_clip_geometry
 
+_DEF_TOL = 1e-8
 
+
+def _normalize_box_edge(edge: np.ndarray, *, name: str) -> tuple[np.ndarray, float]:
+    edge = np.asarray(edge, dtype=float)
+    length = float(np.linalg.norm(edge))
+    if length <= _DEF_TOL:
+        raise ValueError(f"{name} has near-zero length and cannot define a box axis.")
+    return edge / length, length
+
+
+
+def _is_orthogonal_triplet(v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, tol: float = _DEF_TOL) -> bool:
+    return (
+        abs(float(v1 @ v2)) <= tol
+        and abs(float(v1 @ v3)) <= tol
+        and abs(float(v2 @ v3)) <= tol
+    )
+
+
+
+def _match_points_unordered(points_a: np.ndarray, points_b: np.ndarray, tol: float = _DEF_TOL) -> bool:
+    used = np.zeros(len(points_b), dtype=bool)
+    for pa in points_a:
+        diff = np.linalg.norm(points_b - pa, axis=1)
+        idx = int(np.argmin(diff))
+        if used[idx] or diff[idx] > tol:
+            return False
+        used[idx] = True
+    return True
+
+
+
+def _build_bounds_from_corner_edges(
+    origin: np.ndarray,
+    edge1: np.ndarray,
+    edge2: np.ndarray,
+    edge3: np.ndarray,
+    name: str | None = None,
+    *,
+    is_preserve_axis_order: bool = True,
+) -> Bounds:
+    axis1, length1 = _normalize_box_edge(edge1, name="edge1")
+    axis2, length2 = _normalize_box_edge(edge2, name="edge2")
+    axis3, length3 = _normalize_box_edge(edge3, name="edge3")
+
+    if not _is_orthogonal_triplet(axis1, axis2, axis3):
+        raise ValueError(
+            "The input edges do not form an orthogonal box. "
+            "Please convert this geometry to BoundsGeneral instead."
+        )
+
+    handedness = float(np.dot(np.cross(axis1, axis2), axis3))
+    if handedness < 0:
+        if is_preserve_axis_order:
+            raise ValueError(
+                "The input box edges form a left-handed frame under the given axis order. "
+                "Please reorder the input points, or convert this geometry to BoundsGeneral instead."
+            )
+        axis2, axis3 = axis3, axis2
+        length2, length3 = length3, length2
+
+    return Bounds(
+        name=name,
+        opts=OptsBounds(
+            origin=origin,
+            axis1=axis1,
+            axis2=axis2,
+            length1=length1,
+            length2=length2,
+            length3=length3,
+            alignment="min_corner",
+        ),
+    )
+
+
+
+def _build_bounds_from_4_points(points: np.ndarray, name: str | None = None) -> Bounds:
+    origin = points[0]
+    edge1 = points[1] - origin
+    edge2 = points[2] - origin
+    edge3 = points[3] - origin
+    return _build_bounds_from_corner_edges(
+        origin,
+        edge1,
+        edge2,
+        edge3,
+        name=name,
+        is_preserve_axis_order=True,
+    )
+
+
+
+def _build_bounds_from_bounds6(values: np.ndarray, name: str | None = None) -> Bounds:
+    xmin, xmax, ymin, ymax, zmin, zmax = values.tolist()
+    if not (xmax > xmin and ymax > ymin and zmax > zmin):
+        raise ValueError("Axis-aligned bounds must satisfy xmin<xmax, ymin<ymax, zmin<zmax.")
+    return Bounds(
+        name=name,
+        opts=OptsBounds(
+            origin=(xmin, ymin, zmin),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=xmax - xmin,
+            length2=ymax - ymin,
+            length3=zmax - zmin,
+            alignment="min_corner",
+        ),
+    )
+
+
+
+def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> Bounds:
+    points = np.asarray(points, dtype=float)
+    if points.shape != (8, 3):
+        raise ValueError(f"Expected (8, 3) points for a box, got shape {points.shape}.")
+
+    for i in range(8):
+        origin = points[i]
+        others = np.delete(points, i, axis=0)
+        dist = np.linalg.norm(others - origin, axis=1)
+        order = np.argsort(dist)
+        candidate = others[order[:3]]
+
+        for perm in ((0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)):
+            edge1 = candidate[perm[0]] - origin
+            edge2 = candidate[perm[1]] - origin
+            edge3 = candidate[perm[2]] - origin
+
+            try:
+                axis1, _ = _normalize_box_edge(edge1, name="edge1")
+                axis2, _ = _normalize_box_edge(edge2, name="edge2")
+                axis3, _ = _normalize_box_edge(edge3, name="edge3")
+            except ValueError:
+                continue
+
+            if not _is_orthogonal_triplet(axis1, axis2, axis3):
+                continue
+
+            expected = np.array(
+                [
+                    origin,
+                    origin + edge1,
+                    origin + edge2,
+                    origin + edge3,
+                    origin + edge1 + edge2,
+                    origin + edge1 + edge3,
+                    origin + edge2 + edge3,
+                    origin + edge1 + edge2 + edge3,
+                ],
+                dtype=float,
+            )
+            if _match_points_unordered(expected, points):
+                return _build_bounds_from_corner_edges(
+                    origin,
+                    edge1,
+                    edge2,
+                    edge3,
+                    name=name,
+                    is_preserve_axis_order=False,
+                )
+
+    raise ValueError(
+        "The input 8-point geometry does not describe an orthogonal box. "
+        "Please convert this geometry to BoundsGeneral instead."
+    )
+
+
+
+def _polydata_to_box_points(polydata: pv.PolyData) -> np.ndarray:
+    surface = polydata.extract_surface().triangulate().clean()
+    points = np.asarray(surface.points, dtype=float)
+    if points.size == 0:
+        raise ValueError("clip_geometry PolyData is empty.")
+
+    rounded = np.round(points, decimals=10)
+    _, unique_idx = np.unique(rounded, axis=0, return_index=True)
+    unique_points = points[np.sort(unique_idx)]
+    return unique_points
+
+
+
+def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
+    if input_data is None:
+        return None
+
+    if isinstance(input_data, Bounds):
+        return input_data
+
+    if isinstance(input_data, pv.PolyData):
+        unique_points = _polydata_to_box_points(input_data)
+        if unique_points.shape != (8, 3):
+            raise ValueError(
+                f"{name!r} PolyData does not look like a box: it has {len(unique_points)} unique points. "
+                "Please convert this geometry to BoundsGeneral instead."
+            )
+        return _build_bounds_from_8_points(unique_points, name=name)
+
+    arr = np.asarray(input_data, dtype=float)
+
+    if arr.ndim == 1 and arr.shape == (6,):
+        return _build_bounds_from_bounds6(arr, name=name)
+
+    if arr.ndim == 2 and arr.shape == (4, 3):
+        return _build_bounds_from_4_points(arr, name=name)
+
+    if arr.ndim == 2 and arr.shape == (8, 3):
+        return _build_bounds_from_8_points(arr, name=name)
+
+    raise TypeError(
+        f"{name!r} could not be converted to Bounds. Supported inputs are: None, Bounds, "
+        "axis-aligned bounds with 6 numbers, four box-defining points, eight box corners, "
+        "or a box-like PyVista PolyData."
+    )
