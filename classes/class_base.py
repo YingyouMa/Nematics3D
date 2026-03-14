@@ -36,6 +36,10 @@ class ClassBase:
         "_impl_getattr_names": (
             "A set storing all public names that __getattr__ is allowed to resolve."
         ),
+        "_impl_attrs_protected": (
+            "A set storing protected field names. Protected names cannot be modified "
+            "through normal setattr."
+        ),
     }
 
     __relations__ = {
@@ -66,6 +70,8 @@ class ClassBase:
             object.__setattr__(self, "_impl_relations", {})
         if not hasattr(self, "_impl_getattr_names"):
             object.__setattr__(self, "_impl_getattr_names", set())
+        if not hasattr(self, "_impl_attrs_protected"):
+            object.__setattr__(self, "_impl_attrs_protected", set())
 
         self._helper_init_getattr_names_basic()
         self._helper_init_relations_basic()
@@ -76,8 +82,6 @@ class ClassBase:
     def _helper_init_getattr_names_basic(self):
         names = object.__getattribute__(self, "_impl_getattr_names")
         for key in type(self).__attrs__.keys():
-            if key.startswith("_"):
-                continue
             names.add(key)
             if key.startswith("raw_"):
                 names.add(key[4:])
@@ -165,6 +169,100 @@ class ClassBase:
     def act_get_attr(self, key):
         return self._impl_extra_attrs[key]
 
+    def _helper_resolve_protected_target(self, name: str) -> str:
+        name = as_str(name, name=f"Protected attribute name for instance {self.name!r}")
+        if name in type(self).__attrs__:
+            return name
+        if name in self._impl_extra_attrs_docs:
+            return name
+        potential_raw = f"raw_{name}"
+        if potential_raw in type(self).__attrs__:
+            return potential_raw
+        raise AttributeError(
+            f"Cannot protect {name!r}: it is not a field in {type(self).__name__}.__attrs__ "
+            "and is not a registered extra attribute."
+        )
+
+    def act_register_protected_attr(self, attrs):
+        if isinstance(attrs, str):
+            attrs = [attrs]
+        elif not isinstance(attrs, (list, tuple, set)):
+            raise TypeError(
+                "attrs must be a string or a sequence of strings, "
+                f"got {type(attrs).__name__}."
+            )
+
+        for attr in attrs:
+            self._impl_attrs_protected.add(self._helper_resolve_protected_target(attr))
+
+    def act_unregister_protected_attr(self, attrs):
+        if isinstance(attrs, str):
+            attrs = [attrs]
+        elif not isinstance(attrs, (list, tuple, set)):
+            raise TypeError(
+                "attrs must be a string or a sequence of strings, "
+                f"got {type(attrs).__name__}."
+            )
+
+        for attr in attrs:
+            self._impl_attrs_protected.discard(self._helper_resolve_protected_target(attr))
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_show_modifiable_attrs(self, is_return=False, logger=None):
+        protected = set(self._impl_attrs_protected)
+        attrs_raw = []
+        attrs_state = []
+        attrs_extra = []
+
+        for attr_name in type(self).__attrs__.keys():
+            if attr_name in protected:
+                continue
+            if attr_name.startswith("raw_"):
+                attrs_raw.append(attr_name)
+            elif attr_name.startswith("state_"):
+                attrs_state.append(attr_name)
+
+        for attr_name in self._impl_extra_attrs_docs.keys():
+            if attr_name not in protected:
+                attrs_extra.append(attr_name)
+
+        lines = [
+            "Modifiable variables for this instance:",
+            "  - raw_ fields: these are real stored fields in __attrs__. "
+            "When assigning, the 'raw_' prefix may be omitted.",
+        ]
+        if attrs_raw:
+            lines.extend([f"    * {name}" for name in sorted(attrs_raw)])
+        else:
+            lines.append("    * <none>")
+
+        lines.append(
+            "  - state_ fields: these are runtime state fields in __attrs__. "
+            "When assigning, the full 'state_' name must be used."
+        )
+        if attrs_state:
+            lines.extend([f"    * {name}" for name in sorted(attrs_state)])
+        else:
+            lines.append("    * <none>")
+
+        lines.append(
+            "  - extra attrs: these are dynamically registered user attributes."
+        )
+        if attrs_extra:
+            lines.extend([f"    * {name}" for name in sorted(attrs_extra)])
+        else:
+            lines.append("    * <none>")
+
+        if protected:
+            lines.append(
+                "Protected fields are excluded from the lists above and cannot be modified through normal setattr."
+            )
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+
     def __getattr__(self, key):
         if key in object.__getattribute__(self, "_impl_relations"):
             return self._helper_resolve_relation_value(key)
@@ -219,6 +317,12 @@ class ClassBase:
     def _helper_setattr_basic(self, key, value, logger=None):
 
         if key in self._impl_extra_attrs_docs:
+            if key in self._impl_attrs_protected:
+                logger.warning(
+                    f"{key!r} is protected on {type(self).__name__}. "
+                    "Please unprotect it before modifying."
+                )
+                return
             self._impl_extra_attrs[key] = value
             return
 
@@ -242,6 +346,13 @@ class ClassBase:
                     f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                     f"{key!r} is not a valid or registered attribute."
                 )
+
+        if target_key in self._impl_attrs_protected:
+            logger.warning(
+                f"{target_key!r} is protected on {type(self).__name__}. "
+                "Please unprotect it before modifying."
+            )
+            return
 
         if target_key.startswith("_") or (
             not target_key.startswith("raw_")
