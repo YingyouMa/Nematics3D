@@ -204,4 +204,12 @@ class Bounds(HostBase):
         object.__setattr__(self, "_calc_axis3", axis3)
         object.__setattr__(self, "_entity_corners", corners)
         object.__setattr__(self, "_entity_clip_geometry", clip_geometry)
+    @property
+    def corners(self):
+        return self._entity_corners
+
+    @property
+    def clip_geometry(self):
+        return self._entity_clip_geometry
+
 
