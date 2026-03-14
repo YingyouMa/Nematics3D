@@ -301,7 +301,7 @@ class DisclinationLineSmooth(SmoothedLine):
         "_calc_result": "The smoothed disclination indices in lattice grid",
         "_calc_result_coords": "The smoothed disclination coords in real space",
         "_entity_visual": "The PlotTube object as the visualization of this smoothed disclination line",
-        "_entity_planes": "The DefectPlane objects as the cross-sections along the smoothed disclination line",
+        "_entity_sections": "The DefectSection objects as the cross-sections along the smoothed disclination line",
         "_calc_padding_num": "Temporary padding length used when smoothing a cross-boundary line.",
     }
 
@@ -443,7 +443,7 @@ class DisclinationLineSmooth(SmoothedLine):
         return tube
     
     def act_add_local_plane(self, x_param, **kwargs):
-        plane = DefectPlane(self, x_param, **kwargs)
+        plane = DefectSection(self, x_param, **kwargs)
         return plane
 
 @dataclass(slots=True, repr=False)
@@ -632,7 +632,7 @@ class DisclinationLineSmoothPlot(HostBase):
             )
 
 
-class DefectPlane(ClassBase):
+class DefectSection(ClassBase):
 
     __descriptions__: ClassVar[Mapping[str, str]] = {
         **(ClassBase.__descriptions__),
@@ -654,8 +654,8 @@ class DefectPlane(ClassBase):
         self,
         line: DisclinationLineSmooth,
         x_param: float,
-        name: str = "defect plane",
-        name_replace: str = "defect plane",
+        name: str = "defect section",
+        name_replace: str = "defect section",
         state_normal: Unset | Vect(3) = UNSET,
         const_normals: dict = {},
         opts: OptsPlaneGridPolar | None = None,

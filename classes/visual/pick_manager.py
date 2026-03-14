@@ -481,15 +481,15 @@ class PickManager:
         #         control = InteractPlane(owner, figure)
         #         control.show()
         #     elif type(owner).__name__ == "QPlanePolar" and getattr(owner, "_state_is_interactable", False):
-        #         defectPlane = owner.plane.owner
-        #         if type(defectPlane).__name__ == "DefectPlane":
-        #             from .qt.interact_defect_plane import InteractDefectPlane
-        #             control = InteractDefectPlane(owner, figure)
+        #         defectSection = owner.plane.owner
+        #         if type(defectSection).__name__ == "DefectSection":
+        #             from .qt.interact_defect_section import InteractDefectSection
+        #             control = InteractDefectSection(owner, figure)
         #             control.show()
         #             # DEFECT_PLANE_GUI_ONLY_WARNING = (
         #             #     "WARNING!!! \n"
         #             #     "Due to incomplete implementation of the related functionality, "
-        #             #     "please modify the DefectPlane ONLY through the GUI during interactive adjustments. "
+        #             #     "please modify the DefectSection ONLY through the GUI during interactive adjustments. "
         #             #     "Do NOT manually change its properties from the command line, "
         #             #     "as this may cause the internal state and the GUI to become out of sync."
         #             # )

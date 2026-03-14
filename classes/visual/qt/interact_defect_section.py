@@ -7,7 +7,7 @@ from ..plot_rod import PlotRod
 from Nematics3D.datatypes import UNSET
 
 
-class InteractDefectPlane(PanelBase):
+class InteractDefectSection(PanelBase):
     def __init__(self, field, figure):
         self.field = field
         self.defect_plane = field.plane.owner
