@@ -45,7 +45,7 @@ class OptsPlaneGrid(OptsBase):
         "origin":           "origin of plane",
         "alignment":        "Grid reference point to be placed at 'origin' ('center' for geometric middle, 'bottom-left' for the first grid point [0,0])",
         "axis1":            "first in-plane axis",
-        "corners_limit":    "bounding box corners (8×3 array)",
+        "corners_limit":    "bounding box corners (8Ã—3 array)",
         "grid_offset":      "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform":   "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
     }
@@ -88,13 +88,13 @@ class PlaneGrid(HostBase):
         **dict(HostBase.__descriptions__),
 
         # ========== generated grids ==========
-        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
-        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 × num2 × 3)",
-        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 × num2 × 3)",
+        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃ—3)",
+        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 Ã— num2 Ã— 3)",
+        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 Ã— num2 Ã— 3)",
 
         # ========== calc (derived quantities) ==========
         "_calc_axis2": "The second in-plane axis which normal to both axis1 and normal.",
-        "_calc_offset_real": "Offset vector applied to center the plane grid at the specified origin (3-vector) in lattice units",
+        "_calc_offset_real": "Base 3D offset that maps 2D array indices [i, j] into plane coordinates via i*step1 + j*step2 + offset before the global grid transform.",
         "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
         "_calc_size":   "The actual size calculated based on opts.size",
         "_calc_size_extra": "The actual size_extra calculated based on opts.size and opts.size_extra",
@@ -200,12 +200,16 @@ class PlaneGrid(HostBase):
         size1, size2 = sizes
         target_shape = np.shape(grid)[:2]
         grid_int = np.reshape(grid_int, (-1, 2))
-        grid = np.reshape(grid, (-1, 2))
-        grid = np.einsum("ai, ib -> ab", grid, axis_both)
-        
+
+        step_both = np.array([axis1 * space1, axis2 * space2])
+        index_origin_shift = np.zeros(2, dtype=float)
+        if alignment == "center":
+            index_origin_shift = 0.5 * (np.asarray(target_shape, dtype=float) - 1.0)
+
+        offset = origin - np.einsum("i, ib -> b", index_origin_shift, step_both)
+        grid = np.einsum("ai, ib -> ab", grid_int, step_both) + offset
+
         logger.detail("Translate the grid according to the origin.")
-        offset = origin
-        grid = grid + offset
         
         logger.detail("Perform linear transform into real coordinates.")
         grid = apply_linear_transform(

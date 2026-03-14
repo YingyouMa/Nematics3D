@@ -475,7 +475,7 @@ def select_grid_in_box(
     mask = np.all((coords >= -tol) & (coords <= bounds + tol), axis=1)
 
     grid_selected = grid[mask]
-    if grid_selected.shape[0] == 0 and logger is not None:
+    if grid_selected.shape[0] == 0:
         logger.warning(
             "No points from `grid` fall inside the specified box defined by `corners_limit`:\n"
             f"{corners_limit}"

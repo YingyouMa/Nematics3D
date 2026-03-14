@@ -162,6 +162,17 @@ class QPlane(InterpolatePlane):
         return defect_centers, adjacent_mask
     
     
+    def _helper_set_visual_interact_with_plane(self, visual):
+        default_func = getattr(visual, "_impl_interact_func", None)
+
+        def _interact():
+            if callable(default_func):
+                default_func()
+            from .visual.qt.interact_plane import InteractPlane
+            InteractPlane(self, visual.fig).show()
+
+        visual.act_set_interact_func(_interact)
+
     def _helper_update_visual(self):
             
         if self._entity_visual_nb or self._entity_visual_nd:
@@ -198,6 +209,7 @@ class QPlane(InterpolatePlane):
                 coords=self.plane(),
                 scalars=self._calc_S,
                 )
+
     def act_visualize_n(
         self,
         figure: PlotFigure | BackgroundPlotter | None = None,
@@ -264,6 +276,7 @@ class QPlane(InterpolatePlane):
             )
             
         object.__setattr__(visual_nb, "_impl_owner_ref", weakref.ref(self))
+        self._helper_set_visual_interact_with_plane(visual_nb)
         object.__setattr__(self, '_entity_visual_nb', visual_nb)
 
         if np.sum(self._calc_is_near_defect) > 0:
@@ -310,6 +323,7 @@ class QPlane(InterpolatePlane):
             
             
         object.__setattr__(visual_nd, "_impl_owner_ref", weakref.ref(self))
+        self._helper_set_visual_interact_with_plane(visual_nd)
         object.__setattr__(self, '_entity_visual_nd', visual_nd)
         
         object.__setattr__(visual_defect, "_impl_owner_ref", weakref.ref(self))
@@ -362,6 +376,7 @@ class QPlane(InterpolatePlane):
             )
         
         object.__setattr__(visual_S, "_impl_owner_ref", weakref.ref(self))
+        self._helper_set_visual_interact_with_plane(visual_S)
         object.__setattr__(self, '_entity_visual_S', visual_S)
 
 

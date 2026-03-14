@@ -4,7 +4,7 @@ from typing import Literal, Any, Mapping
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.field import generate_fixed_step_grid, apply_linear_transform
+from Nematics3D.field import apply_linear_transform
 from Nematics3D.general import select_grid_in_box
 from .opts import merge_opts_all
 from .host_base import OptsBase, HostBase
@@ -25,7 +25,7 @@ class OptsPlaneGridPolar(OptsBase):
     This option set targets the "ring + equal arc-length" strategy:
     - Rings are placed at radii r_i = (i + 0.5) * dr 
     - Points on each ring are spaced by approximately constant arc length
-      (via N_theta(i) ≈ round(2π r_i / arc_dist))
+      (via N_theta(i) ÃƒÂ¢Ã¢â‚¬Â°Ã‹â€  round(2ÃƒÂÃ¢â€šÂ¬ r_i / arc_dist))
     - Rings are angularly staggered using the golden angle for reduced aliasing
       (a deterministic, reproducible staggering scheme)
     """
@@ -50,7 +50,7 @@ class OptsPlaneGridPolar(OptsBase):
         "layers":               "total number of rings/layers to generate",
         "dr":                   "radial spacing between rings; rings at r_i = (i + 0.5) * dr",
         "arc_dist":             "target arc-length spacing between adjacent points along each ring",
-        "corners_limit":        "bounding box corners (8×3 array)",
+        "corners_limit":        "bounding box corners (8ÃƒÆ’Ã¢â‚¬â€3 array)",
         "grid_offset":          "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform":       "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
     }
@@ -87,8 +87,8 @@ class PlaneGridPolar(HostBase):
     
     __descriptions__ = {
         **dict(HostBase.__descriptions__),
-        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape N×3)",
-        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 × num2 × 3)",
+        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃƒÆ’Ã¢â‚¬â€3)",
+        "_entity_grid_all": "Complete 3D polar grid points before filtering, stored as an array of shape (N, 3)",
         "_entity_polar": "The polar coordinates of points",
         "_calc_ring_offsets": "Cumulative offsets defining the start/end indices of each polar ring",
         "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
@@ -134,11 +134,13 @@ class PlaneGridPolar(HostBase):
                 )
         self.opts.act_finalize(defaults=self._opts_defaults)
 
-        self._helper_commit_apply_opts()
+        self._helper_commit_apply_opts(is_reapply_opts=True)
         
         
-    @logging_and_warning_decorator
-    def _helper_commit_apply_opts(self, logger=None, **kwargs):
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+        if not is_reapply_opts and not kwargs:
+            return
 
         with self.opts._helper_internal_update():
             cover_value(self.opts,
@@ -242,8 +244,6 @@ class PlaneGridPolar(HostBase):
         
         if self.field:
             self.field._helper_commit()
-            
-        self._helper_trigger_sync_batch(**kwargs)
         
         
     def act_debug_plot(self,
