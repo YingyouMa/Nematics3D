@@ -179,17 +179,29 @@ class Bounds(HostBase):
 
         faces = np.hstack(
             [
-                [4, 0, 1, 4, 2],
+                [4, 0, 2, 4, 1],
                 [4, 3, 5, 7, 6],
                 [4, 0, 1, 5, 3],
-                [4, 2, 4, 7, 6],
-                [4, 0, 2, 6, 3],
+                [4, 2, 6, 7, 4],
+                [4, 0, 3, 6, 2],
                 [4, 1, 4, 7, 5],
             ]
         )
-        clip_geometry = pv.PolyData(corners, faces).triangulate().clean()
+        clip_geometry = (
+            pv.PolyData(corners, faces)
+            .triangulate()
+            .clean()
+            .compute_normals(
+                cell_normals=True,
+                point_normals=True,
+                consistent_normals=True,
+                auto_orient_normals=True,
+                inplace=False,
+            )
+        )
 
         object.__setattr__(self, "_calc_axis2", axis2)
         object.__setattr__(self, "_calc_axis3", axis3)
         object.__setattr__(self, "_entity_corners", corners)
         object.__setattr__(self, "_entity_clip_geometry", clip_geometry)
+

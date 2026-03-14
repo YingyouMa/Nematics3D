@@ -620,8 +620,6 @@ class PlotGlyph(HostBase):
         else:
             object.__setattr__(self.opts, "paint_by", paint_method)
 
-        current_shading = kwargs.get("shading_type", getattr(self.opts, "shading_type"))
-
         is_needs_remesh = is_reapply_opts
         for attr in self._pending_resolution_attrs:
             if attr not in kwargs:

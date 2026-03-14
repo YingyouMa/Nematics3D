@@ -408,16 +408,26 @@ class QPlanePolar(QPlane):
         **kwargs,
     ):
 
+        if grid is None:
+            grid = PlaneGridPolar(
+                opts=opts,
+                opts_defaults_override=opts_defaults_override,
+                name=name + "-grid",
+                **kwargs,
+            )
+            kwargs = {}
+            opts = None
+            opts_defaults_override = None
+
         super().__init__(
             interpolator=interpolator,
             name=name,
             grid=grid,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
+            visual_default=visual_default,
             **kwargs
             )
-        
-        self._helper_commit()
 
 
     def _helper_detect_defect(self, directors, threshold: float=0):
