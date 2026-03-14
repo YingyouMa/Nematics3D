@@ -9,6 +9,7 @@ from .Interpolator import Interpolator
 from Nematics3D.field import Q_diagonalize, n_color_immerse, apply_linear_transform, align_directors
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, mark_points_membership
+from Nematics3D.geometry import wrap_to_pi
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_bool
 from .visual.plot_figure import PlotFigure, OptsFigure, as_PlotFigure
@@ -432,9 +433,6 @@ class QPlanePolar(QPlane):
 
     def _helper_detect_defect(self, directors, threshold: float=0):
         
-        def _wrap_to_pi(angle: np.ndarray) -> np.ndarray:
-            """Wrap angles to (-pi, pi]."""
-            return (angle + np.pi) % (2.0 * np.pi) - np.pi
         
         plane_grid = self._entity_plane
         points = plane_grid._entity_grid_all
@@ -475,7 +473,7 @@ class QPlanePolar(QPlane):
             theta_b = theta_outer[jn]  # (n_outer,)
     
             # c: nearest on INNER ring to theta_b (no sorted assumption)
-            diff_b = _wrap_to_pi(theta_inner[None, :] - theta_b[:, None])      # (n_outer, n_inner)
+            diff_b = wrap_to_pi(theta_inner[None, :] - theta_b[:, None])      # (n_outer, n_inner)
             c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)       # (n_outer,)
     
             # inner-ring adjacency via sorting theta_inner into a circular order
@@ -491,8 +489,8 @@ class QPlanePolar(QPlane):
             next_local = order[next_rank]                                      # (n_outer,)
     
             # d: choose neighbor-of-c closer to theta_a
-            d_prev = np.abs(_wrap_to_pi(theta_inner[prev_local] - theta_a))    # (n_outer,)
-            d_next = np.abs(_wrap_to_pi(theta_inner[next_local] - theta_a))    # (n_outer,)
+            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))    # (n_outer,)
+            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))    # (n_outer,)
             d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(np.int64)
     
             idx_c = s_inner + c_local

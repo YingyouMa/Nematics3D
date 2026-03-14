@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from Nematics3D.datatypes import as_str, Vect
+from Nematics3D.geometry import calc_vec_from_azimuth_polar, get_azimuth as geometry_get_azimuth, get_polar_angle as geometry_get_polar_angle
 
 
 @dataclass(slots=True)
@@ -609,21 +610,12 @@ class PanelBase(QtWidgets.QWidget):
 
     @staticmethod
     def _helper_calc_vec(azimuth, polar_angle):
-        x = np.sin(polar_angle) * np.cos(azimuth)
-        y = np.sin(polar_angle) * np.sin(azimuth)
-        z = np.cos(polar_angle)
-        result = (x, y, z)
-        return result
+        return calc_vec_from_azimuth_polar(azimuth, polar_angle)
 
     @staticmethod
     def get_azimuth(vec):
-        az_rad = np.arctan2(vec[1], vec[0])
-        azimuth = np.degrees(az_rad) % 360
-        return azimuth
+        return geometry_get_azimuth(vec)
 
     @staticmethod
     def get_polar_angle(vec):
-        vec /= np.linalg.norm(vec, axis=-1, keepdims=True)
-        polar = np.arccos(vec[2])
-        polar = np.degrees(polar)
-        return polar
+        return geometry_get_polar_angle(vec)

@@ -4,6 +4,7 @@ from qtpy.QtCore import QSignalBlocker
 
 from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper, MovePointConsole
 from Nematics3D.general import rotation_matrix_from_vectors
+from Nematics3D.geometry import calc_vec_from_azimuth_polar, get_azimuth as geometry_get_azimuth, get_polar_angle as geometry_get_polar_angle, get_axis1_azimuth as geometry_get_axis1_azimuth
 from ..plot_rod import PlotRod
 from ..plot_sphere import PlotSphere
 
@@ -354,7 +355,7 @@ class InteractPlane(PanelBase):
         normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
         normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
         normal_now = np.asarray(
-            self._helper_calc_vec(normal_azimuth, normal_polar_angle), dtype=float
+            calc_vec_from_azimuth_polar(normal_azimuth, normal_polar_angle), dtype=float
         )
 
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
@@ -391,28 +392,15 @@ class InteractPlane(PanelBase):
 
     @staticmethod
     def get_azimuth(vec):
-        vec = np.asarray(vec, dtype=float)
-        az_rad = np.arctan2(vec[1], vec[0])
-        return np.degrees(az_rad) % 360
+        return geometry_get_azimuth(vec)
 
     @staticmethod
     def get_polar_angle(vec):
-        vec = np.asarray(vec, dtype=float).copy()
-        vec /= np.linalg.norm(vec, axis=-1, keepdims=True)
-        polar = np.arccos(vec[2])
-        return np.degrees(polar)
+        return geometry_get_polar_angle(vec)
 
     @staticmethod
     def get_axis1_azimuth(axis1, normal):
-        axis1 = np.asarray(axis1, dtype=float).copy()
-        axis1 /= np.linalg.norm(axis1, axis=-1, keepdims=True)
-        rotation = rotation_matrix_from_vectors((0, 0, 1), normal)
-        axisx = rotation @ np.array([1.0, 0.0, 0.0])
-        axisy = rotation @ np.array([0.0, 1.0, 0.0])
-        az_rad = np.arctan2(axis1 @ axisy, axis1 @ axisx)
-        return np.degrees(az_rad) % 360
-
-    # ==================== OVERRIDE ====================
+        return geometry_get_axis1_azimuth(axis1, normal)
     # InteractPlane overrides PanelBase._sync_func because the plane
     # panel must keep multiple coupled widgets and helper visuals in sync
     # with PlaneGrid option changes from the host side.

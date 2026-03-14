@@ -1,7 +1,8 @@
-# ------------------------------------
-# Analysis of Q field in 3D
-# Yingyou Ma, Physics @ Brandeis, 2023
-# ------------------------------------
+"""
+Field-level utilities for structured data on grids, including Q-tensor conversion,
+coordinate-grid generation, transforms, and periodic-boundary operations.
+"""
+
 
 import time
 from typing import Tuple, Optional, Union, Sequence, List

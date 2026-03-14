@@ -1,3 +1,8 @@
+"""
+Miscellaneous shared utilities. If a helper does not clearly belong to a more specific
+module yet, it can live here for now.
+"""
+
 import numpy as np
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping, Optional
 from Nematics3D.logging_decorator import logging_and_warning_decorator
