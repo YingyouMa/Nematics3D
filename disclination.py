@@ -144,7 +144,6 @@ def defect_detect(
         f"Threshold of the inner product between the first and last director is {threshold}"
     )
     
-    logger.detail("Add padding directors for periodic boundary conditions if needed")
     n = add_periodic_boundary(n_origin, is_boundary_periodic)
     defect_indices = np.empty((0, 3), dtype=float)
 
@@ -175,12 +174,10 @@ def defect_detect(
         now = time.time()
 
     # Wrap indices under periodic conditions
-    logger.detail("Start to deal with periodic boundary conditions")
     for i, periodic in enumerate(is_boundary_periodic):
         if periodic:
             defect_indices[:, i] %= n_origin.shape[i]
             
-    logger.detail("Deduplicate defects")
     defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
     
     return defect_indices
@@ -252,12 +249,10 @@ def defect_classify_into_lines(
     box_size_periodic = as_dimension_info(box_size_periodic)
     logger.debug(f"box_size_periodic: {box_size_periodic}")
 
-    logger.detail("Making hash table of defects.")
     defect_indices_hash = make_hash_table(defect_indices)
 
     graph = Graph()
 
-    logger.detail("Start to find neighboring defects")
     for idx1, defect in enumerate(defect_indices):
         neighbor = defect_neighbor_possible_get(
             defect, box_size_periodic=box_size_periodic
@@ -269,7 +264,6 @@ def defect_classify_into_lines(
         for idx2 in search:
             graph.add_edge(idx1, idx2)
 
-    logger.detail("Start to perform Hierholzer algorithm")
     paths = graph.find_path()
     paths = [
         unwrap_trajectory(defect_indices[path], box_size_periodic=box_size_periodic)
@@ -277,7 +271,6 @@ def defect_classify_into_lines(
     ]
     logger.debug("Done!")
     
-    logger.detail("Store the information of lines into DisclinationLine object.")
     lines = [
         DisclinationLine(
             defect_indices=path,

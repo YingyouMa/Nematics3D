@@ -27,7 +27,6 @@ def safe_divide(label, numerator, denominator, logger=None):
         logger.recovery(f"Recovered by resetting denominator to {denominator}")
         value = numerator / denominator
 
-    logger.detail(f"safe_divide result for label={label} is {value}")
     return value
 
 
@@ -52,9 +51,6 @@ def decorated_bridge(label, x, y, logger=None):
     logger.info(f"Entered decorated_bridge with label={label}")
     first = plain_leaf(f"{label}:first-pass", x, y)
     second = decorated_leaf(f"{label}:second-pass", y, x)
-    logger.detail(
-        f"decorated_bridge returning total={first + second} for label={label}"
-    )
     return first + second
 
 
@@ -74,9 +70,6 @@ class Sensor:
         )
         adjusted_x = raw_x + self.bias
         adjusted_y = raw_y - self.bias
-        logger.detail(
-            f"Sensor.measure adjusted values to adjusted_x={adjusted_x}, adjusted_y={adjusted_y}"
-        )
         return sensor_plain_middle(self, adjusted_x, adjusted_y)
 
     def helper_without_decorator(self, x, y):
@@ -117,7 +110,6 @@ def build_report(owner_name, primary, secondary, logger=None):
     )
     total = primary + secondary
     average = total / 2
-    logger.detail(f"Report values total={total}, average={average}")
     return {
         "owner": owner_name,
         "primary": primary,
@@ -138,7 +130,6 @@ class Pipeline:
         report_one = self.analyzer.analyze(x, y)
         report_two = plain_pipeline_step(self.analyzer, x + 1, y - 1)
         logger.info(f"Pipeline.run built two reports for pipeline={self.name}")
-        logger.detail(f"Final reports: report_one={report_one}, report_two={report_two}")
         return report_one, report_two
 
 

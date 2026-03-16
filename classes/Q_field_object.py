@@ -62,9 +62,9 @@ class InputQ:
     box_periodic_flag: DimensionFlagInput = False
     grid_offset: Vect(3) = (0, 0, 0)
     grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
-    const_miminum_line_length_smooth: Number = 61
-    const_smooth_window_length: Number = 41
-    const_miminum_line_length_visual: Number = 75
+    default_miminum_line_length_smooth: Number = 61
+    default_smooth_window_length: Number = 41
+    default_miminum_line_length_visual: Number = 75
 
     __attrs__ = {
         "Q": "Q field (tensor order parameter)",
@@ -73,9 +73,9 @@ class InputQ:
         "box_periodic_flag": "flag indicating whether periodic boundary condition is applied along each dimension",
         "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3)",
-        "const_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
-        "const_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
-        "const_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized",
+        "default_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
+        "default_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
+        "default_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized",
     }
 
     _validators = {
@@ -85,13 +85,13 @@ class InputQ:
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
-        "const_miminum_line_length_smooth": lambda v, d: as_Number(
+        "default_miminum_line_length_smooth": lambda v, d: as_Number(
             v, name=d, value_range=(1, np.inf)
         ),
-        "const_smooth_window_length": lambda v, d: as_Number(
+        "default_smooth_window_length": lambda v, d: as_Number(
             v, name=d, value_range=(2, np.inf)
         ),
-        "const_miminum_line_length_visual": lambda v, d: as_Number(
+        "default_miminum_line_length_visual": lambda v, d: as_Number(
             v, name=d, value_range=(2, np.inf)
         ),
     }
@@ -117,10 +117,10 @@ class QFieldObject(ClassBase):
         "_raw_grid_offset": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
         "_raw_grid_transform": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
         # --- consts / thresholds ---
-        "const_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
-        "const_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
-        "const_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
-        "const_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
+        "default_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
+        "default_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
+        "default_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
+        "default_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
         # --- Derived grids / geometry ---
         "_calc_grid_index": "Lattice coordinate grid in index space (before applying transform/offset).",
         "_calc_grid": "Coordinate grid in real space after applying grid_transform and grid_offset.",
@@ -149,31 +149,26 @@ class QFieldObject(ClassBase):
         "objs": "Read-only: Physical objects. Alias of `_entity_objects`.",
     }
 
-    # __slots__ = tuple(
-    #     k
-    #     for k, v in __attrs__.items()
-    #     if not v.startswith("Property:") and k not in ClassBase.__slots__
-    # ) #!!!
-
     @logging_and_warning_decorator()
     def __init__(
         self,
         is_detect_defects: bool = True,
         is_classify_lines: bool = True,
-        inputValue=InputQ(),
+        inputValue: InputQ | None = None,
         name: str = "Q",
         logger=None,
         **kwargs,
     ) -> None:
 
         super().__init__(name=name, name_replace="Q")
-        # self.name = name  #!!!!!!!
+        if inputValue is None:
+            inputValue = InputQ()
 
         inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
         for f in fields(inputValue):
             k = f.name
             v = getattr(inputValue, k)
-            if k.startswith("const"):
+            if k.startswith("default"):
                 object.__setattr__(self, k, v)
             else:
                 object.__setattr__(self, f"_raw_{k}", v)
@@ -216,7 +211,6 @@ class QFieldObject(ClassBase):
             else:
                 raise NameError("No data is input to initialize Q field.")
 
-        logger.detail("Recording the information of periodic boundary conditions.")
         object.__setattr__(self, "_calc_box_size_periodic_index", np.zeros(3))
         for i, flag in enumerate(self._raw_box_periodic_flag):
             if flag:
@@ -232,11 +226,6 @@ class QFieldObject(ClassBase):
         self._calc_box_size_periodic_coord[finite_mask] = (
             diag[finite_mask] * self._calc_box_size_periodic_index[finite_mask]
         )
-        msg = f"Effective periodic box size in lattice-index units is {self._calc_box_size_periodic_index}.\n"
-        msg += f"Effective periodic box size in real-space coordinates is {self._calc_box_size_periodic_coord}."
-        logger.detail(msg)
-
-        logger.detail("Generating grid of Q")
         grid_shape = np.shape(self._raw_Q)[:3]
         object.__setattr__(
             self,
@@ -316,7 +305,6 @@ class QFieldObject(ClassBase):
         )
         logger.info(f"{len(self._calc_defect_indices)} defects are found.")
 
-        logger.detail("Start to calculate the coordinates of defects in real space.")
         object.__setattr__(
             self, 
             "_calc_defect_grid",
@@ -336,7 +324,6 @@ class QFieldObject(ClassBase):
             grid_offset=self._raw_grid_offset,
             grid_transform=self._raw_grid_transform,
         )
-        logger.detail("Sorting lines by length")
         lines = sorted(lines, key=lambda line: line._calc_defect_num, reverse=True)
         for i, line in enumerate(lines):
             line.name = f"disclination line {i}"
@@ -354,17 +341,15 @@ class QFieldObject(ClassBase):
         **kwargs,
     ):
 
-        logger.detail("Start to smoothen disclination lines.")
-
         if opts is None:
             opts = OptsSmooth()
 
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
 
         if opts.min_line_length is UNSET:
-            opts.min_line_length = self.const_miminum_line_length_smooth
+            opts.min_line_length = self.default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self.const_miminum_line_length_smooth={self.const_smooth_window_length}."
+            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_smooth_window_length}."
             logger.info(msg)
 
         opts.act_finalize()
@@ -376,9 +361,9 @@ class QFieldObject(ClassBase):
             opts.window_ratio = None
 
         if opts.window_length is None and opts.window_ratio is None:
-            opts.window_length = self.const_smooth_window_length
+            opts.window_length = self.default_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += f"Using the default value self.const_smooth_window_length={self.const_smooth_window_length}."
+            msg += f"Using the default value self.default_smooth_window_length={self.default_smooth_window_length}."
             logger.info(msg)
 
         msg = f"Start to smooth disclination lines in Q tensor {self.name!r} With paramaters: \n"
@@ -433,7 +418,7 @@ class QFieldObject(ClassBase):
 
     def act_interpolate(self, points: np.ndarray, is_index=False):
         if not hasattr(self, "_interpolator"):
-            self.act_act_add_interpolator()
+            self.act_add_interpolator()
         return self._calc_interpolator.interpolate(points, is_index=is_index)
 
     @logging_and_warning_decorator()
@@ -480,7 +465,7 @@ class QFieldObject(ClassBase):
                         "or None (creating a new figure) "
                         "Got type {type(figure)!r} instead."
                     )
-            except:
+            except Exception:
                 logger.exception("Could not find figure in FigureManager.")
                 logger.recovery("Create a new figure instead.")
                 figure = PlotFigure(opts=opts_figure, name=title)
@@ -511,8 +496,6 @@ class QFieldObject(ClassBase):
 
         #!!! lines_scalars_name
 
-        logger.detail("Dealing with the parameters")
-
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
@@ -537,9 +520,9 @@ class QFieldObject(ClassBase):
         if min_line_length is None:
             logger.info(
                 "No minimum line length has been provided for the plotted lines. "
-                f"Use the default value {self.const_miminum_line_length_visual}"
+                f"Use the default value {self.default_miminum_line_length_visual}"
             )
-            min_line_length = self.const_miminum_line_length_visual
+            min_line_length = self.default_miminum_line_length_visual
 
         logger.debug(f"min_line_length = {min_line_length}")
 
@@ -547,7 +530,6 @@ class QFieldObject(ClassBase):
             line for line in self.lines if line._calc_defect_num > min_line_length
         ]
 
-        # logger.detail("Searching the attributes of ")
         # if lines_scalars_name is not None:
         #     logger.info("Scalars of lines are input")
         #     try:
@@ -562,9 +544,6 @@ class QFieldObject(ClassBase):
         lines_scalars = [UNSET for line in lines_plot]
 
         if opts_tube.color == "sample_far":
-            logger.detail(
-                "Apply a variety of colors to ensure disclination lines are easily identifiable."
-            )
             from ..general import blue_red_in_white_bg, sample_far
 
             color_map = blue_red_in_white_bg()
@@ -617,7 +596,6 @@ class QFieldObject(ClassBase):
         **kwargs,
     ):
 
-        logger.detail("Dealing with the parameters")
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
@@ -663,7 +641,6 @@ class QFieldObject(ClassBase):
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
 
-        logger.detail("Create the plane.")
         n_plane = QPlane(
             self._calc_interpolator,
             name=name_plane,
@@ -710,7 +687,6 @@ class QFieldObject(ClassBase):
         **kwargs,
     ):
 
-        logger.detail("Dealing with the parameters")
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
@@ -741,7 +717,6 @@ class QFieldObject(ClassBase):
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
 
-        logger.detail("Create the plane.")
         S_plane = QPlane(
             self._calc_interpolator,
             name=name_plane,
@@ -891,12 +866,4 @@ class QFieldObject(ClassBase):
     def __call__(self) -> np.ndarray:
         return self._raw_Q
 
-    @property
-    def name(self):
-        return self.raw_name
-
-    @name.setter
-    def name(self, value: str):
-        name = as_str(value, name="The name of the Q field")
-        self.raw_name = name
 

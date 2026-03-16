@@ -189,20 +189,17 @@ class PlotnPlane:
             # num_n = np.shape(grid_all)[0]
             grid_all_flatten = np.reshape(grid_all, (-1, 3))
             
-            logger.detail("Interpolating ...")
             Q_all = QInterpolator.interpolate(grid_all_flatten)
             _, n_all = Q_diagonalize(Q_all)
             n_all = np.reshape(n_all, (*shape_all, 1, 3))
             # n_all = np.reshape(n_all, (num_n, 1, 3))
             
-            logger.detail("Detecting the defects and surrounding directors ...")
             defect_plane_index = defect_detect(n_all, planes=(False, False, True))
             defect_vicinity_index = defect_vicinity_grid(
                 defect_plane_index, num_shell=1
             )
             defect_vicinity_index = defect_vicinity_index.reshape((-1, 3))[:, :-1]
             
-            logger.detail("Spliting the directors by whether they surround defects ...")
             bulk_index, defect_vicinity_index = split_points(
                 self._entities_plane._entities_grid_int, defect_vicinity_index
             )
@@ -221,7 +218,6 @@ class PlotnPlane:
                 
             )
             
-            logger.detail("Erasing the directors out of the box.")
             defect_vicinity = select_grid_in_box(defect_vicinity, corners_limit)
             bulk = select_grid_in_box(bulk, corners_limit)
 

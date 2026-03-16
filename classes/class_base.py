@@ -282,7 +282,11 @@ class ClassBase:
         for attr_name in type(self).__attrs__.keys():
             if attr_name in protected:
                 continue
-            if attr_name.startswith("raw_") or attr_name.startswith("state_"):
+            if (
+                attr_name.startswith("raw_")
+                or attr_name.startswith("state_")
+                or attr_name.startswith("default_")
+            ):
                 attrs_fields.append(attr_name)
 
         for attr_name in self._impl_extra_attrs_docs.keys():
@@ -447,7 +451,9 @@ class ClassBase:
             return
 
         if target_key.startswith("_") or (
-            not target_key.startswith("raw_") and not target_key.startswith("state_")
+            not target_key.startswith("raw_")
+            and not target_key.startswith("state_")
+            and not target_key.startswith("default_")
         ):
             cls_name = self.__class__.__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")

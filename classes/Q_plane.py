@@ -36,7 +36,7 @@ class QPlane(InterpolatePlane):
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
-        "const_visual_opts": "The default opts_defaults_override for different visualization."
+        "default_visual_opts": "The default opts_defaults_override for different visualization."
     }
     __slots__ = tuple(
             k for k in __attrs__.keys()
@@ -60,11 +60,11 @@ class QPlane(InterpolatePlane):
         **kwargs,
     ):
         
-        const_visual_opts = deepcopy(self._origin_default_visual_opts)
+        default_visual_opts = deepcopy(self._origin_default_visual_opts)
         visual_default = {} if visual_default is None else dict(visual_default)
-        for key, value in const_visual_opts.items():
-            const_visual_opts[key] = value | visual_default
-        object.__setattr__(self, "const_visual_opts", const_visual_opts)
+        for key, value in default_visual_opts.items():
+            default_visual_opts[key] = value | visual_default
+        object.__setattr__(self, "default_visual_opts", default_visual_opts)
         object.__setattr__(self, '_entity_visual_nb', None)
         object.__setattr__(self, '_entity_visual_nd', None)
         object.__setattr__(self, '_entity_visual_defect', None)
@@ -266,7 +266,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                opts_defaults_override=self.const_visual_opts["nb"]
+                opts_defaults_override=self.default_visual_opts["nb"]
             )
             
         else:
@@ -278,7 +278,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                opts_defaults_override=self.const_visual_opts["nb"],
+                opts_defaults_override=self.default_visual_opts["nb"],
                 is_visible=False
             )
             
@@ -295,7 +295,7 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                opts_defaults_override=self.const_visual_opts["nd"]
+                opts_defaults_override=self.default_visual_opts["nd"]
             )
             
             visual_defect = PlotSphere(
@@ -316,7 +316,7 @@ class QPlane(InterpolatePlane):
                 opts=opts_nd,
                 figure=figure,
                 is_visible=False,
-                opts_defaults_override=self.const_visual_opts["nd"]
+                opts_defaults_override=self.default_visual_opts["nd"]
             )
             
             visual_defect = PlotSphere(
@@ -379,7 +379,7 @@ class QPlane(InterpolatePlane):
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
             opts=opts_S,
-            opts_defaults_override=self.const_visual_opts["S"]
+            opts_defaults_override=self.default_visual_opts["S"]
             )
         
         visual_S.act_bind_relation_base("owner", self, is_weak=True)
