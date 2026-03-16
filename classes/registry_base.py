@@ -1,26 +1,29 @@
 import weakref
 
-from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.logging_decorator import (
+    log_caught_exception,
+    logging_and_warning_decorator,
+)
 from Nematics3D.datatypes import as_str
 
 
 class RegistryBase:
 
     # fmt: off
-    __descriptions__ = {
+    __attrs__ = {
         "raw_name":         "The name of the Registry.",
         "raw_info":        "The extra introduction for this instance for clarity",
         "_entity":          "The container storing the objects.",
-
-        "_impl_owner_ref":  (
-            "A weak reference to the owner object associated with this instance. "
+    }
+    __relations__ = {
+        "owner": (
+            "The owner object associated with this registry. "
             "To access it, use .owner or ._impl_owner."
         ),
     }
     # fmt: on
-
+    
     def __init__(self, name, info=None):
-
         name = as_str(name, name="The name of the Registry")
         object.__setattr__(self, "raw_name", name)
         object.__setattr__(self, "_impl_owner_ref", None)
@@ -36,6 +39,36 @@ class RegistryBase:
             )
         )
         object.__setattr__(self, "raw_info", info)
+
+    def act_bind_relation_base(
+        self,
+        name: str,
+        target,
+        *,
+        is_weak: bool = True,
+        is_replace: bool = True,
+    ):
+        name = as_str(name, name="Relation name for RegistryBase")
+        if name != "owner":
+            raise AttributeError(
+                f"RegistryBase only supports relation {name!r} through its lightweight relation interface."
+            )
+
+        current_owner = self.owner
+        if current_owner is not None and current_owner is not target and (not is_replace):
+            raise RuntimeError(f"Relation {name!r} of RegistryBase is already bound.")
+
+        object.__setattr__(
+            self,
+            "_impl_owner_ref",
+            weakref.ref(target) if (is_weak and target is not None) else target,
+        )
+        return target
+
+    def act_unbind_relation_base(self, name: str):
+        name = as_str(name, name="Relation name for RegistryBase")
+        if name == "owner":
+            object.__setattr__(self, "_impl_owner_ref", None)
 
     def _helper_show_name_info(self) -> str:
         info = getattr(self, "raw_info", None)
@@ -63,27 +96,22 @@ class RegistryBase:
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_register(self, term, is_contain_ok=False, logger=None):
-
-        logger.detail(
-            f"Register term into {self._helper_show_name_info()}: term={term!r}"
-        )
-
         if term in self._entity:
             if not is_contain_ok:
-                try:
-                    raise ValueError(
+                log_caught_exception(
+                    logger,
+                    ValueError(
                         f"term {term!r} is already registered in {self._helper_show_name_info()}"
-                    )
-                except ValueError:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignore this process.")
+                    ),
+                    exception_msg="Check input.",
+                    recovery_msg="Ignore this process.",
+                )
             return
 
         if not hasattr(term, "name"):
             raise TypeError("term must have attribute `name`.")
 
-        old_ref = getattr(term, "_impl_registry_ref", None)
-        old_registry = old_ref() if callable(old_ref) else None
+        old_registry = getattr(term, "registry", None)
         if old_registry is not None and old_registry is not self:
             logger.warning(
                 f"{term!r} already has a registry {old_registry!r}. Move it to {self._helper_show_name_info()}."
@@ -91,41 +119,51 @@ class RegistryBase:
             old_registry.act_unregister(term, is_missing_ok=True)
 
         name = self._helper_check_name(term.name)
-        term.name = name
+        set_name = getattr(term, "act_set_name", None)
+        if callable(set_name):
+            set_name(name)
+        else:
+            term.name = name
         self._entity.append(term)
 
-        try:
-            object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
-        except Exception as e:
-            logger.warning(
-                f"Failed to assign '_impl_registry_ref' for {term!r}: {e}. "
-                "This registration is one-way only."
-            )
+        bind_relation = getattr(term, "act_bind_relation_base", None)
+        if callable(bind_relation):
+            bind_relation("registry", self, is_weak=True)
+        else:
+            try:
+                object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
+            except Exception as e:
+                logger.warning(
+                    f"Failed to assign registry relation for {term!r}: {e}. "
+                    "This registration is one-way only."
+                )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unregister(self, term, is_missing_ok=False, logger=None):
-
-        logger.detail(
-            f"Unregister term from {self._helper_show_name_info()}: term={term!r}"
-        )
-
         if term not in self._entity:
             if not is_missing_ok:
-                try:
-                    raise KeyError(
+                log_caught_exception(
+                    logger,
+                    KeyError(
                         f"term {term!r} is not registered in {self._helper_show_name_info()}"
-                    )
-                except KeyError:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignore this process.")
+                    ),
+                    exception_msg="Check input.",
+                    recovery_msg="Ignore this process.",
+                )
             return
 
         self._entity.remove(term)
 
-        ref = getattr(term, "_impl_registry_ref", None)
-        registry = ref() if callable(ref) else None
+        registry = getattr(term, "registry", None)
         if registry is self:
-            object.__setattr__(term, "_impl_registry_ref", None)
+            unbind_relation = getattr(term, "act_unbind_relation_base", None)
+            if callable(unbind_relation):
+                unbind_relation("registry")
+            else:
+                ref = getattr(term, "_impl_registry_ref", None)
+                registry_ref = ref() if callable(ref) else None
+                if registry_ref is self:
+                    object.__setattr__(term, "_impl_registry_ref", None)
 
     @property
     def name(self):
@@ -139,9 +177,11 @@ class RegistryBase:
     @property
     def owner(self):
         ref = self._impl_owner_ref
-        return ref() if ref is not None else None
+        return ref() if callable(ref) else ref
 
-    _impl_owner = owner
+    @property
+    def _impl_owner(self):
+        return self.owner
 
     def __call__(self):
         return tuple(self._entity)

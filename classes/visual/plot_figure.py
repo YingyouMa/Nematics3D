@@ -6,9 +6,10 @@ from pyvistaqt import BackgroundPlotter
 from types import MappingProxyType
 from typing import Mapping, Any
 from PyQt5 import QtCore
-import weakref
-
-from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.logging_decorator import (
+    log_caught_exception,
+    logging_and_warning_decorator,
+)
 from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
@@ -40,8 +41,8 @@ class OptsFigure(OptsBase):
     bg_color: ColorRGB | Unset = UNSET
 
     # fmt: off
-    __descriptions__ = {
-        **(OptsBase.__descriptions__),
+    __attrs__ = {
+        **(OptsBase.__attrs__),
         "azimuth":          "The azimuthal angle (degrees) of the camera around the focal point.",
         "elevation":        "The elevation angle (degrees) of the camera relative to the focal plane.",
         "roll":             "The rotation (degrees) of the camera about the direction of projection.",
@@ -71,14 +72,14 @@ class OptsFigure(OptsBase):
         }
     )
     # fmt: on
-
+    
 
 class PlotFigure(HostBase, RegistryBase):
 
     _DEFAULT_NAME = "unamed figure"
 
-    __descriptions__ = {
-        **(HostBase.__descriptions__),
+    __attrs__ = {
+        **(HostBase.__attrs__),
     
         # -----------------
         # Public identity
@@ -124,30 +125,26 @@ class PlotFigure(HostBase, RegistryBase):
             "and are not occluded by 3D geometry."
         ),
     
-        # -----------------
-        # Properties (excluded from __slots__)
-        # NOTE: the description string MUST start with 'Property:'
-        # -----------------
-        "name": "Property: Alias of `raw_name`",
-        "pl": "Property: Alias of `_entity_plotter`",
+    }
+    __properties__ = {
+        **(HostBase.__properties__),
+        "pl": "Read-only: Alias of `_entity_plotter`.",
         "pl_type": (
-            "Property: Short identifier of the plotter type. "
+            "Read-only: Short identifier of the plotter type. "
             "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
         ),
         "pick_manager": (
-            "Property: Alias of `_entity_pick_manager` "
+            "Read-only: Alias of `_entity_pick_manager` "
             "(or None if not initialized)."
         ),
         "console": (
-            "Property: Alias of `_entity_console` "
+            "Read-only: Alias of `_entity_console` "
             "(or None if not initialized)."
         ),
     }
 
     __slots__ = tuple(
-        k
-        for k, v in __descriptions__.items()
-        if not v.startswith("Property:") and k not in HostBase.__slots__
+        k for k in __attrs__.keys() if k not in HostBase.__slots__
     )
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -162,21 +159,21 @@ class PlotFigure(HostBase, RegistryBase):
         **kwargs,
     ):
 
-        logger.detail("Resovle the input plotter")
         is_new_plotter = False
         if plotter is None:
             is_new_plotter = True
         else:
             if not isinstance(plotter, (BackgroundPlotter, pv.Plotter)):
-                try:
-                    raise TypeError(
+                log_caught_exception(
+                    logger,
+                    TypeError(
                         "`plotter` for PlotFigure must be either"
                         "pyvistaqt BackgroundPlotter object or PyVista Plotter object, or None."
-                    )
-                except:
-                    logger.exception("Check input")
-                    logger.recovery("Create a new figure instead.")
-                    is_new_plotter = True
+                    ),
+                    exception_msg="Check input",
+                    recovery_msg="Create a new figure instead.",
+                )
+                is_new_plotter = True
             else:
                 if is_off_screen and not plotter.off_screen:
                     logger.warning(
@@ -194,6 +191,9 @@ class PlotFigure(HostBase, RegistryBase):
 
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
+        
+        if name is None:
+            name = self._DEFAULT_NAME
 
         super().__init__(
             OptsFigure,
@@ -212,7 +212,7 @@ class PlotFigure(HostBase, RegistryBase):
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
         scalar_bars = RegistryBase("scalar bars manager")
-        scalar_bars._impl_owner_ref = weakref.ref(self)
+        scalar_bars.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
 
         # --- Create overlay renderer (layer=1) at initialization ---
@@ -261,9 +261,12 @@ class PlotFigure(HostBase, RegistryBase):
         return getattr(self, "_entity_console", None)
 
     def act_set_name(self, name):
+        if name is None:
+            name = self._DEFAULT_NAME
         name = super().act_set_name(name)
         if name and self.pl_type == "B":
             self.pl.app_window.setWindowTitle(name)
+        return name
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
@@ -516,13 +519,16 @@ class PlotFigure(HostBase, RegistryBase):
 def as_PlotFigure(figure, opts_figure, logger=None):
 
     if not isinstance(opts_figure, OptsFigure):
-        try:
-            raise TypeError("The variable `opts_figure` must be instance of OptsFigure."
-                            f"Got {type(opts_figure).__name__!r} instead.")
-        except TypeError:
-            logger.exception("Check input.")
-            logger.recovery("Ignore this options in the following.")
-            opts_figure = None
+        log_caught_exception(
+            logger,
+            TypeError(
+                "The variable `opts_figure` must be instance of OptsFigure."
+                f"Got {type(opts_figure).__name__!r} instead."
+            ),
+            exception_msg="Check input.",
+            recovery_msg="Ignore this options in the following.",
+        )
+        opts_figure = None
 
     try:
         if figure is None:

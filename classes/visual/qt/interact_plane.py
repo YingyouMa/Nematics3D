@@ -19,10 +19,10 @@ class InteractPlane(PanelBase):
         self.field = field
         object.__setattr__(self.field, "_state_is_interactable", False)
 
-        origin = np.asarray(field.plane.opts.origin, dtype=float).reshape(1, 3)
-        normal = np.asarray(field.plane.opts.normal, dtype=float).reshape(1, 3)
-        spacing = float(field.plane.opts.spacing)
-        size = float(field.plane.opts.size)
+        origin = np.asarray(field.grid.opts.origin, dtype=float).reshape(1, 3)
+        normal = np.asarray(field.grid.opts.normal, dtype=float).reshape(1, 3)
+        spacing = float(field.grid.opts.spacing)
+        size = float(field.grid.opts.size)
 
         self.visual_normal = PlotRod(
             coords=origin,
@@ -31,7 +31,7 @@ class InteractPlane(PanelBase):
             color=(1, 0, 0),
             length=size,
             figure=figure,
-            name=f"The normal of {field.plane.name!r}",
+            name=f"The normal of {field.grid.name!r}",
             category="Interaction",
             is_reset_camera=False,
             is_visible=False,
@@ -42,7 +42,7 @@ class InteractPlane(PanelBase):
             color=(1, 0, 0),
             radius=spacing,
             figure=figure,
-            name=f"The origin of {field.plane.name!r}",
+            name=f"The origin of {field.grid.name!r}",
             category="Interaction",
             is_reset_camera=False,
             is_visible=False,
@@ -51,7 +51,7 @@ class InteractPlane(PanelBase):
         object.__setattr__(self.visual_normal, "_state_is_interactable", False)
         object.__setattr__(self.visual_origin, "_state_is_interactable", False)
         object.__setattr__(self, "_is_continuous_interacting", False)
-        super().__init__(field.plane, figure, title=f"Controls of {field.plane.name!r}")
+        super().__init__(field.grid, figure, title=f"Controls of {field.grid.name!r}")
 
     def _iter_silhouette_targets(self):
         targets = []

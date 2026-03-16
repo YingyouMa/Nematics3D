@@ -8,7 +8,7 @@ import numpy as np
 import datetime
 
 
-from ..logging_decorator import logging_and_warning_decorator
+from ..logging_decorator import log_caught_exception, logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
 from .opts import merge_opts_all, build_dict_override, diff_dict_values
@@ -46,7 +46,7 @@ class OptsBase:
     )
     _state_is_functioning: bool = field(default=False, init=False, repr=False)
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
+    __attrs__: ClassVar[Mapping[str, str]] = {
         "tag": "name identifier of the option settings",
     }
 
@@ -55,7 +55,7 @@ class OptsBase:
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({"tag": "options"})
-
+    
     @property
     def host(self):
         ref = self._impl_host_ref
@@ -70,29 +70,30 @@ class OptsBase:
         is_functioning = bool(getattr(self, "_state_is_functioning", False))
         is_has_host = getattr(self, "host", None) is not None
 
-        if not key.startswith("_") and key not in self.__class__.__descriptions__:
+        if not key.startswith("_") and key not in self.__class__.__attrs__:
             raise AttributeError(
                 f"Invalid option field {key!r}. "
-                f"Valid fields are: {list(self.__class__.__descriptions__.keys())}"
+                f"Valid fields are: {list(self.__class__.__attrs__.keys())}"
             )
 
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
             if is_functioning:
-                try:
-                    raise TypeError(
+                log_caught_exception(
+                    logger,
+                    TypeError(
                         "Attribute could not be set as UNSET after first functioning!"
-                    )
-                except TypeError:
-                    logger.exception("Check input.")
-                    logger.recovery("Ignore this modification")
+                    ),
+                    exception_msg="Check input.",
+                    recovery_msg="Ignore this modification",
+                )
                 return value
             object.__setattr__(self, key, value)
             return value
 
         # --- validate if needed ---
         if key in self.__class__._validators:
-            desc = f"{key!r}: {self.__class__.__descriptions__[key]}"
+            desc = f"{key!r}: {self.__class__.__attrs__[key]}"
             try:
                 value2 = self.__class__._validators[key](value, desc)
                 value = value2
@@ -115,7 +116,7 @@ class OptsBase:
             not key.startswith("_")
             and is_functioning
             and is_has_host
-            and key in self.__class__.__descriptions__
+            and key in self.__class__.__attrs__
         ):
             self._helper_host_apply(key, value)
             return value
@@ -142,17 +143,14 @@ class OptsBase:
         if getattr(self, "_state_is_functioning", False):
             raise RuntimeError("This Opts has already been finalized.")
 
-        logger.detail("finalize: fill UNSET fields with defaults")
-
         defaults_dict = {} if defaults is None else dict(defaults)
 
-        for k in self.__descriptions__.keys():
+        for k in self.__attrs__.keys():
             if getattr(self, k) is UNSET:
                 v = defaults_dict.get(k, self.__class__._DEFAULTS_FROZEN.get(k, UNSET))
                 if v is UNSET and not is_allow_UNSET:
                     raise KeyError(f"Missing default for field {k!r}.")
                 setattr(self, k, v)
-                logger.detail(f"finalize: set default {k!r}={v!r}")
 
         object.__setattr__(self, "_state_is_functioning", True)
 
@@ -161,7 +159,7 @@ class OptsBase:
     # ---------------------------------------------------------------------
     def _helper_asdict_basic(self, *, is_include_UNSET: bool = False) -> dict[str, Any]:
         result: dict[str, Any] = {}
-        for k in self.__class__.__descriptions__.keys():
+        for k in self.__class__.__attrs__.keys():
             v = getattr(self, k)
             if (not is_include_UNSET) and (v is UNSET):
                 continue
@@ -200,7 +198,7 @@ class OptsBase:
             lines = [f"{cls_name}"]
 
         # --- collect fields ---
-        keys = list(cls.__descriptions__.keys())
+        keys = list(cls.__attrs__.keys())
         if not keys:
             return "\n".join(lines)
 
@@ -268,7 +266,7 @@ class HostBase(ClassBase):
         (``_opts_backup``) to archive configuration history.
 
     ### 3. Variables & Metadata
-    Refer to the ``__descriptions__`` dictionary for granular details on
+    Refer to the ``__attrs__`` dictionary for granular details on
     internal implementation slots and public properties.
     Key internal stores include:
     * ``opts``: The primary configuration engine.
@@ -296,8 +294,8 @@ class HostBase(ClassBase):
     * Other inheritance guidelines of ClassBase class.
     """
 
-    __descriptions__ = {
-        **(ClassBase.__descriptions__),
+    __attrs__ = {
+        **(ClassBase.__attrs__),
         "raw_name": "The name identifier of the host object",
         "_opts": "The Opts instance controlling options.",
         "_opts_defaults": "The default option settings.",
@@ -317,11 +315,6 @@ class HostBase(ClassBase):
             "Additional protected attributes declared directly by this host. "
             "These attrs cannot be modified through act_commit() by external callers."
         ),
-        "attrs_forbidden": (
-            "Property: Union of wrapped-protected attrs and host-declared protected attrs."
-        ),
-        "_impl_wrapper_ref": "A weak reference to the wrapper object that controls this host. ",
-        "_entity_wrapped": "The host object being wrapped and controlled by this wrapper.",
         "_impl_enrich_kwargs_wrapped_func": (
             "A dictionary of callback functions to enrich kwargs before forwarding to wrapped host. "
             "Key: unique identifier (str); Value: callable task(host, kwargs, kwargs_sync)."
@@ -331,11 +324,26 @@ class HostBase(ClassBase):
             "Key: unique identifier (str); Value: callable task(host, kwargs_sync)."
         ),
     }
+    __relations__ = {
+        **(ClassBase.__relations__),
+        "wrapper": (
+            "The wrapper host that controls this host. "
+            "An instance can be wrapped by at most one wrapper at a time."
+        ),
+        "wrapped": (
+            "The wrapped host controlled by this host as a wrapper. "
+            "An instance can wrap at most one wrapped host at a time."
+        ),
+    }
+    __properties__ = {
+        **(ClassBase.__properties__),
+        "attrs_forbidden": (
+            "Read-only: Union of wrapped-protected attrs and host-declared protected attrs."
+        ),
+    }
 
     __slots__ = tuple(
-        k
-        for k, v in __descriptions__.items()
-        if not v.startswith("Property:") and k not in ClassBase.__slots__
+        k for k in __attrs__.keys() if k not in ClassBase.__slots__
     )
 
     _impl_validators = {}
@@ -346,7 +354,7 @@ class HostBase(ClassBase):
     _impl_attrs_reapply_opts_after_raw = set()
     # Public attribute names (without "raw_") that should force an opts re-apply
     # after raw/public assignment in a commit even if no explicit opts update is provided.
-
+    
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -361,14 +369,13 @@ class HostBase(ClassBase):
 
         super().__init__(name=name, name_replace=name_replace)
 
-        logger.detail("Handling explicit kwargs overrides ...")
         kwargs_host = {}
         for key in list(kwargs.keys()):
-            if key in self.__descriptions__ and (
+            if key in self.__attrs__ and (
                 key.startswith("raw_") or key.startswith("state_")
             ):
                 kwargs_host[key] = kwargs.pop(key)
-            elif ("raw_" + key) in self.__descriptions__:
+            elif ("raw_" + key) in self.__attrs__:
                 kwargs_host[key] = kwargs.pop(key)
 
         opts = self._helper_check_opts(opts, opts_type=opts_type)
@@ -376,9 +383,8 @@ class HostBase(ClassBase):
         object.__setattr__(opts, "_impl_host_ref", weakref.ref(self))
         object.__setattr__(self, "_opts", opts)
 
-        logger.detail("Building default option values ...")
         opts_defaults = {
-            **{k: UNSET for k in opts.__descriptions__},
+            **{k: UNSET for k in opts.__attrs__},
             **dict(opts._DEFAULTS_FROZEN),
         }
         opts_defaults = build_dict_override(
@@ -393,8 +399,6 @@ class HostBase(ClassBase):
         object.__setattr__(self, "_impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "_impl_enrich_kwargs_sync_func", {})
         object.__setattr__(self, "_impl_attrs_wrapped", set())
-        object.__setattr__(self, "_impl_wrapper_ref", None)
-        object.__setattr__(self, "_entity_wrapped", None)
 
         if kwargs_host:
             self._helper_commit_raw(kwargs_host)
@@ -412,17 +416,16 @@ class HostBase(ClassBase):
         if opts is None:
             opts = opts_type()
         elif not isinstance(opts, opts_type):
-            try:
-                raise TypeError(
+            log_caught_exception(
+                logger,
+                TypeError(
                     f"opts must be an instance of {opts_type.__name__}, "
                     f"got {type(opts).__name__}"
-                )
-            except TypeError:
-                logger.exception("Check input.")
-                logger.recovery(
-                    f"Create a default instance of {opts_type.__name__} instead."
-                )
-                opts = opts_type()
+                ),
+                exception_msg="Check input.",
+                recovery_msg=f"Create a default instance of {opts_type.__name__} instead.",
+            )
+            opts = opts_type()
 
         return opts
 
@@ -475,7 +478,7 @@ class HostBase(ClassBase):
         kwargs_sync, is_reapply_opts_from_raw = self._helper_commit_pre_opts(kwargs)
         is_reapply_opts = is_reapply_opts or is_reapply_opts_from_raw
 
-        opts_keys = self.opts.__class__.__descriptions__
+        opts_keys = self.opts.__class__.__attrs__
         is_opts_request = (opts is not None) or any(k in opts_keys for k in kwargs)
         if is_reapply_opts or is_opts_request:
             kwargs, kwargs_applied_opts = self._helper_commit_self(
@@ -542,13 +545,14 @@ class HostBase(ClassBase):
         blocked = [k for k in kwargs.keys() if k in self.attrs_forbidden]
         for key in blocked:
             kwargs.pop(key)
-            try:
-                raise AttributeError(
+            log_caught_exception(
+                logger,
+                AttributeError(
                     f"{key!r} is protected and could not be directly modified"
-                )
-            except AttributeError:
-                logger.exception("Invalid attr")
-                logger.recovery("Automatically ignore this attr")
+                ),
+                exception_msg="Invalid attr",
+                recovery_msg="Automatically ignore this attr",
+            )
 
     def _helper_commit_name(self, kwargs):
         if not kwargs:
@@ -567,8 +571,8 @@ class HostBase(ClassBase):
         is_reapply_opts = False
         for key in list(kwargs.keys()):
             is_host_attr = (
-                (key in self.__descriptions__ and (key.startswith("raw_") or key.startswith("state_")))
-                or (("raw_" + key) in self.__descriptions__)
+                (key in self.__attrs__ and (key.startswith("raw_") or key.startswith("state_")))
+                or (("raw_" + key) in self.__attrs__)
             )
             if is_host_attr:
                 kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(
@@ -629,7 +633,7 @@ class HostBase(ClassBase):
         if validator is not None:
             try:
                 value_valid = validator(
-                    attr_value, self.__descriptions__[host_attr_name]
+                    attr_value, self.__attrs__[host_attr_name]
                 )
                 object.__setattr__(self, host_attr_name, value_valid)
                 return {attr_name_return: value_valid}, (
@@ -651,7 +655,7 @@ class HostBase(ClassBase):
     # -----------------------
     def _helper_commit_self(self, opts=None, is_reapply_opts=False, **kwargs):
         if kwargs or opts or is_reapply_opts:
-            self_keys = self.opts.__class__.__descriptions__
+            self_keys = self.opts.__class__.__attrs__
             kwargs_self = {
                 k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_keys
             }
@@ -762,23 +766,29 @@ class HostBase(ClassBase):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
 
     def act_show_attr_desc(self, attr_name: str) -> str:
-        descriptions_host = self.__class__.__descriptions__
+        descriptions_host = self.__class__.__attrs__
         if attr_name in descriptions_host:
             return f"{attr_name!r}: {descriptions_host[attr_name]}"
+        properties_host = self.__class__.__properties__
+        if attr_name in properties_host:
+            return f"{attr_name!r}: {properties_host[attr_name]}"
 
         opts = getattr(self, "_opts", None)
         if opts is not None:
-            descriptions_opts = opts.__class__.__descriptions__
+            descriptions_opts = opts.__class__.__attrs__
             if attr_name in descriptions_opts:
                 return f"{attr_name!r}: {descriptions_opts[attr_name]}"
+            properties_opts = getattr(opts.__class__, "__properties__", {})
+            if attr_name in properties_opts:
+                return f"{attr_name!r}: {properties_opts[attr_name]}"
             raise KeyError(
-                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__descriptions__ "
-                f"or {type(opts).__name__}.__descriptions__."
+                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ "
+                f"or {type(opts).__name__}.__attrs__ / __properties__."
             )
 
         raise KeyError(
-            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__descriptions__. "
-            "The opts descriptions are not available yet because self._opts has not been initialized; "
+            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__. "
+            "The opts attrs are not available yet because self._opts has not been initialized; "
             "the attribute may belong to opts."
         )
     @logging_and_warning_decorator()
@@ -788,12 +798,22 @@ class HostBase(ClassBase):
         ]
 
         attrs_raw = sorted(
-            k for k in self.__class__.__descriptions__.keys() if k.startswith("raw_")
+            k for k in self.__class__.__attrs__.keys() if k.startswith("raw_")
         )
         attrs_state = sorted(
-            k for k in self.__class__.__descriptions__.keys() if k.startswith("state_")
+            k for k in self.__class__.__attrs__.keys() if k.startswith("state_")
         )
-        attrs_opts = sorted(self.opts.__class__.__descriptions__.keys())
+        attrs_opts = sorted(self.opts.__class__.__attrs__.keys())
+        attrs_properties = sorted(
+            k
+            for k in self.__class__.__properties__.keys()
+            if self.__class__._helper_is_writable_property(k)
+        )
+        attrs_opts_properties = sorted(
+            k
+            for k in getattr(self.opts.__class__, "__properties__", {}).keys()
+            if self.opts.__class__._helper_is_writable_property(k)
+        )
 
         if attrs_raw:
             lines.append("[Host raw attributes]")
@@ -810,7 +830,23 @@ class HostBase(ClassBase):
             for attr_name in attrs_opts:
                 lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
 
-        if (not attrs_raw) and (not attrs_state) and (not attrs_opts):
+        if attrs_properties:
+            lines.append("[Host writable properties]")
+            for attr_name in attrs_properties:
+                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+
+        if attrs_opts_properties:
+            lines.append("[Opts writable properties]")
+            for attr_name in attrs_opts_properties:
+                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+
+        if (
+            (not attrs_raw)
+            and (not attrs_state)
+            and (not attrs_opts)
+            and (not attrs_properties)
+            and (not attrs_opts_properties)
+        ):
             lines.append("  (None)")
 
         output = "\n".join(lines)
@@ -848,25 +884,25 @@ class HostBase(ClassBase):
             try:
                 attr = as_str(attr, name=attr_name)
                 if attr.startswith("raw_"):
-                    if attr in self.__descriptions__:
+                    if attr in self.__attrs__:
                         target_set.update([attr, attr[4:]])
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public attribute of {type(self).__name__}."
                         )
                 elif attr.startswith("state_"):
-                    if attr in self.__descriptions__:
+                    if attr in self.__attrs__:
                         target_set.add(attr)
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public state attribute of {type(self).__name__}."
                         )
                 else:
-                    if attr in self.opts.__class__.__descriptions__:
+                    if attr in self.opts.__class__.__attrs__:
                         target_set.add(attr)
                     else:
                         raw_attr = "raw_" + attr
-                        if raw_attr in self.__descriptions__:
+                        if raw_attr in self.__attrs__:
                             target_set.update([raw_attr, raw_attr[4:]])
                         else:
                             raise AttributeError(
@@ -885,6 +921,32 @@ class HostBase(ClassBase):
             target_set=self._impl_attrs_wrapped,
             attr_name="The name of attr to be wrapped",
         )
+
+    def act_unregister_wrapped_attr(
+        self, attrs: Sequence[str] | str | None = None
+    ) -> None:
+        if attrs is None:
+            self._impl_attrs_wrapped.clear()
+            return
+
+        if isinstance(attrs, str):
+            attrs = [attrs]
+        elif not isinstance(attrs, (list, tuple, set)):
+            raise TypeError(
+                "attrs must be a string or a sequence of strings, "
+                f"got {type(attrs).__name__}."
+            )
+
+        for attr in attrs:
+            attr = as_str(attr, name="The name of attr to be unwrapped")
+            if attr.startswith("raw_"):
+                self._impl_attrs_wrapped.discard(attr)
+                self._impl_attrs_wrapped.discard(attr[4:])
+            elif attr.startswith("state_"):
+                self._impl_attrs_wrapped.discard(attr)
+            else:
+                self._impl_attrs_wrapped.discard(attr)
+                self._impl_attrs_wrapped.discard("raw_" + attr)
 
     def act_register_protected_attr(
         self, attrs: Sequence[str] | str
@@ -910,16 +972,6 @@ class HostBase(ClassBase):
         finally:
             protected.update(backup)
 
-
-    @property
-    def wrapper(self):
-        ref = self._impl_wrapper_ref
-        return ref() if ref is not None else None
-
-    @property
-    def wrapped(self):
-        return self._entity_wrapped
-
     def act_bind_wrapper(
         self,
         wrapper: HostBase,
@@ -932,11 +984,24 @@ class HostBase(ClassBase):
                 f"{type(self).__name__} is already wrapped by {type(old).__name__}."
             )
 
-        object.__setattr__(wrapper, "_entity_wrapped", self)
-        object.__setattr__(self, "_impl_wrapper_ref", weakref.ref(wrapper))
+        old_wrapped = wrapper.wrapped
+        if old_wrapped is not None and (old_wrapped is not self):
+            raise RuntimeError(
+                f"{type(wrapper).__name__} already wraps {type(old_wrapped).__name__}."
+            )
+
+        self.act_bind_relation_base("wrapper", wrapper, is_weak=True)
+        wrapper.act_bind_relation_base("wrapped", self, is_weak=False)
 
         if protected_attrs:
             self.act_register_wrapped_attr(protected_attrs)
+
+    def act_unbind_wrapper(self):
+        wrapper = self.wrapper
+        if wrapper is not None and wrapper.wrapped is self:
+            wrapper.act_unbind_relation_base("wrapped")
+        self.act_unbind_relation_base("wrapper")
+        self.act_unregister_wrapped_attr()
 
     # Rewrite from ClassBase. To handle opts.
     def _helper_setattr_final(self, key, value):

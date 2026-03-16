@@ -53,6 +53,7 @@ import sys
 import contextvars
 import logging
 import traceback
+import inspect
 
 # customize log level
 RECOVERY = 35
@@ -78,6 +79,7 @@ _current_log_mode = contextvars.ContextVar("current_log_mode", default=None)
 _current_show_timestamp = contextvars.ContextVar("current_show_timestamp", default=None)
 _current_log_level = contextvars.ContextVar("current_log_level", default=None)
 _current_filename = contextvars.ContextVar("current_filename", default=None)
+_current_owner_label = contextvars.ContextVar("current_owner_label", default=None)
 
 INDENT = "    "
 
@@ -94,6 +96,93 @@ def dummy_logger(level, msg):
     pass
 
 
+def _get_method_logging_context(func, args):
+    base_display_name = func.__name__
+    owner_label = None
+
+    qualname = getattr(func, "__qualname__", base_display_name)
+    parts = qualname.split(".")
+
+    if len(parts) < 2 or not args:
+        return base_display_name, owner_label
+
+    cls_name_in_def = parts[-2]
+    first_arg = args[0]
+
+    if isinstance(first_arg, type):
+        obj_cls = first_arg
+        owner_target = first_arg
+    else:
+        obj_cls = getattr(first_arg, "__class__", None)
+        owner_target = first_arg
+
+    if obj_cls is None or obj_cls.__name__ != cls_name_in_def:
+        return base_display_name, owner_label
+
+    name_attr = getattr(owner_target, "name", None)
+    if name_attr is not None:
+        owner_label = f"{cls_name_in_def}[name={name_attr!r}]"
+    else:
+        owner_label = cls_name_in_def
+
+    return f"{owner_label}.{func.__name__}", owner_label
+
+
+def _describe_frame(frame, include_code):
+    filename = frame.f_code.co_filename
+    lineno = frame.f_lineno
+    location = f"{filename}:{lineno}"
+    if not include_code:
+        return location
+
+    try:
+        frame_info = inspect.getframeinfo(frame, context=1)
+    except OSError:
+        code_line = None
+    else:
+        code_line = frame_info.code_context[0].strip() if frame_info.code_context else None
+
+    if code_line:
+        return f"{location}\ncode: {code_line}"
+    return f"{location}\ncode: <source unavailable>"
+
+
+def _get_log_call_context():
+    frame = inspect.currentframe()
+    if frame is None:
+        return None, None
+
+    try:
+        logger_frame = frame.f_back
+        current_frame = logger_frame.f_back if logger_frame is not None else None
+        caller_frame = current_frame.f_back if current_frame is not None else None
+
+        while caller_frame is not None and caller_frame.f_code.co_filename == __file__:
+            caller_frame = caller_frame.f_back
+
+        current_text = (
+            _describe_frame(current_frame, include_code=False)
+            if current_frame is not None
+            else None
+        )
+        caller_text = (
+            _describe_frame(caller_frame, include_code=True)
+            if caller_frame is not None
+            else None
+        )
+        return current_text, caller_text
+    finally:
+        del frame
+
+
+def log_caught_exception(logger, error, *, exception_msg, recovery_msg):
+    try:
+        raise error
+    except type(error):
+        logger.exception(exception_msg)
+        logger.recovery(recovery_msg)
+
+
 class Logger:
     def __init__(self, safe_log):
         self._log = safe_log
@@ -105,10 +194,22 @@ class Logger:
         self._log(logging.INFO, msg)
 
     def warning(self, msg):
-        self._log(logging.WARNING, ">>> " + msg)
+        current_text, caller_text = _get_log_call_context()
+        parts = [">>> " + msg]
+        if current_text is not None:
+            parts.append(f"Current warning call: {current_text}")
+        if caller_text is not None:
+            parts.append(f"Caller: {caller_text}")
+        self._log(logging.WARNING, "\n".join(parts))
 
     def error(self, msg):
-        self._log(logging.ERROR, msg)
+        current_text, caller_text = _get_log_call_context()
+        parts = [msg]
+        if current_text is not None:
+            parts.append(f"Current error call: {current_text}")
+        if caller_text is not None:
+            parts.append(f"Caller: {caller_text}")
+        self._log(logging.ERROR, "\n".join(parts))
 
     def critical(self, msg):
         self._log(logging.CRITICAL, msg)
@@ -123,11 +224,18 @@ class Logger:
         self._log(PROGRESS, msg)
 
     def exception(self, msg, exc_info=None):
+        current_text, caller_text = _get_log_call_context()
         if exc_info is None:
             exc_text = traceback.format_exc()
         else:
             exc_text = "".join(traceback.format_exception(*exc_info))
-        self._log(logging.ERROR, ">>> " + msg + "\n" + exc_text)
+        parts = [">>> " + msg]
+        if current_text is not None:
+            parts.append(f"Current exception call: {current_text}")
+        if caller_text is not None:
+            parts.append(f"Caller: {caller_text}")
+        parts.append(exc_text)
+        self._log(logging.ERROR, "\n".join(parts))
 
 
 def logging_and_warning_decorator(
@@ -160,37 +268,12 @@ def _decorate(func,
     
     @functools.wraps(func)
     def inner(*args, **kwargs):
-        
-        # Base name is the plain function name
-        display_name = func.__name__
-
-        # Try to detect if this function is defined as a method of a class
-        qualname = getattr(func, "__qualname__", display_name)
-        parts = qualname.split(".")
-
-        # If qualname looks like "ClassName.method_name"
-        if len(parts) >= 2 and args:
-            cls_name_in_def = parts[-2]          # e.g. "QFieldObject"
-            first_arg = args[0]
-
-            # Handle both instance methods (first_arg is instance)
-            # and classmethods (first_arg is the class itself).
-            obj_cls = None
-            if isinstance(first_arg, type):
-                obj_cls = first_arg
-            else:
-                obj_cls = getattr(first_arg, "__class__", None)
-
-            if obj_cls is not None and obj_cls.__name__ == cls_name_in_def:
-                # We are very likely inside a method of this class.
-                name_attr = getattr(first_arg, "name", None)
-            
-                if name_attr is not None:
-                    # e.g. QFieldObject[name='testQ'].act_lines_classify
-                    display_name = f"{cls_name_in_def}[name={name_attr!r}].{func.__name__}"
-                else:
-                    # e.g. QFieldObject.act_lines_classify
-                    display_name = f"{cls_name_in_def}.{func.__name__}"
+        display_name, method_owner_label = _get_method_logging_context(func, args)
+        inherited_owner_label = _current_owner_label.get()
+        effective_owner_label = method_owner_label or inherited_owner_label
+        contextual_display_name = display_name
+        if method_owner_label is None and effective_owner_label is not None:
+            contextual_display_name = f"{effective_owner_label} -> {display_name}"
 
         effective_log_mode = kwargs.pop("log_mode", log_mode)
         effective_show_timestamp = kwargs.pop("show_timestamp", show_timestamp)
@@ -214,6 +297,7 @@ def _decorate(func,
         token_log_mode = _current_log_mode.set(effective_log_mode)
         token_show_ts = _current_show_timestamp.set(effective_show_timestamp)
         token_log_level = _current_log_level.set(effective_log_level)
+        token_owner_label = _current_owner_label.set(effective_owner_label)
 
         current_indent = _current_indent_level.get()
         token_indent = _current_indent_level.set(current_indent + 1)
@@ -296,14 +380,14 @@ def _decorate(func,
                 # 防御一下极端用法
                 safe_log(level, None)
             else:
-                safe_log(level, f"<{display_name}> \n{msg}")
+                safe_log(level, f"<{contextual_display_name}> \n{msg}")
         logger_obj = Logger(bound_safe_log)
         kwargs["logger"] = logger_obj
 
         if safe_log != dummy_logger:
             safe_log(
                 start_finish_level,
-                f"Function `{display_name}` STARTED in program `{get_program_name()}`",
+                f"Function `{contextual_display_name}` STARTED in program `{get_program_name()}`",
             )
             
         start_time = time.time()
@@ -312,14 +396,16 @@ def _decorate(func,
             result = func(*args, **kwargs)
             return result
         except Exception:
-            logger_obj.exception(f"Function `{display_name}` raised an exception")
+            logger_obj.exception(
+                f"Function `{contextual_display_name}` raised an exception"
+            )
             raise
         finally:
             elapsed = time.time() - start_time
             if safe_log != dummy_logger:
                 safe_log(
                     start_finish_level,
-                    f"Function `{display_name}` FINISHED in program `{get_program_name()}`. "
+                    f"Function `{contextual_display_name}` FINISHED in program `{get_program_name()}`. "
                     f"Elapsed time: {elapsed:.3f} seconds.",
                 )
             if is_outermost:
@@ -334,5 +420,6 @@ def _decorate(func,
             _current_log_mode.reset(token_log_mode)
             _current_show_timestamp.reset(token_show_ts)
             _current_log_level.reset(token_log_level)
+            _current_owner_label.reset(token_owner_label)
 
     return inner

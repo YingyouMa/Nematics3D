@@ -21,8 +21,8 @@ class OptsRod(OptsGlyph):
     # --- Geometry & Topology (Tube-specific) ---
     length: LengthMode | Unset = UNSET
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **dict(OptsGlyph.__descriptions__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsGlyph.__attrs__),
         "length": "The length of rods",
     }
 
@@ -37,15 +37,15 @@ class OptsRod(OptsGlyph):
 
 class PlotRod(PlotGlyph):
 
-    __descriptions__ = {
-        **dict(PlotGlyph.__descriptions__),
+    __attrs__ = {
+        **dict(PlotGlyph.__attrs__),
         "raw_name": "The name identifier of the PlotRod instance",
         "raw_orient": "The orientation of rods",
         "_calc_length": "The resolved per-point length array used for rods length.",
     }
     __slots__ = tuple(
         k
-        for k, v in __descriptions__.items()
+        for k, v in __attrs__.items()
         if not v.startswith("Property:") and k not in PlotGlyph.__slots__
     )
 
@@ -91,7 +91,6 @@ class PlotRod(PlotGlyph):
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
-            logger=logger,
             **kwargs,
         )
 
@@ -155,7 +154,6 @@ class PlotRod(PlotGlyph):
 
         poly = self._calc_poly
 
-        logger.detail("Applying tube filter with dynamic radius scaling")
         mesh = poly.tube(
             scalars="radius",
             n_sides=self.opts.sides,
@@ -163,7 +161,6 @@ class PlotRod(PlotGlyph):
         )
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to tube mesh")
             if (
                 isinstance(self.opts.clip_geometry, (list, tuple))
                 and len(self.opts.clip_geometry) == 6

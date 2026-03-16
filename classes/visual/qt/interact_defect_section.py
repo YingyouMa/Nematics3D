@@ -10,23 +10,23 @@ from Nematics3D.datatypes import UNSET
 class InteractDefectSection(PanelBase):
     def __init__(self, field, figure):
         self.field = field
-        self.defect_plane = field.plane.owner
+        self.defect_plane = field.grid.owner
         object.__setattr__(self.field, "_state_is_interactable", False)
         
         self.visual_normal = PlotRod(
-            coords=field.plane.opts.origin,
-            orient=field.plane.opts.normal,
-            radius=field.plane.opts.dr/4,
-            length=field.plane.opts.R_max*5,
+            coords=field.grid.opts.origin,
+            orient=field.grid.opts.normal,
+            radius=field.grid.opts.dr/4,
+            length=field.grid.opts.R_max*5,
             color=(1,0,0),
             figure=figure,
-            name=f"The normal of {field.plane.name!r}",
+            name=f"The normal of {field.grid.name!r}",
             category="Interaction",
             is_reset_camera=False,
             is_visible=False
         )
 
-        super().__init__(field.plane, title=f"Controls of {field.plane.name!r}")
+        super().__init__(field.grid, title=f"Controls of {field.grid.name!r}")
         
         
         

@@ -66,7 +66,7 @@ class InputQ:
     const_smooth_window_length: Number = 41
     const_miminum_line_length_visual: Number = 75
 
-    __descriptions__ = {
+    __attrs__ = {
         "Q": "Q field (tensor order parameter)",
         "S": "S field (scalar order parameter)",
         "n": "director field",
@@ -99,14 +99,14 @@ class InputQ:
     def __setattr__(self, key, value):
         if key in self._validators:
             if value is not UNSET:
-                desc = f"{key!r}: {self.__class__.__descriptions__[key]}"
+                desc = f"{key!r}: {self.__class__.__attrs__[key]}"
                 value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
 
 
 class QFieldObject(ClassBase):
 
-    __descriptions__ = {
+    __attrs__ = {
         # --- Identity ---
         "raw_name": "Name identifier of this Q tensor object.",
         # --- Raw inputs ---
@@ -139,17 +139,19 @@ class QFieldObject(ClassBase):
         # --- Visualization ---
         "_entity_figures": "FigureManager object to manage PlotFigure objects created for visualization.",
         "_entity_objects": "RegistryBase object to manage physical objects related to this Q field.",
-        # --- Public properties (semantic) ---
-        "S": "Property: scalar order parameter field S. This equals _raw_S",
-        "n": "Property: director field n. This equals _raw_n",
-        "lines": "Property: classified disclination lines.",
-        "figs": "Property: visualization figures. This equals _entity_figures",
-        "objs": "Property: physcial objects. This equals _entity_objects",
+    }
+    __properties__ = {
+        **(ClassBase.__properties__),
+        "S": "Read-only: Scalar order parameter field. Alias of `_raw_S`.",
+        "n": "Read-only: Director field. Alias of `_raw_n`.",
+        "lines": "Read-only: Classified disclination lines.",
+        "figs": "Read-only: Visualization figures. Alias of `_entity_figures`.",
+        "objs": "Read-only: Physical objects. Alias of `_entity_objects`.",
     }
 
     # __slots__ = tuple(
     #     k
-    #     for k, v in __descriptions__.items()
+    #     for k, v in __attrs__.items()
     #     if not v.startswith("Property:") and k not in ClassBase.__slots__
     # ) #!!!
 
@@ -179,7 +181,10 @@ class QFieldObject(ClassBase):
         object.__setattr__(
             self,
             "_entity_objects",
-            RegistryBase(f"The objects manager of Q field {self.name!r}"),
+            RegistryBase(
+                "objects manager",
+                info=f"physical objects attached to Q field {self.name!r}",
+            ),
         )
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
@@ -482,7 +487,7 @@ class QFieldObject(ClassBase):
                 figure = PlotFigure(opts=opts_figure, name=title)
 
         if figure.name.startswith(figure._DEFAULT_NAME):
-            figure.name = title
+            figure.act_set_name(title)
         self.figs.act_register(figure, is_contain_ok=True)
         self.figs.act_set_active(figure.name)
 

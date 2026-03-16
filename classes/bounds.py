@@ -24,8 +24,8 @@ class OptsBounds(OptsBase):
 
     alignment: Literal["min_corner", "center"] | Unset = UNSET
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **OptsBase.__descriptions__,
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **OptsBase.__attrs__,
         "origin": (
             "The anchor point of the bounds box. "
             "Its geometric meaning is determined by ``alignment``."
@@ -77,8 +77,8 @@ class OptsBounds(OptsBase):
 
 
 class Bounds(HostBase):
-    __descriptions__ = {
-        **dict(HostBase.__descriptions__),
+    __attrs__ = {
+        **dict(HostBase.__attrs__),
         "_entity_corners": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
         "_entity_clip_geometry": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
         "_calc_axis2": "Resolved second axis used by the bounds box.",
@@ -86,8 +86,9 @@ class Bounds(HostBase):
     }
 
     __slots__ = tuple(
-        k for k, v in __descriptions__.items() if not v.startswith("Property:") and k not in HostBase.__slots__
-    )
+            k for k in __attrs__.keys()
+            if k not in HostBase.__slots__
+        )
 
     def __init__(
         self,

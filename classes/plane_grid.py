@@ -35,8 +35,8 @@ class OptsPlaneGrid(OptsBase):
     grid_offset:            Vect(3) | Unset                             = UNSET
     grid_transform:         Tensor((3, 3)) | Unset                      = UNSET
 
-    __descriptions__ = {
-        **(OptsBase.__descriptions__),
+    __attrs__ = {
+        **(OptsBase.__attrs__),
         "normal":           "normal of plane",
         "spacing":          "grid spacing along axis1",
         "spacing_extra":    "grid spacing along axis2",
@@ -84,8 +84,8 @@ class OptsPlaneGrid(OptsBase):
 
 class PlaneGrid(HostBase):
     
-    __descriptions__ = {
-        **dict(HostBase.__descriptions__),
+    __attrs__ = {
+        **(HostBase.__attrs__),
 
         # ========== generated grids ==========
         "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃ—3)",
@@ -98,18 +98,21 @@ class PlaneGrid(HostBase):
         "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
         "_calc_size":   "The actual size calculated based on opts.size",
         "_calc_size_extra": "The actual size_extra calculated based on opts.size and opts.size_extra",
-        
-        
-        "_impl_field_ref": ("Quantity field evaluated on the 2D plane grid."
-                            "To assess it, use .field or ._impl_field."),
-        
+
         # ========== visualization / diagnostic ==========
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
     }
+    __relations__ = {
+        **(HostBase.__relations__),
+        "field": (
+            "The interpolated field object attached to this plane grid. "
+            "A plane grid can be associated with at most one field at a time."
+        ),
+    }
 
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in HostBase.__slots__
+            k for k in __attrs__.keys()
+            if k not in HostBase.__slots__
         )
 
     def __init__(self,
@@ -128,8 +131,6 @@ class PlaneGrid(HostBase):
             **kwargs
             )
         
-        object.__setattr__(self, '_entity_fig_demo', None)
-        object.__setattr__(self, '_impl_field_ref', None)
         object.__setattr__(self, '_entity_fig_demo', None)
 
         for name, value in {
@@ -195,7 +196,6 @@ class PlaneGrid(HostBase):
         axis_both = np.array([axis1, np.cross(normal, axis1)])
         logger.debug(f"axis2={axis2}")
         
-        logger.detail("Start to generate coordinate grids.")
         grid, grid_int, sizes = generate_fixed_step_grid(size1, size2, space1, space2, alignment=alignment)
         size1, size2 = sizes
         target_shape = np.shape(grid)[:2]
@@ -209,9 +209,6 @@ class PlaneGrid(HostBase):
         offset = origin - np.einsum("i, ib -> b", index_origin_shift, step_both)
         grid = np.einsum("ai, ib -> ab", grid_int, step_both) + offset
 
-        logger.detail("Translate the grid according to the origin.")
-        
-        logger.detail("Perform linear transform into real coordinates.")
         grid = apply_linear_transform(
             grid, transform=grid_transform, offset=grid_offset
         )
@@ -258,11 +255,8 @@ class PlaneGrid(HostBase):
         return self._entity_grid
     
     @property
-    def field(self):
-        ref = self._impl_field_ref
-        return ref() if ref is not None else None
-    
-    _impl_field = field
+    def _impl_field(self):
+        return getattr(self, "field", None)
     
     def act_debug_plot(self,
                        opts_extent: OptsTube | None = None,
@@ -340,7 +334,7 @@ class PlaneGrid(HostBase):
     #     can be redirected to console or to a file depending on the logger
     #     configuration and the behavior of ``logging_and_warning_decorator``.
 
-    #     All attributes listed in ``__descriptions__`` are included,
+    #     All attributes listed in ``__attrs__`` are included,
     #     formatted in a single log entry with a clear separator.
     #     """
     #     lines = []
@@ -348,7 +342,7 @@ class PlaneGrid(HostBase):
 
     #     lines.append("PlaneGrid parameters and results:")
     #     for attr in self.__slots__:
-    #         desc = self.__descriptions__.get(attr, "(no description)")
+    #         desc = self.__attrs__.get(attr, "(no description)")
     #         value = getattr(self, attr, None)
 
     #         if attr in ("opts.axis1", "opts.spacing", "opts.spacing_extra"):

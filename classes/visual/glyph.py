@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
-import weakref
 import numpy as np
 import datetime
 from contextlib import contextmanager
@@ -23,7 +22,10 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from ..bounds import Bounds, as_bounds
 from .plot_figure import PlotFigure
-from Nematics3D.logging_decorator import logging_and_warning_decorator
+from Nematics3D.logging_decorator import (
+    log_caught_exception,
+    logging_and_warning_decorator,
+)
 from Nematics3D.general import find_nearest_point, fmt_value
 
 #!!! resolver source
@@ -74,8 +76,8 @@ class OptsGlyph(OptsBase):
     sides:                      int | Unset                         = UNSET
     clip_geometry:              ClipGeometryLike | Unset            = UNSET
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **(OptsBase.__descriptions__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **(OptsBase.__attrs__),
         
         # === Visibility & Global Settings ===
         "is_visible":           "Whether the glyph is visible in the scene.",
@@ -207,8 +209,8 @@ class OptsGlyph(OptsBase):
 class PlotGlyph(HostBase):
 
     # fmt: off
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **(HostBase.__descriptions__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **(HostBase.__attrs__),
         
         "raw_category":                 "The category of the glyph, used in the classfication of PlotFigure",
         "raw_coords":                   "The N x 3 input coordinates of each glyph",
@@ -221,17 +223,25 @@ class PlotGlyph(HostBase):
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
         "_impl_name_pv":                "The unique identifier of this glyph stored in the PyVista plotter.",
         "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
-        "_impl_figure_ref":             ("A weak reference to the PlotFigure instance containing this glyph."
-                                         "To access it, use .fig or ._impl_figure."),
-        "_impl_bounds_ref":             "A weak reference to the Bounds instance clipping this glyph.",
         "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
         "_state_is_silhouette":         "Whether silhouette actors should be rebuilt during glyph updates.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
+    __relations__: ClassVar[Mapping[str, str]] = {
+        **(HostBase.__relations__),
+        "fig": (
+            "The PlotFigure instance containing this glyph. "
+            "An instance can belong to at most one figure at a time."
+        ),
+        "bounds": (
+            "The Bounds instance clipping this glyph. "
+            "An instance can bind to at most one bounds object at a time."
+        ),
+    }
     
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in HostBase.__slots__
+            k for k in __attrs__.keys()
+            if k not in HostBase.__slots__
         )
     
     _pending_resolution_attrs: List[str] = [
@@ -283,7 +293,6 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_interactable", True)
-        object.__setattr__(self, "_impl_bounds_ref", None)
 
         super().__init__(
             opts_type,
@@ -305,27 +314,29 @@ class PlotGlyph(HostBase):
                     "The default paint_by strategy will be applied."
                 )
 
-        logger.detail("Establishing PlotFigure object ...")
         if figure is not None:
-            try:
-                if not isinstance(figure, PlotFigure):
-                    raise TypeError("`figure` for plotting must be PlotFigure object!")
-                else:
-                    if not figure.is_alive:
-                        raise RuntimeError(
-                            "The plotting window has been closed. Cannot update an inactive plotter."
-                        )
-            except (TypeError, RuntimeError):
-                logger.exception("Check input")
-                logger.recovery(
-                    "Create a new PlotFigure object and store it in self.fig"
+            if not isinstance(figure, PlotFigure):
+                log_caught_exception(
+                    logger,
+                    TypeError("`figure` for plotting must be PlotFigure object!"),
+                    exception_msg="Check input",
+                    recovery_msg="Create a new PlotFigure object and store it in self.fig",
+                )
+                figure = PlotFigure()
+            elif not figure.is_alive:
+                log_caught_exception(
+                    logger,
+                    RuntimeError(
+                        "The plotting window has been closed. Cannot update an inactive plotter."
+                    ),
+                    exception_msg="Check input",
+                    recovery_msg="Create a new PlotFigure object and store it in self.fig",
                 )
                 figure = PlotFigure()
         elif figure is None:
             figure = PlotFigure()
-        object.__setattr__(self, "_impl_figure_ref", weakref.ref(figure))
+        self.act_bind_relation_base("fig", figure, is_weak=True)
 
-        logger.detail("Examining the options before plotting ...")
         self.opts.act_finalize(self._opts_defaults)
         str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
         unique_id = self.name + str_now
@@ -344,25 +355,13 @@ class PlotGlyph(HostBase):
         figure.pl.render()
         figure.act_register(self)
 
-    @property
-    def fig(self):
-        ref = self._impl_figure_ref
-        return ref() if ref is not None else None
-
-    _impl_figure = fig
-
-    @property
-    def bounds(self):
-        ref = self._impl_bounds_ref
-        return ref() if ref is not None else None
-
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unbind_bounds(self, is_apply=True, logger=None):
         bounds_old = self.bounds
         if bounds_old is None:
             return
         bounds_old.act_detach_sync_task(self._impl_name_pv)
-        object.__setattr__(self, "_impl_bounds_ref", None)
+        self.act_unbind_relation_base("bounds")
         if is_apply and getattr(self, "_entity", None) is not None:
             self.act_commit(is_reapply_opts=True)
 
@@ -390,7 +389,7 @@ class PlotGlyph(HostBase):
                 raise RuntimeError("This glyph is already bound to a Bounds object.")
             self.act_unbind_bounds(is_apply=False)
 
-        object.__setattr__(self, "_impl_bounds_ref", weakref.ref(bounds))
+        self.act_bind_relation_base("bounds", bounds, is_weak=True)
         bounds.act_attach_sync_task(
             self._impl_name_pv,
             lambda **kwargs: self.act_commit(is_reapply_opts=True),
@@ -515,12 +514,10 @@ class PlotGlyph(HostBase):
             input_dir["clim"] = self.opts.scalars_clim
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
 
-        logger.detail("Creating glyph polydata and mesh")
         self._helper_build_poly()
         mesh = self._helper_build_mesh()
         mesh = self._helper_apply_bounds(mesh)
 
-        logger.detail("Removing the existing actor")
         plotter = self.fig.pl
         if unique_id in plotter.actors:
             plotter.remove_actor(unique_id)
@@ -530,23 +527,19 @@ class PlotGlyph(HostBase):
             if pm is not None:
                 pm.act_unregister(old_actor)
 
-        logger.detail("Visualizing the glyph")
         actor = plotter.add_mesh(mesh, **input_dir)
-
-        logger.detail(
-            "Applying detailed rendering properties directly to the Actor's property object"
-        )
 
         prop = actor.prop
 
         shading = self.opts.shading_type.lower()
         if shading not in ("pbr", "phong"):
-            try:
-                raise ValueError("shading type must either be `pbr` or `phong`")
-            except ValueError:
-                logger.exception("Please check input")
-                logger.recovery("Use `phong` in the following.")
-                shading = "phong"
+            log_caught_exception(
+                logger,
+                ValueError("shading type must either be `pbr` or `phong`"),
+                exception_msg="Please check input",
+                recovery_msg="Use `phong` in the following.",
+            )
+            shading = "phong"
         prop.interpolation = shading
         object.__setattr__(self.opts, "shading_type", shading)
 
@@ -667,9 +660,6 @@ class PlotGlyph(HostBase):
         if not is_reapply_opts and not kwargs:
             return
 
-        logger.detail(
-            "Check if a recoloring is requested by input kwargs; if so, determine the paint method"
-        )
         paint_method = kwargs.pop("paint_by", None)
         if paint_method is None:
             has_color, has_scalars = "color" in kwargs, "scalars" in kwargs
@@ -812,11 +802,12 @@ class PlotGlyph(HostBase):
         if callable(func):
             object.__setattr__(self, "_impl_interact_func", func)
         else:
-            try:
-                raise RuntimeError("_impl_interact_func is not callable.")
-            except:
-                logger.warning("Check input.")
-                logger.recovery("Automatically ignore this modification")
+            log_caught_exception(
+                logger,
+                RuntimeError("_impl_interact_func is not callable."),
+                exception_msg="Check input.",
+                recovery_msg="Automatically ignore this modification",
+            )
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

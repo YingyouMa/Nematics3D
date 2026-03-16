@@ -25,7 +25,7 @@ def opacity_func(coords):
     opacity = np.abs(np.sin(coords[:, 2]))
     return opacity
 
-figure = Nematics3D.PlotFigure()
+figure = Nematics3D.PlotFigure(name="test_figure")
 
 
 # --- 案例 1: 固定参数 (类似于你给的例子) ---

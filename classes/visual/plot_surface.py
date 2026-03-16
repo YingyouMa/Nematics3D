@@ -13,8 +13,8 @@ from .qt.interact_surface import InteractSurface
 @dataclass(slots=True, repr=False)
 class OptsSurface(OptsGlyph):
     
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **(OptsGlyph.__descriptions__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **(OptsGlyph.__attrs__),
         "radius": (
             "Deprecated placeholder. "
             "Currently has no effect in surface plots. "
@@ -42,14 +42,14 @@ class OptsSurface(OptsGlyph):
     
 class PlotSurface(PlotGlyph):
     
-    __descriptions__: ClassVar[Mapping[str, str]] = {
+    __attrs__: ClassVar[Mapping[str, str]] = {
         k: v
-        for k, v in PlotGlyph.__descriptions__.items()
+        for k, v in PlotGlyph.__attrs__.items()
         if k != "_calc_radius"
     }
     
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
+            k for k, v in __attrs__.items() 
             if not v.startswith("Property:") and k not in PlotGlyph.__slots__
         )
     
@@ -80,7 +80,6 @@ class PlotSurface(PlotGlyph):
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
-            logger=logger,
             **kwargs,
         )
 
@@ -94,12 +93,9 @@ class PlotSurface(PlotGlyph):
     def _helper_build_mesh(self, logger=None):
         
         poly = self._calc_poly  
-            
-        logger.detail("Creating the surface mesh by Delaunay triangulation.")
         mesh = poly.delaunay_2d(alpha=0.0)
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to surface mesh")
             if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):

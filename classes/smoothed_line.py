@@ -31,8 +31,8 @@ class OptsSmooth(OptsBase):
     min_line_length:            int | Unset                         = UNSET
     is_window_warning:          bool | Unset                        = UNSET
 
-    __descriptions__ = {
-        **(OptsBase.__descriptions__),
+    __attrs__ = {
+        **(OptsBase.__attrs__),
         "window_ratio":         "window ratio for smoothing: line_length / window_length",
         "window_length":        "explicit window length for smoothing",
         "order":                "smoothing polynomial order",
@@ -82,8 +82,8 @@ class SmoothingConfigError(ValueError):
 class SmoothedLine(HostBase):
 
     # fmt: off
-    __descriptions__ = {
-        **dict(HostBase.__descriptions__),
+    __attrs__ = {
+        **dict(HostBase.__attrs__),
         "raw_name":                 "The name identifier of the original line",
         "raw_coords":               "Raw input line coordinates (shape: N x D)",
         "_calc_coords":             "The processed coordinates actually sent into the smoothing pipeline",
@@ -104,7 +104,7 @@ class SmoothedLine(HostBase):
 
     __slots__ = tuple(
         k
-        for k, v in __descriptions__.items()
+        for k, v in __attrs__.items()
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
 
@@ -126,7 +126,7 @@ class SmoothedLine(HostBase):
 
         line_coord_input = self._impl_validators["coords"](
             line_coord_input,
-            self.__descriptions__["raw_coords"],
+            self.__attrs__["raw_coords"],
         )
 
         object.__setattr__(self, "raw_coords", line_coord_input)
@@ -197,7 +197,6 @@ class SmoothedLine(HostBase):
         logger.debug(msg)
 
         try:
-            logger.detail("Start to determine the smoothing window length.")
             if self.opts.window_length is None:
                 if self.opts.window_ratio is None:
                     reason = "No input value provided for smooth window length."
@@ -260,11 +259,7 @@ class SmoothedLine(HostBase):
             object.__setattr__(
                 self, "_calc_N_out", int(self._calc_N_init * self.opts.N_out_ratio)
             )
-            logger.detail(
-                f"Number of output points after smoothing is {self._calc_N_out}."
-            )
 
-            logger.detail("Applying Savitzky-Golay filter to smooth the curve")
             line_points = savgol_filter(
                 self._calc_coords,
                 self.opts.window_length,
@@ -273,10 +268,8 @@ class SmoothedLine(HostBase):
                 mode=self.opts.mode,
             )
 
-            logger.detail("Defining spline parameter u")
             uspline = np.arange(self._calc_N_init) / self._calc_N_init
 
-            logger.detail("Fitting and evaluate spline")
             u_out = np.linspace(0, 1, self._calc_N_out)
             tck = splprep(line_points.T, u=uspline, s=0)[0]
             result = np.array(splev(u_out, tck)).T

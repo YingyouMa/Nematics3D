@@ -24,9 +24,8 @@ from .interpolate_plane import InterpolatePlane
 
 class QPlane(InterpolatePlane):
 
-    __descriptions__ = {
-        **(InterpolatePlane.__descriptions__),
-        
+    __attrs__ = {
+        **(InterpolatePlane.__attrs__),
         "raw_name": "The name identifier of this Q-plane object",
         "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
         "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
@@ -39,10 +38,9 @@ class QPlane(InterpolatePlane):
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
         "const_visual_opts": "The default opts_defaults_override for different visualization."
     }
-
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in InterpolatePlane.__slots__
+            k for k in __attrs__.keys()
+            if k not in InterpolatePlane.__slots__
         )
     
     _origin_default_visual_opts = {
@@ -90,7 +88,7 @@ class QPlane(InterpolatePlane):
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
 
-        plane_grid = self._entity_plane
+        plane_grid = self.grid
 
         grid_all = plane_grid._entity_grid_all
         grid_all_flatten = np.reshape(grid_all, (-1, 3))
@@ -118,13 +116,12 @@ class QPlane(InterpolatePlane):
     @logging_and_warning_decorator()
     def _helper_detect_defect(self, n_all, logger=None):
     
-        plane_grid = self._entity_plane
+        plane_grid = self.grid
         grid_all = plane_grid._entity_grid_all
         
         shape_all = np.shape(grid_all)[:2]
         n_all = np.reshape(n_all, (*shape_all, 1, 3))
 
-        logger.detail("Detecting the defects and surrounding directors ...")
         defect_plane_index = defect_detect(n_all, planes=(False, False, True))  #!!! pbc
         defect_vicinity_index = defect_vicinity_grid(
             defect_plane_index, num_shell=1
@@ -138,8 +135,6 @@ class QPlane(InterpolatePlane):
         if len(defect_plane_index)==0:
             defect_centers = None
         else:
-            logger.detail("Switching the lattice indices of defects into real space units ...")
-            
             space1 = plane_grid.opts.spacing
             space2 = (
                 space1
@@ -180,7 +175,7 @@ class QPlane(InterpolatePlane):
             
             if np.sum(~self._calc_is_near_defect) > 0:
                 self._entity_visual_nb.act_commit(       
-                    coords=self._entity_plane()[~self._calc_is_near_defect],
+                    coords=self.grid()[~self._calc_is_near_defect],
                     orient=self._calc_n[~self._calc_is_near_defect],
                     is_visible=True
                     )
@@ -189,7 +184,7 @@ class QPlane(InterpolatePlane):
             
             if np.sum(self._calc_is_near_defect) > 0:
                 self._entity_visual_nd.act_commit(       
-                    coords=self._entity_plane()[self._calc_is_near_defect],
+                    coords=self.grid()[self._calc_is_near_defect],
                     orient=self._calc_n[self._calc_is_near_defect],
                     is_visible=True
                     )
@@ -207,7 +202,7 @@ class QPlane(InterpolatePlane):
                 
         if getattr(self, "_entity_visual_S", None):
             self._entity_visual_S.act_commit(
-                coords=self.plane(),
+                coords=self.grid(),
                 scalars=self._calc_S,
                 )
 
@@ -254,7 +249,7 @@ class QPlane(InterpolatePlane):
         if np.sum(~self._calc_is_near_defect) > 0:
             
             visual_nb = PlotRod(
-                coords=self._entity_plane()[~self._calc_is_near_defect],
+                coords=self.grid()[~self._calc_is_near_defect],
                 orient=self._calc_n[~self._calc_is_near_defect],
                 name=f"n bulk of plane {self.name!r}",
                 category="plane analysis",
@@ -266,7 +261,7 @@ class QPlane(InterpolatePlane):
         else:
             
             visual_nb = PlotRod(
-                coords=self._entity_plane()[self._calc_is_near_defect],
+                coords=self.grid()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
                 name=f"n bulk of plane {self.name!r}",
                 category="plane analysis",
@@ -276,14 +271,14 @@ class QPlane(InterpolatePlane):
                 is_visible=False
             )
             
-        object.__setattr__(visual_nb, "_impl_owner_ref", weakref.ref(self))
+        visual_nb.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nb)
         object.__setattr__(self, '_entity_visual_nb', visual_nb)
 
         if np.sum(self._calc_is_near_defect) > 0:
             
             visual_nd = PlotRod(
-                coords=self._entity_plane()[self._calc_is_near_defect],
+                coords=self.grid()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
                 name=f"n near defect of plane {self.name!r}",
                 category="plane analysis",
@@ -303,7 +298,7 @@ class QPlane(InterpolatePlane):
         else:
             
             visual_nd = PlotRod(
-                coords=self._entity_plane()[~self._calc_is_near_defect][:2],
+                coords=self.grid()[~self._calc_is_near_defect][:2],
                 orient=self._calc_n[~self._calc_is_near_defect][:2],
                 name=f"n near defect of plane {self.name!r}",
                 category="plane analysis",
@@ -314,7 +309,7 @@ class QPlane(InterpolatePlane):
             )
             
             visual_defect = PlotSphere(
-                coords=self._entity_plane()[~self._calc_is_near_defect][:2], 
+                coords=self.grid()[~self._calc_is_near_defect][:2], 
                 name=f"defects of plane {self.name!r}",
                 category="plane analysis",
                 opts=opts_defect, 
@@ -323,11 +318,11 @@ class QPlane(InterpolatePlane):
             )
             
             
-        object.__setattr__(visual_nd, "_impl_owner_ref", weakref.ref(self))
+        visual_nd.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nd)
         object.__setattr__(self, '_entity_visual_nd', visual_nd)
         
-        object.__setattr__(visual_defect, "_impl_owner_ref", weakref.ref(self))
+        visual_defect.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, '_entity_visual_defect', visual_defect)
             
         visual_defect.act_add_attr(
@@ -367,7 +362,7 @@ class QPlane(InterpolatePlane):
         figure = as_PlotFigure(figure, opts_figure)
             
         visual_S = PlotSurface(
-            coords=self.plane(),
+            coords=self.grid(),
             scalars=self._calc_S,
             figure=figure,
             name=f"S defect of plane {self.name!r}",
@@ -376,20 +371,19 @@ class QPlane(InterpolatePlane):
             opts_defaults_override=self.const_visual_opts["S"]
             )
         
-        object.__setattr__(visual_S, "_impl_owner_ref", weakref.ref(self))
+        visual_S.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_S)
         object.__setattr__(self, '_entity_visual_S', visual_S)
 
 
 class QPlanePolar(QPlane):
 
-    __descriptions__ = {
-        **(QPlane.__descriptions__),
+    __attrs__ = {
+        **(QPlane.__attrs__),
     }
-
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in QPlane.__slots__
+            k for k in __attrs__.keys()
+            if k not in QPlane.__slots__
         )
     
     _origin_default_visual_opts = {
@@ -434,7 +428,7 @@ class QPlanePolar(QPlane):
     def _helper_detect_defect(self, directors, threshold: float=0):
         
         
-        plane_grid = self._entity_plane
+        plane_grid = self.grid
         points = plane_grid._entity_grid_all
         polar = plane_grid._entity_polar
         ring_offsets = plane_grid._calc_ring_offsets

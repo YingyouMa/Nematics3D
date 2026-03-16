@@ -6,12 +6,16 @@ from ..registry_base import RegistryBase
 
 class FigureManager(RegistryBase):
 
-    __descriptions__ = {
-        **(RegistryBase.__descriptions__),
+    __attrs__ = {
+        **(RegistryBase.__attrs__),
         "_state_active_name": "The name of current active figure",
     }
+    __properties__ = {
+        "active_name": "Read-only: The name of the current active figure.",
+        "active_fig": "Read-only: The current active PlotFigure instance.",
+    }
 
-    __slots__ = tuple(__descriptions__.keys())
+    __slots__ = tuple(__attrs__.keys())
 
     def __init__(self, name: str = "figures"):
         super().__init__(name)

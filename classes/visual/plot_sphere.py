@@ -21,12 +21,12 @@ class OptsSphere(OptsGlyph):
 
 class PlotSphere(PlotGlyph):
 
-    __descriptions__ = {
-        **dict(PlotGlyph.__descriptions__),
+    __attrs__ = {
+        **dict(PlotGlyph.__attrs__),
     }
     
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
+            k for k, v in __attrs__.items() 
             if not v.startswith("Property:") and k not in PlotGlyph.__slots__
         )
     
@@ -55,7 +55,6 @@ class PlotSphere(PlotGlyph):
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
-            logger=logger,
             **kwargs,
         )
 
@@ -67,15 +66,12 @@ class PlotSphere(PlotGlyph):
     def _helper_build_mesh(self, logger=None):
         
         poly = self._calc_poly
-            
-        logger.detail("Applying sphere filter with dynamic radius scaling")
         unit_sphere = pv.Sphere(theta_resolution=self.opts.sides, 
                                 phi_resolution=self.opts.sides, 
                                 radius=1.0)
         mesh = poly.glyph(geom=unit_sphere, scale="radius", orient=False)
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to sphere mesh")
             if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):

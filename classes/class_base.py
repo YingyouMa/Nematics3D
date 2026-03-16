@@ -52,14 +52,15 @@ class ClassBase:
             "An instance can belong to at most one registry at a time."
         ),
     }
+    __properties__ = {}
 
     __slots__ = tuple(__attrs__.keys()) + ("__weakref__",)
-
+    
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
-    
-    def __init__(self, *, name: str, name_replace: str):
+
+    def __init__(self, *, name: str | None, name_replace: str):
 
         if not hasattr(self, "_impl_extra_attrs"):
             object.__setattr__(self, "_impl_extra_attrs", {})
@@ -74,8 +75,12 @@ class ClassBase:
 
         self._helper_init_getattr_names_basic()
         self._helper_init_relations_basic()
-
-        name = as_str(name, name=self.__attrs__["raw_name"], replace=name_replace)
+        
+        if name is None:
+            name = name_replace
+        else:
+            name = as_str(name, name=self.__attrs__["raw_name"], replace=name_replace)
+            
         self.act_set_name(name if name else name_replace)
 
     def _helper_init_getattr_names_basic(self):
@@ -84,13 +89,14 @@ class ClassBase:
             names.add(key)
             if key.startswith("raw_"):
                 names.add(key[4:])
+        names.update(type(self).__properties__.keys())
         names.update(type(self).__relations__.keys())
         names.update(object.__getattribute__(self, "_impl_extra_attrs_docs").keys())
 
     def _helper_init_relations_basic(self):
         relations = object.__getattribute__(self, "_impl_relations")
-        relations.setdefault("owner", None)
-        relations.setdefault("registry", None)
+        for key in type(self).__relations__.keys():
+            relations.setdefault(key, None)
 
     # ------------------------------------------------------------------
     # Readable-name registry
@@ -116,15 +122,13 @@ class ClassBase:
             return value()
         return value
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_bind_relation(
+    def act_bind_relation_base(
         self,
         name: str,
         target,
         *,
         is_weak: bool = True,
         is_replace: bool = True,
-        logger=None,
     ):
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
         if not name.isidentifier():
@@ -145,7 +149,7 @@ class ClassBase:
         )
         return target
 
-    def act_unbind_relation(self, name: str):
+    def act_unbind_relation_base(self, name: str):
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
         if name in self._impl_relations:
             self._impl_relations[name] = None
@@ -210,11 +214,18 @@ class ClassBase:
             )
 
         for attr in attrs:
-            self._impl_attrs_protected.discard(self._helper_resolve_protected_target(attr))
+            self._impl_attrs_protected.discard(
+                self._helper_resolve_protected_target(attr)
+            )
 
     # ------------------------------------------------------------------
     # Attribute inspection
     # ------------------------------------------------------------------
+
+    @classmethod
+    def _helper_is_writable_property(cls, name: str) -> bool:
+        desc = cls.__properties__.get(name, "")
+        return isinstance(desc, str) and desc.startswith("Writable:")
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
@@ -222,6 +233,7 @@ class ClassBase:
         attrs_raw = []
         attrs_state = []
         attrs_extra = []
+        attrs_properties = []
 
         for attr_name in type(self).__attrs__.keys():
             if attr_name in protected:
@@ -235,9 +247,12 @@ class ClassBase:
             if attr_name not in protected:
                 attrs_extra.append(attr_name)
 
+        for attr_name in type(self).__properties__.keys():
+            if self.__class__._helper_is_writable_property(attr_name):
+                attrs_properties.append(attr_name)
+
         lines = [
-            "Modifiable variables for this instance:",
-            "  - raw_ fields: these are real stored fields in __attrs__. "
+            "Modifiable variables for this instance.",
             "When assigning, the 'raw_' prefix may be omitted.",
         ]
         if attrs_raw:
@@ -245,10 +260,6 @@ class ClassBase:
         else:
             lines.append("    * <none>")
 
-        lines.append(
-            "  - state_ fields: these are runtime state fields in __attrs__. "
-            "When assigning, the full 'state_' name must be used."
-        )
         if attrs_state:
             lines.extend([f"    * {name}" for name in sorted(attrs_state)])
         else:
@@ -259,6 +270,14 @@ class ClassBase:
         )
         if attrs_extra:
             lines.extend([f"    * {name}" for name in sorted(attrs_extra)])
+        else:
+            lines.append("    * <none>")
+
+        lines.append(
+            "  - writable properties: these are public properties whose setters are supported."
+        )
+        if attrs_properties:
+            lines.extend([f"    * {name}" for name in sorted(attrs_properties)])
         else:
             lines.append("    * <none>")
 
@@ -346,7 +365,7 @@ class ClassBase:
         if key in self._impl_relations:
             logger.warning(
                 f"{key!r} is a relation of {type(self).__name__}. "
-                "Please modify it via act_bind_relation() / act_unbind_relation()."
+                "Please modify it via act_bind_relation_base() / act_unbind_relation_base()."
             )
             return
 
@@ -372,8 +391,7 @@ class ClassBase:
             return
 
         if target_key.startswith("_") or (
-            not target_key.startswith("raw_")
-            and not target_key.startswith("state_")
+            not target_key.startswith("raw_") and not target_key.startswith("state_")
         ):
             cls_name = self.__class__.__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")

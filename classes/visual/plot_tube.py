@@ -31,8 +31,8 @@ class OptsTube(OptsGlyph):
     smooth_iter:            int | Unset  = UNSET
 
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **dict(OptsGlyph.__descriptions__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsGlyph.__attrs__),
         "is_capping":        "Whether to close the ends of the tube.",
         "smooth_iter":       "Path smoothing iterations to remove jagged edges.",
     }
@@ -55,14 +55,14 @@ class OptsTube(OptsGlyph):
         
 class PlotTube(PlotGlyph):
 
-    __descriptions__ = {
-        **dict(PlotGlyph.__descriptions__),
+    __attrs__ = {
+        **dict(PlotGlyph.__attrs__),
         "raw_name":     "The name identifier of the PlotTube instance",
         "raw_line_index": "Optional polyline membership indices.",
     }
     
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
+            k for k, v in __attrs__.items() 
             if not v.startswith("Property:") and k not in PlotGlyph.__slots__
         )
     _impl_attrs_reapply_opts_after_raw = (
@@ -99,7 +99,6 @@ class PlotTube(PlotGlyph):
             opts=opts,
             figure=figure,
             opts_defaults_override=opts_defaults_override,
-            logger=logger,
             **kwargs,
         )
         
@@ -151,7 +150,6 @@ class PlotTube(PlotGlyph):
         if is_use_multi:
             poly = pv.MultipleLines(points)
         else:
-            logger.detail('Searching run boundaries: each run corresponds to one disconnected polyline')
             breaks = np.nonzero(idx[1:] != idx[:-1])[0] + 1
             starts = np.r_[0, breaks]
             ends   = np.r_[breaks, len(idx)]
@@ -171,7 +169,6 @@ class PlotTube(PlotGlyph):
             poly = pv.PolyData(points, lines=lines)
         
         if self.opts.smooth_iter > 0:
-            logger.detail(f"Smoothing path with {self.opts.smooth_iter} iterations")
             poly = poly.smooth(n_iter=self.opts.smooth_iter)
             
         object.__setattr__(self, "_calc_poly", poly)
@@ -187,7 +184,6 @@ class PlotTube(PlotGlyph):
 
         poly = self._calc_poly    
 
-        logger.detail("Applying tube filter with dynamic radius scaling")
         mesh = poly.tube(
             scalars='radius', 
             n_sides=self.opts.sides, 
@@ -196,7 +192,6 @@ class PlotTube(PlotGlyph):
         )
 
         if self.opts.clip_geometry is not None:
-            logger.detail("Applying spatial clipping to tube mesh")
             if isinstance(self.opts.clip_geometry, (list, tuple)) and len(self.opts.clip_geometry) == 6:
                 mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
             elif hasattr(self.opts.clip_geometry, "points"):

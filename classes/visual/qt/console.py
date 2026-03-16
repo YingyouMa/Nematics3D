@@ -1,5 +1,3 @@
-import pyvista as pv
-import pyvistaqt as pvqt
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtGui import QFont
 
@@ -13,8 +11,7 @@ class ScopedConsoleDock(QtWidgets.QDockWidget):
     def __init__(self, 
                  title:         str="Scoped Console", 
                  parent:        QtWidgets.QMainWindow | None = None,
-                 font_size:     float=15,
-                 logger=None):
+                 font_size:     float=15):
         
         super().__init__(title, parent)
 

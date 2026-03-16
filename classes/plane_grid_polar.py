@@ -41,8 +41,8 @@ class OptsPlaneGridPolar(OptsBase):
     grid_offset:                Vect(3) | Unset                 = UNSET
     grid_transform:             Tensor((3, 3)) | Unset          = UNSET
 
-    __descriptions__ = {
-        **(OptsBase.__descriptions__),
+    __attrs__ = {
+        **(OptsBase.__attrs__),
         "origin":               "center of the polar grid in index coordinates",
         "normal":               "normal of the plane (unit vector)",
         "theta0_axis":          "in-plane reference axis defining theta=0; will be projected onto the plane and normalized (None uses the default axis)",
@@ -54,7 +54,6 @@ class OptsPlaneGridPolar(OptsBase):
         "grid_offset":          "grid translation offset to map lattice indices to real-space coordinates",
         "grid_transform":       "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
     }
-
     _validators = {
         **(OptsBase._validators),
         "origin":               lambda v, d: as_Vect(v, name=d),
@@ -85,24 +84,26 @@ class OptsPlaneGridPolar(OptsBase):
 
 class PlaneGridPolar(HostBase):
     
-    __descriptions__ = {
-        **dict(HostBase.__descriptions__),
+    __attrs__ = {
+        **(HostBase.__attrs__),
         "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃƒÆ’Ã¢â‚¬â€3)",
         "_entity_grid_all": "Complete 3D polar grid points before filtering, stored as an array of shape (N, 3)",
         "_entity_polar": "The polar coordinates of points",
         "_calc_ring_offsets": "Cumulative offsets defining the start/end indices of each polar ring",
         "_calc_box_mask": "the flag indicating whether point in self._entity_grid_all is inside the corners limit",
-        "_impl_field_ref": (
-            "Quantity field evaluated on the 2D plane grid."
-            "To assess it, use .field or ._impl_field."
-        ),
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D polar grid points.",
 
     }
-    
+    __relations__ = {
+        **(HostBase.__relations__),
+        "field": (
+            "The interpolated field object attached to this polar plane grid. "
+            "A polar plane grid can be associated with at most one field at a time."
+        ),
+    }
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in HostBase.__slots__
+            k for k in __attrs__.keys()
+            if k not in HostBase.__slots__
         )
     
     def __init__(self,
@@ -111,6 +112,8 @@ class PlaneGridPolar(HostBase):
                  opts: OptsPlaneGridPolar | None = None,
                  opts_defaults_override: Mapping[str, Any] | None = None,
                  **kwargs):
+        if name is None:
+            name = name_replace
         
         super().__init__(
             OptsPlaneGridPolar,
@@ -122,7 +125,6 @@ class PlaneGridPolar(HostBase):
             )
         
         object.__setattr__(self, '_entity_fig_demo', None)
-        object.__setattr__(self, '_impl_field_ref', None)
         
         for name, value in {
             "origin": self.opts.origin,
@@ -333,10 +335,7 @@ class PlaneGridPolar(HostBase):
         
         
     @property
-    def field(self):
-        ref = self._impl_field_ref
-        return ref() if ref is not None else None
-    
-    _impl_field = field
+    def _impl_field(self):
+        return getattr(self, "field", None)
 
 

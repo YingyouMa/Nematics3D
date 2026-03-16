@@ -5,7 +5,7 @@ import weakref
 from types import MappingProxyType
 
 from ..general import sort_line_indices  # , get_plane, get_tangent
-from ..logging_decorator import logging_and_warning_decorator
+from ..logging_decorator import log_caught_exception, logging_and_warning_decorator
 from ..datatypes import (
     Vect,
     as_Vect,
@@ -45,7 +45,7 @@ class InputLine:
     grid_offset: Vect(3) = (0, 0, 0)
     grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
 
-    __descriptions__ = {
+    __attrs__ = {
         "defect_indices": "indices of defect points in the Q array",
         "box_size_periodic_index": "the maximum index of each index in the Q array (finite values for periodic boundary conditions and np.inf for non-periodic)",
         "grid_offset": "grid translation offset to map lattice indices of Q array to real-space coordinates",
@@ -63,15 +63,15 @@ class InputLine:
 
     def __setattr__(self, key, value):
         if key in self._validators:
-            desc = f"{key!r}: {self.__class__.__descriptions__[key]}"
+            desc = f"{key!r}: {self.__class__.__attrs__[key]}"
             value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
 
 
 class DisclinationLine(ClassBase):
 
-    __descriptions__ = {
-        **(ClassBase.__descriptions__),
+    __attrs__ = {
+        **(ClassBase.__attrs__),
         
         # ========== user-facing ==========
         "raw_name":                         "Name identifier of this disclination line",
@@ -93,7 +93,7 @@ class DisclinationLine(ClassBase):
     }
 
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
+            k for k, v in __attrs__.items() 
             if not v.startswith("Property:") and k not in ClassBase.__slots__
         )
 
@@ -109,6 +109,8 @@ class DisclinationLine(ClassBase):
 
         if inputValue is None:
             inputValue = InputLine()
+        if name is None:
+            name = "disclination line"
 
         super().__init__(name=name, name_replace="disclination line")
 
@@ -118,10 +120,7 @@ class DisclinationLine(ClassBase):
         for k, v in asdict(inputValue).items():
             object.__setattr__(self, f"_raw_{k}", v)
 
-        logger.detail(f"Initializing the disclination line {self.name!r}")
-
         if is_sorted == False:
-            logger.detail("Sorting defects by closest neighboring pairs.")
             object.__setattr__(self, '_raw_defect_indices', sort_line_indices(self._raw_defect_indices))
         
         object.__setattr__(self, '_raw_box_size_periodic_index', as_dimension_info(self._raw_box_size_periodic_index))
@@ -155,13 +154,9 @@ class DisclinationLine(ClassBase):
         logger.debug(
             f"Disclination line {self.name!r} is of kind {self._calc_end2end_kind!r}"
         )
-        logger.detail(
-            f"The first and end point are {self._raw_defect_indices[0]} and {self._raw_defect_indices[-1]}"
-        )
 
         object.__setattr__(self, '_calc_defect_num', np.shape(self._raw_defect_indices)[0])
 
-        logger.detail("Calculating the defects positions in real-space units.")
         defect_coords = apply_linear_transform(
             self._raw_defect_indices,
             transform=self._raw_grid_transform,
@@ -247,8 +242,12 @@ class DisclinationLine(ClassBase):
         try:
             smooth_obj = self.smooths[smooth_index]
         except Exception:
-            logger.exception("Check input")
-            logger.recovery("Use the latest version instead.")
+            log_caught_exception(
+                logger,
+                IndexError(f"Invalid smooth_index={smooth_index!r} for available smooth versions."),
+                exception_msg="Check input",
+                recovery_msg="Use the latest version instead.",
+            )
             smooth_obj = self.smooths[-1]
 
         if getattr(smooth_obj, "_entity_visual", None):
@@ -296,8 +295,8 @@ class DisclinationLine(ClassBase):
 
 class DisclinationLineSmooth(SmoothedLine):
 
-    __descriptions__ = {
-        **SmoothedLine.__descriptions__,
+    __attrs__ = {
+        **SmoothedLine.__attrs__,
         "_calc_result": "The smoothed disclination indices in lattice grid",
         "_calc_result_coords": "The smoothed disclination coords in real space",
         "_entity_visual": "The PlotTube object as the visualization of this smoothed disclination line",
@@ -306,7 +305,7 @@ class DisclinationLineSmooth(SmoothedLine):
     }
 
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
+            k for k, v in __attrs__.items() 
             if not v.startswith("Property:") and k not in SmoothedLine.__slots__
         )
 
@@ -330,21 +329,31 @@ class DisclinationLineSmooth(SmoothedLine):
                 f"Got type={type(line).__name__} instead."
             )
 
-        object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
-        object.__setattr__(self, "_entity_sections", RegistryBase(name="Planes"))
-        object.__setattr__(self._entity_sections, "_impl_owner_ref", weakref.ref(self))
-        object.__setattr__(self, "_calc_padding_num", 0)
-
         if name is None:
-            name = self.owner.name
+            name = line.name
+
+        relations = {key: None for key in type(self).__relations__.keys()}
+        relations["owner"] = weakref.ref(line)
+        object.__setattr__(self, "_impl_relations", relations)
 
         super().__init__(
-            self.owner._raw_defect_indices,
+            line._raw_defect_indices,
             name=name,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
+        self.act_bind_relation_base("owner", line, is_weak=True)
+        object.__setattr__(
+            self,
+            "_entity_sections",
+            RegistryBase(
+                name="Planes",
+                info=f"registry of cross-section grids for the smoothed disclination line {self.name!r}",
+            ),
+        )
+        self._entity_sections.act_bind_relation_base("owner", self, is_weak=True)
+        object.__setattr__(self, "_calc_padding_num", 0)
         self.act_register_protected_attr(["coords", "mode"])
 
     def _helper_resolve_coords(self):
@@ -391,7 +400,6 @@ class DisclinationLineSmooth(SmoothedLine):
 
         super()._helper_commit_apply_opts_main(
             is_reapply_opts=is_reapply_opts,
-            logger=logger,
             **kwargs,
         )
 
@@ -452,8 +460,8 @@ class OptsDefectLinePlot(OptsBase):
     is_smooth: bool | Unset = UNSET
     is_wrap: bool | Unset = UNSET
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **OptsBase.__descriptions__,
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **OptsBase.__attrs__,
         "is_smooth": "Whether to apply geometric smoothing to defect lines during visualization.",
         "is_wrap": "Whether to apply periodic-boundary wrapping when visualizing defect lines.",
     }
@@ -475,14 +483,14 @@ class OptsDefectLinePlot(OptsBase):
 
 class DisclinationLineSmoothPlot(HostBase):
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **HostBase.__descriptions__,
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **HostBase.__attrs__,
         "raw_name": "The name of this instance for visualization of defect line (smoothed/unsmoothed)"
     }
 
     __slots__ = tuple(
         k
-        for k, v in __descriptions__.items()
+        for k, v in __attrs__.items()
         if not v.startswith("Property:") and k not in HostBase.__slots__
     )
     
@@ -511,7 +519,7 @@ class DisclinationLineSmoothPlot(HostBase):
                 f"Got {type(line).__name__!r} instead"
             )
             
-        self_descriptions = OptsDefectLinePlot.__descriptions__
+        self_descriptions = OptsDefectLinePlot.__attrs__
         self_kwargs = {k: kwargs.pop(k) for k in list(kwargs.keys()) if k in self_descriptions}
 
         super().__init__(
@@ -523,7 +531,7 @@ class DisclinationLineSmoothPlot(HostBase):
             **self_kwargs
         )
 
-        object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
+        self.act_bind_relation_base("owner", line, is_weak=True)
 
         self.opts.act_finalize(defaults=self._opts_defaults)
 
@@ -563,9 +571,6 @@ class DisclinationLineSmoothPlot(HostBase):
                 else owner.owner._calc_defect_coords
             )
             if owner.owner._calc_end2end_kind == "loop":
-                logger.detail(
-                    f"Line {owner.name!r} is a loop. Closing the loop by appending the start point to the end."
-                )
                 line_coords = np.concatenate((line_coords, [line_coords[0]]))
             line_index = None
 
@@ -593,15 +598,11 @@ class DisclinationLineSmoothPlot(HostBase):
                 line_coords_origin,
             )
 
-            logger.detail("Extracting the points at periodic boundaries.")
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
             diff = np.linalg.norm(diff, axis=-1)
             end_list = np.where(diff > 1)[0] + 1
             end_list = np.concatenate([[0], end_list, [len(line_coords_origin)]])
 
-            logger.detail(
-                "Classifying the line into different segements due to periodic boundary conditions."
-            )
             line_index = np.ones(len(line_coords_origin))
             for i in range(len(end_list) - 1):
                 line_index[end_list[i] : end_list[i + 1]] = i
@@ -638,8 +639,8 @@ class OptsDefectSectionGrid(OptsBase):
 
     u_percent: float | Unset = UNSET
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **OptsBase.__descriptions__,
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **OptsBase.__attrs__,
         "u_percent": (
             "Normalized spline parameter percentage along the smoothed defect line. "
             "0 means the start of the spline parameter domain and 100 means the end."
@@ -663,8 +664,8 @@ class DefectSectionGrid(HostBase):
 
     _impl_attrs_reapply_opts_after_raw = {"state_normal"}
 
-    __descriptions__: ClassVar[Mapping[str, str]] = {
-        **HostBase.__descriptions__,
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **HostBase.__attrs__,
         "raw_name": "The name identifier of this local defect section grid wrapper",
         "state_normal": "Current normal selector for the section; either tangent, a registered name, or a direct vector.",
         "_calc_normal": "Resolved normal currently used by this defect section grid.",
@@ -673,8 +674,8 @@ class DefectSectionGrid(HostBase):
 
     __slots__ = tuple(
         k
-        for k, v in __descriptions__.items()
-        if not v.startswith("Property:") and k not in HostBase.__slots__
+        for k in __attrs__.keys()
+        if k not in HostBase.__slots__
     )
 
     def __init__(
@@ -701,7 +702,7 @@ class DefectSectionGrid(HostBase):
         self_kwargs = {
             k: kwargs.pop(k)
             for k in list(kwargs.keys())
-            if k in OptsDefectSectionGrid.__descriptions__
+            if k in OptsDefectSectionGrid.__attrs__
         }
         if u_percent is not None:
             self_kwargs["u_percent"] = u_percent
@@ -843,8 +844,8 @@ class DefectSectionGrid(HostBase):
             return output
 # class DefectSection(ClassBase):
 
-#     __descriptions__: ClassVar[Mapping[str, str]] = {
-#         **(ClassBase.__descriptions__),
+#     __attrs__: ClassVar[Mapping[str, str]] = {
+#         **(ClassBase.__attrs__),
 #         "x_param": "Continuous spline parameter along the curve", 
 #         "state_normal": "The plane normal, provided either as a key from 'const_normals' or as a direct vector.",
 #         "const_normals": "A mapping of named constant vectors for convenient reuse as plane normals.",
@@ -854,8 +855,8 @@ class DefectSectionGrid(HostBase):
 
 #     __slots__ = tuple(
 #         k
-#         for k, v in __descriptions__.items()
-#         if not v.startswith("Property:") and k not in ClassBase.__slots__
+#         for k in __attrs__.keys()
+#         if k not in ClassBase.__slots__
 #     )
     
 #     @logging_and_warning_decorator(start_finish_level=5)
@@ -960,7 +961,7 @@ class DefectSectionGrid(HostBase):
 #     def _helper_check_x_param(self, x_param, logger=None):
 #         x_param = as_Number(
 #             x_param,
-#             name="x_param: "+self.__descriptions__["x_param"], 
+#             name="x_param: "+self.__attrs__["x_param"], 
 #             value_range=(0,100)
 #             )
 #         return x_param

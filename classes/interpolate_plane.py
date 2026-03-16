@@ -1,6 +1,5 @@
 import pyvista as pv
 import numpy as np
-import weakref
 from typing import Mapping, Any
 
 from .Interpolator import Interpolator
@@ -13,18 +12,22 @@ from .class_base import ClassBase
 
 class InterpolatePlane(ClassBase):
 
-    __descriptions__ = {
-        **(ClassBase.__descriptions__),
-        
+    __attrs__ = {
+        **(ClassBase.__attrs__),
         "raw_name": "The name identifier of this plane object",
         "_calc_result": "The interpolated value of the physics quantity on the 2D plane grid.",
         "_raw_interpolator": "Interpolator object for the physics quantity (class Interpolator)",
-        "_entity_plane": "The PlaneGrid entity (coordinates of 2D lattice)",
     }
-
+    __relations__ = {
+        **(ClassBase.__relations__),
+        "grid": (
+            "The plane grid associated with this interpolated field. "
+            "A field can be associated with at most one grid at a time."
+        ),
+    }
     __slots__ = tuple(
-            k for k, v in __descriptions__.items() 
-            if not v.startswith("Property:") and k not in ClassBase.__slots__
+            k for k in __attrs__.keys()
+            if k not in ClassBase.__slots__
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -42,8 +45,7 @@ class InterpolatePlane(ClassBase):
         super().__init__(name=name, name_replace="interpolate plane")
         
         if grid:
-            object.__setattr__(self, "_entity_plane", grid)
-            self._entity_plane.act_commit(
+            grid.act_commit(
                 opts=opts, 
                 name=self.name +"-grid",
                 **kwargs
@@ -53,12 +55,11 @@ class InterpolatePlane(ClassBase):
                 opts=opts,
                 opts_defaults_override=opts_defaults_override,
                 name=self.name +"-grid",
-                **kwargs)
-            object.__setattr__(self, "_entity_plane", grid)
-                
-        object.__setattr__(
-            self._entity_plane, "_impl_field_ref", weakref.ref(self)
-        )
+                **kwargs
+            )
+
+        self.act_bind_relation_base("grid", grid, is_weak=False)
+        grid.act_bind_relation_base("field", self, is_weak=True)
 
         if not isinstance(interpolator, Interpolator):
             raise TypeError(
@@ -72,13 +73,11 @@ class InterpolatePlane(ClassBase):
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
 
-        plane_grid = self._entity_plane
+        plane_grid = self.grid
 
-        logger.detail("Retrieving the full grid in lattice index structure ...")
         grid_all = plane_grid._entity_grid_all
         grid_all_flatten = np.reshape(grid_all, (-1, 3))
 
-        logger.detail("Interpolating ...")
         result = self._raw_interpolator.interpolate(grid_all_flatten)
         object.__setattr__(self, "_calc_result", result[plane_grid._calc_box_mask])
 
@@ -86,9 +85,3 @@ class InterpolatePlane(ClassBase):
     @property
     def result(self):
         return self._calc_result
-
-    @property
-    def plane(self):
-        return self._entity_plane
-    
-    
