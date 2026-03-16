@@ -794,16 +794,18 @@ class HostBase(ClassBase):
     @logging_and_warning_decorator()
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
         lines = [
-            "Modifiable attributes (note: the 'raw_' prefix can be omitted when assigning values, while 'state_' must be written explicitly):",
+            "When assigning host fields, the 'raw_' prefix may be omitted.",
         ]
 
-        attrs_raw = sorted(
-            k for k in self.__class__.__attrs__.keys() if k.startswith("raw_")
-        )
-        attrs_state = sorted(
-            k for k in self.__class__.__attrs__.keys() if k.startswith("state_")
+        attrs_host = sorted(
+            k
+            for k in self.__class__.__attrs__.keys()
+            if k.startswith("raw_") or k.startswith("state_")
         )
         attrs_opts = sorted(self.opts.__class__.__attrs__.keys())
+        if "tag" in attrs_opts:
+            attrs_opts.remove("tag")
+            attrs_opts.insert(0, "tag")
         attrs_properties = sorted(
             k
             for k in self.__class__.__properties__.keys()
@@ -815,14 +817,9 @@ class HostBase(ClassBase):
             if self.opts.__class__._helper_is_writable_property(k)
         )
 
-        if attrs_raw:
-            lines.append("[Host raw attributes]")
-            for attr_name in attrs_raw:
-                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
-
-        if attrs_state:
-            lines.append("[Host state attributes]")
-            for attr_name in attrs_state:
+        if attrs_host:
+            lines.append("[Host attributes]")
+            for attr_name in attrs_host:
                 lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
 
         if attrs_opts:
@@ -841,8 +838,7 @@ class HostBase(ClassBase):
                 lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
 
         if (
-            (not attrs_raw)
-            and (not attrs_state)
+            (not attrs_host)
             and (not attrs_opts)
             and (not attrs_properties)
             and (not attrs_opts_properties)

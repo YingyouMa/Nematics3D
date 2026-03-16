@@ -45,11 +45,11 @@ class ClassBase:
     __relations__ = {
         "owner": (
             "The object that owns this instance. "
-            "An instance can belong to at most one owner at a time."
+            "An instance can belong to at most one owner."
         ),
         "registry": (
             "The Registry object where this instance is registered. "
-            "An instance can belong to at most one registry at a time."
+            "An instance can belong to at most one registry."
         ),
     }
     __properties__ = {}
@@ -230,18 +230,15 @@ class ClassBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def act_show_modifiable_attrs(self, is_return=False, logger=None):
         protected = set(self._impl_attrs_protected)
-        attrs_raw = []
-        attrs_state = []
+        attrs_fields = []
         attrs_extra = []
         attrs_properties = []
 
         for attr_name in type(self).__attrs__.keys():
             if attr_name in protected:
                 continue
-            if attr_name.startswith("raw_"):
-                attrs_raw.append(attr_name)
-            elif attr_name.startswith("state_"):
-                attrs_state.append(attr_name)
+            if attr_name.startswith("raw_") or attr_name.startswith("state_"):
+                attrs_fields.append(attr_name)
 
         for attr_name in self._impl_extra_attrs_docs.keys():
             if attr_name not in protected:
@@ -252,16 +249,10 @@ class ClassBase:
                 attrs_properties.append(attr_name)
 
         lines = [
-            "Modifiable variables for this instance.",
             "When assigning, the 'raw_' prefix may be omitted.",
         ]
-        if attrs_raw:
-            lines.extend([f"    * {name}" for name in sorted(attrs_raw)])
-        else:
-            lines.append("    * <none>")
-
-        if attrs_state:
-            lines.extend([f"    * {name}" for name in sorted(attrs_state)])
+        if attrs_fields:
+            lines.extend([f"    * {name}" for name in sorted(attrs_fields)])
         else:
             lines.append("    * <none>")
 
@@ -285,6 +276,26 @@ class ClassBase:
             lines.append(
                 "Protected fields are excluded from the lists above and cannot be modified through normal setattr."
             )
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_show_relations(self, is_return=False, logger=None):
+        lines = []
+
+        for name in type(self).__relations__.keys():
+            target = getattr(self, name, None)
+            if target is None:
+                continue
+            desc = type(self).__relations__[name]
+            lines.append(f"{name}: {desc}")
+            lines.append(f"  current: {target!r}")
+
+        if not lines:
+            lines.append("<none>")
 
         output = "\n".join(lines)
         logger.info(output)

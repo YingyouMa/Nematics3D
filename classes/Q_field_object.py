@@ -360,7 +360,6 @@ class QFieldObject(ClassBase):
             opts = OptsSmooth()
 
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
-        opts.is_window_warning = False
 
         if opts.min_line_length is UNSET:
             opts.min_line_length = self.const_miminum_line_length_smooth
@@ -392,7 +391,7 @@ class QFieldObject(ClassBase):
         window_list = {}
         for line in self.lines:
             if line._calc_defect_num >= opts.min_line_length:
-                line.act_smooth(opts=opts)
+                line.act_smooth(opts=opts, state_is_window_warning=False)
                 num_smooth += 1
                 window_list[line.name] = line.smooth.opts.window_length
             else:

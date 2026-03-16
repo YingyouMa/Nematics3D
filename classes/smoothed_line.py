@@ -29,7 +29,6 @@ class OptsSmooth(OptsBase):
     N_out_ratio:                Number | Unset                      = UNSET
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
     min_line_length:            int | Unset                         = UNSET
-    is_window_warning:          bool | Unset                        = UNSET
 
     __attrs__ = {
         **(OptsBase.__attrs__),
@@ -39,7 +38,6 @@ class OptsSmooth(OptsBase):
         "N_out_ratio":          "ratio between output and input #points in smoothing",
         "mode":                 "smoothing mode (interp or wrap)",
         "min_line_length":      "minimum line length to be smoothed",
-        "is_window_warning" :   "whether present the warning when window_length and window_ratio are both input"
     }
 
     _validators = {
@@ -50,7 +48,6 @@ class OptsSmooth(OptsBase):
         "N_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
         "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
-        "is_window_warning":    lambda v, d: as_bool(v, name=d)
     }
     
     _DEFAULTS_FROZEN = MappingProxyType({
@@ -62,7 +59,6 @@ class OptsSmooth(OptsBase):
         "N_out_ratio":          2,
         "mode":                 "interp",
         "min_line_length":      50,
-        "is_window_warning":    True
     })
 # fmt: on
 
@@ -92,6 +88,7 @@ class SmoothedLine(HostBase):
         "_calc_result":             "The smoothed output coordinates (shape: M x D)",
         "_entity_tck":              "B-spline representation (tck) used for evaluating curve derivatives",
         "_state_is_smoothed":       "Boolean flag indicating whether smoothing was applied",
+        "state_is_window_warning":  "Whether to present the warning when both window_length and window_ratio are provided.",
         "_state_status": (
             "Status indicator of the smoothing pipeline. "
             "Set to 'success' if smoothing completes normally. "
@@ -133,6 +130,7 @@ class SmoothedLine(HostBase):
         object.__setattr__(self, "_calc_coords", self.raw_coords)
 
         object.__setattr__(self, "_state_is_smoothed", False)
+        object.__setattr__(self, "state_is_window_warning", True)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
 
         super().__init__(
@@ -214,7 +212,7 @@ class SmoothedLine(HostBase):
             else:
                 if (
                     self.opts.window_ratio is not None
-                    and self.opts.is_window_warning == True
+                    and self.state_is_window_warning
                 ):
                     logger.warning(
                         f"Window_length is manual input as {self.opts.window_length}. "
