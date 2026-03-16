@@ -30,7 +30,7 @@ Currently, I manually place the package in a specific location and import it usi
 For example, in Windows, I'm applying:
 ```python
 import sys
-sys.path.insert(0, "WhereYouPutThePackage")
+sys.path.insert(0, r"WhereYouPutTheRepo\src")
 import Nematics3D
 ```
 To install Mayavi using conda, run the following line on Anaconda Prompt

@@ -90,7 +90,9 @@
 import numpy as np
 import pyvista as pv
 import sys
-sys.path.insert(0, 'D:/Document/GitHub/')
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from Nematics3D import PlotTube
 
 # 假设你的类都定义在当前环境或已导入

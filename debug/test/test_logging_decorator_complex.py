@@ -1,5 +1,8 @@
 import logging
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from Nematics3D.logging_decorator import (
     logging_and_warning_decorator,
     set_global_logging_defaults,

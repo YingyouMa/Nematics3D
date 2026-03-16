@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from typing import Callable, MutableMapping, Any
 
 import sys
-sys.path.insert(0, 'D:/Document/GitHub/')
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import Nematics3D
 
 from Nematics3D.classes.visual.qt.panel_base import *

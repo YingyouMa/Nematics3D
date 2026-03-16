@@ -3,8 +3,9 @@ import pyvista as pv
 
 
 import sys
-# sys.path.insert(0, 'D:/Document/GitHub/3D-active-nematics/simulation')
-sys.path.insert(0, 'D:/Document/GitHub/')
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import Nematics3D
 
 index_max =  128

@@ -4,7 +4,9 @@ import datetime
 from qtpy import QtWidgets, QtCore, QtGui
 
 import sys
-sys.path.insert(0, "D:/Document/GitHub/")
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import Nematics3D
 
 from Nematics3D.classes.visual.qt.panel_base import PanelBase, make_labeled_slider_row, make_RGB_slider

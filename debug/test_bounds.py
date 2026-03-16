@@ -1,5 +1,9 @@
 import numpy as np
 import pyvista as pv
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from Nematics3D.classes.bounds import Bounds, OptsBounds
 
