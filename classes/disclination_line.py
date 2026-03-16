@@ -27,7 +27,7 @@ from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
-from ..general import pop_exclusive, find_plane_normal
+from ..general import pop_exclusive, find_plane_normal, is_given_str
 from .class_base import ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
@@ -450,7 +450,7 @@ class DisclinationLineSmooth(SmoothedLine):
 
         return tube
     
-    def act_add_local_plane(self, x_param, **kwargs):
+    def act_cross_section(self, x_param, **kwargs):
         plane = DefectSectionGrid(self, u_percent=x_param, **kwargs)
         return plane
 
@@ -716,7 +716,7 @@ class DefectSectionGrid(HostBase):
             **self_kwargs,
         )
 
-        object.__setattr__(self, "_impl_owner_ref", weakref.ref(line))
+        self.act_bind_relation_base("owner", line, is_weak=True)
         object.__setattr__(self, "_impl_normals", {"tangent": None})
         object.__setattr__(self, "_calc_normal", None)
         self.opts.act_finalize(defaults=self._opts_defaults)
@@ -726,7 +726,7 @@ class DefectSectionGrid(HostBase):
                 self.act_register_normal(key, value)
 
         state_normal = self._helper_check_state_normal(
-            state_normal, self.act_show_attr_desc("state_normal")
+            state_normal, self.show_attr_desc("state_normal")
         )
         object.__setattr__(self, "state_normal", state_normal)
 
@@ -757,7 +757,7 @@ class DefectSectionGrid(HostBase):
         return as_Vect(state_normal, name="The direct normal of defect section grid", is_norm=True)
 
     def _helper_resolve_normal(self, tangent):
-        normal = tangent if self.state_normal == "tangent" else self.state_normal
+        normal = tangent if is_given_str(self.state_normal, "tangent") else self.state_normal
         if isinstance(normal, str):
             normal = self._impl_normals[normal]
             if callable(normal):
@@ -792,7 +792,7 @@ class DefectSectionGrid(HostBase):
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
         for key, value in kwargs.items():
             object.__setattr__(self.opts, key, value)
-        return {}, kwargs
+        return self._helper_resolve_pose(), kwargs
 
     @logging_and_warning_decorator()
     def act_register_normal(self, key, value, logger=None):
@@ -825,7 +825,7 @@ class DefectSectionGrid(HostBase):
         self._impl_normals[key] = value
 
     @logging_and_warning_decorator()
-    def act_show_normals(self, is_return=False, logger=None):
+    def show_normals(self, is_return=False, logger=None):
         is_return = as_bool(is_return, name="Whether to return the normal summary", replace=False)
 
         lines = [f"Registered normals of {self.name!r}:"]
@@ -842,6 +842,7 @@ class DefectSectionGrid(HostBase):
         logger.info(output)
         if is_return:
             return output
+        
 # class DefectSection(ClassBase):
 
 #     __attrs__: ClassVar[Mapping[str, str]] = {

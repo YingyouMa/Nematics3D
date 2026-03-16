@@ -791,7 +791,6 @@ class QFieldObject(ClassBase):
         **kwargs,
     ):
 
-        logger.detail("Dealing with the parameters")
         if opts_grid is None:
             opts_grid = OptsPlaneGridPolar()
         if opts_extent is None:
@@ -837,13 +836,17 @@ class QFieldObject(ClassBase):
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
 
-        logger.detail("Create the plane.")
-        plane_grid = smooth.act_add_local_plane(x_param, opts=opts_grid, name=plane_name)
-        n_plane_name = plane_grid.name + " of " + smooth.name
+        section = smooth.act_cross_section(
+            x_param,
+            opts_grid=opts_grid,
+            name=plane_name,
+        )
+        plane_grid = section.wrapped
+        n_plane_name = section.name + " of " + smooth.name
         n_plane = QPlanePolar(
             self._calc_interpolator,
             name=n_plane_name,
-            grid=plane_grid._entity
+            grid=plane_grid,
         )
         self.objs.act_register(n_plane)
 

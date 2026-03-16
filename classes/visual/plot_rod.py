@@ -78,7 +78,7 @@ class PlotRod(PlotGlyph):
 
         orient = self.__class__._impl_validators["orient"](
             orient,
-            self.act_show_attr_desc("raw_orient"),
+            self.show_attr_desc("raw_orient"),
         )
         object.__setattr__(self, "raw_orient", orient)
 

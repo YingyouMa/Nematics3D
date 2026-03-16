@@ -765,7 +765,7 @@ class HostBase(ClassBase):
     def act_detach_enrich_kwargs_wrapped_task(self, name: str):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
 
-    def act_show_attr_desc(self, attr_name: str) -> str:
+    def show_attr_desc(self, attr_name: str) -> str:
         descriptions_host = self.__class__.__attrs__
         if attr_name in descriptions_host:
             return f"{attr_name!r}: {descriptions_host[attr_name]}"
@@ -792,7 +792,7 @@ class HostBase(ClassBase):
             "the attribute may belong to opts."
         )
     @logging_and_warning_decorator()
-    def act_show_modifiable_attrs(self, is_return=False, logger=None):
+    def show_modifiable_attrs(self, is_return=False, logger=None):
         lines = [
             "When assigning host fields, the 'raw_' prefix may be omitted.",
         ]
@@ -820,22 +820,22 @@ class HostBase(ClassBase):
         if attrs_host:
             lines.append("[Host attributes]")
             for attr_name in attrs_host:
-                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
 
         if attrs_opts:
             lines.append("[Opts attributes]")
             for attr_name in attrs_opts:
-                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
 
         if attrs_properties:
             lines.append("[Host writable properties]")
             for attr_name in attrs_properties:
-                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
 
         if attrs_opts_properties:
             lines.append("[Opts writable properties]")
             for attr_name in attrs_opts_properties:
-                lines.append(f"  - {self.act_show_attr_desc(attr_name)}")
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
 
         if (
             (not attrs_host)

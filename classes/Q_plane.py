@@ -169,6 +169,17 @@ class QPlane(InterpolatePlane):
 
         visual.act_set_interact_func(_interact)
 
+    def _helper_set_visual_interact_with_defect_section(self, visual):
+        default_func = getattr(visual, "_impl_interact_func", None)
+
+        def _interact():
+            if callable(default_func):
+                default_func()
+            from .visual.qt.interact_defect_section import InteractDefectSection
+            InteractDefectSection(self, visual.fig).show()
+
+        visual.act_set_interact_func(_interact)
+
     def _helper_update_visual(self):
             
         if self._entity_visual_nb or self._entity_visual_nd:
@@ -423,6 +434,9 @@ class QPlanePolar(QPlane):
             visual_default=visual_default,
             **kwargs
             )
+
+    def _helper_set_visual_interact_with_plane(self, visual):
+        self._helper_set_visual_interact_with_defect_section(visual)
 
 
     def _helper_detect_defect(self, directors, threshold: float=0):

@@ -60,16 +60,16 @@ spacing = 2.5
 # Q.figs.active_fig.act_view_yz()
 # Q.figs.active_fig.opts.azimuth = 90
 
-# Q.act_visualize_n_near_defect(75, Q.lines[3].smooth)
+Q.act_visualize_n_near_defect(75, Q.lines[3].smooth)
 
 
-testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), corners_limit=Q._calc_corners)
-testnPlane = Nematics3D.QPlane(Q._calc_interpolator, grid=testGrid)
+# testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), corners_limit=Q._calc_corners)
+# testnPlane = Nematics3D.QPlane(Q._calc_interpolator, grid=testGrid)
 
-testnPlane.act_visualize_n(figure=figure)
-# testnPlane.act_visualize_S(figure=figure)
-figure.act_view_yz()
-figure.opts.azimuth = 90
+# testnPlane.act_visualize_n(figure=figure)
+# # testnPlane.act_visualize_S(figure=figure)
+# figure.act_view_yz()
+# figure.opts.azimuth = 90
 
 # figure.act_savefig('test.png')
 # figure.pl.screenshot('test.png', transparent_background=False)

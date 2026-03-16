@@ -227,8 +227,53 @@ class ClassBase:
         desc = cls.__properties__.get(name, "")
         return isinstance(desc, str) and desc.startswith("Writable:")
 
+    def show_attr_desc(self, attr_name: str) -> str:
+        descriptions_attrs = self.__class__.__attrs__
+        if attr_name in descriptions_attrs:
+            return f"{attr_name!r}: {descriptions_attrs[attr_name]}"
+
+        descriptions_properties = self.__class__.__properties__
+        if attr_name in descriptions_properties:
+            return f"{attr_name!r}: {descriptions_properties[attr_name]}"
+
+        descriptions_relations = self.__class__.__relations__
+        if attr_name in descriptions_relations:
+            return f"{attr_name!r}: {descriptions_relations[attr_name]}"
+
+        descriptions_extra = self._impl_extra_attrs_docs
+        if attr_name in descriptions_extra:
+            return f"{attr_name!r}: {descriptions_extra[attr_name]}"
+
+        raise KeyError(
+            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / "
+            "__properties__ / __relations__ / extra attrs."
+        )
+
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_show_modifiable_attrs(self, is_return=False, logger=None):
+    def show_getattrs(self, is_return=False, logger=None):
+        names = sorted(
+            name
+            for name in self._impl_getattr_names
+            if not name.startswith("_impl_")
+        )
+
+        lines = []
+        for name in names:
+            try:
+                lines.append(self.show_attr_desc(name))
+            except KeyError:
+                continue
+
+        if not lines:
+            lines.append("<none>")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_modifiable_attrs(self, is_return=False, logger=None):
         protected = set(self._impl_attrs_protected)
         attrs_fields = []
         attrs_extra = []
@@ -283,7 +328,7 @@ class ClassBase:
             return output
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_show_relations(self, is_return=False, logger=None):
+    def show_relations(self, is_return=False, logger=None):
         lines = []
 
         for name in type(self).__relations__.keys():
