@@ -22,10 +22,7 @@ from Nematics3D.datatypes import (
 from ..host_base import OptsBase, HostBase
 from ..bounds import Bounds, as_bounds
 from .plot_figure import PlotFigure
-from Nematics3D.logging_decorator import (
-    log_caught_exception,
-    logging_and_warning_decorator,
-)
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import find_nearest_point, fmt_value
 
 #!!! resolver source
@@ -37,8 +34,6 @@ ColorMode = ColorRGB | Callable | Sequence
 OpacityMode = float | Callable | Sequence
 RadiusMode = float | Callable | Sequence
 ScalarsMode = Callable | Sequence | None
-ClipGeometryLike = list[float] | pv.PolyData | None
-
 # fmt: off
 @dataclass(slots=True, repr=False)
 class OptsGlyph(OptsBase):
@@ -72,10 +67,8 @@ class OptsGlyph(OptsBase):
     is_scalar_bar:              bool | Unset                        = UNSET
     scalar_bar_title:           str | Unset                         = UNSET
 
-    # --- Geometry & Clipping ---
+    # --- Geometry ---
     sides:                      int | Unset                         = UNSET
-    clip_geometry:              ClipGeometryLike | Unset            = UNSET
-
     __attrs__: ClassVar[Mapping[str, str]] = {
         **(OptsBase.__attrs__),
         
@@ -129,13 +122,8 @@ class OptsGlyph(OptsBase):
         "is_scalar_bar":        "Whether to display the color legend (scalar bar).",
         "scalar_bar_title":     "Title for the scalar bar (e.g., 'Stress (MPa)').",
         
-        # --- Geometry & Clipping ---
+        # --- Geometry ---
         "sides":                "Number of facets around the glyph (higher = smoother).",
-        "clip_geometry": (
-            "(INVALID FOR NOW!!!) Define clipping boundary. Can be: "
-            "1) List of 6 floats [xmin, xmax...] for axis-aligned box, "
-            "2) A Mesh/PolyData representing any closed shape (e.g. 8-point box)."
-        ),
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -183,7 +171,6 @@ class OptsGlyph(OptsBase):
         "is_scalar_bar":        True,
         "scalar_bar_title":     "scalar",
         "sides":                12,
-        "clip_geometry":        None,
     })
 
     _actor_attr: ClassVar[Mapping[str, str]] = {
@@ -316,22 +303,24 @@ class PlotGlyph(HostBase):
 
         if figure is not None:
             if not isinstance(figure, PlotFigure):
-                log_caught_exception(
-                    logger,
-                    TypeError("`figure` for plotting must be PlotFigure object!"),
-                    exception_msg="Check input",
-                    recovery_msg="Create a new PlotFigure object and store it in self.fig",
-                )
+                try:
+                    raise TypeError("`figure` for plotting must be PlotFigure object!")
+                except TypeError:
+                    logger.exception("Check input")
+                    logger.recovery(
+                        "Create a new PlotFigure object and store it in self.fig"
+                    )
                 figure = PlotFigure()
             elif not figure.is_alive:
-                log_caught_exception(
-                    logger,
-                    RuntimeError(
+                try:
+                    raise RuntimeError(
                         "The plotting window has been closed. Cannot update an inactive plotter."
-                    ),
-                    exception_msg="Check input",
-                    recovery_msg="Create a new PlotFigure object and store it in self.fig",
-                )
+                    )
+                except RuntimeError:
+                    logger.exception("Check input")
+                    logger.recovery(
+                        "Create a new PlotFigure object and store it in self.fig"
+                    )
                 figure = PlotFigure()
         elif figure is None:
             figure = PlotFigure()
@@ -375,7 +364,9 @@ class PlotGlyph(HostBase):
             bounds = as_bounds(bounds, name="The bounds controlling this glyph")
         except Exception:
             logger.exception("Check input.")
-            logger.recovery("Ignore this bounds input and continue without modifying the current binding.")
+            logger.recovery(
+                "Ignore this bounds input and continue without modifying the current binding."
+            )
             return
 
         bounds_old = self.bounds
@@ -533,12 +524,11 @@ class PlotGlyph(HostBase):
 
         shading = self.opts.shading_type.lower()
         if shading not in ("pbr", "phong"):
-            log_caught_exception(
-                logger,
-                ValueError("shading type must either be `pbr` or `phong`"),
-                exception_msg="Please check input",
-                recovery_msg="Use `phong` in the following.",
-            )
+            try:
+                raise ValueError("shading type must either be `pbr` or `phong`")
+            except ValueError:
+                logger.exception("Please check input")
+                logger.recovery("Use `phong` in the following.")
             shading = "phong"
         prop.interpolation = shading
         object.__setattr__(self.opts, "shading_type", shading)
@@ -797,20 +787,19 @@ class PlotGlyph(HostBase):
                 func()
             else:
                 raise RuntimeError("_impl_interact_func is not callable.")
+
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_interact_func(self, func, logger=None):
         if callable(func):
             object.__setattr__(self, "_impl_interact_func", func)
         else:
-            log_caught_exception(
-                logger,
-                RuntimeError("_impl_interact_func is not callable."),
-                exception_msg="Check input.",
-                recovery_msg="Automatically ignore this modification",
-            )
+            try:
+                raise RuntimeError("_impl_interact_func is not callable.")
+            except RuntimeError:
+                logger.exception("Check input.")
+                logger.recovery("Automatically ignore this modification")
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})"
         return msg
-

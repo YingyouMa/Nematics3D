@@ -6,10 +6,7 @@ from pyvistaqt import BackgroundPlotter
 from types import MappingProxyType
 from typing import Mapping, Any
 from PyQt5 import QtCore
-from Nematics3D.logging_decorator import (
-    log_caught_exception,
-    logging_and_warning_decorator,
-)
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import (
     ColorRGB,
     as_ColorRGB,
@@ -164,15 +161,14 @@ class PlotFigure(HostBase, RegistryBase):
             is_new_plotter = True
         else:
             if not isinstance(plotter, (BackgroundPlotter, pv.Plotter)):
-                log_caught_exception(
-                    logger,
-                    TypeError(
+                try:
+                    raise TypeError(
                         "`plotter` for PlotFigure must be either"
                         "pyvistaqt BackgroundPlotter object or PyVista Plotter object, or None."
-                    ),
-                    exception_msg="Check input",
-                    recovery_msg="Create a new figure instead.",
-                )
+                    )
+                except TypeError:
+                    logger.exception("Check input")
+                    logger.recovery("Create a new figure instead.")
                 is_new_plotter = True
             else:
                 if is_off_screen and not plotter.off_screen:
@@ -519,15 +515,14 @@ class PlotFigure(HostBase, RegistryBase):
 def as_PlotFigure(figure, opts_figure, logger=None):
 
     if not isinstance(opts_figure, OptsFigure):
-        log_caught_exception(
-            logger,
-            TypeError(
+        try:
+            raise TypeError(
                 "The variable `opts_figure` must be instance of OptsFigure."
                 f"Got {type(opts_figure).__name__!r} instead."
-            ),
-            exception_msg="Check input.",
-            recovery_msg="Ignore this options in the following.",
-        )
+            )
+        except TypeError:
+            logger.exception("Check input.")
+            logger.recovery("Ignore this options in the following.")
         opts_figure = None
 
     try:

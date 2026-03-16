@@ -18,8 +18,8 @@ Available Log Levels (from most verbose to least verbose):
 
  20  INFO
       Key results and essential runtime messages. Concise summaries of important
-      events, outcomes, and performance information. This level is also used to 
-      report critical default parameters that were implicitly applied because the 
+      events, outcomes, and performance information. This level is also used to
+      report critical default parameters that were implicitly applied because the
       user did not provide explicit values.
 
  30  WARNING
@@ -140,7 +140,9 @@ def _describe_frame(frame, include_code):
     except OSError:
         code_line = None
     else:
-        code_line = frame_info.code_context[0].strip() if frame_info.code_context else None
+        code_line = (
+            frame_info.code_context[0].strip() if frame_info.code_context else None
+        )
 
     if code_line:
         return f"{location}\ncode: {code_line}"
@@ -173,14 +175,6 @@ def _get_log_call_context():
         return current_text, caller_text
     finally:
         del frame
-
-
-def log_caught_exception(logger, error, *, exception_msg, recovery_msg):
-    try:
-        raise error
-    except type(error):
-        logger.exception(exception_msg)
-        logger.recovery(recovery_msg)
 
 
 class Logger:
@@ -216,10 +210,10 @@ class Logger:
 
     def recovery(self, msg):
         self._log(RECOVERY, msg)
-        
-    def detail(self, msg): 
+
+    def detail(self, msg):
         self._log(DETAIL, msg)
-        
+
     def progress(self, msg):
         self._log(PROGRESS, msg)
 
@@ -239,33 +233,33 @@ class Logger:
 
 
 def logging_and_warning_decorator(
-        log_mode=None, 
-        show_timestamp=None, 
-        log_level=None,
-        start_finish_level=logging.DEBUG):
-    
+    log_mode=None, show_timestamp=None, log_level=None, start_finish_level=logging.DEBUG
+):
+
     if callable(log_mode):
         func = log_mode
         return _decorate(func, start_finish_level=start_finish_level)
 
     def wrapper(func):
         return _decorate(
-            func, 
-            log_mode=log_mode, 
-            show_timestamp=show_timestamp, 
+            func,
+            log_mode=log_mode,
+            show_timestamp=show_timestamp,
             log_level=log_level,
-            start_finish_level=start_finish_level
+            start_finish_level=start_finish_level,
         )
 
     return wrapper
 
 
-def _decorate(func, 
-              log_mode=None, 
-              show_timestamp=None, 
-              log_level=None,
-              start_finish_level=logging.DEBUG):
-    
+def _decorate(
+    func,
+    log_mode=None,
+    show_timestamp=None,
+    log_level=None,
+    start_finish_level=logging.DEBUG,
+):
+
     @functools.wraps(func)
     def inner(*args, **kwargs):
         display_name, method_owner_label = _get_method_logging_context(func, args)
@@ -344,43 +338,38 @@ def _decorate(func,
                         return
                     if level < effective_log_level and level != RECOVERY:
                         return
-                
+
                     show_ts = _current_show_timestamp.get()
                     indent_level = _current_indent_level.get()
                     indent_str = INDENT * indent_level
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     level_str = f"[{logging.getLevelName(level)}]"
-                
-                    # 这里直接用 msg，不要加 display_name
+
                     indented_msg = "\n".join(
                         f"{indent_str}{line}" for line in str(msg).splitlines()
                     )
-                
+
                     mode = _current_log_mode.get()
                     fh = _current_file_handler.get()
-                
+
                     if show_ts:
                         text = f"{level_str} - {timestamp}\n{indented_msg}\n"
                     else:
                         text = f"{level_str}\n{indented_msg}\n"
-                
+
                     if mode == "screen":
                         print(text, end="")
                     elif mode == "file" and fh:
                         fh.write(text)
 
                 _current_logger.set(safe_log)
-                       
- 
-        
+
         def bound_safe_log(level, msg):
-            # 给每条 logger.* 输出前面加上当前函数名，
-            # start/finish 那两句仍然用原始 safe_log，不受影响
             if msg is None:
-                # 防御一下极端用法
                 safe_log(level, None)
             else:
                 safe_log(level, f"<{contextual_display_name}> \n{msg}")
+
         logger_obj = Logger(bound_safe_log)
         kwargs["logger"] = logger_obj
 
@@ -389,7 +378,7 @@ def _decorate(func,
                 start_finish_level,
                 f"Function `{contextual_display_name}` STARTED in program `{get_program_name()}`",
             )
-            
+
         start_time = time.time()
 
         try:

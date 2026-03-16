@@ -1,9 +1,6 @@
 import weakref
 
-from Nematics3D.logging_decorator import (
-    log_caught_exception,
-    logging_and_warning_decorator,
-)
+from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_str
 
 
@@ -98,14 +95,13 @@ class RegistryBase:
     def act_register(self, term, is_contain_ok=False, logger=None):
         if term in self._entity:
             if not is_contain_ok:
-                log_caught_exception(
-                    logger,
-                    ValueError(
+                try:
+                    raise ValueError(
                         f"term {term!r} is already registered in {self._helper_show_name_info()}"
-                    ),
-                    exception_msg="Check input.",
-                    recovery_msg="Ignore this process.",
-                )
+                    )
+                except ValueError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this process.")
             return
 
         if not hasattr(term, "name"):
@@ -142,14 +138,13 @@ class RegistryBase:
     def act_unregister(self, term, is_missing_ok=False, logger=None):
         if term not in self._entity:
             if not is_missing_ok:
-                log_caught_exception(
-                    logger,
-                    KeyError(
+                try:
+                    raise KeyError(
                         f"term {term!r} is not registered in {self._helper_show_name_info()}"
-                    ),
-                    exception_msg="Check input.",
-                    recovery_msg="Ignore this process.",
-                )
+                    )
+                except KeyError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this process.")
             return
 
         self._entity.remove(term)

@@ -8,7 +8,7 @@ import numpy as np
 import datetime
 
 
-from ..logging_decorator import log_caught_exception, logging_and_warning_decorator
+from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
 from .opts import merge_opts_all, build_dict_override, diff_dict_values
@@ -79,14 +79,13 @@ class OptsBase:
         # --- setting UNSET after functioning is forbidden ---
         if value is UNSET:
             if is_functioning:
-                log_caught_exception(
-                    logger,
-                    TypeError(
+                try:
+                    raise TypeError(
                         "Attribute could not be set as UNSET after first functioning!"
-                    ),
-                    exception_msg="Check input.",
-                    recovery_msg="Ignore this modification",
-                )
+                    )
+                except TypeError:
+                    logger.exception("Check input.")
+                    logger.recovery("Ignore this modification")
                 return value
             object.__setattr__(self, key, value)
             return value
@@ -416,15 +415,16 @@ class HostBase(ClassBase):
         if opts is None:
             opts = opts_type()
         elif not isinstance(opts, opts_type):
-            log_caught_exception(
-                logger,
-                TypeError(
+            try:
+                raise TypeError(
                     f"opts must be an instance of {opts_type.__name__}, "
                     f"got {type(opts).__name__}"
-                ),
-                exception_msg="Check input.",
-                recovery_msg=f"Create a default instance of {opts_type.__name__} instead.",
-            )
+                )
+            except TypeError:
+                logger.exception("Check input.")
+                logger.recovery(
+                    f"Create a default instance of {opts_type.__name__} instead."
+                )
             opts = opts_type()
 
         return opts
@@ -545,14 +545,13 @@ class HostBase(ClassBase):
         blocked = [k for k in kwargs.keys() if k in self.attrs_forbidden]
         for key in blocked:
             kwargs.pop(key)
-            log_caught_exception(
-                logger,
-                AttributeError(
+            try:
+                raise AttributeError(
                     f"{key!r} is protected and could not be directly modified"
-                ),
-                exception_msg="Invalid attr",
-                recovery_msg="Automatically ignore this attr",
-            )
+                )
+            except AttributeError:
+                logger.exception("Invalid attr")
+                logger.recovery("Automatically ignore this attr")
 
     def _helper_commit_name(self, kwargs):
         if not kwargs:

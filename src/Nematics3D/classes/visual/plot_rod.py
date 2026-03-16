@@ -49,8 +49,12 @@ class PlotRod(PlotGlyph):
         if not v.startswith("Property:") and k not in PlotGlyph.__slots__
     )
 
-    _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + ["length"]
-    _impl_attrs_reapply_opts_after_raw = PlotGlyph._impl_attrs_reapply_opts_after_raw | {"orient"}
+    _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
+        "length"
+    ]
+    _impl_attrs_reapply_opts_after_raw = (
+        PlotGlyph._impl_attrs_reapply_opts_after_raw | {"orient"}
+    )
     _impl_validators = {
         **PlotGlyph._impl_validators,
         "orient": lambda v, d: as_points(v, name=d),
@@ -102,7 +106,6 @@ class PlotRod(PlotGlyph):
         object.__setattr__(self, "_impl_resolver_source", "raw_orient")
 
         self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
-
 
         self._helper_init_end()
 
@@ -160,15 +163,6 @@ class PlotRod(PlotGlyph):
             absolute=True,
         )
 
-        if self.opts.clip_geometry is not None:
-            if (
-                isinstance(self.opts.clip_geometry, (list, tuple))
-                and len(self.opts.clip_geometry) == 6
-            ):
-                mesh = mesh.clip_box(bounds=self.opts.clip_geometry, invert=False)
-            elif hasattr(self.opts.clip_geometry, "points"):
-                mesh = mesh.clip_surface(self.opts.clip_geometry, invert=False)
-
         object.__setattr__(self, "_calc_poly", poly)
         return mesh
 
@@ -181,4 +175,3 @@ class PlotRod(PlotGlyph):
         value = fmt_value(self.raw_orient[idx])
         msg = f"Local orientation: {value} \n" + msg
         return pos, msg, idx
-

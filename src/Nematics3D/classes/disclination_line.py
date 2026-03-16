@@ -5,7 +5,7 @@ import weakref
 from types import MappingProxyType
 
 from ..general import sort_line_indices  # , get_plane, get_tangent
-from ..logging_decorator import log_caught_exception, logging_and_warning_decorator
+from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
     as_Vect,
@@ -242,12 +242,13 @@ class DisclinationLine(ClassBase):
         try:
             smooth_obj = self.smooths[smooth_index]
         except Exception:
-            log_caught_exception(
-                logger,
-                IndexError(f"Invalid smooth_index={smooth_index!r} for available smooth versions."),
-                exception_msg="Check input",
-                recovery_msg="Use the latest version instead.",
-            )
+            try:
+                raise IndexError(
+                    f"Invalid smooth_index={smooth_index!r} for available smooth versions."
+                )
+            except IndexError:
+                logger.exception("Check input")
+                logger.recovery("Use the latest version instead.")
             smooth_obj = self.smooths[-1]
 
         if getattr(smooth_obj, "_entity_visual", None):
