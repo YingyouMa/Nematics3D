@@ -4,22 +4,40 @@ from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import as_str
 
 
+# Subclassing rules:
+# - Extend `__attrs__`, `__relations__`, and `__properties__` deliberately.
+#   These tables drive both the object model and the inspection interface.
+# - Keep `__slots__` consistent with the stored fields declared in `__attrs__`.
+#   Do not add stored instance state that bypasses this metadata layer.
+# - Persisted or directly assignable stored fields should follow the existing
+#   naming conventions such as `raw_*`, `state_*`, and `default_*`.
+# - New relations should be declared in `__relations__` and managed through the
+#   relation helpers instead of ad hoc direct assignment.
+# - Runtime user-defined attributes should go through `act_add_attr()` rather
+#   than introducing parallel extension mechanisms.
+# - Overriding `__getattr__`, `__setattr__`, or name-handling behavior is
+#   high-risk and should preserve the semantics expected by downstream classes.
 class ClassBase:
     """
-    A foundational base class providing structured identity, hierarchy management,
-    and strict attribute control.
+    Shared base class for structured Nematics3D objects.
 
-    ### Main Features:
-    * **Identity & Hierarchy**: Manages the object's name and its relationships
-        with an 'Owner' (parent object) and a 'Registry' (container). It supports
-        automatic name conflict resolution via the Registry's helper methods.
-    * **Attribute Control**: Uses ``__slots__`` to optimize memory and prevent
-        accidental assignment of undefined variables.
-    * **Dynamic Extension**: Supports human-added attributes via ``act_add_attr``.
+    For typical users of this package, ClassBase provides a consistent object
+    interface with:
 
-    ### Variables & Metadata:
-    Field-like variables are documented in ``__attrs__`` and relationships are
-    documented in ``__relations__``.
+    - a readable object name
+    - lightweight owner / registry relations
+    - controlled attribute access
+    - inspection helpers such as `show_getattrs()`, `show_modifiable_attrs()`,
+      and `show_relations()`
+
+    The `show_*` helpers are especially useful when exploring an unfamiliar
+    object. They provide a quick summary of what the object exposes, which
+    attributes are intended to be modified, and how the object is currently
+    connected to other objects.
+
+    Most users should not need to subclass ClassBase directly. Its main purpose
+    is to give higher-level objects in the package a consistent identity,
+    relation model, and attribute-inspection interface.
     """
 
     __attrs__ = {
@@ -55,7 +73,7 @@ class ClassBase:
     __properties__ = {}
 
     __slots__ = tuple(__attrs__.keys()) + ("__weakref__",)
-    
+
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -75,12 +93,12 @@ class ClassBase:
 
         self._helper_init_getattr_names_basic()
         self._helper_init_relations_basic()
-        
+
         if name is None:
             name = name_replace
         else:
             name = as_str(name, name=self.__attrs__["raw_name"], replace=name_replace)
-            
+
         self.act_set_name(name if name else name_replace)
 
     def _helper_init_getattr_names_basic(self):
@@ -252,9 +270,7 @@ class ClassBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def show_getattrs(self, is_return=False, logger=None):
         names = sorted(
-            name
-            for name in self._impl_getattr_names
-            if not name.startswith("_impl_")
+            name for name in self._impl_getattr_names if not name.startswith("_impl_")
         )
 
         lines = []
@@ -341,7 +357,7 @@ class ClassBase:
                 continue
             desc = type(self).__relations__[name]
             lines.append(f"{name}: {desc}")
-            lines.append(f"  current: {target!r}")
+            lines.append(f"  current: {target}")
 
         if not lines:
             lines.append("<none>")

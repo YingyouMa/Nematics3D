@@ -69,6 +69,7 @@ class OptsGlyph(OptsBase):
 
     # --- Geometry ---
     sides:                      int | Unset                         = UNSET
+    is_clip_inside:             bool | Unset                        = UNSET
     __attrs__: ClassVar[Mapping[str, str]] = {
         **(OptsBase.__attrs__),
         
@@ -124,6 +125,7 @@ class OptsGlyph(OptsBase):
         
         # --- Geometry ---
         "sides":                "Number of facets around the glyph (higher = smoother).",
+        "is_clip_inside":       "Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -145,6 +147,7 @@ class OptsGlyph(OptsBase):
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
         "scalar_bar_title":     lambda v, d: as_str(v, name=d),
         "sides":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True),
+        "is_clip_inside":       lambda v, d: as_bool(v, name=d),
         }
 
 
@@ -171,6 +174,7 @@ class OptsGlyph(OptsBase):
         "is_scalar_bar":        True,
         "scalar_bar_title":     "scalar",
         "sides":                12,
+        "is_clip_inside":       True,
     })
 
     _actor_attr: ClassVar[Mapping[str, str]] = {
@@ -392,7 +396,10 @@ class PlotGlyph(HostBase):
         bounds = self.bounds
         if bounds is None:
             return mesh
-        return mesh.clip_surface(bounds.clip_geometry, invert=False)
+        return mesh.clip_surface(
+            bounds.clip_geometry,
+            invert=self.opts.is_clip_inside,
+        )
 
     # ----------------------------------------------------------------------------------------------------
     # Resolver function: to resolve point-wise properties (color, opacity, etc) for each inidividual glyph
@@ -636,6 +643,13 @@ class PlotGlyph(HostBase):
         pm.act_register(actor=actor, owner=self)
 
     def act_remove(self):
+        bounds_visual_source = getattr(self, "_impl_bounds_visual_source", None)
+        bounds_visual_sync_name = getattr(self, "_impl_bounds_visual_sync_name", None)
+        if bounds_visual_source is not None:
+            bounds_visual_source._helper_unregister_visual_sync(
+                bounds_visual_sync_name,
+                tube=self,
+            )
         self.act_unbind_bounds(is_apply=False)
         self.fig.pl.remove_actor(self._entity)
         pm = getattr(self.fig, "_entity_pick_manager", None)

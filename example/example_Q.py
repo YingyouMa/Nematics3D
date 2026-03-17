@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import Nematics3D
 
-from Nematics3D.debug.debug_store import DEBUG_VARS
+# from Nematics3D.debug.debug_store import DEBUG_VARS
 
 # index_max =  128
 # n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]

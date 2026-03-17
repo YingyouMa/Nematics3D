@@ -89,7 +89,26 @@ When modifying an existing aligned block:
 - extend the local `fmt` protection if needed
 - run `black` after the edit so the rest of the file stays normalized
 
-## 7. Example pattern
+## 7. Override comment blocks
+
+When a method intentionally overrides inherited behavior, add an override comment block immediately above the method.
+
+Use the repository pattern:
+
+```py
+# ==================== OVERRIDE ====================
+# ClassName overrides BaseClass.method_name because ...
+# ==================================================
+```
+
+Rules:
+
+- use this for real behavioral overrides, not for simple inherited methods left unchanged
+- name the overriding class and the overridden base method explicitly
+- state the reason for the override in one or two short lines
+- keep the block immediately adjacent to the method definition
+
+## 8. Example pattern
 
 The following is representative of the intended style for short declarative blocks:
 

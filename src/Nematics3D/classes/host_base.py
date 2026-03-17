@@ -55,7 +55,7 @@ class OptsBase:
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({"tag": "options"})
-    
+
     @property
     def host(self):
         ref = self._impl_host_ref
@@ -229,68 +229,43 @@ class OptsBase:
         return repr(v)
 
 
+# Subclassing rules:
+# - Keep host-side stored fields in `__attrs__`, and keep options in the paired
+#   `OptsBase` subclass rather than spreading configurable state across both
+#   layers without documentation.
+# - Extend `__attrs__`, `__relations__`, `__properties__`, and `_impl_validators`
+#   deliberately. These declarations define both behavior and user-facing
+#   inspection output.
+# - `__init__()` should only do minimal wiring. Concrete subclasses remain
+#   responsible for finalizing opts and for defining how accepted option updates
+#   are realized in host state.
+# - `_helper_commit_apply_opts_main()` is the main subclass hook. If a subclass
+#   accepts an update there, it must write the resolved value back to
+#   `self.opts` through a non-recursive internal path.
+# - Wrapper hosts that transform inputs must write transformed values back into
+#   the forwarded kwargs so downstream wrapped hosts receive the resolved
+#   parameters.
+# - Overriding `act_commit()`, `_helper_commit_pre_opts()`, or forwarding/sync
+#   helpers is high-risk and should preserve the established commit pipeline.
 class HostBase(ClassBase):
     """
-    A high-level controller class that manages complex state through a
-    'Opts' configuration layer and a strict commit-based update pipeline.
+    Shared host controller for objects that manage state through an associated
+    `OptsBase` configuration object.
 
-    ### 1. Centralized Data Storage (.opts)
-    All critical parameters and functional settings are stored exclusively within
-    the ``.opts`` attribute, which is an instance of ``OptsBase`` (or its subclass).
-    The Host instance itself does not hold primary state variables; instead, it
-    acts as the logic engine that governs and applies the configuration held
-    by the Opts instance.
+    For typical users of this package, a HostBase-style object provides:
 
-    ### 2. Host-Opts Interaction Semantics
-    This class operates on a "Request-Commit-Apply" model. Instead of
-    direct mutation, the Host delegates its public configuration to an
-    associated ``OptsBase`` instance.
-    * **State Isolation**: Before 'finalization', Opts acts as a buffer.
-        Once finalized (functioning state), any change to Opts triggers a
-        request back to the Host.
-    * **The Commit Pipeline**: All public attribute assignments on the Host
-        are intercepted and routed through ``act_commit()``. This ensures that
-        changes undergo validation, preprocessing, and side-effect management
-        (e.g., hardware updates, cache invalidation) before state realization.
-    * **Write-Back Policy**: When a commit is accepted, the Host is responsible
-        for updating its internal state and writing resolved values back to
-        the Opts instance via bypass methods to avoid recursive loops.
+    - a normal object identity and relation interface inherited from `ClassBase`
+    - a paired `.opts` object that stores configurable parameters
+    - a commit-style update path instead of ad hoc direct mutation
+    - inspection helpers such as `show_getattrs()`, `show_modifiable_attrs()`,
+      and `show_relations()`
 
-    ### 2. Core Functional Modules
-    * **Identity Management**: Inherits robust naming and conflict resolution
-        from ``ClassBase``.
-    * **Option Lifecycle**: Manages the binding, override merging, and
-        finalization of configuration options (Opts).
-    * **State Snapshots**: Provides a timestamped backup mechanism
-        (``_opts_backup``) to archive configuration history.
+    The `show_*` helpers are especially useful when exploring an unfamiliar
+    host object. In particular, `show_modifiable_attrs()` helps distinguish
+    host-side fields from opts-managed fields before making updates.
 
-    ### 3. Variables & Metadata
-    Refer to the ``__attrs__`` dictionary for granular details on
-    internal implementation slots and public properties.
-    Key internal stores include:
-    * ``opts``: The primary configuration engine.
-    * ``_opts_defaults``: The baseline configuration used during finalization.
-    * ``_opts_backup``: Historical archive of previous option states.
-
-    ### 4. Inheritance Guidelines
-    * HostBase.__init__ only performs minimal wiring (opts binding,
-        defaults construction, and name initialization). Concrete host
-        subclasses are responsible for:
-          - finalizing opts at the appropriate lifecycle stage, and
-          - defining how finalized opts are consumed and applied.
-    * The kwargs received by HostBase._helper_commit_apply_opts(...) are
-        guaranteed to have passed all opts-level preprocessing and basic
-        validation. Host implementations may assume that input values are
-        already sanitized, and therefore should not repeat opts-level
-        validation. Host-side logic should focus on state-dependent or
-        cross-field constraints and side effects.
-    * When a host accepts an update in _helper_commit_apply_opts(...), it
-        MUST write the resolved value back to opts. This write-back must bypass
-        the normal opts assignment path (e.g. via object.__setattr__ or
-        OptsBase._helper_internal_update) to avoid recursive commit loops.
-        The host is also responsible for calling self._impl_sync_func() to update
-        all downstream listeners by the resolved value.
-    * Other inheritance guidelines of ClassBase class.
+    Most package users should work with concrete host subclasses rather than
+    subclassing HostBase directly.
     """
 
     __attrs__ = {
@@ -341,9 +316,7 @@ class HostBase(ClassBase):
         ),
     }
 
-    __slots__ = tuple(
-        k for k in __attrs__.keys() if k not in ClassBase.__slots__
-    )
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
 
     _impl_validators = {}
     # Validator keys correspond to the public name (without the ``raw_`` prefix).
@@ -353,7 +326,12 @@ class HostBase(ClassBase):
     _impl_attrs_reapply_opts_after_raw = set()
     # Public attribute names (without "raw_") that should force an opts re-apply
     # after raw/public assignment in a commit even if no explicit opts update is provided.
-    
+
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.__init__ because a host must bind an
+    # OptsBase instance, build opts defaults, and initialize commit-related
+    # runtime stores in addition to the basic naming/relations setup.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -570,9 +548,9 @@ class HostBase(ClassBase):
         is_reapply_opts = False
         for key in list(kwargs.keys()):
             is_host_attr = (
-                (key in self.__attrs__ and (key.startswith("raw_") or key.startswith("state_")))
-                or (("raw_" + key) in self.__attrs__)
-            )
+                key in self.__attrs__
+                and (key.startswith("raw_") or key.startswith("state_"))
+            ) or (("raw_" + key) in self.__attrs__)
             if is_host_attr:
                 kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(
                     kwargs, key
@@ -631,9 +609,7 @@ class HostBase(ClassBase):
 
         if validator is not None:
             try:
-                value_valid = validator(
-                    attr_value, self.__attrs__[host_attr_name]
-                )
+                value_valid = validator(attr_value, self.__attrs__[host_attr_name])
                 object.__setattr__(self, host_attr_name, value_valid)
                 return {attr_name_return: value_valid}, (
                     reapply_key in self.__class__._impl_attrs_reapply_opts_after_raw
@@ -764,6 +740,10 @@ class HostBase(ClassBase):
     def act_detach_enrich_kwargs_wrapped_task(self, name: str):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
 
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_attr_desc so descriptions can be
+    # resolved from both the host layer and the paired opts layer.
+    # ==================================================
     def show_attr_desc(self, attr_name: str) -> str:
         descriptions_host = self.__class__.__attrs__
         if attr_name in descriptions_host:
@@ -790,6 +770,11 @@ class HostBase(ClassBase):
             "The opts attrs are not available yet because self._opts has not been initialized; "
             "the attribute may belong to opts."
         )
+
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_modifiable_attrs to present modifiable
+    # fields by category: host attrs, opts attrs, and writable properties.
+    # ==================================================
     @logging_and_warning_decorator()
     def show_modifiable_attrs(self, is_return=False, logger=None):
         lines = [
@@ -852,7 +837,7 @@ class HostBase(ClassBase):
 
     def act_save_opts(self, name=None):
         if not name:
-            name = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+            name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         self._opts_backup[name] = self.opts.act_asdict()
 
     def act_attach_sync_task(self, name: str, func: Callable):
@@ -865,7 +850,11 @@ class HostBase(ClassBase):
 
     @logging_and_warning_decorator()
     def _helper_register_protected_attr(
-        self, attrs: Sequence[str] | str, target_set: set[str], attr_name: str, logger=None
+        self,
+        attrs: Sequence[str] | str,
+        target_set: set[str],
+        attr_name: str,
+        logger=None,
     ) -> None:
         if isinstance(attrs, str):
             attrs = [attrs]
@@ -907,9 +896,7 @@ class HostBase(ClassBase):
                 logger.exception("Invalid attr name.")
                 logger.recovery("Automatically ignore this attr.")
 
-    def act_register_wrapped_attr(
-        self, attrs: Sequence[str] | str
-    ) -> None:
+    def act_register_wrapped_attr(self, attrs: Sequence[str] | str) -> None:
         """Register a group of public attributes as protected under wrapping."""
         self._helper_register_protected_attr(
             attrs,
@@ -943,9 +930,11 @@ class HostBase(ClassBase):
                 self._impl_attrs_wrapped.discard(attr)
                 self._impl_attrs_wrapped.discard("raw_" + attr)
 
-    def act_register_protected_attr(
-        self, attrs: Sequence[str] | str
-    ) -> None:
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.act_register_protected_attr because protected
+    # names may belong either to the host itself or to its paired opts object.
+    # ==================================================
+    def act_register_protected_attr(self, attrs: Sequence[str] | str) -> None:
         """Register a group of public attributes as directly protected by this host."""
         self._helper_register_protected_attr(
             attrs,
@@ -998,13 +987,9 @@ class HostBase(ClassBase):
         self.act_unbind_relation_base("wrapper")
         self.act_unregister_wrapped_attr()
 
-    # Rewrite from ClassBase. To handle opts.
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase._helper_setattr_final so public assignment is
+    # routed through `act_commit()` instead of writing directly to host storage.
+    # ==================================================
     def _helper_setattr_final(self, key, value):
         self.act_commit(**{key: value})
-
-
-
-
-
-
-

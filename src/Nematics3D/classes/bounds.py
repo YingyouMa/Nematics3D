@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
+import weakref
 from typing import Any, ClassVar, Literal, Mapping
 
 import numpy as np
@@ -8,8 +9,23 @@ import pyvista as pv
 
 from Nematics3D.datatypes import Number, UNSET, Unset, Vect, as_Number, as_Vect, as_str
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.general import get_box_corners
+from Nematics3D.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase
+
+
+@dataclass(slots=True)
+class _BoundsVisualEntry:
+    figure_ref: weakref.ReferenceType
+    tube_ref: weakref.ReferenceType
+    sync_name: str
+
+    @property
+    def figure(self):
+        return self.figure_ref()
+
+    @property
+    def tube(self):
+        return self.tube_ref()
 
 
 @dataclass(slots=True, repr=False)
@@ -55,10 +71,16 @@ class OptsBounds(OptsBase):
         **OptsBase._validators,
         "origin": lambda v, d: as_Vect(v, name=d, dim=3),
         "axis1": lambda v, d: as_Vect(v, name=d, dim=3, is_norm=True),
-        "axis2": lambda v, d: None if v is None else as_Vect(v, name=d, dim=3, is_norm=True),
+        "axis2": lambda v, d: (
+            None if v is None else as_Vect(v, name=d, dim=3, is_norm=True)
+        ),
         "length1": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
-        "length2": lambda v, d: None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf)),
-        "length3": lambda v, d: None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "length2": lambda v, d: (
+            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+        ),
+        "length3": lambda v, d: (
+            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+        ),
         "alignment": lambda v, d: as_str(v, name=d, pool=("min_corner", "center")),
     }
 
@@ -81,14 +103,33 @@ class Bounds(HostBase):
         **dict(HostBase.__attrs__),
         "_entity_corners": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
         "_entity_clip_geometry": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
+        "_entity_visuals": "Visual subscriptions of this bounds across figures.",
         "_calc_axis2": "Resolved second axis used by the bounds box.",
         "_calc_axis3": "Resolved third axis used by the bounds box.",
     }
+    _VISUAL_EDGES = (
+        (0, 1),
+        (0, 2),
+        (0, 3),
+        (1, 4),
+        (1, 5),
+        (2, 4),
+        (2, 6),
+        (4, 7),
+        (3, 5),
+        (3, 6),
+        (5, 7),
+        (6, 7),
+    )
+    _VISUAL_DEFAULTS = MappingProxyType(
+        {
+            "color": (0.0, 0.0, 0.0),
+            "radius": 0.35,
+            "is_pickable": False,
+        }
+    )
 
-    __slots__ = tuple(
-            k for k in __attrs__.keys()
-            if k not in HostBase.__slots__
-        )
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
 
     def __init__(
         self,
@@ -109,6 +150,7 @@ class Bounds(HostBase):
 
         object.__setattr__(self, "_entity_corners", None)
         object.__setattr__(self, "_entity_clip_geometry", None)
+        object.__setattr__(self, "_entity_visuals", [])
         object.__setattr__(self, "_calc_axis2", None)
         object.__setattr__(self, "_calc_axis3", None)
 
@@ -116,13 +158,17 @@ class Bounds(HostBase):
             "length1": self.opts.length1,
         }.items():
             if value is UNSET:
-                raise ValueError(f"Missing required variable {attr_name!r} to generate bounds")
+                raise ValueError(
+                    f"Missing required variable {attr_name!r} to generate bounds"
+                )
 
         self.opts.act_finalize(defaults=self._opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+    def _helper_commit_apply_opts_main(
+        self, is_reapply_opts=False, logger=None, **kwargs
+    ):
         if not is_reapply_opts and not kwargs:
             return
 
@@ -150,8 +196,6 @@ class Bounds(HostBase):
                     f"New orthonormal axis2: {axis2}."
                 )
         else:
-            from Nematics3D.general import rotation_matrix_from_vectors
-
             rotation_matrix = rotation_matrix_from_vectors((1, 0, 0), axis1)
             axis2 = rotation_matrix @ np.array([0.0, 1.0, 0.0])
             logger.debug(
@@ -214,6 +258,172 @@ class Bounds(HostBase):
     def clip_geometry(self):
         return self._entity_clip_geometry
 
+    def _helper_build_visual_edges(self) -> tuple[np.ndarray, np.ndarray]:
+        coords = []
+        line_index = []
+
+        for i, (a, b) in enumerate(self._VISUAL_EDGES):
+            coords.append(self.corners[a])
+            coords.append(self.corners[b])
+            line_index.extend([i, i])
+
+        return np.asarray(coords, dtype=float), np.asarray(line_index, dtype=int)
+
+    def _helper_is_visual_entry_alive(self, entry: _BoundsVisualEntry) -> bool:
+        figure = entry.figure
+        tube = entry.tube
+        return (
+            figure is not None
+            and tube is not None
+            and figure.is_alive
+            and tube in figure._entity
+        )
+
+    def _helper_find_visual_entry(
+        self,
+        *,
+        figure=None,
+        tube=None,
+        sync_name: str | None = None,
+    ) -> _BoundsVisualEntry | None:
+        for entry in self._entity_visuals:
+            if sync_name is not None and entry.sync_name == sync_name:
+                return entry
+            if figure is not None and entry.figure is figure:
+                return entry
+            if tube is not None and entry.tube is tube:
+                return entry
+        return None
+
+    def _helper_prune_visuals(self):
+        visuals_alive = []
+        sync_to_detach = []
+        for entry in self._entity_visuals:
+            if self._helper_is_visual_entry_alive(entry):
+                visuals_alive.append(entry)
+            else:
+                sync_to_detach.append(entry.sync_name)
+
+        for sync_name in sync_to_detach:
+            self.act_detach_sync_task(sync_name)
+
+        if len(visuals_alive) != len(self._entity_visuals):
+            object.__setattr__(self, "_entity_visuals", visuals_alive)
+
+    def _helper_unregister_visual_sync(
+        self, sync_name: str | None = None, *, tube=None
+    ):
+        visuals_alive = []
+        sync_to_detach = []
+        for entry in self._entity_visuals:
+            is_match = (sync_name is not None and entry.sync_name == sync_name) or (
+                tube is not None and entry.tube is tube
+            )
+            if is_match:
+                sync_to_detach.append(entry.sync_name)
+            else:
+                visuals_alive.append(entry)
+
+        for name in sync_to_detach:
+            self.act_detach_sync_task(name)
+
+        if sync_to_detach:
+            object.__setattr__(self, "_entity_visuals", visuals_alive)
+
+    def _helper_refresh_visual(self, sync_name: str):
+        entry = self._helper_find_visual_entry(sync_name=sync_name)
+        if entry is None or not self._helper_is_visual_entry_alive(entry):
+            self._helper_unregister_visual_sync(sync_name)
+            return
+
+        coords, line_index = self._helper_build_visual_edges()
+        entry.tube.act_commit(
+            coords=coords, line_index=line_index, is_reapply_opts=True
+        )
+
+    def act_visualize(
+        self,
+        figure=None,
+        opts=None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        name: str | None = None,
+        category: str = "bounds",
+        is_reset_camera: bool = False,
+        is_replace: bool = False,
+        **kwargs,
+    ):
+        from .visual.plot_figure import PlotFigure
+        from .visual.plot_tube import PlotTube
+
+        self._helper_prune_visuals()
+        if figure is None:
+            figure = PlotFigure()
+        elif not isinstance(figure, PlotFigure):
+            try:
+                figure = PlotFigure(plotter=figure)
+            except Exception:
+                figure = PlotFigure()
+
+        entry_old = self._helper_find_visual_entry(figure=figure)
+        if entry_old is not None:
+            tube_old = entry_old.tube
+            if tube_old is not None and self._helper_is_visual_entry_alive(entry_old):
+                if not is_replace:
+                    if opts is not None:
+                        tube_old.act_commit(opts=opts, **kwargs)
+                    elif kwargs:
+                        tube_old.act_commit(**kwargs)
+                    return tube_old
+                tube_old.act_remove()
+
+        coords, line_index = self._helper_build_visual_edges()
+        if opts_defaults_override is None:
+            opts_defaults_override = dict(self._VISUAL_DEFAULTS)
+        else:
+            opts_defaults_override = dict(self._VISUAL_DEFAULTS) | dict(
+                opts_defaults_override
+            )
+
+        tube = PlotTube(
+            coords=coords,
+            line_index=line_index,
+            figure=figure,
+            opts=opts,
+            opts_defaults_override=opts_defaults_override,
+            name=self.name if name is None else name,
+            category=category,
+            is_reset_camera=is_reset_camera,
+            **kwargs,
+        )
+
+        sync_name = f"{tube._impl_name_pv}__bounds_sync"
+        tube.act_add_attr(
+            "_impl_bounds_visual_source",
+            doc="Bounds source driving this visualized frame.",
+            default=self,
+            overwrite=True,
+        )
+        tube.act_add_attr(
+            "_impl_bounds_visual_sync_name",
+            doc="Internal sync-task name used by the source Bounds.",
+            default=sync_name,
+            overwrite=True,
+        )
+
+        self.act_attach_sync_task(
+            sync_name,
+            lambda **kwargs_sync: self._helper_refresh_visual(sync_name),
+        )
+        self._entity_visuals.append(
+            _BoundsVisualEntry(
+                figure_ref=weakref.ref(figure),
+                tube_ref=weakref.ref(tube),
+                sync_name=sync_name,
+            )
+        )
+        return tube
+
+
 _DEF_TOL = 1e-8
 
 
@@ -225,8 +435,9 @@ def _normalize_box_edge(edge: np.ndarray, *, name: str) -> tuple[np.ndarray, flo
     return edge / length, length
 
 
-
-def _is_orthogonal_triplet(v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, tol: float = _DEF_TOL) -> bool:
+def _is_orthogonal_triplet(
+    v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, tol: float = _DEF_TOL
+) -> bool:
     return (
         abs(float(v1 @ v2)) <= tol
         and abs(float(v1 @ v3)) <= tol
@@ -234,8 +445,9 @@ def _is_orthogonal_triplet(v1: np.ndarray, v2: np.ndarray, v3: np.ndarray, tol: 
     )
 
 
-
-def _match_points_unordered(points_a: np.ndarray, points_b: np.ndarray, tol: float = _DEF_TOL) -> bool:
+def _match_points_unordered(
+    points_a: np.ndarray, points_b: np.ndarray, tol: float = _DEF_TOL
+) -> bool:
     used = np.zeros(len(points_b), dtype=bool)
     for pa in points_a:
         diff = np.linalg.norm(points_b - pa, axis=1)
@@ -244,7 +456,6 @@ def _match_points_unordered(points_a: np.ndarray, points_b: np.ndarray, tol: flo
             return False
         used[idx] = True
     return True
-
 
 
 def _build_bounds_from_corner_edges(
@@ -290,7 +501,6 @@ def _build_bounds_from_corner_edges(
     )
 
 
-
 def _build_bounds_from_4_points(points: np.ndarray, name: str | None = None) -> Bounds:
     origin = points[0]
     edge1 = points[1] - origin
@@ -306,11 +516,12 @@ def _build_bounds_from_4_points(points: np.ndarray, name: str | None = None) -> 
     )
 
 
-
 def _build_bounds_from_bounds6(values: np.ndarray, name: str | None = None) -> Bounds:
     xmin, xmax, ymin, ymax, zmin, zmax = values.tolist()
     if not (xmax > xmin and ymax > ymin and zmax > zmin):
-        raise ValueError("Axis-aligned bounds must satisfy xmin<xmax, ymin<ymax, zmin<zmax.")
+        raise ValueError(
+            "Axis-aligned bounds must satisfy xmin<xmax, ymin<ymax, zmin<zmax."
+        )
     return Bounds(
         name=name,
         opts=OptsBounds(
@@ -323,7 +534,6 @@ def _build_bounds_from_bounds6(values: np.ndarray, name: str | None = None) -> B
             alignment="min_corner",
         ),
     )
-
 
 
 def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> Bounds:
@@ -382,7 +592,6 @@ def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> 
     )
 
 
-
 def _polydata_to_box_points(polydata: pv.PolyData) -> np.ndarray:
     surface = polydata.extract_surface().triangulate().clean()
     points = np.asarray(surface.points, dtype=float)
@@ -393,7 +602,6 @@ def _polydata_to_box_points(polydata: pv.PolyData) -> np.ndarray:
     _, unique_idx = np.unique(rounded, axis=0, return_index=True)
     unique_points = points[np.sort(unique_idx)]
     return unique_points
-
 
 
 def as_bounds(input_data, name: str = "bounds") -> Bounds | None:

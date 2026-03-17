@@ -57,6 +57,17 @@ Do not use `# fmt: off` for:
 
 If alignment does not clearly improve readability, let `black` format the code normally.
 
+## Override comment blocks
+
+When a method intentionally overrides inherited behavior, add an override comment block immediately above the method using the repository pattern:
+
+```py
+# ==================== OVERRIDE ====================
+# ClassName overrides BaseClass.method_name because ...
+# ==================================================
+```
+
+This is part of the repository code style for real behavioral overrides. Use it to make extension points and changed semantics obvious to later readers.
 ## Detailed style guide
 
 For more detailed repository conventions, see [docs/code-style.md](/D:/Document/GitHub/Nematics3D/docs/code-style.md).
