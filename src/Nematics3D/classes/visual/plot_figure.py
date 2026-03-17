@@ -69,15 +69,53 @@ class OptsFigure(OptsBase):
         }
     )
     # fmt: on
-    
+
+
+# Subclassing rules:
+# - PlotFigure combines HostBase and RegistryBase. Subclasses must preserve both
+#   contracts: host-style commit/update behavior and registry-style management
+#   of attached visual entities.
+# - Keep `_entity_plotter` as the single source of truth for the backend plotter
+#   object, and keep `_entity`, `_entity_scalar_bars`, and other attached
+#   entities synchronized with that plotter state.
+# - If a subclass changes figure initialization, preserve the distinction
+#   between creating a new plotter and wrapping an existing one.
+# - If a subclass overrides camera/application sync behavior, keep opts, camera,
+#   and plotter state mutually consistent after every accepted update.
+# - Keep `__repr__` as the detailed combined host/registry view and `__str__`
+#   as the short host-style identity view unless there is a strong reason to
+#   change both.
+
 
 class PlotFigure(HostBase, RegistryBase):
+    """
+    Figure object for interactive or off-screen 3D visualization.
 
-    _DEFAULT_NAME = "unamed figure"
+    For most users, PlotFigure is the main visualization container used by
+    plotting and visualization methods across the package.
+
+    Typical usage:
+
+    - create a new figure with `PlotFigure()` or `PlotFigure(is_off_screen=True)`
+    - pass the figure into other visualization helpers so multiple objects share
+      the same scene
+    - read the current figure settings through `figure.opts`
+    - modify figure settings through `figure.opts.<name> = value` or
+      `figure.act_commit(...)`
+    - inspect available figure settings through `figure.opts`
+    - access attached plotted objects through the registry behavior inherited by
+      the figure
+    - use `str(figure)` for a short identity view and `repr(figure)` for a more
+      detailed summary of attached objects
+
+    PlotFigure manages both the rendering backend and the registry of objects
+    attached to that backend.
+    """
+
+    _DEFAULT_NAME = "unnamed figure"
 
     __attrs__ = {
         **(HostBase.__attrs__),
-    
         # -----------------
         # Public identity
         # -----------------
@@ -85,7 +123,6 @@ class PlotFigure(HostBase, RegistryBase):
             "Human-readable identifier of the figure. "
             "Used as the window title for BackgroundPlotter."
         ),
-    
         # -----------------
         # Core plot backend
         # -----------------
@@ -93,13 +130,10 @@ class PlotFigure(HostBase, RegistryBase):
             "The underlying plotting backend. "
             "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance. "
         ),
-    
         # -----------------
         # Attached entities
         # -----------------
-        "_entity": (
-            "Internal registry of objects attached to this figure."
-        ),
+        "_entity": ("Internal registry of objects attached to this figure."),
         "_entity_pick_manager": (
             "The PickManager instance associated with this figure. "
             "Available only in interactive (on-screen) sessions."
@@ -111,7 +145,6 @@ class PlotFigure(HostBase, RegistryBase):
         "_entity_scalar_bars": (
             "RegistryBase instance managing scalar bars attached to this figure."
         ),
-    
         # -----------------
         # VTK overlay layer
         # -----------------
@@ -121,7 +154,6 @@ class PlotFigure(HostBase, RegistryBase):
             "Actors added to this renderer are drawn on top of the main scene "
             "and are not occluded by 3D geometry."
         ),
-    
     }
     __properties__ = {
         **(HostBase.__properties__),
@@ -135,14 +167,16 @@ class PlotFigure(HostBase, RegistryBase):
             "(or None if not initialized)."
         ),
         "console": (
-            "Read-only: Alias of `_entity_console` "
-            "(or None if not initialized)."
+            "Read-only: Alias of `_entity_console` " "(or None if not initialized)."
         ),
     }
 
-    __slots__ = tuple(
-        k for k in __attrs__.keys() if k not in HostBase.__slots__
-    )
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
+
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides HostBase.__init__ because it must construct or wrap
+    # a plotting backend before binding figure opts and attached figure entities.
+    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -187,7 +221,7 @@ class PlotFigure(HostBase, RegistryBase):
 
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
-        
+
         if name is None:
             name = self._DEFAULT_NAME
 
@@ -256,6 +290,11 @@ class PlotFigure(HostBase, RegistryBase):
     def console(self):
         return getattr(self, "_entity_console", None)
 
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides HostBase/ClassBase name handling so BackgroundPlotter
+    # window titles stay synchronized with the figure name.
+    # ==================================================
+
     def act_set_name(self, name):
         if name is None:
             name = self._DEFAULT_NAME
@@ -263,6 +302,11 @@ class PlotFigure(HostBase, RegistryBase):
         if name and self.pl_type == "B":
             self.pl.app_window.setWindowTitle(name)
         return name
+
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides HostBase._helper_commit_apply_opts_main to treat
+    # figure opts as direct camera/window state updates on the live plotter.
+    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
@@ -281,7 +325,6 @@ class PlotFigure(HostBase, RegistryBase):
             )
 
         self._helper_sync_from_opts()
-
 
     @property
     def pl(self):
@@ -324,7 +367,7 @@ class PlotFigure(HostBase, RegistryBase):
         raise RuntimeError(
             "Boolean evaluation of this object is deprecated and no longer supported. "
             "This method is retained only to detect legacy usage during debugging. "
-            "Please explicitly call 'is_alive()' instead."
+            "Please explicitly use the `is_alive` property instead."
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -485,6 +528,11 @@ class PlotFigure(HostBase, RegistryBase):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
 
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides RegistryBase.act_register so camera state can be
+    # refreshed after registering objects that request a camera reset.
+    # ==================================================
+
     def act_register(self, term, is_contain_ok=False):
         super().act_register(term, is_contain_ok=is_contain_ok)
         if term.opts.is_reset_camera:
@@ -502,14 +550,24 @@ class PlotFigure(HostBase, RegistryBase):
             window_size=window_size,
         )
 
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides HostBase.__repr__ to combine the host summary with
+    # the registry-style listing of objects attached to the figure.
+    # ==================================================
+
     def __repr__(self):
         msg = HostBase.__repr__(self) + "\n"
         msg += RegistryBase._helper_repr_by_category(self)
         return msg
 
+    # ==================== OVERRIDE ====================
+    # PlotFigure overrides the default string form to keep the short host-style
+    # identity view for compact logging and display.
+    # ==================================================
+
     def __str__(self):
         return HostBase.__repr__(self)
-    
+
 
 @logging_and_warning_decorator()
 def as_PlotFigure(figure, opts_figure, logger=None):

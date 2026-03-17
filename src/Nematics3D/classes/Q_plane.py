@@ -1,4 +1,4 @@
-from pyvistaqt import BackgroundPlotter
+﻿from pyvistaqt import BackgroundPlotter
 import pyvista as pv
 import numpy as np
 import weakref
@@ -6,7 +6,12 @@ from typing import Mapping, Any
 from copy import deepcopy
 
 from .Interpolator import Interpolator
-from Nematics3D.field import Q_diagonalize, n_color_immerse, apply_linear_transform, align_directors
+from Nematics3D.field import (
+    Q_diagonalize,
+    n_color_immerse,
+    apply_linear_transform,
+    align_directors,
+)
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
 from Nematics3D.general import select_grid_in_box, mark_points_membership
 from Nematics3D.geometry import wrap_to_pi
@@ -36,17 +41,16 @@ class QPlane(InterpolatePlane):
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
-        "default_visual_opts": "The default opts_defaults_override for different visualization."
+        "default_visual_opts": "The default opts_defaults_override for different visualization.",
     }
     __slots__ = tuple(
-            k for k in __attrs__.keys()
-            if k not in InterpolatePlane.__slots__
-        )
-    
+        k for k in __attrs__.keys() if k not in InterpolatePlane.__slots__
+    )
+
     _origin_default_visual_opts = {
-        "nb":   {"color": n_color_immerse, "opacity": 0.2},
-        "nd":   {"color": n_color_immerse},
-        "S":    {"scalar_bar_title": "S"}
+        "nb": {"color": n_color_immerse, "opacity": 0.2},
+        "nd": {"color": n_color_immerse},
+        "S": {"scalar_bar_title": "S"},
     }
 
     def __init__(
@@ -59,31 +63,28 @@ class QPlane(InterpolatePlane):
         visual_default: Mapping[str, Any] | None = None,
         **kwargs,
     ):
-        
+
         default_visual_opts = deepcopy(self._origin_default_visual_opts)
         visual_default = {} if visual_default is None else dict(visual_default)
         for key, value in default_visual_opts.items():
             default_visual_opts[key] = value | visual_default
         object.__setattr__(self, "default_visual_opts", default_visual_opts)
-        object.__setattr__(self, '_entity_visual_nb', None)
-        object.__setattr__(self, '_entity_visual_nd', None)
-        object.__setattr__(self, '_entity_visual_defect', None)
-        object.__setattr__(self, '_entity_visual_S', None)
-        object.__setattr__(self, '_state_is_interactable', True)
-        
+        object.__setattr__(self, "_entity_visual_nb", None)
+        object.__setattr__(self, "_entity_visual_nd", None)
+        object.__setattr__(self, "_entity_visual_defect", None)
+        object.__setattr__(self, "_entity_visual_S", None)
+        object.__setattr__(self, "_state_is_interactable", True)
+
         super().__init__(
             interpolator=interpolator,
             name=name,
             grid=grid,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
-            **kwargs
-            )
+            **kwargs,
+        )
 
         self._helper_commit()
-        
-
-        
 
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
@@ -95,30 +96,37 @@ class QPlane(InterpolatePlane):
 
         Q_all = self._raw_interpolator.interpolate(grid_all_flatten)
         S_all, n_all = Q_diagonalize(Q_all)
-        object.__setattr__(self, '_calc_n', n_all[plane_grid._calc_box_mask])
-        object.__setattr__(self, '_calc_S', S_all[plane_grid._calc_box_mask])
-        object.__setattr__(self, '_calc_result', Q_all[plane_grid._calc_box_mask])
-        
-        
+        object.__setattr__(self, "_calc_n", n_all[plane_grid._calc_box_mask])
+        object.__setattr__(self, "_calc_S", S_all[plane_grid._calc_box_mask])
+        object.__setattr__(self, "_calc_result", Q_all[plane_grid._calc_box_mask])
+
         defect_centers, adjacent_mask = self._helper_detect_defect(n_all)
-        
-        object.__setattr__(self, '_calc_is_near_defect', adjacent_mask[plane_grid._calc_box_mask])
-        
+
+        object.__setattr__(
+            self, "_calc_is_near_defect", adjacent_mask[plane_grid._calc_box_mask]
+        )
+
         if defect_centers is None:
-            object.__setattr__(self, '_calc_defect_pos', None)
+            object.__setattr__(self, "_calc_defect_pos", None)
         else:
-            defect_centers = select_grid_in_box(defect_centers, plane_grid.opts.corners_limit)
-            object.__setattr__(self, '_calc_defect_pos', defect_centers)
-            
+            bounds = plane_grid.bounds
+            if bounds is not None:
+                _, defect_mask_inside = select_grid_in_box(
+                    defect_centers, bounds.corners, is_return_mask=True
+                )
+                if not plane_grid.opts.is_clip_inside:
+                    defect_mask_inside = ~defect_mask_inside
+                defect_centers = defect_centers[defect_mask_inside]
+            object.__setattr__(self, "_calc_defect_pos", defect_centers)
+
         self._helper_update_visual()
-        
-        
+
     @logging_and_warning_decorator()
     def _helper_detect_defect(self, n_all, logger=None):
-    
+
         plane_grid = self.grid
         grid_all = plane_grid._entity_grid_all
-        
+
         shape_all = np.shape(grid_all)[:2]
         n_all = np.reshape(n_all, (*shape_all, 1, 3))
 
@@ -132,7 +140,7 @@ class QPlane(InterpolatePlane):
             plane_grid._entity_grid_int.astype(int), defect_vicinity_index
         )
 
-        if len(defect_plane_index)==0:
+        if len(defect_plane_index) == 0:
             defect_centers = None
         else:
             space1 = plane_grid.opts.spacing
@@ -144,7 +152,7 @@ class QPlane(InterpolatePlane):
             step1 = plane_grid.opts.axis1 * space1
             step2 = plane_grid._calc_axis2 * space2
             step_both = np.array([step1, step2])
-            
+
             defect_centers = (
                 np.einsum("ai, ib -> ab", defect_plane_index, step_both)
                 + plane_grid._calc_offset_real
@@ -154,10 +162,9 @@ class QPlane(InterpolatePlane):
                 transform=plane_grid.opts.grid_transform,
                 offset=plane_grid.opts.grid_offset,
             )
-        
+
         return defect_centers, adjacent_mask
-    
-    
+
     def _helper_set_visual_interact_with_plane(self, visual):
         default_func = getattr(visual, "_impl_interact_func", None)
 
@@ -165,6 +172,7 @@ class QPlane(InterpolatePlane):
             if callable(default_func):
                 default_func()
             from .visual.qt.interact_plane import InteractPlane
+
             InteractPlane(self, visual.fig).show()
 
         visual.act_set_interact_func(_interact)
@@ -176,46 +184,49 @@ class QPlane(InterpolatePlane):
             if callable(default_func):
                 default_func()
             from .visual.qt.interact_defect_section import InteractDefectSection
+
             InteractDefectSection(self, visual.fig).show()
 
         visual.act_set_interact_func(_interact)
 
     def _helper_update_visual(self):
-            
+
         if self._entity_visual_nb or self._entity_visual_nd:
-            
+
             if np.sum(~self._calc_is_near_defect) > 0:
-                self._entity_visual_nb.act_commit(       
+                self._entity_visual_nb.act_commit(
                     coords=self.grid()[~self._calc_is_near_defect],
                     orient=self._calc_n[~self._calc_is_near_defect],
-                    is_visible=True
-                    )
+                    is_visible=True,
+                )
             else:
                 self._entity_visual_nb.opts.is_visible = False
-            
+
             if np.sum(self._calc_is_near_defect) > 0:
-                self._entity_visual_nd.act_commit(       
+                self._entity_visual_nd.act_commit(
                     coords=self.grid()[self._calc_is_near_defect],
                     orient=self._calc_n[self._calc_is_near_defect],
-                    is_visible=True
-                    )
+                    is_visible=True,
+                )
             else:
                 self._entity_visual_nd.opts.is_visible = False
-                
-                
-            if getattr(self, "_calc_defect_pos", None) is not None and len(self._calc_defect_pos)>0:   
-                self._entity_visual_defect.act_commit( 
+
+            if (
+                getattr(self, "_calc_defect_pos", None) is not None
+                and len(self._calc_defect_pos) > 0
+            ):
+                self._entity_visual_defect.act_commit(
                     coords=self._calc_defect_pos,
-                    is_visible=self._entity_visual_defect.is_show_defect
-                    )
+                    is_visible=self._entity_visual_defect.is_show_defect,
+                )
             else:
                 self._entity_visual_defect.opts.is_visible = False
-                
+
         if getattr(self, "_entity_visual_S", None):
             self._entity_visual_S.act_commit(
                 coords=self.grid(),
                 scalars=self._calc_S,
-                )
+            )
 
     def act_visualize_n(
         self,
@@ -256,9 +267,9 @@ class QPlane(InterpolatePlane):
         opts_nd = merge["nd_"]
 
         figure = as_PlotFigure(figure, opts_figure)
-            
+
         if np.sum(~self._calc_is_near_defect) > 0:
-            
+
             visual_nb = PlotRod(
                 coords=self.grid()[~self._calc_is_near_defect],
                 orient=self._calc_n[~self._calc_is_near_defect],
@@ -266,11 +277,12 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                opts_defaults_override=self.default_visual_opts["nb"]
+                bounds=self.grid.bounds,
+                opts_defaults_override=self.default_visual_opts["nb"],
             )
-            
+
         else:
-            
+
             visual_nb = PlotRod(
                 coords=self.grid()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
@@ -278,16 +290,17 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
+                bounds=self.grid.bounds,
                 opts_defaults_override=self.default_visual_opts["nb"],
-                is_visible=False
+                is_visible=False,
             )
-            
+
         visual_nb.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nb)
-        object.__setattr__(self, '_entity_visual_nb', visual_nb)
+        object.__setattr__(self, "_entity_visual_nb", visual_nb)
 
         if np.sum(self._calc_is_near_defect) > 0:
-            
+
             visual_nd = PlotRod(
                 coords=self.grid()[self._calc_is_near_defect],
                 orient=self._calc_n[self._calc_is_near_defect],
@@ -295,19 +308,21 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                opts_defaults_override=self.default_visual_opts["nd"]
+                bounds=self.grid.bounds,
+                opts_defaults_override=self.default_visual_opts["nd"],
             )
-            
+
             visual_defect = PlotSphere(
-                coords=self._calc_defect_pos, 
+                coords=self._calc_defect_pos,
                 name=f"defects of plane {self.name!r}",
                 category="plane analysis",
-                opts=opts_defect, 
-                figure=figure
+                opts=opts_defect,
+                figure=figure,
+                bounds=self.grid.bounds,
             )
-            
+
         else:
-            
+
             visual_nd = PlotRod(
                 coords=self.grid()[~self._calc_is_near_defect][:2],
                 orient=self._calc_n[~self._calc_is_near_defect][:2],
@@ -316,34 +331,33 @@ class QPlane(InterpolatePlane):
                 opts=opts_nd,
                 figure=figure,
                 is_visible=False,
-                opts_defaults_override=self.default_visual_opts["nd"]
+                opts_defaults_override=self.default_visual_opts["nd"],
             )
-            
+
             visual_defect = PlotSphere(
-                coords=self.grid()[~self._calc_is_near_defect][:2], 
+                coords=self.grid()[~self._calc_is_near_defect][:2],
                 name=f"defects of plane {self.name!r}",
                 category="plane analysis",
-                opts=opts_defect, 
+                opts=opts_defect,
                 figure=figure,
-                is_visible=False
+                bounds=self.grid.bounds,
+                is_visible=False,
             )
-            
-            
+
         visual_nd.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nd)
-        object.__setattr__(self, '_entity_visual_nd', visual_nd)
-        
-        visual_defect.act_bind_relation_base("owner", self, is_weak=True)
-        object.__setattr__(self, '_entity_visual_defect', visual_defect)
-            
-        visual_defect.act_add_attr(
-            "is_show_defect", 
-            f"Whether to plot defect points during the visualization of directors on {self.name}.",
-            default=is_defect
-            )
-        
-        visual_defect.opts.is_visible = visual_defect.is_show_defect
+        object.__setattr__(self, "_entity_visual_nd", visual_nd)
 
+        visual_defect.act_bind_relation_base("owner", self, is_weak=True)
+        object.__setattr__(self, "_entity_visual_defect", visual_defect)
+
+        visual_defect.act_add_attr(
+            "is_show_defect",
+            f"Whether to plot defect points during the visualization of directors on {self.name}.",
+            default=is_defect,
+        )
+
+        visual_defect.opts.is_visible = visual_defect.is_show_defect
 
     def act_visualize_S(
         self,
@@ -352,7 +366,7 @@ class QPlane(InterpolatePlane):
         opts_S: OptsSurface | None = None,
         **kwargs,
     ):
-    
+
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_S is None:
@@ -371,7 +385,7 @@ class QPlane(InterpolatePlane):
         opts_S = merge["S_"]
 
         figure = as_PlotFigure(figure, opts_figure)
-            
+
         visual_S = PlotSurface(
             coords=self.grid(),
             scalars=self._calc_S,
@@ -379,12 +393,13 @@ class QPlane(InterpolatePlane):
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
             opts=opts_S,
-            opts_defaults_override=self.default_visual_opts["S"]
-            )
-        
+            bounds=self.grid.bounds,
+            opts_defaults_override=self.default_visual_opts["S"],
+        )
+
         visual_S.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_S)
-        object.__setattr__(self, '_entity_visual_S', visual_S)
+        object.__setattr__(self, "_entity_visual_S", visual_S)
 
 
 class QPlanePolar(QPlane):
@@ -392,15 +407,12 @@ class QPlanePolar(QPlane):
     __attrs__ = {
         **(QPlane.__attrs__),
     }
-    __slots__ = tuple(
-            k for k in __attrs__.keys()
-            if k not in QPlane.__slots__
-        )
-    
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in QPlane.__slots__)
+
     _origin_default_visual_opts = {
-        "nb":   {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
-        "nd":   {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
-        "S":    {"scalar_bar_title": "S"}
+        "nb": {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
+        "nd": {"color": n_color_immerse, "length": 0.6, "radius": 0.06},
+        "S": {"scalar_bar_title": "S"},
     }
 
     def __init__(
@@ -432,172 +444,180 @@ class QPlanePolar(QPlane):
             opts=opts,
             opts_defaults_override=opts_defaults_override,
             visual_default=visual_default,
-            **kwargs
-            )
+            **kwargs,
+        )
 
     def _helper_set_visual_interact_with_plane(self, visual):
         self._helper_set_visual_interact_with_defect_section(visual)
 
+    def _helper_detect_defect(self, directors, threshold: float = 0):
 
-    def _helper_detect_defect(self, directors, threshold: float=0):
-        
-        
         plane_grid = self.grid
         points = plane_grid._entity_grid_all
         polar = plane_grid._entity_polar
         ring_offsets = plane_grid._calc_ring_offsets
-        
+
         n_rings = ring_offsets.shape[0] - 1
         adjacent_mask = np.zeros((points.shape[0],), dtype=bool)
         defect_centers_chunks = []
-    
+
         # If ring 0 is origin block (size 1 at r=0), skip it for quad loops
         start_ring = 0
         if n_rings >= 1:
             s0, e0 = ring_offsets[0], ring_offsets[1]
             if (e0 - s0) == 1 and np.isclose(polar[s0, 0], 0.0):
                 start_ring = 1
-    
+
         # ----------------------------
         # Helper: process one ring-pair (outer -> inner)
         # ----------------------------
-        def _process_outer_to_inner(s_outer: int, e_outer: int, s_inner: int, e_inner: int) -> None:
+        def _process_outer_to_inner(
+            s_outer: int, e_outer: int, s_inner: int, e_inner: int
+        ) -> None:
             n_outer = e_outer - s_outer
             n_inner = e_inner - s_inner
             if n_outer < 2 or n_inner < 2:
                 return
-    
+
             theta_outer = polar[s_outer:e_outer, 1]  # (n_outer,)
             theta_inner = polar[s_inner:e_inner, 1]  # (n_inner,)
-    
+
             # base edges on OUTER ring
             j = np.arange(n_outer, dtype=np.int64)
             jn = (j + 1) % n_outer
-    
+
             idx_a = s_outer + j
             idx_b = s_outer + jn
-    
-            theta_a = theta_outer[j]   # (n_outer,)
+
+            theta_a = theta_outer[j]  # (n_outer,)
             theta_b = theta_outer[jn]  # (n_outer,)
-    
+
             # c: nearest on INNER ring to theta_b (no sorted assumption)
-            diff_b = wrap_to_pi(theta_inner[None, :] - theta_b[:, None])      # (n_outer, n_inner)
-            c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)       # (n_outer,)
-    
+            diff_b = wrap_to_pi(
+                theta_inner[None, :] - theta_b[:, None]
+            )  # (n_outer, n_inner)
+            c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)  # (n_outer,)
+
             # inner-ring adjacency via sorting theta_inner into a circular order
-            order = np.argsort(theta_inner)                                    # (n_inner,)
+            order = np.argsort(theta_inner)  # (n_inner,)
             rank_of = np.empty_like(order)
-            rank_of[order] = np.arange(n_inner, dtype=np.int64)                # local_index -> rank
-    
-            c_rank = rank_of[c_local]                                          # (n_outer,)
+            rank_of[order] = np.arange(n_inner, dtype=np.int64)  # local_index -> rank
+
+            c_rank = rank_of[c_local]  # (n_outer,)
             prev_rank = (c_rank - 1) % n_inner
             next_rank = (c_rank + 1) % n_inner
-    
-            prev_local = order[prev_rank]                                      # (n_outer,)
-            next_local = order[next_rank]                                      # (n_outer,)
-    
+
+            prev_local = order[prev_rank]  # (n_outer,)
+            next_local = order[next_rank]  # (n_outer,)
+
             # d: choose neighbor-of-c closer to theta_a
-            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))    # (n_outer,)
-            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))    # (n_outer,)
-            d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(np.int64)
-    
+            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))  # (n_outer,)
+            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))  # (n_outer,)
+            d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(
+                np.int64
+            )
+
             idx_c = s_inner + c_local
             idx_d = s_inner + d_local
-    
+
             # loop vertex coords
             pa = points[idx_a]
             pb = points[idx_b]
             pc = points[idx_c]
             pd = points[idx_d]
-    
+
             # loop directors
             a = directors[idx_a]
             b_raw = directors[idx_b]
             c_raw = directors[idx_c]
             d_raw = directors[idx_d]
-    
+
             # align along loop: a -> b -> c -> d
             b = align_directors(a, b_raw)
             c = align_directors(b, c_raw)
             d = align_directors(c, d_raw)
-    
+
             test = np.einsum("...i,...i->...", a, d)  # (n_outer,)
             hit = test < threshold
             if not np.any(hit):
                 return
-    
+
             centers = (pa + pb + pc + pd) * 0.25
             defect_centers_chunks.append(centers[hit])
-    
+
             adjacent_mask[idx_a[hit]] = True
             adjacent_mask[idx_b[hit]] = True
             inner_idx = np.unique(np.concatenate([idx_c[hit], idx_d[hit]]))
             adjacent_mask[inner_idx] = True
-            
+
         # ----------------------------
         # Outer -> inner traversal with stop rule (inner ring < 6)
         # ----------------------------
         outermost = n_rings - 1
-        last_good_ring = None  # the ring index (k) of the last ring with >= 6 points before stopping
-    
+        last_good_ring = (
+            None  # the ring index (k) of the last ring with >= 6 points before stopping
+        )
+
         # Walk inward: (outer=r, inner=r-1)
         for r in range(outermost, start_ring, -1):
             s_outer, e_outer = ring_offsets[r], ring_offsets[r + 1]
             s_inner, e_inner = ring_offsets[r - 1], ring_offsets[r]
-    
+
             n_inner = e_inner - s_inner
-    
+
             # stop condition: we are about to step into a ring with < 6 points
             if n_inner < 6:
                 last_good_ring = r  # the current outer ring is the last ring still >= 6 (in practice)
                 break
-    
+
             # process this ring-pair (outer -> inner)
             _process_outer_to_inner(s_outer, e_outer, s_inner, e_inner)
-    
+
         # If we never hit n_inner < 6, then the innermost ring we reached is start_ring
         if last_good_ring is None:
-            last_good_ring = start_ring if (ring_offsets[start_ring + 1] - ring_offsets[start_ring]) >= 6 else None
-    
+            last_good_ring = (
+                start_ring
+                if (ring_offsets[start_ring + 1] - ring_offsets[start_ring]) >= 6
+                else None
+            )
+
         # ----------------------------
         # Final-ring internal closure check (only if that ring has >= 6 points)
         # ----------------------------
         if last_good_ring is not None:
             s, e = ring_offsets[last_good_ring], ring_offsets[last_good_ring + 1]
             n_last = e - s
-    
+
             if n_last >= 6:
                 v = directors[s:e]  # (n_last, 3)
-    
+
                 # Vectorized "sequential alignment" using cumulative signs of neighbor dots.
                 # NOTE: avoid sign==0 zeroing by using a strict <0 test here.
-                dots = np.einsum("ij,ij->i", v[:-1], v[1:])                    # (n_last-1,)
-                step_sign = np.where(dots < 0.0, -1.0, 1.0).astype(v.dtype)     # (n_last-1,)
-    
+                dots = np.einsum("ij,ij->i", v[:-1], v[1:])  # (n_last-1,)
+                step_sign = np.where(dots < 0.0, -1.0, 1.0).astype(
+                    v.dtype
+                )  # (n_last-1,)
+
                 cum_sign = np.concatenate(
                     [np.ones((1,), dtype=v.dtype), np.cumprod(step_sign)]
                 )  # (n_last,)
-    
+
                 v_aligned_last = v[-1] * cum_sign[-1]
                 closure = float(np.dot(v[0], v_aligned_last))
-    
+
                 if closure < threshold:
                     # mark this whole ring as adjacent-to-defect
                     adjacent_mask[s:e] = True
-    
+
                     # put one defect center for this ring (use mean position)
-                    defect_centers_chunks.append(points[s:e].mean(axis=0, keepdims=True))
-    
+                    defect_centers_chunks.append(
+                        points[s:e].mean(axis=0, keepdims=True)
+                    )
+
         defect_centers = (
             np.concatenate(defect_centers_chunks, axis=0).astype(float)
             if defect_centers_chunks
             else None
         )
-    
+
         return defect_centers, adjacent_mask
-
-
-
-
-
-

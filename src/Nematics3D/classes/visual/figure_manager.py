@@ -4,7 +4,34 @@ from .plot_figure import PlotFigure
 from ..registry_base import RegistryBase
 
 
+# Subclassing rules:
+# - FigureManager extends RegistryBase with one extra state: the currently
+#   active figure name. Keep that state synchronized with the actual registry
+#   contents when changing registration or activation behavior.
+# - Preserve the expectation that `active_fig` is a convenience view over the
+#   registry, not a separate storage slot for a figure object.
+# - If a subclass changes active-figure resolution, keep the fallback rules
+#   predictable when there are zero, one, or multiple figures in the manager.
+
+
 class FigureManager(RegistryBase):
+    """
+    Registry for managing PlotFigure objects and tracking which one is active.
+
+    For most users, FigureManager is used through a host object such as
+    `QFieldObject`, but it can also be used directly.
+
+    Typical usage:
+
+    - register figures through `act_register(fig)`
+    - access a figure through `manager[name]` or `manager[index]`
+    - set the current active figure through `act_set_active(name_or_index)`
+    - use `active_fig` or `active_name` to access the current active figure
+    - use `repr(manager)` to inspect the figures stored in display order
+
+    If there is exactly one figure and no active figure has been set yet,
+    `active_fig` will automatically fall back to that only figure.
+    """
 
     __attrs__ = {
         **(RegistryBase.__attrs__),
@@ -38,15 +65,17 @@ class FigureManager(RegistryBase):
                 object.__setattr__(self, "_state_active_name", figure.name)
                 active_name = figure.name
             elif len(self) == 0:
-                raise KeyError("There is no figure in FigureManager, so no active figure can be returned.")
+                raise KeyError(
+                    "There is no figure in FigureManager, so no active figure can be returned."
+                )
             else:
-                raise KeyError("There are multiple figures in FigureManager but no active figure has been set.")
+                raise KeyError(
+                    "There are multiple figures in FigureManager but no active figure has been set."
+                )
 
         figure = self[active_name]
         if not figure.is_alive:
-            logger.warning(
-                f"The active figure {figure.name!r} is not alive anymore."
-            )
+            logger.warning(f"The active figure {figure.name!r} is not alive anymore.")
         return figure
 
     def act_set_active(self, id_fig: str):
@@ -54,7 +83,9 @@ class FigureManager(RegistryBase):
         if figure.is_alive:
             self._state_active_name = figure.name
         else:
-            raise KeyError("This figure is deleted and could not be set to active figure.")
+            raise KeyError(
+                "This figure is deleted and could not be set to active figure."
+            )
 
     def __repr__(self):
         cls_name = self.__class__.__name__

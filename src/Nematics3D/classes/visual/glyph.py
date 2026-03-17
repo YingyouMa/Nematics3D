@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -353,7 +353,7 @@ class PlotGlyph(HostBase):
         bounds_old = self.bounds
         if bounds_old is None:
             return
-        bounds_old.act_detach_sync_task(self._impl_name_pv)
+        bounds_old.act_unregister_subscriber(sync_name=self._impl_name_pv, host=self)
         self.act_unbind_relation_base("bounds")
         if is_apply and getattr(self, "_entity", None) is not None:
             self.act_commit(is_reapply_opts=True)
@@ -388,6 +388,11 @@ class PlotGlyph(HostBase):
         bounds.act_attach_sync_task(
             self._impl_name_pv,
             lambda **kwargs: self.act_commit(is_reapply_opts=True),
+        )
+        bounds.act_register_subscriber(
+            self,
+            sync_name=self._impl_name_pv,
+            kind="glyph",
         )
         if is_apply and getattr(self, "_entity", None) is not None:
             self.act_commit(is_reapply_opts=True)

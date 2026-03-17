@@ -291,7 +291,9 @@ class PlaneGrid(HostBase):
         bounds_old = self.bounds
         if bounds_old is None:
             return
-        bounds_old.act_detach_sync_task(self._impl_name_bounds_sync)
+        bounds_old.act_unregister_subscriber(
+            sync_name=self._impl_name_bounds_sync, host=self
+        )
         self.act_unbind_relation_base("bounds")
         if is_apply:
             self.act_commit(is_reapply_opts=True)
@@ -328,6 +330,11 @@ class PlaneGrid(HostBase):
         bounds.act_attach_sync_task(
             self._impl_name_bounds_sync,
             lambda **kwargs: self.act_commit(is_reapply_opts=True),
+        )
+        bounds.act_register_subscriber(
+            self,
+            sync_name=self._impl_name_bounds_sync,
+            kind="plane_grid",
         )
         if is_apply:
             self.act_commit(is_reapply_opts=True)

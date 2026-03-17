@@ -4,7 +4,35 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_str
 
 
+# Subclassing rules:
+# - Keep the registry lightweight. It intentionally manages a small storage and
+#   relation surface instead of reproducing the full ClassBase machinery.
+# - Extend `__attrs__` and `__relations__` deliberately so metadata, display,
+#   and registration behavior stay consistent.
+# - Preserve the registration contract: registered objects should be renamed
+#   through the registry when needed and should be bound/unbound through
+#   `act_bind_relation_base()` / `act_unbind_relation_base()` when available.
+# - Keep `__repr__` as the detailed registry view. `__str__` should remain the
+#   short identity-style view used in compact displays and relation output.
+
+
 class RegistryBase:
+    """
+    Lightweight registry for storing and looking up named objects.
+
+    For most users, RegistryBase is meant to be used directly rather than
+    subclassed.
+
+    Typical usage:
+
+    - use `act_register(obj)` to add an object
+    - use `registry[name]` or `registry[index]` to retrieve an object
+    - use `for obj in registry` or `len(registry)` to work with the collection
+    - use `repr(registry)` to inspect the registered contents in detail
+
+    When an object with a duplicate name is registered, the registry will
+    automatically rename it so names stay unique inside that registry.
+    """
 
     # fmt: off
     __attrs__ = {
@@ -19,7 +47,7 @@ class RegistryBase:
         ),
     }
     # fmt: on
-    
+
     def __init__(self, name, info=None):
         name = as_str(name, name="The name of the Registry")
         object.__setattr__(self, "raw_name", name)
@@ -52,7 +80,11 @@ class RegistryBase:
             )
 
         current_owner = self.owner
-        if current_owner is not None and current_owner is not target and (not is_replace):
+        if (
+            current_owner is not None
+            and current_owner is not target
+            and (not is_replace)
+        ):
             raise RuntimeError(f"Relation {name!r} of RegistryBase is already bound.")
 
         object.__setattr__(
@@ -126,13 +158,10 @@ class RegistryBase:
         if callable(bind_relation):
             bind_relation("registry", self, is_weak=True)
         else:
-            try:
-                object.__setattr__(term, "_impl_registry_ref", weakref.ref(self))
-            except Exception as e:
-                logger.warning(
-                    f"Failed to assign registry relation for {term!r}: {e}. "
-                    "This registration is one-way only."
-                )
+            logger.warning(
+                f"Failed to assign registry relation for {term!r}. "
+                "This registration is one-way only because the object does not expose act_bind_relation_base()."
+            )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unregister(self, term, is_missing_ok=False, logger=None):
@@ -154,11 +183,6 @@ class RegistryBase:
             unbind_relation = getattr(term, "act_unbind_relation_base", None)
             if callable(unbind_relation):
                 unbind_relation("registry")
-            else:
-                ref = getattr(term, "_impl_registry_ref", None)
-                registry_ref = ref() if callable(ref) else None
-                if registry_ref is self:
-                    object.__setattr__(term, "_impl_registry_ref", None)
 
     @property
     def name(self):
@@ -260,6 +284,9 @@ class RegistryBase:
                     lines.append(f"{'':<{cat_width}}     {name}")
 
         return "\n".join(lines)
+
+    def __str__(self):
+        return f"{type(self).__name__}({self.name!r})"
 
     def __repr__(self):
         cls_name = self.__class__.__name__

@@ -181,6 +181,7 @@ class QFieldObject(ClassBase):
                 info=f"physical objects attached to Q field {self.name!r}",
             ),
         )
+        self._entity_objects.act_bind_relation_base("owner", self, is_weak=True)
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
         if self._raw_n is not UNSET:
@@ -250,13 +251,13 @@ class QFieldObject(ClassBase):
             transform=self._raw_grid_transform,
             offset=self._raw_grid_offset,
         )
-        
+
         object.__setattr__(self, "_calc_corners_index", corners_index)
         object.__setattr__(self, "_calc_corners", corners)
         logger.debug(
             f"Box corners in lattice-index units is {self._calc_corners_index}."
             f"Box corners in reap-space coordinates is {self._calc_corners}."
-            )
+        )
 
         if (not is_detect_defects) and is_classify_lines:
             is_classify_lines = False
@@ -292,27 +293,28 @@ class QFieldObject(ClassBase):
         self.act_add_interpolator()
 
         object.__setattr__(self, "_entity_figures", FigureManager())
+        self._entity_figures.act_bind_relation_base("owner", self, is_weak=True)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
         object.__setattr__(
-            self, 
-            "_calc_defect_indices", 
+            self,
+            "_calc_defect_indices",
             defect_detect(
                 self._raw_n,
                 is_boundary_periodic=self._raw_box_periodic_flag,
-            )
+            ),
         )
         logger.info(f"{len(self._calc_defect_indices)} defects are found.")
 
         object.__setattr__(
-            self, 
+            self,
             "_calc_defect_grid",
             apply_linear_transform(
                 self._calc_defect_indices,
                 transform=self._raw_grid_transform,
                 offset=self._raw_grid_offset,
-            )
+            ),
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -407,10 +409,7 @@ class QFieldObject(ClassBase):
         interpolator = RegularGridInterpolator(
             (u, v, w), self._raw_Q, method="linear", bounds_error=True
         )
-        interpolator = Interpolator(
-            interpolator,
-            weakref.ref(self)
-        )
+        interpolator = Interpolator(interpolator, weakref.ref(self))
 
         object.__setattr__(self, "_calc_interpolator", interpolator)
 
@@ -574,7 +573,6 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
-
 
     @logging_and_warning_decorator()
     def act_visualize_n_plane(
@@ -744,7 +742,6 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
-
     @logging_and_warning_decorator()
     def act_visualize_n_near_defect(
         self,
@@ -839,7 +836,6 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
-
     @property
     def lines(self):
         result = [
@@ -865,5 +861,3 @@ class QFieldObject(ClassBase):
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q
-
-

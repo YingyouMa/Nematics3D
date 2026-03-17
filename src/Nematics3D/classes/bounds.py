@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 import weakref
@@ -11,6 +11,17 @@ from Nematics3D.datatypes import Number, UNSET, Unset, Vect, as_Number, as_Vect,
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase
+
+
+@dataclass(slots=True)
+class _BoundsSubscriberEntry:
+    host_ref: weakref.ReferenceType
+    sync_name: str
+    kind: str
+
+    @property
+    def host(self):
+        return self.host_ref()
 
 
 @dataclass(slots=True)
@@ -104,6 +115,7 @@ class Bounds(HostBase):
         "_entity_corners": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
         "_entity_clip_geometry": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
         "_entity_visuals": "Visual subscriptions of this bounds across figures.",
+        "_entity_subscribers": "Weak subscriber records for hosts driven by this bounds, excluding its own visualization frames.",
         "_calc_axis2": "Resolved second axis used by the bounds box.",
         "_calc_axis3": "Resolved third axis used by the bounds box.",
     }
@@ -125,7 +137,7 @@ class Bounds(HostBase):
         {
             "color": (0.0, 0.0, 0.0),
             "radius": 0.35,
-            "is_pickable": False,
+            "is_pickable": True,
         }
     )
 
@@ -151,6 +163,7 @@ class Bounds(HostBase):
         object.__setattr__(self, "_entity_corners", None)
         object.__setattr__(self, "_entity_clip_geometry", None)
         object.__setattr__(self, "_entity_visuals", [])
+        object.__setattr__(self, "_entity_subscribers", [])
         object.__setattr__(self, "_calc_axis2", None)
         object.__setattr__(self, "_calc_axis3", None)
 
@@ -258,9 +271,91 @@ class Bounds(HostBase):
     def clip_geometry(self):
         return self._entity_clip_geometry
 
+    def _helper_is_subscriber_alive(self, entry: _BoundsSubscriberEntry) -> bool:
+        return entry.host is not None
+
+    def _helper_prune_subscribers(self):
+        subscribers_alive = []
+        sync_to_detach = []
+        for entry in self._entity_subscribers:
+            if self._helper_is_subscriber_alive(entry):
+                subscribers_alive.append(entry)
+            else:
+                sync_to_detach.append(entry.sync_name)
+
+        for sync_name in sync_to_detach:
+            self.act_detach_sync_task(sync_name)
+
+        if len(subscribers_alive) != len(self._entity_subscribers):
+            object.__setattr__(self, "_entity_subscribers", subscribers_alive)
+
+    def _helper_find_subscriber(self, *, host=None, sync_name: str | None = None):
+        for entry in self._entity_subscribers:
+            if sync_name is not None and entry.sync_name == sync_name:
+                return entry
+            if host is not None and entry.host is host:
+                return entry
+        return None
+
+    def act_register_subscriber(self, host, *, sync_name: str, kind: str):
+        self._helper_prune_subscribers()
+        entry_old = self._helper_find_subscriber(host=host, sync_name=sync_name)
+        if entry_old is not None:
+            return entry_old
+
+        self._entity_subscribers.append(
+            _BoundsSubscriberEntry(
+                host_ref=weakref.ref(host),
+                sync_name=sync_name,
+                kind=str(kind),
+            )
+        )
+
+    def act_unregister_subscriber(self, *, host=None, sync_name: str | None = None):
+        subscribers_alive = []
+        sync_to_detach = []
+        for entry in self._entity_subscribers:
+            is_match = (sync_name is not None and entry.sync_name == sync_name) or (
+                host is not None and entry.host is host
+            )
+            if is_match:
+                sync_to_detach.append(entry.sync_name)
+            else:
+                subscribers_alive.append(entry)
+
+        for name in sync_to_detach:
+            self.act_detach_sync_task(name)
+
+        if sync_to_detach:
+            object.__setattr__(self, "_entity_subscribers", subscribers_alive)
+
+    @property
+    def subscribers(self):
+        self._helper_prune_subscribers()
+        return tuple(
+            entry.host for entry in self._entity_subscribers if entry.host is not None
+        )
+
+    @property
+    def glyph_subscribers(self):
+        self._helper_prune_subscribers()
+        return tuple(
+            entry.host
+            for entry in self._entity_subscribers
+            if entry.kind == "glyph" and entry.host is not None
+        )
+
+    @property
+    def plane_grid_subscribers(self):
+        self._helper_prune_subscribers()
+        return tuple(
+            entry.host
+            for entry in self._entity_subscribers
+            if entry.kind == "plane_grid" and entry.host is not None
+        )
+
     def _helper_build_visual_edges(self) -> tuple[np.ndarray, np.ndarray]:
         coords = []
-        line_index = []
 
         for i, (a, b) in enumerate(self._VISUAL_EDGES):
             coords.append(self.corners[a])
@@ -341,6 +436,13 @@ class Bounds(HostBase):
             coords=coords, line_index=line_index, is_reapply_opts=True
         )
 
+    def _helper_open_interact_panels(self, tube, figure):
+        from .visual.qt.interact_bounds import InteractBounds
+        from .visual.qt.interact_tube import InteractTube
+
+        InteractTube(tube, figure).show()
+        InteractBounds(self, figure).show()
+
     def act_visualize(
         self,
         figure=None,
@@ -408,6 +510,9 @@ class Bounds(HostBase):
             doc="Internal sync-task name used by the source Bounds.",
             default=sync_name,
             overwrite=True,
+        )
+        tube.act_set_interact_func(
+            lambda: self._helper_open_interact_panels(tube=tube, figure=figure)
         )
 
         self.act_attach_sync_task(

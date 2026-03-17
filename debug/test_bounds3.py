@@ -64,7 +64,7 @@ bounds_visual = bounds.act_visualize(
         color=(0.0, 0.0, 0.0),
         radius=0.06,
         sides=18,
-        is_pickable=False,
+        is_pickable=True,
     ),
     is_reset_camera=False,
     name="bounds-frame",
