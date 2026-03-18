@@ -362,13 +362,13 @@ class DisclinationLineSmooth(SmoothedLine):
         **SmoothedLine.__attrs__,
         "_calc_result": "The smoothed disclination indices in lattice grid",
         "_calc_result_coords": "The smoothed disclination coords in real space",
-        "_entity_sections": "The DefectSection objects as the cross-sections along the smoothed disclination line",
         "_calc_padding_num": "Temporary padding length used when smoothing a cross-boundary line.",
     }
 
     __relations__ = {
         **SmoothedLine.__relations__,
         "visual": "The one-to-one visualization wrapper currently associated with this smoothed disclination line.",
+        "sections": "RegistryBase object that manages cross-section grids created from this smoothed disclination line.",
     }
 
     __slots__ = tuple(
@@ -412,15 +412,12 @@ class DisclinationLineSmooth(SmoothedLine):
             **kwargs,
         )
         self.act_bind_relation_base("owner", line, is_weak=True)
-        object.__setattr__(
-            self,
-            "_entity_sections",
-            RegistryBase(
-                name="Planes",
-                info=f"registry of cross-section grids for the smoothed disclination line {self.name!r}",
-            ),
+        sections = RegistryBase(
+            name="Planes",
+            info=f"registry of cross-section grids for the smoothed disclination line {self.name!r}",
         )
-        self._entity_sections.act_bind_relation_base("owner", self, is_weak=True)
+        self.act_bind_relation_base("sections", sections, is_weak=False)
+        sections.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "_calc_padding_num", 0)
         self.act_register_protected_attr(["coords", "mode"])
 
@@ -894,7 +891,7 @@ class DefectSectionGrid(HostBase):
         self.act_attach_enrich_kwargs_wrapped_task(
             "section_pose", self._helper_enrich_kwargs_wrapped_section
         )
-        line._entity_sections.act_register(self)
+        line.sections.act_register(self)
 
     def _helper_check_state_normal(self, state_normal, desc):
         if isinstance(state_normal, str):

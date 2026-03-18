@@ -1,9 +1,9 @@
-from pyvistaqt import BackgroundPlotter
+﻿from pyvistaqt import BackgroundPlotter
 import numpy as np
 from typing import Mapping, Any
 from copy import deepcopy
 
-from .Interpolator import Interpolator
+from .QInterpolator import QInterpolator
 from Nematics3D.field import (
     Q_diagonalize,
     n_color_immerse,
@@ -47,16 +47,19 @@ class QPlane(InterpolatePlane):
     __attrs__ = {
         **(InterpolatePlane.__attrs__),
         "raw_name": "The name identifier of this Q-plane object",
-        "_entity_visual_nb": "The PlotRod objects of visualized directors in the bulk",
-        "_entity_visual_nd": "The PlotRod objects of visualized directors near defects",
-        "_entity_visual_defect": "The PlotSphere objects of visualized defects",
-        "_entity_visual_S": "The PlotSurface object of visualized S",
         "_calc_n": "List of director field arrays (from Q-diagonalization)",
         "_calc_S": "List of S field arrays (from Q-diagonalization)",
         "_calc_is_near_defect": "The flag indicating whether the local direcor surrounds a defect",
         "_calc_defect_pos": "The positions of defects on this n-plane",
         "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
         "default_visual_opts": "The default opts_defaults_override for different visualization.",
+    }
+    __relations__ = {
+        **(InterpolatePlane.__relations__),
+        "visual_nb": "The PlotRod visual showing directors in the bulk region of this Q plane.",
+        "visual_nd": "The PlotRod visual showing directors near detected defects on this Q plane.",
+        "visual_defect": "The PlotSphere visual showing detected defect positions on this Q plane.",
+        "visual_S": "The PlotSurface visual showing scalar order on this Q plane.",
     }
     __slots__ = tuple(
         k for k in __attrs__.keys() if k not in InterpolatePlane.__slots__
@@ -75,7 +78,7 @@ class QPlane(InterpolatePlane):
     # ==================================================
     def __init__(
         self,
-        interpolator: Interpolator,
+        interpolator: QInterpolator,
         name: str = "Q-plane",
         grid: PlaneGrid | None = None,
         opts: OptsPlaneGrid | None = None,
@@ -101,10 +104,6 @@ class QPlane(InterpolatePlane):
                 )
             default_visual_opts[key] = default_visual_opts[key] | dict(override)
         object.__setattr__(self, "default_visual_opts", default_visual_opts)
-        object.__setattr__(self, "_entity_visual_nb", None)
-        object.__setattr__(self, "_entity_visual_nd", None)
-        object.__setattr__(self, "_entity_visual_defect", None)
-        object.__setattr__(self, "_entity_visual_S", None)
         object.__setattr__(self, "_state_is_interactable", True)
 
         super().__init__(
@@ -129,7 +128,7 @@ class QPlane(InterpolatePlane):
         grid_all = plane_grid._entity_grid_all
         grid_all_flatten = np.reshape(grid_all, (-1, 3))
 
-        Q_all = self._raw_interpolator.interpolate(grid_all_flatten)
+        Q_all = self.interpolator.interpolate(grid_all_flatten)
         S_all, n_all = Q_diagonalize(Q_all)
         object.__setattr__(self, "_calc_n", n_all[plane_grid._calc_box_mask])
         object.__setattr__(self, "_calc_S", S_all[plane_grid._calc_box_mask])
@@ -226,39 +225,39 @@ class QPlane(InterpolatePlane):
 
     def _helper_update_visual(self):
 
-        if self._entity_visual_nb or self._entity_visual_nd:
+        if self.visual_nb or self.visual_nd:
 
             if np.sum(~self._calc_is_near_defect) > 0:
-                self._entity_visual_nb.act_commit(
+                self.visual_nb.act_commit(
                     coords=self.grid()[~self._calc_is_near_defect],
                     orient=self._calc_n[~self._calc_is_near_defect],
                     is_visible=True,
                 )
             else:
-                self._entity_visual_nb.opts.is_visible = False
+                self.visual_nb.opts.is_visible = False
 
             if np.sum(self._calc_is_near_defect) > 0:
-                self._entity_visual_nd.act_commit(
+                self.visual_nd.act_commit(
                     coords=self.grid()[self._calc_is_near_defect],
                     orient=self._calc_n[self._calc_is_near_defect],
                     is_visible=True,
                 )
             else:
-                self._entity_visual_nd.opts.is_visible = False
+                self.visual_nd.opts.is_visible = False
 
             if (
                 getattr(self, "_calc_defect_pos", None) is not None
                 and len(self._calc_defect_pos) > 0
             ):
-                self._entity_visual_defect.act_commit(
+                self.visual_defect.act_commit(
                     coords=self._calc_defect_pos,
-                    is_visible=self._entity_visual_defect.is_show_defect,
+                    is_visible=self.visual_defect.is_show_defect,
                 )
             else:
-                self._entity_visual_defect.opts.is_visible = False
+                self.visual_defect.opts.is_visible = False
 
-        if getattr(self, "_entity_visual_S", None):
-            self._entity_visual_S.act_commit(
+        if getattr(self, "visual_S", None):
+            self.visual_S.act_commit(
                 coords=self.grid(),
                 scalars=self._calc_S,
             )
@@ -332,7 +331,7 @@ class QPlane(InterpolatePlane):
 
         visual_nb.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nb)
-        object.__setattr__(self, "_entity_visual_nb", visual_nb)
+        self.act_bind_relation_base("visual_nb", visual_nb, is_weak=False)
 
         if np.sum(self._calc_is_near_defect) > 0:
 
@@ -381,10 +380,10 @@ class QPlane(InterpolatePlane):
 
         visual_nd.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_nd)
-        object.__setattr__(self, "_entity_visual_nd", visual_nd)
+        self.act_bind_relation_base("visual_nd", visual_nd, is_weak=False)
 
         visual_defect.act_bind_relation_base("owner", self, is_weak=True)
-        object.__setattr__(self, "_entity_visual_defect", visual_defect)
+        self.act_bind_relation_base("visual_defect", visual_defect, is_weak=False)
 
         visual_defect.act_add_attr(
             "is_show_defect",
@@ -434,7 +433,7 @@ class QPlane(InterpolatePlane):
 
         visual_S.act_bind_relation_base("owner", self, is_weak=True)
         self._helper_set_visual_interact_with_plane(visual_S)
-        object.__setattr__(self, "_entity_visual_S", visual_S)
+        self.act_bind_relation_base("visual_S", visual_S, is_weak=False)
 
 
 # QPlanePolar specializes QPlane for polar plane grids and ring-based
@@ -469,7 +468,7 @@ class QPlanePolar(QPlane):
     # ==================================================
     def __init__(
         self,
-        interpolator: Interpolator,
+        interpolator: QInterpolator,
         name: str = "Q-plane (polar)",
         grid: PlaneGridPolar | None = None,
         opts: OptsPlaneGridPolar | None = None,

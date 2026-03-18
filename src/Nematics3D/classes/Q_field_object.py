@@ -4,7 +4,6 @@ from typing import Union
 from dataclasses import replace, dataclass, field, fields
 from pyvistaqt import BackgroundPlotter
 import pyvista as pv
-import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
@@ -35,7 +34,7 @@ from ..field import (
     apply_linear_transform,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
-from .Interpolator import Interpolator
+from .QInterpolator import QInterpolator
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
@@ -134,19 +133,20 @@ class QFieldObject(ClassBase):
         # --- Defects / disclinations  ---
         "_calc_defect_indices": "Indices (lattice coordinates) of detected defect points.",
         "_calc_defect_grid": "Real-space coordinates of detected defect points.",
-        # --- Interpolation ---
-        "_calc_interpolator": "Interpolator object for Q field in real space / index space.",
-        # --- Visualization ---
-        "_entity_figures": "FigureManager object to manage PlotFigure objects created for visualization.",
-        "_entity_objects": "RegistryBase object to manage physical objects related to this Q field.",
+    }
+    __relations__ = {
+        **(ClassBase.__relations__),
+        "figures": "FigureManager object that manages PlotFigure objects created for this Q field.",
+        "objects": "RegistryBase object that manages physical objects related to this Q field.",
+        "interpolator": "The QInterpolator object associated with this Q field.",
     }
     __properties__ = {
         **(ClassBase.__properties__),
         "S": "Read-only: Scalar order parameter field. Alias of `_raw_S`.",
         "n": "Read-only: Director field. Alias of `_raw_n`.",
         "lines": "Read-only: Classified disclination lines.",
-        "figs": "Read-only: Visualization figures. Alias of `_entity_figures`.",
-        "objs": "Read-only: Physical objects. Alias of `_entity_objects`.",
+        "figs": "Read-only: Visualization figures. Alias of `figures`.",
+        "objs": "Read-only: Physical objects. Alias of `objects`.",
     }
 
     @logging_and_warning_decorator()
@@ -173,15 +173,12 @@ class QFieldObject(ClassBase):
             else:
                 object.__setattr__(self, f"_raw_{k}", v)
 
-        object.__setattr__(
-            self,
-            "_entity_objects",
-            RegistryBase(
-                "objects manager",
-                info=f"physical objects attached to Q field {self.name!r}",
-            ),
+        objects = RegistryBase(
+            "objects manager",
+            info=f"physical objects attached to Q field {self.name!r}",
         )
-        self._entity_objects.act_bind_relation_base("owner", self, is_weak=True)
+        self.act_bind_relation_base("objects", objects, is_weak=False)
+        objects.act_bind_relation_base("owner", self, is_weak=True)
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
         if self._raw_n is not UNSET:
@@ -293,8 +290,9 @@ class QFieldObject(ClassBase):
 
         self.act_add_interpolator()
 
-        object.__setattr__(self, "_entity_figures", FigureManager())
-        self._entity_figures.act_bind_relation_base("owner", self, is_weak=True)
+        figures = FigureManager()
+        self.act_bind_relation_base("figures", figures, is_weak=False)
+        figures.act_bind_relation_base("owner", self, is_weak=True)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
@@ -330,7 +328,7 @@ class QFieldObject(ClassBase):
         lines = sorted(lines, key=lambda line: line._calc_defect_num, reverse=True)
         for i, line in enumerate(lines):
             line.name = f"disclination line {i}"
-            self._entity_objects.act_register(line)
+            self.objects.act_register(line)
 
         logger.info(f"{len(lines)} lines are found.")
 
@@ -400,26 +398,19 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_add_interpolator(self, logger=None):
 
-        from scipy.interpolate import RegularGridInterpolator
+        interpolator_old = self.interpolator
+        if isinstance(interpolator_old, QInterpolator):
+            return interpolator_old
 
-        shape = np.shape(self._raw_Q)[:3]
-        u = np.arange(shape[0])
-        v = np.arange(shape[1])
-        w = np.arange(shape[2])
+        interpolator = QInterpolator(self, name=f"{self.name} interpolator")
+        self.act_bind_relation_base("interpolator", interpolator, is_weak=False)
 
-        interpolator = RegularGridInterpolator(
-            (u, v, w), self._raw_Q, method="linear", bounds_error=True
-        )
-        interpolator = Interpolator(interpolator, weakref.ref(self))
-
-        object.__setattr__(self, "_calc_interpolator", interpolator)
-
-        return self._calc_interpolator
+        return self.interpolator
 
     def act_interpolate(self, points: np.ndarray, is_index=False):
-        if not hasattr(self, "_interpolator"):
+        if self.interpolator is None:
             self.act_add_interpolator()
-        return self._calc_interpolator.interpolate(points, is_index=is_index)
+        return self.interpolator.interpolate(points, is_index=is_index)
 
     @logging_and_warning_decorator()
     def _helper_set_figure(
@@ -669,11 +660,11 @@ class QFieldObject(ClassBase):
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
-        if not hasattr(self, "_calc_interpolator"):
+        if self.interpolator is None:
             self.act_add_interpolator()
 
         n_plane = QPlane(
-            self._calc_interpolator,
+            self.interpolator,
             name=name_plane,
             opts=opts_grid,
             bounds=bounds,
@@ -746,11 +737,11 @@ class QFieldObject(ClassBase):
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
-        if not hasattr(self, "_calc_interpolator"):
+        if self.interpolator is None:
             self.act_add_interpolator()
 
         S_plane = QPlane(
-            self._calc_interpolator,
+            self.interpolator,
             name=name_plane,
             opts=opts_grid,
             bounds=bounds,
@@ -840,7 +831,7 @@ class QFieldObject(ClassBase):
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
-        if not hasattr(self, "_calc_interpolator"):
+        if self.interpolator is None:
             self.act_add_interpolator()
 
         section = smooth.act_cross_section(
@@ -852,7 +843,7 @@ class QFieldObject(ClassBase):
         plane_grid = section.wrapped
         n_plane_name = section.name + " of " + smooth.name
         n_plane = QPlanePolar(
-            self._calc_interpolator,
+            self.interpolator,
             name=n_plane_name,
             grid=plane_grid,
         )
@@ -873,18 +864,16 @@ class QFieldObject(ClassBase):
 
     @property
     def lines(self):
-        result = [
-            item for item in self._entity_objects if isinstance(item, DisclinationLine)
-        ]
+        result = [item for item in self.objects if isinstance(item, DisclinationLine)]
         return result
 
     @property
     def figs(self):
-        return self._entity_figures
+        return self.figures
 
     @property
     def objs(self):
-        return self._entity_objects
+        return self.objects
 
     @property
     def S(self):

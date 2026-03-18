@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
@@ -66,10 +66,10 @@ class InteractPlane(PanelBase):
     def _iter_silhouette_targets(self):
         targets = []
         for name in (
-            "_entity_visual_nb",
-            "_entity_visual_nd",
-            "_entity_visual_defect",
-            "_entity_visual_S",
+            "visual_nb",
+            "visual_nd",
+            "visual_defect",
+            "visual_S",
         ):
             visual = getattr(self.field, name, None)
             if visual is not None:

@@ -50,18 +50,19 @@ n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 
 bounds_max = 60
+bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 Q.act_lines_smooth(window_length=21, min_line_length=40)
-# Q.act_visualize_disclination_lines(
-#     is_wrap=True,
-#     line_color=(0.5, 0.5, 0.5),
-#     extent_radius=0.05,
-#     min_line_length=50,
-#     line_radius=0.4,
-#     figure=figure,
-#     bounds=(0,60,0,60,0,60)
-# )
+Q.act_visualize_disclination_lines(
+    is_wrap=True,
+    line_color=(0.5, 0.5, 0.5),
+    extent_radius=0.05,
+    min_line_length=50,
+    line_radius=0.4,
+    figure=figure,
+    bounds=bounds
+)
 
 trans = 7.5
 spacing = 2.5
@@ -72,7 +73,7 @@ Q.act_visualize_n_plane(
     grid_size=100,
     grid_origin=(bounds_max / 2 - trans, bounds_max / 2 - trans, bounds_max / 2 - trans),
     is_extent=True,
-#    bounds=(0,60,0,60,0,60)
+    bounds=bounds
 )
 Q.figs.active_fig.act_view_yz()
 Q.figs.active_fig.opts.azimuth = 90
