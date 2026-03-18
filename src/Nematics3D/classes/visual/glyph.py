@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -308,6 +308,7 @@ class PlotGlyph(HostBase):
         bounds: Bounds | None = None,
         clip_mode: str = "center",
         is_subscribe_bounds: bool = True,
+        is_passive_bounds_sync: bool = False,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -395,6 +396,7 @@ class PlotGlyph(HostBase):
             bounds,
             is_apply=False,
             is_subscribe=is_subscribe_bounds,
+            is_passive_sync=is_passive_bounds_sync,
         )
 
     def _helper_init_end(self):
@@ -428,6 +430,7 @@ class PlotGlyph(HostBase):
         is_apply=True,
         is_replace=True,
         is_subscribe=True,
+        is_passive_sync=False,
         logger=None,
     ):
         if bounds is None:
@@ -456,10 +459,11 @@ class PlotGlyph(HostBase):
 
         self.act_bind_relation_base("bounds", bounds, is_weak=True)
         if is_subscribe:
-            bounds.act_attach_sync_task(
-                self._impl_name_pv,
-                lambda **kwargs: self.act_commit(is_reapply_opts=True),
-            )
+            if not is_passive_sync:
+                bounds.act_attach_sync_task(
+                    self._impl_name_pv,
+                    lambda **kwargs: self.act_commit(is_reapply_opts=True),
+                )
             bounds.act_register_subscriber(
                 self,
                 sync_name=self._impl_name_pv,
@@ -588,6 +592,16 @@ class PlotGlyph(HostBase):
 
         plotter = fig.pl
         actor = getattr(self, "_entity", None)
+
+        def _safe_remove_actor(target):
+            try:
+                plotter.remove_actor(target, render=False)
+            except AttributeError:
+                # The Qt panel may outlive the PyVista renderer during shutdown.
+                # In that case, the renderer bookkeeping is already gone and
+                # there is nothing left for us to remove cleanly.
+                return
+
         if actor is not None:
             pm = getattr(fig, "_entity_pick_manager", None)
             if pm is not None:
@@ -595,8 +609,8 @@ class PlotGlyph(HostBase):
                     pm.act_unregister(actor)
                 except Exception:
                     pm._impl_registry.pop(actor, None)
-            plotter.remove_actor(actor, render=False)
-        plotter.remove_actor(self._impl_name_pv, render=False)
+            _safe_remove_actor(actor)
+        _safe_remove_actor(self._impl_name_pv)
         self._helper_clear_silhouette()
         object.__setattr__(self, "_entity", None)
 
@@ -625,11 +639,13 @@ class PlotGlyph(HostBase):
 
         if self.state_clip_mode == "center":
             object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+            self._helper_build_poly()
+            mesh = self._helper_build_mesh()
         else:
             object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
-        self._helper_build_poly()
-        mesh = self._helper_build_mesh()
-        mesh = self._helper_apply_bounds_mesh(mesh)
+            self._helper_build_poly()
+            mesh = self._helper_build_mesh()
+            mesh = self._helper_apply_bounds_mesh(mesh)
 
         if self._helper_is_empty_mesh(mesh):
             object.__setattr__(self, "_state_is_empty", True)
@@ -808,11 +824,13 @@ class PlotGlyph(HostBase):
         if is_needs_remesh:
             if self.state_clip_mode == "center":
                 object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+                self._helper_build_poly()
+                mesh = self._helper_build_mesh()
             else:
                 object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
-            self._helper_build_poly()
-            mesh = self._helper_build_mesh()
-            mesh = self._helper_apply_bounds_mesh(mesh)
+                self._helper_build_poly()
+                mesh = self._helper_build_mesh()
+                mesh = self._helper_apply_bounds_mesh(mesh)
             if self._helper_is_empty_mesh(mesh):
                 object.__setattr__(self, "_state_is_empty", True)
                 self._helper_clear_live_actor()

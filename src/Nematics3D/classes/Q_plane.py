@@ -11,7 +11,11 @@ from Nematics3D.field import (
     align_directors,
 )
 from Nematics3D.disclination import defect_detect, defect_vicinity_grid
-from Nematics3D.general import select_grid_in_box, mark_points_membership
+from Nematics3D.general import (
+    select_grid_in_box,
+    mark_points_membership,
+    find_rotation_axis,
+)
 from Nematics3D.geometry import wrap_to_pi
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import as_bool
@@ -311,10 +315,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals, but avoid direct bounds
-                # subscription because PlaneGrid -> QPlane already drives these updates.
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
-                is_subscribe_bounds=False,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
                 opts_defaults_override=self.default_visual_opts["nb"],
             )
 
@@ -327,10 +334,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals, but avoid direct bounds
-                # subscription because PlaneGrid -> QPlane already drives these updates.
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
-                is_subscribe_bounds=False,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
                 opts_defaults_override=self.default_visual_opts["nb"],
                 is_visible=False,
             )
@@ -348,10 +358,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals, but avoid direct bounds
-                # subscription because PlaneGrid -> QPlane already drives these updates.
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
-                is_subscribe_bounds=False,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
                 opts_defaults_override=self.default_visual_opts["nd"],
             )
 
@@ -361,10 +374,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals, but avoid direct bounds
-                # subscription because PlaneGrid -> QPlane already drives these updates.
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
-                is_subscribe_bounds=False,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
             )
 
         else:
@@ -376,6 +392,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
+                bounds=self.grid.bounds,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
                 is_visible=False,
                 opts_defaults_override=self.default_visual_opts["nd"],
             )
@@ -386,10 +409,13 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals, but avoid direct bounds
-                # subscription because PlaneGrid -> QPlane already drives these updates.
+                # Keep the same bounds clip on derived visuals and still register
+                # them as bounds subscribers for shared tooling such as silhouette
+                # suppression, but skip direct bounds-driven commits because
+                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
-                is_subscribe_bounds=False,
+                is_subscribe_bounds=True,
+                is_passive_bounds_sync=True,
                 is_visible=False,
             )
 
@@ -442,10 +468,13 @@ class QPlane(InterpolatePlane):
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
             opts=opts_S,
-            # Keep the same bounds clip on derived visuals, but avoid direct bounds
-            # subscription because PlaneGrid -> QPlane already drives these updates.
+            # Keep the same bounds clip on derived visuals and still register
+            # them as bounds subscribers for shared tooling such as silhouette
+            # suppression, but skip direct bounds-driven commits because
+            # PlaneGrid -> QPlane already drives these updates.
             bounds=self.grid.bounds,
-            is_subscribe_bounds=False,
+            is_subscribe_bounds=True,
+            is_passive_bounds_sync=True,
             opts_defaults_override=self.default_visual_opts["S"],
         )
 
@@ -700,3 +729,34 @@ class QPlanePolar(QPlane):
         )
 
         return defect_centers, adjacent_mask
+
+    @logging_and_warning_decorator()
+    def act_calc_omega(self, layer, logger=None):
+        plane_grid = self.grid
+        ring_offsets = plane_grid._calc_ring_offsets
+        n_rings = ring_offsets.shape[0] - 1
+
+        layer = int(layer)
+        if layer < 0 or layer >= n_rings:
+            raise ValueError(
+                f"`layer` must be between 0 and {n_rings - 1}, got {layer}."
+            )
+
+        s, e = ring_offsets[layer], ring_offsets[layer + 1]
+        if (e - s) < 2:
+            raise ValueError(
+                f"Layer {layer} contains fewer than 2 directors and cannot define a rotation axis."
+            )
+
+        Q_all = self.interpolator.interpolate(plane_grid._entity_grid_all)
+        _, n_all = Q_diagonalize(Q_all)
+        directors = np.asarray(n_all[s:e], dtype=float).copy()
+
+        for i in range(1, len(directors)):
+            directors[i] = align_directors(directors[i - 1], directors[i])
+
+        omega, metric = find_rotation_axis(directors, is_return_metric=True)
+        metric["layer"] = layer
+        metric["num_directors"] = int(len(directors))
+
+        return omega, metric

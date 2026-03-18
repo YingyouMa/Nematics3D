@@ -73,10 +73,14 @@ Q.act_visualize_n_plane(
     grid_size=100,
     grid_origin=(bounds_max / 2 - trans, bounds_max / 2 - trans, bounds_max / 2 - trans),
     is_extent=True,
-    bounds=bounds
+    bounds=bounds,
+    figure=figure
 )
 Q.figs.active_fig.act_view_yz()
 Q.figs.active_fig.opts.azimuth = 90
+
+# bounds_all = Nematics3D.Bounds(length1=128)
+# bounds_all.act_visualize(figure=figure)
 
 # Q.act_visualize_n_near_defect(75, Q.lines[3].smooth)
 

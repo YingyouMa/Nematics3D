@@ -1,4 +1,4 @@
-"""
+﻿"""
 Miscellaneous shared utilities. If a helper does not clearly belong to a more specific
 module yet, it can live here for now.
 """
@@ -64,7 +64,7 @@ def search_in_reservoir(
     reservoir : Sequence of items or dict-like
         Either:
         - A list of reservoir items (to be hashed by `make_hash_table`), or
-        - A precomputed dictionary mapping tuple(item) → float or int (if `is_reservoir_hash` is True)
+        - A precomputed dictionary mapping tuple(item) â†’ float or int (if `is_reservoir_hash` is True)
 
     is_reservoir_hash : bool, optional
         If True, `reservoir` is assumed to be a dictionary-like hash table.
@@ -177,8 +177,8 @@ def blue_red_in_white_bg() -> np.ndarray:
     Notes
     -----
     - The colormap is constructed as:
-        * index 0–255: blue → cyan → green (increasing G, decreasing B)
-        * index 255–510: green → yellow → red (decreasing G, increasing R)
+        * index 0â€“255: blue â†’ cyan â†’ green (increasing G, decreasing B)
+        * index 255â€“510: green â†’ yellow â†’ red (decreasing G, increasing R)
     - L2 normalization is applied to each RGB vector for perceptual contrast
       when visualized on white backgrounds.
     """
@@ -323,7 +323,7 @@ def get_square_each(size, num, dim=2):
     edges = []
     for i in range(4):
         p0, p1 = corners[i], corners[(i + 1) % 4]
-        edge = np.linspace(p0, p1, num - 1, endpoint=False)  # 不要重复顶点
+        edge = np.linspace(p0, p1, num - 1, endpoint=False)  # ä¸è¦é‡å¤é¡¶ç‚¹
         edges.append(edge)
     coords = np.vstack(edges)
 
@@ -454,7 +454,11 @@ def select_grid_in_box(
         return (grid, mask_all) if is_return_mask else grid
 
     corners_limit = np.asarray(corners_limit)
-    if corners_limit.ndim != 2 or corners_limit.shape[1] != 3 or corners_limit.shape[0] < 4:
+    if (
+        corners_limit.ndim != 2
+        or corners_limit.shape[1] != 3
+        or corners_limit.shape[0] < 4
+    ):
         raise ValueError(
             f"`corners_limit` must have shape (>=4, 3). Got {corners_limit.shape} instead."
         )
@@ -487,7 +491,6 @@ def select_grid_in_box(
         )
 
     return (grid_selected, mask) if is_return_mask else grid_selected
-
 
 
 def split_points(
@@ -529,7 +532,7 @@ def split_points(
     - Works for arbitrary D (not just 3).
     - Exact equality is used. For floating-point data, consider pre-rounding if your points come from
       numerical computations with tiny differences (e.g., `np.round(points, decimals=9)`).
-    - This implementation uses a per-row “byte view” (np.void) to enable row-wise set operations efficiently.
+    - This implementation uses a per-row â€œbyte viewâ€ (np.void) to enable row-wise set operations efficiently.
     - Empty arrays are fully supported as long as they have shape (0, D).
 
     Examples
@@ -596,6 +599,7 @@ def split_points(
 
     return only_in_points1, also_in_points2
 
+
 def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarray:
     """
     Return a boolean mask indicating whether each row in points1 appears in points2.
@@ -608,9 +612,13 @@ def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarr
     b = np.ascontiguousarray(points2)
 
     if a.ndim != 2 or b.ndim != 2:
-        raise ValueError(f"points1 and points2 must be 2D arrays. Got {a.ndim=} and {b.ndim=}.")
+        raise ValueError(
+            f"points1 and points2 must be 2D arrays. Got {a.ndim=} and {b.ndim=}."
+        )
     if a.shape[1] != b.shape[1]:
-        raise ValueError(f"points1 and points2 must have the same number of columns. Got {a.shape[1]=} vs {b.shape[1]=}.")
+        raise ValueError(
+            f"points1 and points2 must have the same number of columns. Got {a.shape[1]=} vs {b.shape[1]=}."
+        )
 
     row_dtype = np.dtype((np.void, a.dtype.itemsize * a.shape[1]))
     a_view = a.view(row_dtype).ravel()
@@ -619,16 +627,17 @@ def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarr
     return np.isin(a_view, b_view).reshape(-1)
 
 
-
-def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) ) -> Tensor((3,3)):
+def rotation_matrix_from_vectors(
+    source_vector: Vect(3), target_vector: Vect(3)
+) -> Tensor((3, 3)):
     """
     Construct a rotation matrix that rotates one vector to another.
 
-    This function computes a 3×3 rotation matrix `R` such that:
-        R @ source_vector ≈ target_vector
+    This function computes a 3Ã—3 rotation matrix `R` such that:
+        R @ source_vector â‰ˆ target_vector
 
-    It internally uses SciPy's `Rotation.align_vectors` to find the 
-    minimal rotation that maps the source direction to the target 
+    It internally uses SciPy's `Rotation.align_vectors` to find the
+    minimal rotation that maps the source direction to the target
     direction.
 
     Parameters
@@ -641,16 +650,16 @@ def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) 
     Returns
     -------
     rotation_matrix : ndarray, shape (3, 3)
-        A proper rotation matrix (orthogonal with det=+1) that rotates 
+        A proper rotation matrix (orthogonal with det=+1) that rotates
         `source_vector` to align with `target_vector`.
 
     Notes
     -----
     - Both vectors are normalized internally before computing the rotation.
-    - If the vectors are parallel (or anti-parallel), the rotation axis 
-      may be underdetermined, but `Rotation.align_vectors` chooses a 
+    - If the vectors are parallel (or anti-parallel), the rotation axis
+      may be underdetermined, but `Rotation.align_vectors` chooses a
       consistent solution.
-    - To apply the rotation to other vectors, use the returned matrix 
+    - To apply the rotation to other vectors, use the returned matrix
       with the `@` operator (matrix multiplication).
 
     Examples
@@ -661,14 +670,22 @@ def rotation_matrix_from_vectors(source_vector: Vect(3), target_vector: Vect(3) 
     >>> np.allclose(Rmat @ source, target)
     True
     """
-    
+
     from scipy.spatial.transform import Rotation as R
-    
-    source_vector = as_Vect(source_vector, name="The vector used as the starting source when constructing the rotation matrix", is_norm=True)
-    target_vector = as_Vect(target_vector, name="The vector used as the endinbg target when constructing the rotation matrix", is_norm=True)
+
+    source_vector = as_Vect(
+        source_vector,
+        name="The vector used as the starting source when constructing the rotation matrix",
+        is_norm=True,
+    )
+    target_vector = as_Vect(
+        target_vector,
+        name="The vector used as the endinbg target when constructing the rotation matrix",
+        is_norm=True,
+    )
 
     rot, _ = R.align_vectors([target_vector], [source_vector])
-    
+
     return rot.as_matrix()
 
 
@@ -681,24 +698,24 @@ def find_rotation_axis(directors, is_return_metric=False):
     # This is equivalent to finding the eigenvector with the smallest eigenvalue.
     M = np.dot(directors.T, directors)
     eigenvalues, eigenvectors = np.linalg.eigh(M)
-    
+
     # The first eigenvector corresponds to the smallest eigenvalue (the axis).
     axis = eigenvectors[:, 0]
-    
+
     # 2. Determine rotation direction if requested.
     # We look at the cross product of consecutive vectors: v_i x v_{i+1}.
     # The sum of these cross products points in the direction of the rotation.
     cross_prods = np.cross(directors[:-1], directors[1:])
     avg_cross = np.sum(cross_prods, axis=0)
-        
-    # If the dot product between our calculated axis and the rotation 
+
+    # If the dot product between our calculated axis and the rotation
     # flow is negative, flip the axis to align with the "Up" direction.
     if np.dot(axis, avg_cross) < 0:
         axis = -axis
-        
+
     if not is_return_metric:
         return axis
-    
+
     else:
 
         # 3. Calculate metrics
@@ -706,23 +723,35 @@ def find_rotation_axis(directors, is_return_metric=False):
         total_var = np.sum(eigenvalues)
         # Orthogonality score: 1.0 means all vectors are perfectly in the plane perpendicular to the axis.
         orthogonality_score = 1.0 - (eigenvalues[0] / total_var)
-        
+
         # RMS of sin(theta), where theta is the angle between the vector and the plane.
         # Ideally, this should be near 0.
         rms_sin_theta = np.sqrt(eigenvalues[0] / len(directors))
-        
+
         # Calculate the average tilt angle from the perpendicular plane in degrees.
         tilt_angle_deg = np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
-        
+
+        # Rotation consistency: 1 means consecutive directors rotate
+        # around the same axis direction monotonically; 0 means
+        # positive and negative rotation contributions largely cancel.
+        signed_rotation_steps = np.dot(cross_prods, axis)
+        total_signed_rotation = np.sum(signed_rotation_steps)
+        total_rotation_magnitude = np.sum(np.abs(signed_rotation_steps))
+        rotation_consistency = (
+            np.abs(total_signed_rotation) / total_rotation_magnitude
+            if total_rotation_magnitude > 1e-12
+            else 0.0
+        )
+
         metric = {
             "orthogonality_score": orthogonality_score,
             "rms_sin_theta": rms_sin_theta,
             "tilt_angle_degrees": tilt_angle_deg,
-            "eigenvalues": eigenvalues
+            "rotation_consistency": rotation_consistency,
+            "eigenvalues": eigenvalues,
         }
-        
-        return axis, metric
 
+        return axis, metric
 
 
 def find_plane_normal(points, is_return_metric=False):
@@ -736,49 +765,53 @@ def find_plane_normal(points, is_return_metric=False):
     # This ensures we are looking at the spread around the centroid
     centroid = np.mean(points, axis=0)
     centered_points = points - centroid
-    
+
     # 2. Compute the Scatter Matrix (or Covariance Matrix)
     # M = (P - mean)^T * (P - mean)
     M = np.dot(centered_points.T, centered_points)
-    
+
     # 3. Eigenvalue decomposition
     # eigenvalues are sorted in ascending order by np.linalg.eigh
     eigenvalues, eigenvectors = np.linalg.eigh(M)
-    
+
     # The normal vector is the eigenvector corresponding to the smallest eigenvalue
     normal = eigenvectors[:, 0]
-    
+
     if not is_return_metric:
         return normal
     else:
 
         # 4. Metrics calculation
         total_variance = np.sum(eigenvalues)
-        
+
         # Planarity Score (0 to 1): How well the points fit a flat plane.
         # 1.0 means perfectly flat.
-        planarity = 1.0 - (3.0 * eigenvalues[0] / total_variance) if total_variance > 0 else 1.0
-        
+        planarity = (
+            1.0 - (3.0 * eigenvalues[0] / total_variance) if total_variance > 0 else 1.0
+        )
+
         # Thickness: The RMS distance of points from the fitted plane
         thickness_rms = np.sqrt(eigenvalues[0] / len(points))
-        
-        # Aspect Ratio (Anisotropy): 
+
+        # Aspect Ratio (Anisotropy):
         # Compares the smallest spread to the medium spread to see if the plane is well-defined
         # If this is close to 1, the points might be distributed like a line rather than a plane.
-        linearity_risk = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] > 1e-9 else 1.0
-    
-        metric =  {
+        linearity_risk = (
+            eigenvalues[0] / eigenvalues[1] if eigenvalues[1] > 1e-9 else 1.0
+        )
+
+        metric = {
             "centroid": centroid,
             "planarity_score": np.clip(planarity, 0, 1),
             "thickness_rms": thickness_rms,
             "eigenvalues": eigenvalues,
-            "linearity_risk": linearity_risk  # High risk if the 'plane' thickness is similar to its width
+            "linearity_risk": linearity_risk,  # High risk if the 'plane' thickness is similar to its width
         }
-        
+
         return normal, metric
 
 
-def pop_exclusive(kwargs: dict, k1: str, k2: str):    #1
+def pop_exclusive(kwargs: dict, k1: str, k2: str):  # 1
     """
     Pop exactly one of (k1, k2) from kwargs if present.
 
@@ -832,8 +865,10 @@ def find_nearest_point(query_pt, coords, is_return_idx=False):
     q = np.asarray(query_pt, dtype=float).reshape(-1)
     pts = np.asarray(coords, dtype=float)
     if pts.ndim != 2 or pts.shape[1] != len(q):
-        raise ValueError(f"`coords` shape is {pts.shape},"
-                         f"while `query_pt` shape is {query_pt.shape}")
+        raise ValueError(
+            f"`coords` shape is {pts.shape},"
+            f"while `query_pt` shape is {query_pt.shape}"
+        )
 
     d = pts - q
     d2 = np.einsum("ij,ij->i", d, d)
@@ -885,20 +920,26 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
     idx = int(np.argmin(d2))
     return proj[idx]
 
+
 def is_given_str(a, b):
-    return True if isinstance(a, str) and a==b else False
+    return True if isinstance(a, str) and a == b else False
+
 
 def fmt_value(v, ndigits=2):
     """Format scalar or ndarray with fixed decimals (zero-padded)."""
     if isinstance(v, np.ndarray):
         fmt = np.vectorize(lambda x: f"{float(x):.{ndigits}f}", otypes=[str])
-        return "[" + ", ".join(fmt(v).ravel()) + "]" if v.ndim == 1 else \
-               np.array2string(fmt(v), separator=", ")
+        return (
+            "[" + ", ".join(fmt(v).ravel()) + "]"
+            if v.ndim == 1
+            else np.array2string(fmt(v), separator=", ")
+        )
     try:
         return f"{float(v):.{ndigits}f}"
     except Exception:
         return str(v)
-    
+
+
 def is_equal_array(v1, v2, logger=None):
     try:
         arr1 = np.asarray(v1)
@@ -911,6 +952,7 @@ def is_equal_array(v1, v2, logger=None):
 
     return np.array_equal(arr1, arr2, equal_nan=True)
 
+
 def is_equal(v1, v2):
     try:
         return is_equal_array(v1, v2)
@@ -919,6 +961,7 @@ def is_equal(v1, v2):
             return v1 == v2
         except Exception:
             return False
+
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
 #     from scipy.spatial.distance import cdist
