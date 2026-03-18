@@ -36,7 +36,21 @@ class OptsSurface(OptsGlyph):
     )
 
 
+# PlotSurface keeps the generic glyph host behavior but replaces the geometry
+# generation and silhouette handling with surface-specific logic.
+#
+# Subclasses should preserve the assumption that surfaces are resolved from
+# point clouds through a mesh-building stage, and keep silhouette updates in
+# sync with any actor or mesh replacement.
 class PlotSurface(PlotGlyph):
+    """
+    PlotSurface visualizes a point cloud as a reconstructed surface mesh.
+
+    Normal users provide surface sample points, then inspect or update visual
+    settings through `surface.opts` or `surface.act_commit(...)`. Available
+    settings can be explored with `surface.show_modifiable_attrs()`, while
+    `repr(surface)` gives a compact summary of the plotted object.
+    """
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         k: v for k, v in PlotGlyph.__attrs__.items() if k != "_calc_radius"
@@ -50,6 +64,10 @@ class PlotSurface(PlotGlyph):
 
     _pending_resolution_attrs = ["color", "scalars", "opacity"]
 
+    # ==================== OVERRIDE ====================
+    # PlotSurface overrides PlotGlyph.__init__ only to select the surface opts
+    # type and install the surface-specific interaction entry point.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -80,6 +98,11 @@ class PlotSurface(PlotGlyph):
 
         self._helper_init_end()
 
+    # ==================== OVERRIDE ====================
+    # PlotSurface overrides PlotGlyph._helper_build_mesh because surfaces are
+    # reconstructed from the prepared point cloud with a 2D Delaunay stage
+    # instead of glyph or tube extrusion logic.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
 
@@ -88,6 +111,11 @@ class PlotSurface(PlotGlyph):
 
         return mesh
 
+    # ==================== OVERRIDE ====================
+    # PlotSurface overrides PlotGlyph._helper_add_silhouette because surface
+    # objects need a feature-edge outline generated from the triangulated mesh
+    # rather than the generic glyph silhouette behavior.
+    # ==================================================
     def _helper_add_silhouette(self):
 
         plotter = self.fig.pl

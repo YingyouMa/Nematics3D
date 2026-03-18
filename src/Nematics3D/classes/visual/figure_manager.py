@@ -44,6 +44,11 @@ class FigureManager(RegistryBase):
 
     __slots__ = tuple(__attrs__.keys())
 
+    # ==================== OVERRIDE ====================
+    # FigureManager overrides RegistryBase.__init__ because it must initialize
+    # the additional active-figure state after the registry core is created.
+    # ==================================================
+
     def __init__(self, name: str = "figures"):
         super().__init__(name)
         object.__setattr__(self, "_state_active_name", None)
@@ -86,6 +91,11 @@ class FigureManager(RegistryBase):
             raise KeyError(
                 "This figure is deleted and could not be set to active figure."
             )
+
+    # ==================== OVERRIDE ====================
+    # FigureManager overrides RegistryBase.__repr__ to present figures in
+    # display order rather than grouped by category.
+    # ==================================================
 
     def __repr__(self):
         cls_name = self.__class__.__name__

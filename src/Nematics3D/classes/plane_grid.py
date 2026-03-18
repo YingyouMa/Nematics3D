@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 from typing import Literal, Any, Mapping
 from types import MappingProxyType
 from dataclasses import dataclass
@@ -93,14 +93,31 @@ class OptsPlaneGrid(OptsBase):
     )
 
 
+# PlaneGrid keeps the HostBase option pipeline but specializes it for
+# generating a 2D lattice embedded in 3D space with optional bounds clipping.
+#
+# Subclasses should preserve the relationship among `normal`, `axis1`,
+# the derived in-plane axis, and the generated grid caches. If grid
+# generation is overridden, keep `_entity_grid`, `_entity_grid_all`,
+# `_entity_grid_int`, and the derived size/offset fields synchronized.
 class PlaneGrid(HostBase):
+    """
+    PlaneGrid generates a 2D sampling grid embedded in 3D space.
+
+    Normal users configure the grid through `grid.opts` or
+    `grid.act_commit(...)`, and can iterate over the selected grid points or
+    convert the object to a NumPy array directly. Use
+    `grid.show_modifiable_attrs()` to inspect available settings and
+    `grid.show_relations()` to check the current `field` and `bounds`
+    bindings.
+    """
 
     __attrs__ = {
         **(HostBase.__attrs__),
         # ========== generated grids ==========
-        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃƒâ€”3)",
-        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 Ãƒâ€” num2 Ãƒâ€” 3)",
-        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 Ãƒâ€” num2 Ãƒâ€” 3)",
+        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃ—3)",
+        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 Ã— num2 Ã— 3)",
+        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 Ã— num2 Ã— 3)",
         # ========== calc (derived quantities) ==========
         "_calc_axis2": "The second in-plane axis which normal to both axis1 and normal.",
         "_calc_offset_real": "Base 3D offset that maps 2D array indices [i, j] into plane coordinates via i*step1 + j*step2 + offset before the global grid transform.",
@@ -125,6 +142,11 @@ class PlaneGrid(HostBase):
 
     __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
 
+    # ==================== OVERRIDE ====================
+    # PlaneGrid overrides HostBase.__init__ because it must validate required
+    # plane parameters, install the bounds-sync helper state, and trigger the
+    # first grid generation immediately after opts finalization.
+    # ==================================================
     def __init__(
         self,
         name: str | None = None,
@@ -163,6 +185,11 @@ class PlaneGrid(HostBase):
 
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
+    # ==================== OVERRIDE ====================
+    # PlaneGrid overrides HostBase._helper_commit_apply_opts_main because
+    # plane-grid opts require custom axis construction, grid generation,
+    # optional bounds filtering, and cache updates specific to plane sampling.
+    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
@@ -264,6 +291,11 @@ class PlaneGrid(HostBase):
         if self.field:
             self.field._helper_commit()
 
+    # ==================== OVERRIDE ====================
+    # PlaneGrid overrides ClassBase.__repr__ because a plane grid is more useful
+    # when represented by its geometric orientation and origin than by name
+    # alone.
+    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         msg = f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, origin={self.opts.origin} at {self.opts.alignment}"
@@ -285,6 +317,12 @@ class PlaneGrid(HostBase):
     @property
     def _impl_field(self):
         return getattr(self, "field", None)
+
+    def act_copy(self, name: str | None = None, is_bind_same_bounds: bool = True):
+        opts_new = type(self.opts)(**self.opts.act_asdict())
+        bounds_new = self.bounds if is_bind_same_bounds else None
+        name_new = self.name if name is None else name
+        return type(self)(name=name_new, opts=opts_new, bounds=bounds_new)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unbind_bounds(self, is_apply=True, logger=None):
@@ -457,8 +495,3 @@ class PlaneGrid(HostBase):
 #         data = json.load(f)
 #     opts = OptsPlaneGrid(**data)
 #     return cls(opts=opts)
-
-# def act_copy(self) -> "PlaneGrid":
-#     import copy
-#     opts_new = copy.deepcopy(self._opts_all)
-#     return self.__class__(opts=opts_new)

@@ -52,7 +52,22 @@ class OptsTube(OptsGlyph):
     )
 
 
+# PlotTube inherits the generic glyph pipeline but adds polyline-specific raw
+# topology and build logic.
+#
+# Subclasses should keep the line-index contract aligned with `raw_coords`,
+# route extra raw inputs through the pre-opts commit stage, and preserve the
+# polyline-specific pick semantics when overriding geometry helpers.
 class PlotTube(PlotGlyph):
+    """
+    PlotTube visualizes one or more connected line paths as tube geometry.
+
+    For normal use, provide the centerline coordinates and optionally a
+    `line_index` array to split the points into multiple disconnected paths.
+    Visual settings can be read from `tube.opts`, changed through
+    `tube.opts.<name> = value` or `tube.act_commit(...)`, and inspected with
+    `tube.show_modifiable_attrs()`.
+    """
 
     __attrs__ = {
         **dict(PlotGlyph.__attrs__),
@@ -178,8 +193,7 @@ class PlotTube(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
         """
-        Internal: Create the PyVista PolyData, apply smoothing,
-        and generate tube with dynamic or static radius.
+        Internal: generate tube geometry from the prepared polyline dataset.
         """
 
         poly = self._calc_poly

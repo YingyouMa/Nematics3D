@@ -2,6 +2,7 @@ import time
 import numpy as np
 from mayavi import mlab
 import logging
+
 # import matplotlib.pyplot as plt
 
 import sys
@@ -57,21 +58,34 @@ from Nematics3D.debug.debug_store import DEBUG_VARS
 #     line.specular_color = (1,0,0)
 #     line.radius = 2
 #     line.sides = 20
-   
-figure = Nematics3D.PlotFigure()    
-   
-index_max =  60
-n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
-S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
+
+figure = Nematics3D.PlotFigure()
+
+index_max = 60
+n = np.load("data/n_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
+S = np.load("data/S_example_global.npy")[0:index_max, 0:index_max, 0:index_max]
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=index_max >= 128)
 Q.act_lines_smooth(window_length=21, min_line_length=40)
-Q.act_visualize_disclination_lines(is_wrap=True, line_color=(0.5, 0.5, 0.5), extent_radius=0.05, min_line_length=50, line_radius=0.4, figure=figure)
-    
+Q.act_visualize_disclination_lines(
+    is_wrap=True,
+    line_color=(0.5, 0.5, 0.5),
+    extent_radius=0.05,
+    min_line_length=50,
+    line_radius=0.4,
+    figure=figure,
+)
+
 trans = 7.5
 spacing = 2.5
 
-testGrid = Nematics3D.PlaneGrid(normal=(1,1,1), spacing=spacing, size=100, origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), corners_limit=Q._calc_corners)
+testGrid = Nematics3D.PlaneGrid(
+    normal=(1, 1, 1),
+    spacing=spacing,
+    size=100,
+    origin=(index_max / 2 - trans, index_max / 2 - trans, index_max / 2 - trans),
+    bounds=Q._calc_corners,
+)
 testnPlane = Nematics3D.QPlane(Q._calc_interpolator, grid=testGrid)
 
 testnPlane.act_visualize_n(figure=figure)
@@ -81,13 +95,13 @@ figure.opts.azimuth = 90
 
 
 # Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
-#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
+#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans),
 #                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=False, is_extent=False, n_is_n_defect=True)
 # Q.figs[0].scene.opts_azimuth = 90
 # Q.figs[0].scene.opts_elevation = 90
 
 # Q.act_visualize_n_in_Q(plane_normal=(1,1,1), plane_spacing=spacing, plane_size=100,
-#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans), 
+#                    plane_origin=(index_max/2-trans,index_max/2-trans,index_max/2-trans),
 #                    n_length=spacing, n_opacity=0.2, n_radius=0.3, is_new=True, is_extent=False, n_is_n_defect=True)
 # Q.figs[1].objects["nPlanes"][0].act_commit(opts_spacing=3, length=3, origin=(30,30,30), opts_normal=(1,1,0), opts_radius=0.1, sda=1)
 # Q.figs[1].objects["nPlanes"][0].colors = (1,0,0)
@@ -100,7 +114,6 @@ figure.opts.azimuth = 90
 #     l.opts_N_out_ratio = 3
 #     l.act_visualize(is_new=False, color=(1,0,0), move=(3,0,0))
 
-    
 
 # @Nematics3D.logging_and_warning_decorator
 # def example_visualize(Q, logger=None):
@@ -108,7 +121,7 @@ figure.opts.azimuth = 90
 #     Q.update_lines_classify(logger=logger)
 #     Q.update_lines_smoothen(logger=logger)
 #     Q.visualize_disclination_lines(logger=logger)
-    
+
 # # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True)
 # example_visualize(Q, log_level=logging.DEBUG, show_timestamp=True, log_mode='none')
 
@@ -140,14 +153,14 @@ figure.opts.azimuth = 90
 # mlab.points3d(*(Q._defect_indices).T, scale_factor=0.5)
 
 
-'''
+"""
 Q.update_corners()
 extent = Nematics3D.PlotExtent(Q._corners)
 test = Nematics3D.PlotPlaneGrid((1,1,1), 100, 100, 200, corners_limit=Q._corners, origin=(64,64,64))
 
 Nematics3D.PlotExtent(Q._corners)
 mlab.points3d(*(test._grid.T))
-'''
+"""
 # Q.update_corners()
 # extent = Nematics3D.PlotExtent(Q._corners, radius=0.02)
 # plane = Nematics3D.PlotPlaneGrid((1,1,1), 10, 10, index_max, corners_limit=Q._corners, origin=(index_max/2, index_max/2, index_max/2))
@@ -188,11 +201,6 @@ mlab.points3d(*(test._grid.T))
 # # mlab.points3d(*(Q._defect_indices.T), scale_factor=1)
 
 
-
-
-
-
-
 # space_index_ratio = 128 / np.array(np.shape(n)[:-1])
 
 # # Nematics3D.visualize_nematics_field(n=n, plotn=True, plotdefects=True, plotS=False, defect_indices=defect_indices,
@@ -204,4 +212,3 @@ mlab.points3d(*(test._grid.T))
 
 # defect_indices = Nematics3D.defect_detect(n, is_boundary_periodic=1)
 # lines = Nematics3D.disclination.defect_classify_into_lines(defect_indices, box_size_periodic = (128, 128, 128))
-

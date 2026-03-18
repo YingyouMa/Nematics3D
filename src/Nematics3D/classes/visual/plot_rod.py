@@ -35,7 +35,21 @@ class OptsRod(OptsGlyph):
     )
 
 
+# PlotRod inherits the generic glyph host but replaces the geometry path with
+# rod-specific orientation and length handling.
+#
+# Subclasses must keep `raw_orient` aligned with `raw_coords`, update any
+# endpoint-expanded arrays together, and be careful when overriding attribute
+# access because several resolved arrays are intentionally repeated per rod.
 class PlotRod(PlotGlyph):
+    """
+    PlotRod visualizes oriented rods centered at the provided coordinates.
+
+    Normal users create rods from positions plus orientation vectors, then tune
+    appearance and geometry through `rod.opts` or `rod.act_commit(...)`.
+    Use `rod.show_modifiable_attrs()` to inspect configurable settings and
+    `repr(rod)` for a compact summary of the plotted object.
+    """
 
     __attrs__ = {
         **dict(PlotGlyph.__attrs__),
@@ -109,6 +123,11 @@ class PlotRod(PlotGlyph):
 
         self._helper_init_end()
 
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph.__getattribute__ because rod geometry expands
+    # each logical sample into two endpoints, so several resolved per-rod arrays
+    # must be repeated to stay aligned with the endpoint-based polydata.
+    # ==================================================
     # PlotRod expands each rod center into two endpoints, so per-rod arrays
     # must be repeated to stay aligned with the endpoint-based polydata layout.
     def __getattribute__(self, name):
@@ -117,6 +136,11 @@ class PlotRod(PlotGlyph):
             value = np.repeat(value, 2, axis=0)
         return value
 
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph._helper_build_poly because rod glyphs are
+    # represented by oriented line segments built from center points plus
+    # per-sample length and orientation data.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None):
 
@@ -152,6 +176,11 @@ class PlotRod(PlotGlyph):
         object.__setattr__(self, "_calc_poly", poly)
         self._helper_set_poly(poly)
 
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph._helper_build_mesh because rods use the
+    # rod-specific endpoint polydata and rely on tube filtering without capping
+    # or extra spline processing.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
 

@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 import time
 from typing import Union
 from dataclasses import replace, dataclass, field, fields
@@ -36,7 +36,6 @@ from ..field import (
 )
 from ..disclination import defect_detect, defect_classify_into_lines
 from .Interpolator import Interpolator
-from .visual.plot_extent import PlotExtent
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
@@ -46,6 +45,7 @@ from .Q_plane import QPlane, QPlanePolar
 from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar
+from .bounds import as_bounds
 from .opts import merge_opts_all, cover_value
 from ..general import get_box_corners
 from .smoothed_line import OptsSmooth
@@ -125,7 +125,7 @@ class QFieldObject(ClassBase):
         "_calc_grid_index": "Lattice coordinate grid in index space (before applying transform/offset).",
         "_calc_grid": "Coordinate grid in real space after applying grid_transform and grid_offset.",
         "_calc_corners_index": "Box corners in lattice-index space.",
-        "_calc_corners": "Box corners in real space coordinates.",
+        "_calc_corners": "Bounds object describing the Q-field box in real-space coordinates.",
         "_calc_box_size_periodic_index": (
             "Effective periodic box size in index units. "
             "For periodic dims equals grid size, otherwise inf."
@@ -246,17 +246,18 @@ class QFieldObject(ClassBase):
         logger.debug("Generating the coorners of Q.")
         Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
         corners_index = get_box_corners(Lx, Ly, Lz)
-        corners = apply_linear_transform(
+        corners_coord = apply_linear_transform(
             corners_index,
             transform=self._raw_grid_transform,
             offset=self._raw_grid_offset,
         )
+        bounds = as_bounds(corners_coord, name=f"Bounds of Q field {self.name!r}")
 
         object.__setattr__(self, "_calc_corners_index", corners_index)
-        object.__setattr__(self, "_calc_corners", corners)
+        object.__setattr__(self, "_calc_corners", bounds)
         logger.debug(
             f"Box corners in lattice-index units is {self._calc_corners_index}."
-            f"Box corners in reap-space coordinates is {self._calc_corners}."
+            f"Box bounds in real-space coordinates is {self._calc_corners}."
         )
 
         if (not is_detect_defects) and is_classify_lines:
@@ -445,11 +446,16 @@ class QFieldObject(ClassBase):
                     figure = self.figs[figure]
                     figure.act_commit(opts_figure)
                 elif figure is None:
-                    if (
-                        hasattr(self.figs, "_state_active_name")
-                        and self.figs.active_fig.is_alive
-                    ):
-                        figure = self.figs[self.figs._state_active_name]
+                    active_name = getattr(self.figs, "_state_active_name", None)
+                    if active_name is not None:
+                        figure_active = self.figs[active_name]
+                        if figure_active.is_alive:
+                            figure = figure_active
+                            figure.act_commit(opts_figure)
+                        else:
+                            figure = PlotFigure(opts=opts_figure, name=title)
+                    elif len(self.figs) == 1 and self.figs[0].is_alive:
+                        figure = self.figs[0]
                         figure.act_commit(opts_figure)
                     else:
                         figure = PlotFigure(opts=opts_figure, name=title)
@@ -476,6 +482,29 @@ class QFieldObject(ClassBase):
 
         return figure
 
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_resolve_visual_bounds(
+        self, bounds=None, *, label: str = "plot", logger=None
+    ):
+        if bounds is None:
+            return self._calc_corners
+
+        bounds_name = f"{label} bounds"
+        try:
+            bounds_obj = as_bounds(bounds, name=bounds_name)
+        except Exception:
+            logger.exception("Check input.")
+            logger.recovery("Use the default Q bounds instead.")
+            return self._calc_corners
+
+        if bounds_obj not in self.objs:
+            set_name = getattr(bounds_obj, "act_set_name", None)
+            if callable(set_name):
+                set_name(bounds_name)
+            self.objs.act_register(bounds_obj, is_contain_ok=True)
+
+        return bounds_obj
+
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
@@ -488,6 +517,7 @@ class QFieldObject(ClassBase):
         opts_figure: OptsFigure | None = None,
         opts_tube: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
+        bounds=None,
         title: str = "disclination lines",
         logger=None,
         **kwargs,
@@ -515,6 +545,7 @@ class QFieldObject(ClassBase):
         check_bool_flags(locals())
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+        bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
         if min_line_length is None:
             logger.info(
@@ -562,13 +593,13 @@ class QFieldObject(ClassBase):
                 figure=figure,
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
+                bounds=bounds,
                 # scalars=line_scalar,
                 opts=opts_tube,
             )
 
         if is_extent:
-            extent = PlotExtent(
-                self._calc_corners,
+            extent = bounds.act_visualize(
                 figure=figure,
                 opts=opts_extent,
                 is_reset_camera=False,
@@ -588,6 +619,7 @@ class QFieldObject(ClassBase):
         opts_figure: OptsFigure | None = None,
         opts_extent: OptsTube | None = None,
         opts_defect: OptsSphere | None = None,
+        bounds=None,
         title: str = "visualization of n plane",
         name_plane: str = "n-plane",
         logger=None,
@@ -635,6 +667,7 @@ class QFieldObject(ClassBase):
         cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+        bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
@@ -643,10 +676,10 @@ class QFieldObject(ClassBase):
             self._calc_interpolator,
             name=name_plane,
             opts=opts_grid,
+            bounds=bounds,
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "corners_limit": self._calc_corners_index,
                 "grid_offset": self._raw_grid_offset,
                 "grid_transform": self._raw_grid_transform,
             },
@@ -662,8 +695,7 @@ class QFieldObject(ClassBase):
         )
 
         if is_extent:
-            PlotExtent(
-                self._calc_corners,
+            bounds.act_visualize(
                 figure=figure,
                 opts=opts_extent,
                 is_reset_camera=False,
@@ -679,6 +711,7 @@ class QFieldObject(ClassBase):
         opts_S: OptsSurface | None = None,
         opts_figure: OptsFigure | None = None,
         opts_extent: OptsTube | None = None,
+        bounds=None,
         title: str = "visualization of S plane",
         name_plane: str = "S-plane",
         logger=None,
@@ -711,6 +744,7 @@ class QFieldObject(ClassBase):
         opts_S = merge["S_"]
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+        bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
@@ -719,10 +753,10 @@ class QFieldObject(ClassBase):
             self._calc_interpolator,
             name=name_plane,
             opts=opts_grid,
+            bounds=bounds,
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "corners_limit": self._calc_corners_index,
                 "grid_offset": self._raw_grid_offset,
                 "grid_transform": self._raw_grid_transform,
             },
@@ -735,8 +769,7 @@ class QFieldObject(ClassBase):
         )
 
         if is_extent:
-            PlotExtent(
-                self._calc_corners,
+            bounds.act_visualize(
                 figure=figure,
                 opts=opts_extent,
                 is_reset_camera=False,
@@ -757,6 +790,7 @@ class QFieldObject(ClassBase):
         opts_figure: OptsFigure | None = None,
         opts_extent: OptsTube | None = None,
         opts_defect: OptsSphere | None = None,
+        bounds=None,
         title: str = "visualization of n near defect",
         plane_name: str | None = None,
         logger=None,
@@ -804,6 +838,7 @@ class QFieldObject(ClassBase):
         cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+        bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
         if not hasattr(self, "_calc_interpolator"):
             self.act_add_interpolator()
@@ -812,6 +847,7 @@ class QFieldObject(ClassBase):
             x_param,
             opts_grid=opts_grid,
             name=plane_name,
+            bounds=bounds,
         )
         plane_grid = section.wrapped
         n_plane_name = section.name + " of " + smooth.name
@@ -829,8 +865,7 @@ class QFieldObject(ClassBase):
         )
 
         if is_extent:
-            PlotExtent(
-                self._calc_corners,
+            bounds.act_visualize(
                 figure=figure,
                 opts=opts_extent,
                 is_reset_camera=False,

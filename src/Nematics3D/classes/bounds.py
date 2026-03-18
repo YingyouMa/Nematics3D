@@ -357,6 +357,7 @@ class Bounds(HostBase):
     def _helper_build_visual_edges(self) -> tuple[np.ndarray, np.ndarray]:
         coords = []
 
+        line_index = []
         for i, (a, b) in enumerate(self._VISUAL_EDGES):
             coords.append(self.corners[a])
             coords.append(self.corners[b])

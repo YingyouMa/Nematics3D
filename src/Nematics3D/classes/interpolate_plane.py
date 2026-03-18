@@ -1,4 +1,3 @@
-import pyvista as pv
 import numpy as np
 from typing import Mapping, Any
 
@@ -8,9 +7,23 @@ from .plane_grid import PlaneGrid, OptsPlaneGrid
 from .plane_grid_polar import PlaneGridPolar, OptsPlaneGridPolar
 from .class_base import ClassBase
 
-#!!! class name
 
+# InterpolatePlane is a lightweight bridge between an interpolator and a
+# plane-grid sampling object.
+#
+# Subclasses should preserve the binding contract between `grid` and `field`,
+# keep `_calc_result` synchronized with the current grid mask, and be careful
+# when changing grid construction because this class currently accepts either
+# Cartesian or polar plane-grid implementations.
 class InterpolatePlane(ClassBase):
+    """
+    InterpolatePlane samples an `Interpolator` on a plane grid.
+
+    Normal users pass in an interpolator plus either an existing plane grid
+    or plane-grid options. The sampled values are then available through
+    `plane.result`. Use `plane.show_relations()` to inspect the bound grid and
+    `plane.grid.show_modifiable_attrs()` to inspect grid settings.
+    """
 
     __attrs__ = {
         **(ClassBase.__attrs__),
@@ -25,11 +38,13 @@ class InterpolatePlane(ClassBase):
             "A field can be associated with at most one grid at a time."
         ),
     }
-    __slots__ = tuple(
-            k for k in __attrs__.keys()
-            if k not in ClassBase.__slots__
-        )
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
 
+    # ==================== OVERRIDE ====================
+    # InterpolatePlane overrides ClassBase.__init__ because it must create or
+    # update the plane grid binding before validating the interpolator and
+    # computing the first sampled result.
+    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -41,21 +56,19 @@ class InterpolatePlane(ClassBase):
         logger=None,
         **kwargs,
     ):
-        
+
         super().__init__(name=name, name_replace="interpolate plane")
-        
+
         if grid:
-            grid.act_commit(
-                opts=opts, 
-                name=self.name +"-grid",
-                **kwargs
-                )
+            grid = grid.act_copy(name=self.name + "-grid")
+            if opts is not None or kwargs:
+                grid.act_commit(opts=opts, **kwargs)
         else:
             grid = PlaneGrid(
                 opts=opts,
                 opts_defaults_override=opts_defaults_override,
-                name=self.name +"-grid",
-                **kwargs
+                name=self.name + "-grid",
+                **kwargs,
             )
 
         self.act_bind_relation_base("grid", grid, is_weak=False)
@@ -65,11 +78,12 @@ class InterpolatePlane(ClassBase):
             raise TypeError(
                 "Interpolator for InterplatePlane must be the class of Nematics3D.classes.Interpolator.Interpolator"
             )
-        object.__setattr__(self, '_raw_interpolator', interpolator)
-        
-        self._helper_commit()
-        
+        object.__setattr__(self, "_raw_interpolator", interpolator)
 
+        self._helper_commit()
+
+    # InterpolatePlane adds `_helper_commit` as its internal recomputation step
+    # for re-sampling interpolated values on the currently bound plane grid.
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
 
@@ -80,7 +94,6 @@ class InterpolatePlane(ClassBase):
 
         result = self._raw_interpolator.interpolate(grid_all_flatten)
         object.__setattr__(self, "_calc_result", result[plane_grid._calc_box_mask])
-
 
     @property
     def result(self):

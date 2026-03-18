@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -190,6 +190,11 @@ class OptsGlyph(OptsBase):
         "roughness":            "prop.roughness",
         }
     
+    # ==================== OVERRIDE ====================
+    # OptsGlyph overrides OptsBase._helper_host_apply so opts updates are
+    # forwarded through the owning glyph commit pipeline.
+    # ==================================================
+
     def _helper_host_apply(self, key, value):
         if self.host:
             self.host.act_commit(**{key: value})
@@ -197,7 +202,37 @@ class OptsGlyph(OptsBase):
 # fmt: on
 
 
+# Subclassing rules:
+# - PlotGlyph subclasses must preserve the HostBase commit contract while also
+#   keeping the glyph-specific render pipeline consistent: resolved data ->
+#   polydata -> mesh -> actor.
+# - Subclasses should override `_helper_build_mesh()` to define geometry and
+#   should override `_helper_build_poly()` only when the default point-data
+#   preparation is not sufficient.
+# - Keep figure registration, bounds binding, and pick registration aligned so
+#   actor lifecycle stays synchronized with PlotFigure lifecycle.
+# - Preserve the distinction between raw inputs (`raw_*`), resolved arrays
+#   (`_calc_*`), and live plotter entities (`_entity*`).
+
+
 class PlotGlyph(HostBase):
+    """
+    Base class for drawable glyph-style objects attached to a PlotFigure.
+
+    For most users, concrete subclasses of PlotGlyph are created by higher-level
+    visualization helpers rather than instantiated directly.
+
+    Typical usage:
+
+    - create or obtain a glyph object attached to a `PlotFigure`
+    - inspect and modify its visual settings through `glyph.opts`
+    - use `glyph.act_commit(...)` or `glyph.opts.<name> = value` to update how
+      the glyph is rendered
+    - use the containing figure to manage registration, picking, and display
+
+    PlotGlyph manages both the resolved visual data of the glyph and the live
+    actor created in the plotter.
+    """
 
     # fmt: off
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -216,6 +251,7 @@ class PlotGlyph(HostBase):
         "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
         "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
         "_state_is_silhouette":         "Whether silhouette actors should be rebuilt during glyph updates.",
+        "_state_is_empty":              "Whether the glyph currently has no drawable geometry and should skip render-side updates.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     __relations__: ClassVar[Mapping[str, str]] = {
@@ -248,6 +284,12 @@ class PlotGlyph(HostBase):
         HostBase._impl_attrs_reapply_opts_after_raw | {"coords"}
     )
     # fmt: on
+
+    # ==================== OVERRIDE ====================
+    # PlotGlyph overrides HostBase.__init__ because it must validate glyph
+    # inputs, choose or create a figure, and initialize render-specific state
+    # before the generic host lifecycle is completed.
+    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -283,6 +325,7 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_impl_resolver_source", "raw_coords")
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
+        object.__setattr__(self, "_state_is_empty", False)
         object.__setattr__(self, "_state_is_interactable", True)
 
         super().__init__(
@@ -331,7 +374,7 @@ class PlotGlyph(HostBase):
         self.act_bind_relation_base("fig", figure, is_weak=True)
 
         self.opts.act_finalize(self._opts_defaults)
-        str_now = datetime.datetime.now().strftime("_%Y/%m/%d_%H:%M:%S.%f")[:-4]
+        str_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         unique_id = self.name + str_now
         object.__setattr__(self, "_impl_name_pv", unique_id)
 
@@ -355,7 +398,7 @@ class PlotGlyph(HostBase):
             return
         bounds_old.act_unregister_subscriber(sync_name=self._impl_name_pv, host=self)
         self.act_unbind_relation_base("bounds")
-        if is_apply and getattr(self, "_entity", None) is not None:
+        if is_apply:
             self.act_commit(is_reapply_opts=True)
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -375,7 +418,7 @@ class PlotGlyph(HostBase):
 
         bounds_old = self.bounds
         if bounds_old is bounds:
-            if is_apply and getattr(self, "_entity", None) is not None:
+            if is_apply:
                 self.act_commit(is_reapply_opts=True)
             return
 
@@ -394,7 +437,7 @@ class PlotGlyph(HostBase):
             sync_name=self._impl_name_pv,
             kind="glyph",
         )
-        if is_apply and getattr(self, "_entity", None) is not None:
+        if is_apply:
             self.act_commit(is_reapply_opts=True)
 
     def _helper_apply_bounds(self, mesh):
@@ -494,6 +537,36 @@ class PlotGlyph(HostBase):
     def _helper_build_mesh(self):
         raise NotImplementedError(...)
 
+    def _helper_is_empty_mesh(self, mesh):
+        if mesh is None:
+            return True
+        if getattr(mesh, "n_points", 0) == 0:
+            return True
+        if getattr(mesh, "n_cells", 0) == 0:
+            return True
+        return False
+
+    def _helper_clear_live_actor(self):
+        fig = self.fig
+        if fig is None:
+            object.__setattr__(self, "_entity", None)
+            self._helper_clear_silhouette()
+            return
+
+        plotter = fig.pl
+        actor = getattr(self, "_entity", None)
+        if actor is not None:
+            pm = getattr(fig, "_entity_pick_manager", None)
+            if pm is not None:
+                try:
+                    pm.act_unregister(actor)
+                except Exception:
+                    pm._impl_registry.pop(actor, None)
+            plotter.remove_actor(actor, render=False)
+        plotter.remove_actor(self._impl_name_pv, render=False)
+        self._helper_clear_silhouette()
+        object.__setattr__(self, "_entity", None)
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_make_figure(self, logger=None):
         """
@@ -521,15 +594,15 @@ class PlotGlyph(HostBase):
         mesh = self._helper_build_mesh()
         mesh = self._helper_apply_bounds(mesh)
 
-        plotter = self.fig.pl
-        if unique_id in plotter.actors:
-            plotter.remove_actor(unique_id)
-        old_actor = getattr(self, "_entity", None)
-        if old_actor is not None:
-            pm = getattr(self.fig, "_entity_pick_manager", None)
-            if pm is not None:
-                pm.act_unregister(old_actor)
+        if self._helper_is_empty_mesh(mesh):
+            object.__setattr__(self, "_state_is_empty", True)
+            self._helper_clear_live_actor()
+            self.fig.pl.render()
+            return
 
+        object.__setattr__(self, "_state_is_empty", False)
+        self._helper_clear_live_actor()
+        plotter = self.fig.pl
         actor = plotter.add_mesh(mesh, **input_dir)
 
         prop = actor.prop
@@ -656,11 +729,14 @@ class PlotGlyph(HostBase):
                 tube=self,
             )
         self.act_unbind_bounds(is_apply=False)
-        self.fig.pl.remove_actor(self._entity)
-        pm = getattr(self.fig, "_entity_pick_manager", None)
-        if pm:
-            pm._impl_registry.pop(self._entity)
-        self.fig._entity.remove(self)
+        self._helper_clear_live_actor()
+        self.fig.act_unregister(self, is_missing_ok=True)
+
+    # ==================== OVERRIDE ====================
+    # PlotGlyph overrides HostBase._helper_commit_apply_opts_main to resolve
+    # visual data, rebuild mesh state when needed, and push updates into the
+    # live actor inside the figure plotter.
+    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
@@ -696,18 +772,26 @@ class PlotGlyph(HostBase):
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
             mesh = self._helper_apply_bounds(mesh)
-            self._entity.mapper.SetInputData(mesh)
-            self._entity.mapper.Update()
-            if self._state_is_silhouette:
-                self._helper_add_silhouette()
+            if self._helper_is_empty_mesh(mesh):
+                object.__setattr__(self, "_state_is_empty", True)
+                self._helper_clear_live_actor()
             else:
-                self._helper_clear_silhouette()
+                object.__setattr__(self, "_state_is_empty", False)
+                if getattr(self, "_entity", None) is None:
+                    self._helper_make_figure()
+                else:
+                    self._entity.mapper.SetInputData(mesh)
+                    self._entity.mapper.Update()
+                    if self._state_is_silhouette:
+                        self._helper_add_silhouette()
+                    else:
+                        self._helper_clear_silhouette()
 
         for key, value in kwargs.items():
             try:
 
                 attr_path_actor = self.opts._actor_attr.get(key, None)
-                if attr_path_actor:
+                if attr_path_actor and getattr(self, "_entity", None) is not None:
                     parts = attr_path_actor.split(".")
                     obj = self._entity
                     for part in parts[:-1]:
@@ -719,10 +803,11 @@ class PlotGlyph(HostBase):
                 logger.exception(f"Failed to reset value of {key!r}")
                 logger.recovery("Ignore this modification")
 
-        if paint_method == "color":
-            self._helper_update_rgba()
-        else:
-            self._helper_update_scalars()
+        if getattr(self, "_entity", None) is not None and not self._state_is_empty:
+            if paint_method == "color":
+                self._helper_update_rgba()
+            else:
+                self._helper_update_scalars()
 
         self.fig.pl.render()
 
@@ -817,6 +902,11 @@ class PlotGlyph(HostBase):
             except RuntimeError:
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification")
+
+    # ==================== OVERRIDE ====================
+    # PlotGlyph overrides ClassBase/HostBase.__repr__ to keep the glyph string
+    # form compact and focused on its class and public name.
+    # ==================================================
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__

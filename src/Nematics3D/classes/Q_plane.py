@@ -1,7 +1,5 @@
-﻿from pyvistaqt import BackgroundPlotter
-import pyvista as pv
+from pyvistaqt import BackgroundPlotter
 import numpy as np
-import weakref
 from typing import Mapping, Any
 from copy import deepcopy
 
@@ -27,7 +25,24 @@ from .plane_grid_polar import PlaneGridPolar, OptsPlaneGridPolar
 from .interpolate_plane import InterpolatePlane
 
 
+# QPlane extends InterpolatePlane with Q-tensor-specific post-processing and
+# visualization helpers.
+#
+# Subclasses should preserve the coupling among interpolated Q values, the
+# derived director/S caches, defect-detection outputs, and any live visual
+# objects. If the recomputation path is overridden, keep `_calc_result`,
+# `_calc_n`, `_calc_S`, `_calc_is_near_defect`, and `_calc_defect_pos`
+# synchronized before updating visualization objects.
 class QPlane(InterpolatePlane):
+    """
+    QPlane samples a Q-tensor interpolator on a plane grid and derives
+    director, scalar-order, and defect-related quantities on that plane.
+
+    Normal users access the sampled Q values through `plane.result`, the
+    derived director and order fields through the plane attributes, and can
+    create visual summaries with `act_visualize_n()` and `act_visualize_S()`.
+    Use `plane.show_relations()` to inspect the bound grid.
+    """
 
     __attrs__ = {
         **(InterpolatePlane.__attrs__),
@@ -53,6 +68,11 @@ class QPlane(InterpolatePlane):
         "S": {"scalar_bar_title": "S"},
     }
 
+    # ==================== OVERRIDE ====================
+    # QPlane overrides InterpolatePlane.__init__ because it must initialize
+    # Q-plane-specific visual state before delegating to the interpolation
+    # pipeline and triggering the first defect-aware recomputation.
+    # ==================================================
     def __init__(
         self,
         interpolator: Interpolator,
@@ -66,8 +86,20 @@ class QPlane(InterpolatePlane):
 
         default_visual_opts = deepcopy(self._origin_default_visual_opts)
         visual_default = {} if visual_default is None else dict(visual_default)
-        for key, value in default_visual_opts.items():
-            default_visual_opts[key] = value | visual_default
+        expected_visual_keys = {"nb", "nd", "S"}
+        unexpected_visual_keys = set(visual_default) - expected_visual_keys
+        if unexpected_visual_keys:
+            raise ValueError(
+                "`visual_default` must only contain the keys 'nb', 'nd', and 'S'. "
+                f"Got unexpected keys: {sorted(unexpected_visual_keys)!r}."
+            )
+        for key in expected_visual_keys:
+            override = visual_default.get(key, {})
+            if not isinstance(override, Mapping):
+                raise TypeError(
+                    f"`visual_default[{key!r}]` must be a mapping of option overrides."
+                )
+            default_visual_opts[key] = default_visual_opts[key] | dict(override)
         object.__setattr__(self, "default_visual_opts", default_visual_opts)
         object.__setattr__(self, "_entity_visual_nb", None)
         object.__setattr__(self, "_entity_visual_nd", None)
@@ -84,8 +116,11 @@ class QPlane(InterpolatePlane):
             **kwargs,
         )
 
-        self._helper_commit()
-
+    # ==================== OVERRIDE ====================
+    # QPlane overrides InterpolatePlane._helper_commit because Q-plane updates
+    # must diagonalize interpolated tensors, detect defects, refresh derived
+    # caches, and then propagate the new data into any live visuals.
+    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit(self, logger=None):
 
@@ -402,7 +437,20 @@ class QPlane(InterpolatePlane):
         object.__setattr__(self, "_entity_visual_S", visual_S)
 
 
+# QPlanePolar specializes QPlane for polar plane grids and ring-based
+# defect detection.
+#
+# Subclasses should preserve the expectation that the bound grid is a
+# `PlaneGridPolar`, and keep the ring-offset-based defect traversal aligned
+# with the polar grid cache layout.
 class QPlanePolar(QPlane):
+    """
+    QPlanePolar is the polar-grid variant of QPlane.
+
+    It uses `PlaneGridPolar` sampling and a ring-aware defect-detection path
+    that is better matched to polar lattice topology. Users interact with it
+    through the same main interfaces as `QPlane`.
+    """
 
     __attrs__ = {
         **(QPlane.__attrs__),
@@ -415,6 +463,10 @@ class QPlanePolar(QPlane):
         "S": {"scalar_bar_title": "S"},
     }
 
+    # ==================== OVERRIDE ====================
+    # QPlanePolar overrides QPlane.__init__ because it must ensure a polar
+    # plane grid is constructed when the caller does not provide one.
+    # ==================================================
     def __init__(
         self,
         interpolator: Interpolator,
@@ -447,9 +499,19 @@ class QPlanePolar(QPlane):
             **kwargs,
         )
 
+    # ==================== OVERRIDE ====================
+    # QPlanePolar overrides QPlane._helper_set_visual_interact_with_plane because
+    # polar-plane visuals should open the defect-section interaction UI by
+    # default instead of the Cartesian plane interaction UI.
+    # ==================================================
     def _helper_set_visual_interact_with_plane(self, visual):
         self._helper_set_visual_interact_with_defect_section(visual)
 
+    # ==================== OVERRIDE ====================
+    # QPlanePolar overrides QPlane._helper_detect_defect because polar grids
+    # require ring-aware topology traversal instead of the Cartesian grid
+    # defect-detection path used by QPlane.
+    # ==================================================
     def _helper_detect_defect(self, directors, threshold: float = 0):
 
         plane_grid = self.grid

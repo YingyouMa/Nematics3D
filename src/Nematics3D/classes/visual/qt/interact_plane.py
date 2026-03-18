@@ -2,9 +2,19 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
-from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper, MovePointConsole
+from .panel_base import (
+    PanelBase,
+    make_labeled_slider_row,
+    LogTickMapper,
+    MovePointConsole,
+)
 from Nematics3D.general import rotation_matrix_from_vectors
-from Nematics3D.geometry import calc_vec_from_azimuth_polar, get_azimuth as geometry_get_azimuth, get_polar_angle as geometry_get_polar_angle, get_axis1_azimuth as geometry_get_axis1_azimuth
+from Nematics3D.geometry import (
+    calc_vec_from_azimuth_polar,
+    get_azimuth as geometry_get_azimuth,
+    get_polar_angle as geometry_get_polar_angle,
+    get_axis1_azimuth as geometry_get_axis1_azimuth,
+)
 from ..plot_rod import PlotRod
 from ..plot_sphere import PlotSphere
 
@@ -93,7 +103,9 @@ class InteractPlane(PanelBase):
             if not hasattr(visual, "_state_is_silhouette"):
                 continue
             object.__setattr__(visual, "_state_is_silhouette", True)
-            if getattr(visual, "_entity", None) is not None and hasattr(visual, "_helper_add_silhouette"):
+            if getattr(visual, "_entity", None) is not None and hasattr(
+                visual, "_helper_add_silhouette"
+            ):
                 visual._helper_add_silhouette()
 
     def build_ui(self):
@@ -202,10 +214,16 @@ class InteractPlane(PanelBase):
         self.chk_use_spacing_extra = QtWidgets.QCheckBox(
             "Use controlled spacing_extra", group_scalar
         )
-        self.chk_use_spacing_extra.setChecked(self.state["is_use_control_spacing_extra"])
+        self.chk_use_spacing_extra.setChecked(
+            self.state["is_use_control_spacing_extra"]
+        )
         gl_scalar.addWidget(self.chk_use_spacing_extra)
-        self.chk_use_spacing_extra.stateChanged.connect(self._on_toggle_use_spacing_extra)
-        self.sliders["spacing_extra"].set_enabled(self.state["is_use_control_spacing_extra"])
+        self.chk_use_spacing_extra.stateChanged.connect(
+            self._on_toggle_use_spacing_extra
+        )
+        self.sliders["spacing_extra"].set_enabled(
+            self.state["is_use_control_spacing_extra"]
+        )
 
         log_size = LogTickMapper(
             value_min=0.2 * self.state["size"],
@@ -304,16 +322,26 @@ class InteractPlane(PanelBase):
 
         for key, item in self.sliders.items():
             if key == "origin_move_step":
-                item.slider.valueChanged.connect(lambda _v=0: self.on_changed(is_commit=False))
+                item.slider.valueChanged.connect(
+                    lambda _v=0: self.on_changed(is_commit=False)
+                )
             else:
                 item.slider.valueChanged.connect(self.on_changed)
-                item.slider.sliderPressed.connect(self._helper_begin_continuous_interaction)
-                item.slider.sliderReleased.connect(self._helper_end_continuous_interaction)
+                item.slider.sliderPressed.connect(
+                    self._helper_begin_continuous_interaction
+                )
+                item.slider.sliderReleased.connect(
+                    self._helper_end_continuous_interaction
+                )
 
         self.on_changed(0, is_commit=False)
 
     def _commit_origin(self, center):
-        self.host.act_commit(origin=np.asarray(center, dtype=float))
+        self._is_gui_updating = True
+        try:
+            self.host.act_commit(origin=np.asarray(center, dtype=float))
+        finally:
+            self._is_gui_updating = False
 
     def _on_toggle_show_axes(self):
         checked = self.chk_is_show_axes.isChecked()
@@ -401,6 +429,7 @@ class InteractPlane(PanelBase):
     @staticmethod
     def get_axis1_azimuth(axis1, normal):
         return geometry_get_axis1_azimuth(axis1, normal)
+
     # InteractPlane overrides PanelBase._sync_func because the plane
     # panel must keep multiple coupled widgets and helper visuals in sync
     # with PlaneGrid option changes from the host side.
@@ -410,7 +439,9 @@ class InteractPlane(PanelBase):
             self.host._opts_backup[self.str_now_live].update(kwargs)
 
             if "origin" in kwargs:
-                self.state["origin"] = np.asarray(self.host.opts.origin, dtype=float).copy()
+                self.state["origin"] = np.asarray(
+                    self.host.opts.origin, dtype=float
+                ).copy()
                 self.point_console._update_center_label()
             if "alignment" in kwargs:
                 checked = self.host.opts.alignment == "center"
@@ -428,7 +459,9 @@ class InteractPlane(PanelBase):
                 self.state["is_use_control_spacing_extra"] = result
                 self.sliders["spacing_extra"].set_enabled(result)
                 if result:
-                    self._sync_from_host_slider("spacing_extra", self.host.opts.spacing_extra)
+                    self._sync_from_host_slider(
+                        "spacing_extra", self.host.opts.spacing_extra
+                    )
             if "size_extra" in kwargs:
                 result = self.host.opts.size_extra is not None
                 with QSignalBlocker(self.chk_use_size_extra):
@@ -438,9 +471,15 @@ class InteractPlane(PanelBase):
                 if result:
                     self._sync_from_host_slider("size_extra", self.host.opts.size_extra)
             if "normal" in kwargs:
-                self._sync_from_host_slider("normal_azimuth", self.get_azimuth(self.host.opts.normal))
-                self._sync_from_host_slider("normal_polar_angle", self.get_polar_angle(self.host.opts.normal))
-                self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
+                self._sync_from_host_slider(
+                    "normal_azimuth", self.get_azimuth(self.host.opts.normal)
+                )
+                self._sync_from_host_slider(
+                    "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
+                )
+                self.normal_info.setText(
+                    self._vect_text(self.host.opts.normal, "normal")
+                )
             if "axis1" in kwargs or "normal" in kwargs:
                 self._sync_from_host_slider(
                     "axis1_azimuth",

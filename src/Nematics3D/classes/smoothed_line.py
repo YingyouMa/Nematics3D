@@ -9,15 +9,7 @@ from typing import Mapping, Any
 from ..logging_decorator import logging_and_warning_decorator
 from .host_base import OptsBase, HostBase
 from .opts import cover_value
-from ..datatypes import (
-    Number,
-    as_Number,
-    as_str,
-    as_bool,
-    UNSET,
-    Unset,
-    as_points
-)
+from ..datatypes import Number, as_Number, as_str, as_bool, UNSET, Unset, as_points
 
 # fmt: off
 @dataclass(slots=True, repr=False)
@@ -75,7 +67,24 @@ class SmoothingConfigError(ValueError):
     pass
 
 
+# SmoothedLine keeps the HostBase commit pipeline but specializes it for
+# one-dimensional line smoothing and spline-based tangent evaluation.
+#
+# Subclasses should preserve the distinction between raw input coordinates,
+# processed coordinates entering the smoothing pipeline, and final smoothed
+# output. If the smoothing stage is overridden, keep the fallback contract
+# consistent so `_calc_result`, `_entity_tck`, and `_state_status` remain
+# synchronized.
 class SmoothedLine(HostBase):
+    """
+    SmoothedLine wraps a polyline and optionally produces a smoothed result.
+
+    Normal users provide input coordinates, then inspect or change smoothing
+    settings through `line.opts` or `line.act_commit(...)`. The resulting
+    coordinates are available through `line.result`, NumPy conversion, or
+    indexing/iteration on the object itself. Use
+    `line.show_modifiable_attrs()` to inspect configurable options.
+    """
 
     # fmt: off
     __attrs__ = {
@@ -112,6 +121,11 @@ class SmoothedLine(HostBase):
 
     _impl_attrs_reapply_opts_after_raw = {"coords"}
 
+    # ==================== OVERRIDE ====================
+    # SmoothedLine overrides HostBase.__init__ because it must validate and cache
+    # raw coordinates before the host opts pipeline is initialized, then trigger
+    # the first smoothing pass immediately after opts finalization.
+    # ==================================================
     def __init__(
         self,
         line_coord_input: np.ndarray,
@@ -166,8 +180,15 @@ class SmoothedLine(HostBase):
             f"The line `{self.name}` is not smoothed, reason: {reason}.",
         )
 
+    # ==================== OVERRIDE ====================
+    # SmoothedLine overrides HostBase._helper_commit_apply_opts_main because
+    # smoothing opts require custom normalization, validation, fallback, and
+    # spline-cache updates that are specific to line processing.
+    # ==================================================
     @logging_and_warning_decorator()
-    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, logger=None, **kwargs):
+    def _helper_commit_apply_opts_main(
+        self, is_reapply_opts=False, logger=None, **kwargs
+    ):
 
         if not is_reapply_opts and not kwargs:
             return
@@ -210,10 +231,7 @@ class SmoothedLine(HostBase):
                     self._calc_N_init / self.opts.window_length,
                 )
             else:
-                if (
-                    self.opts.window_ratio is not None
-                    and self.state_is_window_warning
-                ):
+                if self.opts.window_ratio is not None and self.state_is_window_warning:
                     logger.warning(
                         f"Window_length is manual input as {self.opts.window_length}. "
                         f"window_ratio ({self.opts.window_ratio}) would be ignored and reset."
@@ -300,7 +318,11 @@ class SmoothedLine(HostBase):
                 "Probably the line is not properly initialized or successfully smoothed."
             )
 
-        x_param = as_Number(x_param, value_range=(0, 100), name="Continuous spline parameter along the curve")
+        x_param = as_Number(
+            x_param,
+            value_range=(0, 100),
+            name="Continuous spline parameter along the curve",
+        )
         x_param /= 100
         dr_dx = np.asarray(splev(x_param, self._entity_tck, der=1), dtype=float)
 
@@ -333,4 +355,3 @@ class SmoothedLine(HostBase):
     @property
     def result(self):
         return self._calc_result
-
