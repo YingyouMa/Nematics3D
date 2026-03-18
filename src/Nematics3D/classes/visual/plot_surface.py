@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+﻿from dataclasses import dataclass
 from typing import Callable, Any, Mapping, ClassVar
 import numpy as np
 import pyvista as pv
@@ -53,7 +53,8 @@ class PlotSurface(PlotGlyph):
     """
 
     __attrs__: ClassVar[Mapping[str, str]] = {
-        k: v for k, v in PlotGlyph.__attrs__.items() if k != "_calc_radius"
+        **{k: v for k, v in PlotGlyph.__attrs__.items() if k != "_calc_radius"},
+        "_calc_keep_index": "Indices of raw surface points kept after center-based point filtering.",
     }
 
     __slots__ = tuple(
@@ -77,6 +78,7 @@ class PlotSurface(PlotGlyph):
         category: str = "surface",
         figure: PlotFigure | None = None,
         opts: OptsSurface | None = None,
+        clip_mode: str = "center",
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -90,13 +92,77 @@ class PlotSurface(PlotGlyph):
             name_replace=name_replace,
             opts=opts,
             figure=figure,
+            clip_mode=clip_mode,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
 
+        object.__setattr__(self, "_calc_keep_index", None)
         self.act_set_interact_func(lambda: InteractSurface(self, self.fig).show())
 
         self._helper_init_end()
+
+    # ==================== OVERRIDE ====================
+    # PlotSurface overrides PlotGlyph._helper_bound_coords because
+    # surface glyphs can center-clip by filtering raw surface points directly.
+    # ==================================================
+    def _helper_bound_coords(self):
+        bounds = self.bounds
+        if bounds is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+            object.__setattr__(self, "_calc_keep_index", keep_index)
+            return self.raw_coords.copy()
+
+        axis1 = np.asarray(bounds.opts.axis1, dtype=float)
+        axis2 = np.asarray(bounds._calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds._calc_axis3, dtype=float)
+        length1 = float(bounds.opts.length1)
+        length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
+        length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
+        origin = np.asarray(bounds.opts.origin, dtype=float)
+
+        if bounds.opts.alignment == "min_corner":
+            origin_min_corner = origin
+        else:
+            origin_min_corner = origin - 0.5 * (
+                length1 * axis1 + length2 * axis2 + length3 * axis3
+            )
+
+        basis = np.column_stack([axis1, axis2, axis3])
+        coords_local = (self.raw_coords - origin_min_corner) @ basis
+        tol = 1e-10
+        upper = np.array([length1, length2, length3], dtype=float)
+        mask_inside = np.all(
+            (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
+        )
+        mask_keep = mask_inside if self.opts.is_clip_inside else ~mask_inside
+        keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
+        object.__setattr__(self, "_calc_keep_index", keep_index)
+        return self.raw_coords[keep_index]
+
+    # ==================== OVERRIDE ====================
+    # PlotSurface overrides PlotGlyph._helper_set_poly so center-based clipping
+    # can directly filter pointwise visual data with the kept indices.
+    # ==================================================
+    def _helper_set_poly(self, poly):
+        if self.state_clip_mode != "center":
+            return super()._helper_set_poly(poly)
+
+        if poly.n_points == 0:
+            return
+
+        keep_index = getattr(self, "_calc_keep_index", None)
+        if keep_index is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+
+        opacity = self._calc_opacity[keep_index]
+        scalars = self._calc_scalars[keep_index]
+        color = self._calc_color[keep_index]
+
+        poly.point_data["opacity"] = opacity
+        poly.point_data["scalars"] = scalars
+        rgba_values = np.hstack([color, opacity.reshape(-1, 1)])
+        poly.point_data["rgba"] = rgba_values
 
     # ==================== OVERRIDE ====================
     # PlotSurface overrides PlotGlyph._helper_build_mesh because surfaces are
@@ -107,6 +173,8 @@ class PlotSurface(PlotGlyph):
     def _helper_build_mesh(self, logger=None):
 
         poly = self._calc_poly
+        if poly.n_points < 3:
+            return pv.PolyData()
         mesh = poly.delaunay_2d(alpha=0.0)
 
         return mesh

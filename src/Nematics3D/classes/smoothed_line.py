@@ -1,13 +1,14 @@
-import numpy as np
+﻿import numpy as np
 from typing import Literal
 from scipy.signal import savgol_filter
-from scipy.interpolate import splprep, splev
+from scipy.interpolate import splprep, splev, interp1d
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping, Any
 
 from ..logging_decorator import logging_and_warning_decorator
 from .host_base import OptsBase, HostBase
+from .class_base import ClassBase
 from .opts import cover_value
 from ..datatypes import Number, as_Number, as_str, as_bool, UNSET, Unset, as_points
 
@@ -355,3 +356,177 @@ class SmoothedLine(HostBase):
     @property
     def result(self):
         return self._calc_result
+
+
+# SmoothedLineFunc samples a numerical function along the normalized parameter
+# of a smoothed line and turns the sampled values into an interpolated
+# one-dimensional function representation.
+#
+# Subclasses should treat this class as a staged sampling pipeline. Override
+# the smallest helper that matches the customization you need: resolve owner-
+# dependent defaults, preprocess query points, sample raw values, or prepare
+# interpolation data for periodic behavior.
+
+
+class SmoothedLineFunc(ClassBase):
+    """
+    SmoothedLineFunc represents a sampled function of `u_percent` along a
+    smoothed line.
+
+    Users provide a numerical sampling function and a set of `u_percent`
+    sampling points. The class evaluates the function at those points, stores
+    the sampled values and metrics, and builds an interpolator for later
+    evaluation. Use `show_getattrs()` to inspect the available stored fields.
+    """
+
+    __attrs__ = {
+        **(ClassBase.__attrs__),
+        "raw_name": "The name identifier of this smoothed-line function.",
+        "_raw_func": "Numerical function that maps a single u_percent sample to a value or to a (value, metric) pair.",
+        "_raw_u_samples": "Sampling locations in u_percent used to evaluate the numerical function.",
+        "_calc_values": "Values returned by the numerical function at each sampling location.",
+        "_calc_metrics": "Per-sample metrics returned by the numerical function, or None if unavailable.",
+        "_entity_interpolator": "Interpolator object built from the sampled values.",
+    }
+
+    __relations__ = {
+        **(ClassBase.__relations__),
+        "owner": "The SmoothedLine instance that this function is associated with.",
+    }
+
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
+
+    # ==================== OVERRIDE ====================
+    # SmoothedLineFunc overrides ClassBase.__init__ because it must validate
+    # inputs, sample the function immediately, and build the interpolator.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __init__(
+        self,
+        func,
+        u_samples,
+        owner: SmoothedLine,
+        name: str = "smoothed line function",
+        logger=None,
+    ):
+        super().__init__(name=name, name_replace="smoothed line function")
+
+        if not isinstance(owner, SmoothedLine):
+            raise TypeError("`owner` for SmoothedLineFunc must be a SmoothedLine.")
+        if not callable(func):
+            raise TypeError("`func` for SmoothedLineFunc must be callable.")
+
+        u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
+        if u_samples.ndim != 1 or len(u_samples) == 0:
+            raise ValueError("`u_samples` must be a non-empty one-dimensional array.")
+        if np.any(~np.isfinite(u_samples)):
+            raise ValueError("`u_samples` must contain only finite values.")
+        if np.min(u_samples) < 0 or np.max(u_samples) > 100:
+            raise ValueError("`u_samples` must stay within the range [0, 100].")
+        u_samples = np.unique(np.sort(u_samples))
+        if len(u_samples) == 0:
+            raise ValueError(
+                "`u_samples` must remain non-empty after sorting and deduplication."
+            )
+
+        object.__setattr__(self, "_raw_func", func)
+        object.__setattr__(self, "_raw_u_samples", u_samples)
+        object.__setattr__(self, "_calc_values", None)
+        object.__setattr__(self, "_calc_metrics", None)
+        object.__setattr__(self, "_entity_interpolator", None)
+        self.act_bind_relation_base("owner", owner, is_weak=True)
+
+        values = []
+        metrics = []
+        has_metric = False
+        for u in self._raw_u_samples:
+            sample_result = self._raw_func(float(u))
+            if isinstance(sample_result, tuple) and len(sample_result) == 2:
+                value, metric = sample_result
+            else:
+                value, metric = sample_result, None
+            values.append(np.asarray(value))
+            metrics.append(metric)
+            has_metric = has_metric or (metric is not None)
+
+        values = np.stack(values, axis=0)
+        metrics = metrics if has_metric else None
+
+        owner_mode = getattr(owner.opts, "mode", None)
+        mode = (
+            "interp"
+            if owner_mode is None
+            else as_str(
+                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
+            )
+        )
+
+        if mode == "wrap":
+            u_interp = np.concatenate(
+                [
+                    self._raw_u_samples - 100.0,
+                    self._raw_u_samples,
+                    self._raw_u_samples + 100.0,
+                ]
+            )
+            values_interp = np.concatenate([values, values, values], axis=0)
+        else:
+            u_interp = self._raw_u_samples
+            values_interp = values
+
+        interpolator = interp1d(
+            u_interp,
+            values_interp,
+            axis=0,
+            kind="linear",
+            bounds_error=False,
+            fill_value="extrapolate",
+            assume_sorted=True,
+        )
+
+        object.__setattr__(self, "_calc_values", values)
+        object.__setattr__(self, "_calc_metrics", metrics)
+        object.__setattr__(self, "_entity_interpolator", interpolator)
+
+    def interpolate(self, u_percent):
+        u_percent = np.asarray(u_percent, dtype=float)
+        owner_mode = getattr(self.owner.opts, "mode", None)
+        mode = (
+            "interp"
+            if owner_mode is None
+            else as_str(
+                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
+            )
+        )
+        if mode == "wrap":
+            u_percent = np.mod(u_percent, 100.0)
+        return self._entity_interpolator(u_percent)
+
+    def __call__(self, u_percent):
+        return self.interpolate(u_percent)
+
+    # ==================== OVERRIDE ====================
+    # SmoothedLineFunc overrides ClassBase.__repr__ because the sampled
+    # function is most useful when summarized by sample count and owner mode.
+    # ==================================================
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        owner_mode = getattr(self.owner.opts, "mode", None)
+        mode = (
+            "interp"
+            if owner_mode is None
+            else as_str(
+                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
+            )
+        )
+        return (
+            f"{cls_name}({self.name!r}), num_samples={len(self._raw_u_samples)}, "
+            f"mode={mode!r}"
+        )
+
+    # ==================== OVERRIDE ====================
+    # SmoothedLineFunc overrides object.__str__ so plain string display stays
+    # concise, matching the short ClassBase-style identity representation.
+    # ==================================================
+    def __str__(self) -> str:
+        return ClassBase.__repr__(self)

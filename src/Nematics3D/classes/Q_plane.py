@@ -311,7 +311,10 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals, but avoid direct bounds
+                # subscription because PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
+                is_subscribe_bounds=False,
                 opts_defaults_override=self.default_visual_opts["nb"],
             )
 
@@ -324,7 +327,10 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals, but avoid direct bounds
+                # subscription because PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
+                is_subscribe_bounds=False,
                 opts_defaults_override=self.default_visual_opts["nb"],
                 is_visible=False,
             )
@@ -342,7 +348,10 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals, but avoid direct bounds
+                # subscription because PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
+                is_subscribe_bounds=False,
                 opts_defaults_override=self.default_visual_opts["nd"],
             )
 
@@ -352,7 +361,10 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals, but avoid direct bounds
+                # subscription because PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
+                is_subscribe_bounds=False,
             )
 
         else:
@@ -374,7 +386,10 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
+                # Keep the same bounds clip on derived visuals, but avoid direct bounds
+                # subscription because PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
+                is_subscribe_bounds=False,
                 is_visible=False,
             )
 
@@ -427,7 +442,10 @@ class QPlane(InterpolatePlane):
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
             opts=opts_S,
+            # Keep the same bounds clip on derived visuals, but avoid direct bounds
+            # subscription because PlaneGrid -> QPlane already drives these updates.
             bounds=self.grid.bounds,
+            is_subscribe_bounds=False,
             opts_defaults_override=self.default_visual_opts["S"],
         )
 

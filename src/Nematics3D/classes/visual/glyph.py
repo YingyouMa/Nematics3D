@@ -237,9 +237,10 @@ class PlotGlyph(HostBase):
     # fmt: off
     __attrs__: ClassVar[Mapping[str, str]] = {
         **(HostBase.__attrs__),
-        
         "raw_category":                 "The category of the glyph, used in the classfication of PlotFigure",
         "raw_coords":                   "The N x 3 input coordinates of each glyph",
+        "state_clip_mode":             "Clip strategy for bounds application. 'mesh' clips the built mesh while 'center' clips the center representation before meshing.",
+        "_calc_coords":                "The effective coordinates used for the current glyph build after clip-mode preprocessing.",
         "_calc_poly":                   "The generated PyVista PolyData",
         "_calc_color":                  "The resolved per-point RGB color array of the glyph.",
         "_calc_opacity":                "The resolved per-point opacity array of the glyph.",
@@ -254,6 +255,7 @@ class PlotGlyph(HostBase):
         "_state_is_empty":              "Whether the glyph currently has no drawable geometry and should skip render-side updates.",
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
+    
     __relations__: ClassVar[Mapping[str, str]] = {
         **(HostBase.__relations__),
         "fig": (
@@ -278,10 +280,12 @@ class PlotGlyph(HostBase):
     _impl_validators = {
         **(HostBase._impl_validators),
         "coords":       lambda v, d: as_points(v, name=d),
-        "category":     lambda v, d: as_str(v, name=d) 
+        "category":     lambda v, d: as_str(v, name=d),
+        "state_clip_mode": lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
         }
+    
     _impl_attrs_reapply_opts_after_raw = (
-        HostBase._impl_attrs_reapply_opts_after_raw | {"coords"}
+        HostBase._impl_attrs_reapply_opts_after_raw | {"coords", "state_clip_mode"}
     )
     # fmt: on
 
@@ -302,6 +306,8 @@ class PlotGlyph(HostBase):
         opts: OptsGlyph | None = None,
         figure: PlotFigure | None = None,
         bounds: Bounds | None = None,
+        clip_mode: str = "center",
+        is_subscribe_bounds: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -312,6 +318,12 @@ class PlotGlyph(HostBase):
             self.show_attr_desc("raw_coords"),
         )
         object.__setattr__(self, "raw_coords", coords)
+        clip_mode = self.__class__._impl_validators["state_clip_mode"](
+            clip_mode,
+            self.show_attr_desc("state_clip_mode"),
+        )
+        object.__setattr__(self, "state_clip_mode", clip_mode)
+        object.__setattr__(self, "_calc_coords", coords.copy())
         category = self.__class__._impl_validators["category"](
             category,
             self.show_attr_desc("raw_category"),
@@ -379,12 +391,20 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_impl_name_pv", unique_id)
 
         object.__setattr__(self, "_impl_interact_func", None)
-        self.act_bind_bounds(bounds, is_apply=False)
+        self.act_bind_bounds(
+            bounds,
+            is_apply=False,
+            is_subscribe=is_subscribe_bounds,
+        )
 
     def _helper_init_end(self):
 
         for attr in self._pending_resolution_attrs:
             self._helper_resolver_spec(attr)
+        if self.state_clip_mode == "center":
+            object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+        else:
+            object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
         self._helper_make_figure()
 
         figure = self.fig
@@ -402,7 +422,14 @@ class PlotGlyph(HostBase):
             self.act_commit(is_reapply_opts=True)
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_bind_bounds(self, bounds, is_apply=True, is_replace=True, logger=None):
+    def act_bind_bounds(
+        self,
+        bounds,
+        is_apply=True,
+        is_replace=True,
+        is_subscribe=True,
+        logger=None,
+    ):
         if bounds is None:
             self.act_unbind_bounds(is_apply=is_apply)
             return
@@ -428,25 +455,31 @@ class PlotGlyph(HostBase):
             self.act_unbind_bounds(is_apply=False)
 
         self.act_bind_relation_base("bounds", bounds, is_weak=True)
-        bounds.act_attach_sync_task(
-            self._impl_name_pv,
-            lambda **kwargs: self.act_commit(is_reapply_opts=True),
-        )
-        bounds.act_register_subscriber(
-            self,
-            sync_name=self._impl_name_pv,
-            kind="glyph",
-        )
+        if is_subscribe:
+            bounds.act_attach_sync_task(
+                self._impl_name_pv,
+                lambda **kwargs: self.act_commit(is_reapply_opts=True),
+            )
+            bounds.act_register_subscriber(
+                self,
+                sync_name=self._impl_name_pv,
+                kind="glyph",
+            )
         if is_apply:
             self.act_commit(is_reapply_opts=True)
 
-    def _helper_apply_bounds(self, mesh):
+    def _helper_apply_bounds_mesh(self, mesh):
         bounds = self.bounds
         if bounds is None:
             return mesh
         return mesh.clip_surface(
             bounds.clip_geometry,
             invert=self.opts.is_clip_inside,
+        )
+
+    def _helper_bound_coords(self):
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement center-based bounds clipping yet."
         )
 
     # ----------------------------------------------------------------------------------------------------
@@ -522,7 +555,7 @@ class PlotGlyph(HostBase):
     # ----------------------------------------------------------------------------------------------------
 
     def _helper_build_poly(self):
-        poly = pv.PolyData(self.raw_coords)
+        poly = pv.PolyData(self._calc_coords)
         object.__setattr__(self, "_calc_poly", poly)
         self._helper_set_poly(poly)
 
@@ -590,9 +623,13 @@ class PlotGlyph(HostBase):
             input_dir["clim"] = self.opts.scalars_clim
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
 
+        if self.state_clip_mode == "center":
+            object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+        else:
+            object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
         self._helper_build_poly()
         mesh = self._helper_build_mesh()
-        mesh = self._helper_apply_bounds(mesh)
+        mesh = self._helper_apply_bounds_mesh(mesh)
 
         if self._helper_is_empty_mesh(mesh):
             object.__setattr__(self, "_state_is_empty", True)
@@ -769,9 +806,13 @@ class PlotGlyph(HostBase):
             is_needs_remesh = True
 
         if is_needs_remesh:
+            if self.state_clip_mode == "center":
+                object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+            else:
+                object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
-            mesh = self._helper_apply_bounds(mesh)
+            mesh = self._helper_apply_bounds_mesh(mesh)
             if self._helper_is_empty_mesh(mesh):
                 object.__setattr__(self, "_state_is_empty", True)
                 self._helper_clear_live_actor()
