@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 from typing import Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev, interp1d
@@ -384,6 +384,7 @@ class SmoothedLineFunc(ClassBase):
         "raw_name": "The name identifier of this smoothed-line function.",
         "_raw_func": "Numerical function that maps a single u_percent sample to a value or to a (value, metric) pair.",
         "_raw_u_samples": "Sampling locations in u_percent used to evaluate the numerical function.",
+        "_raw_func_kwargs": "Extra keyword arguments passed to the numerical function during sampling.",
         "_calc_values": "Values returned by the numerical function at each sampling location.",
         "_calc_metrics": "Per-sample metrics returned by the numerical function, or None if unavailable.",
         "_entity_interpolator": "Interpolator object built from the sampled values.",
@@ -406,6 +407,7 @@ class SmoothedLineFunc(ClassBase):
         func,
         u_samples,
         owner: SmoothedLine,
+        func_kwargs: Mapping[str, Any] | None = None,
         name: str = "smoothed line function",
         logger=None,
     ):
@@ -431,6 +433,11 @@ class SmoothedLineFunc(ClassBase):
 
         object.__setattr__(self, "_raw_func", func)
         object.__setattr__(self, "_raw_u_samples", u_samples)
+        object.__setattr__(
+            self,
+            "_raw_func_kwargs",
+            {} if func_kwargs is None else dict(func_kwargs),
+        )
         object.__setattr__(self, "_calc_values", None)
         object.__setattr__(self, "_calc_metrics", None)
         object.__setattr__(self, "_entity_interpolator", None)
@@ -440,7 +447,7 @@ class SmoothedLineFunc(ClassBase):
         metrics = []
         has_metric = False
         for u in self._raw_u_samples:
-            sample_result = self._raw_func(float(u))
+            sample_result = self._raw_func(float(u), **self._raw_func_kwargs)
             if isinstance(sample_result, tuple) and len(sample_result) == 2:
                 value, metric = sample_result
             else:

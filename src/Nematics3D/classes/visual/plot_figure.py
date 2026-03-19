@@ -145,6 +145,12 @@ class PlotFigure(HostBase, RegistryBase):
         "_entity_scalar_bars": (
             "RegistryBase instance managing scalar bars attached to this figure."
         ),
+        "_entity_interacts": (
+            "RegistryBase instance managing live interact panels attached to this figure."
+        ),
+        "_impl_interact_count": (
+            "Monotonic counter used to assign interact panel ids for this figure."
+        ),
         # -----------------
         # VTK overlay layer
         # -----------------
@@ -168,6 +174,9 @@ class PlotFigure(HostBase, RegistryBase):
         ),
         "console": (
             "Read-only: Alias of `_entity_console` " "(or None if not initialized)."
+        ),
+        "interacts": (
+            "Read-only: Alias of `_entity_interacts` (or None if not initialized)."
         ),
     }
 
@@ -221,6 +230,7 @@ class PlotFigure(HostBase, RegistryBase):
 
         object.__setattr__(self, "_entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
+        object.__setattr__(self, "_impl_interact_count", 0)
 
         if name is None:
             name = self._DEFAULT_NAME
@@ -244,6 +254,10 @@ class PlotFigure(HostBase, RegistryBase):
         scalar_bars = RegistryBase("scalar bars manager")
         scalar_bars.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
+
+        interacts = RegistryBase("interact panel manager")
+        interacts.act_bind_relation_base("owner", self, is_weak=True)
+        object.__setattr__(self, "_entity_interacts", interacts)
 
         # --- Create overlay renderer (layer=1) at initialization ---
         overlay = self._helper_init_overlay_renderer()
@@ -286,9 +300,51 @@ class PlotFigure(HostBase, RegistryBase):
 
             object.__setattr__(self, "_entity_console", console)
 
+            original_close_event = main_window.closeEvent
+
+            def _close_event_with_interacts(event):
+                self._helper_close_interacts()
+                original_close_event(event)
+
+            main_window.closeEvent = _close_event_with_interacts
+
     @property
     def console(self):
         return getattr(self, "_entity_console", None)
+
+    @property
+    def interacts(self):
+        return getattr(self, "_entity_interacts", None)
+
+    def act_register_interact(self, panel):
+        interacts = self.interacts
+        if interacts is None:
+            return None
+        count = self._impl_interact_count + 1
+        object.__setattr__(self, "_impl_interact_count", count)
+        panel.name = f"panel{count}"
+        interacts.act_register(
+            panel,
+            is_contain_ok=True,
+            is_bind_registry_relation=False,
+        )
+        return panel.name
+
+    def act_unregister_interact(self, panel):
+        interacts = self.interacts
+        if interacts is None:
+            return
+        interacts.act_unregister(panel, is_missing_ok=True)
+
+    def _helper_close_interacts(self):
+        interacts = self.interacts
+        if interacts is None:
+            return
+        for panel in list(interacts):
+            try:
+                panel.close()
+            except Exception:
+                pass
 
     # ==================== OVERRIDE ====================
     # PlotFigure overrides HostBase/ClassBase name handling so BackgroundPlotter
@@ -569,10 +625,13 @@ class PlotFigure(HostBase, RegistryBase):
         return HostBase.__repr__(self)
 
 
-@logging_and_warning_decorator()
-def as_PlotFigure(figure, opts_figure, logger=None):
+FigureData = PlotFigure | BackgroundPlotter | pv.Plotter
 
-    if not isinstance(opts_figure, OptsFigure):
+
+@logging_and_warning_decorator()
+def as_PlotFigure(figure, opts_figure=None, logger=None):
+
+    if opts_figure is not None and not isinstance(opts_figure, OptsFigure):
         try:
             raise TypeError(
                 "The variable `opts_figure` must be instance of OptsFigure."

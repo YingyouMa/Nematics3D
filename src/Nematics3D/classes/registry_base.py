@@ -124,7 +124,13 @@ class RegistryBase:
         return name
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def act_register(self, term, is_contain_ok=False, logger=None):
+    def act_register(
+        self,
+        term,
+        is_contain_ok=False,
+        is_bind_registry_relation=True,
+        logger=None,
+    ):
         if term in self._entity:
             if not is_contain_ok:
                 try:
@@ -153,6 +159,9 @@ class RegistryBase:
         else:
             term.name = name
         self._entity.append(term)
+
+        if not is_bind_registry_relation:
+            return
 
         bind_relation = getattr(term, "act_bind_relation_base", None)
         if callable(bind_relation):

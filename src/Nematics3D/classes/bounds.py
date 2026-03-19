@@ -1,16 +1,29 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 import weakref
-from typing import Any, ClassVar, Literal, Mapping
+from typing import Any, ClassVar, Literal, Mapping, Sequence, TypeAlias
 
 import numpy as np
 import pyvista as pv
 
-from Nematics3D.datatypes import Number, UNSET, Unset, Vect, as_Number, as_Vect, as_str
+from Nematics3D.datatypes import (
+    Number,
+    Tensor,
+    UNSET,
+    Unset,
+    Vect,
+    as_Number,
+    as_Vect,
+    as_str,
+)
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase
+
+BoundsData: TypeAlias = (
+    "Bounds | Vect(6) | Tensor((4, 3)) | Tensor((8, 3)) | pv.PolyData"
+)
 
 
 @dataclass(slots=True)

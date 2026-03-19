@@ -6,7 +6,12 @@ import math
 import numpy as np
 
 from Nematics3D.datatypes import as_str, Vect
-from Nematics3D.geometry import calc_vec_from_azimuth_polar, get_azimuth as geometry_get_azimuth, get_polar_angle as geometry_get_polar_angle
+from Nematics3D.geometry import (
+    calc_vec_from_azimuth_polar,
+    get_azimuth as geometry_get_azimuth,
+    get_polar_angle as geometry_get_polar_angle,
+)
+from .ui_throttle import UIThrottle
 
 
 @dataclass(slots=True)
@@ -490,7 +495,13 @@ class MovePointConsole:
 
 class PanelBase(QtWidgets.QWidget):
 
-    def __init__(self, host, figure, title: str = "Panel"):
+    def __init__(
+        self,
+        host,
+        figure,
+        title: str = "Panel",
+        slider_throttle_ms: int = 20,
+    ):
 
         title = as_str(title, name="The title of panel", replace="Panel")
 
@@ -518,6 +529,7 @@ class PanelBase(QtWidgets.QWidget):
 
         self.host = host
         self.fig = figure
+        self.raw_name = "panel_unregistered"
         self.str_now = datetime.datetime.now().strftime("panel_%Y%m%d_%H%M%S_%f")[:-3]
         self.host.act_save_opts(self.str_now)
         self.str_now_live = self.str_now + "_live"
@@ -529,6 +541,13 @@ class PanelBase(QtWidgets.QWidget):
 
         self.state: dict[str, object] = {}
         self.sliders: dict[str, SliderItem] = {}
+        if not hasattr(self, "_custom_sliders"):
+            self._custom_sliders = []
+        self.slider_throttle_ms = int(slider_throttle_ms)
+        self._slider_throttle = UIThrottle(
+            interval_ms=self.slider_throttle_ms,
+            parent=self,
+        )
 
         self.setWindowTitle(title)
         self.setObjectName("panel")
@@ -538,7 +557,13 @@ class PanelBase(QtWidgets.QWidget):
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.layout.setSpacing(8)
 
+        if self.fig is not None and hasattr(self.fig, "act_register_interact"):
+            interact_name = self.fig.act_register_interact(self)
+            if interact_name is not None:
+                self.setObjectName(interact_name)
+
         self.build_ui()
+        self.act_wire_default_slider_connections()
 
         # ----------------------------
         # Reset Actions group
@@ -563,6 +588,14 @@ class PanelBase(QtWidgets.QWidget):
 
         self.host.act_attach_sync_task(name=self.str_now_live, func=self._sync_func)
 
+        console = getattr(self.fig, "console", None) if self.fig is not None else None
+        if console is not None and self.name != "panel_unregistered":
+            console.println(f"Opened the control panel for {self.host!s}.")
+            console.println(
+                "In the command line, the controlled object is also available as "
+                f"the current figure's interacts[{self.name!r}].host."
+            )
+
     def _sync_from_host_slider(self, attr: str, value: float):
         s = self.sliders[attr]
         s.set_tick(value, is_block_signals=True)
@@ -574,6 +607,52 @@ class PanelBase(QtWidgets.QWidget):
 
         if is_commit:
             self.commit()
+
+    def _helper_begin_slider_interaction(self, *_args):
+        func = getattr(self, "_on_slider_pressed", None)
+        if not callable(func):
+            func = getattr(self, "_helper_begin_continuous_interaction", None)
+        if callable(func):
+            func(*_args)
+
+    def _helper_end_slider_interaction(self, *_args):
+        self._slider_throttle.flush()
+        func = getattr(self, "_on_slider_released", None)
+        if not callable(func):
+            func = getattr(self, "_helper_end_continuous_interaction", None)
+        if callable(func):
+            func(*_args)
+
+    def _schedule_on_changed(self, _value=0):
+        self._slider_throttle.schedule(self.on_changed)
+
+    def act_wire_default_slider_connections(self):
+        custom_sliders = list(getattr(self, "_custom_sliders", []))
+        for key, item in self.sliders.items():
+            if item in custom_sliders:
+                continue
+            slider = item.slider
+            try:
+                slider.valueChanged.disconnect()
+            except Exception:
+                pass
+            try:
+                slider.sliderPressed.disconnect()
+            except Exception:
+                pass
+            try:
+                slider.sliderReleased.disconnect()
+            except Exception:
+                pass
+
+            if str(key).endswith("_move_step"):
+                slider.valueChanged.connect(
+                    lambda _v=0: self.on_changed(is_commit=False)
+                )
+            else:
+                slider.valueChanged.connect(self._schedule_on_changed)
+                slider.sliderPressed.connect(self._helper_begin_slider_interaction)
+                slider.sliderReleased.connect(self._helper_end_slider_interaction)
 
     def build_ui(self):
         raise NotImplementedError
@@ -599,9 +678,12 @@ class PanelBase(QtWidgets.QWidget):
             event.accept()
 
     def on_close(self):
+        self._slider_throttle.cancel()
         if hasattr(self.host, "_state_is_interactable"):
             object.__setattr__(self.host, "_state_is_interactable", True)
         self.host.act_detach_sync_task(self.str_now_live)
+        if self.fig is not None and hasattr(self.fig, "act_unregister_interact"):
+            self.fig.act_unregister_interact(self)
 
     @staticmethod
     def _vect_text(vect, name):
@@ -619,3 +701,17 @@ class PanelBase(QtWidgets.QWidget):
     @staticmethod
     def get_polar_angle(vec):
         return geometry_get_polar_angle(vec)
+
+    @property
+    def name(self):
+        return self.raw_name
+
+    @name.setter
+    def name(self, value):
+        self.raw_name = as_str(value, name="Panel name", replace="panel")
+
+    def __str__(self):
+        return f"{self.name} -> {self.host!s}"
+
+    def __repr__(self):
+        return f"{type(self).__name__}({self.name!r} -> {self.host!s})"

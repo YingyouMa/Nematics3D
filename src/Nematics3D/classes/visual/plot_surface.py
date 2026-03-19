@@ -1,12 +1,14 @@
-﻿from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass
 from typing import Callable, Any, Mapping, ClassVar
 import numpy as np
 import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from .plot_figure import PlotFigure
+from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from ..bounds import BoundsData
 from .qt.interact_surface import InteractSurface
 
 
@@ -76,8 +78,9 @@ class PlotSurface(PlotGlyph):
         name: str | None = None,
         name_replace: str = "surface",
         category: str = "surface",
-        figure: PlotFigure | None = None,
+        figure: FigureData | None = None,
         opts: OptsSurface | None = None,
+        bounds: BoundsData | None = None,
         clip_mode: str = "center",
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
@@ -92,6 +95,7 @@ class PlotSurface(PlotGlyph):
             name_replace=name_replace,
             opts=opts,
             figure=figure,
+            bounds=bounds,
             clip_mode=clip_mode,
             opts_defaults_override=opts_defaults_override,
             **kwargs,

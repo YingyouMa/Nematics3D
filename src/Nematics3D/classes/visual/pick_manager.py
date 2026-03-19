@@ -454,61 +454,6 @@ class PickManager:
         if getattr(owner, "_state_is_interactable", False):
             owner.act_interact()
 
-        # if type(owner).__name__ == "PlotSphere" and getattr(owner, "_state_is_interactable", False):
-            
-        #     from .qt.interact_sphere import InteractSphere
-        #     control = InteractSphere(owner, owner.fig)
-        #     control.show()
-            
-        # elif type(owner).__name__ == "PlotTube" and getattr(owner, "_state_is_interactable", False):
-            
-        #     owner = owner.owner
-        #     if type(owner).__name__ == "DisclinationLineSmoothPlot":
-        #         from .qt.interact_disclination_line import InteractDisclinationLine
-        #         control = InteractDisclinationLine(owner)
-        #         control.show()
-                
-        # if type(owner).__name__ == "PlotRod" and getattr(owner, "_state_is_interactable", False):
-            
-        #     from .qt.interact_rod import InteractRod
-        #     control = InteractRod(owner, owner.fig)
-        #     control.show()
-            
-        #     figure = owner.fig
-        #     owner = owner.owner
-        #     if type(owner).__name__ == "QPlane" and getattr(owner, "_state_is_interactable", False):
-        #         from .qt.interact_plane import InteractPlane
-        #         control = InteractPlane(owner, figure)
-        #         control.show()
-        #     elif type(owner).__name__ == "QPlanePolar" and getattr(owner, "_state_is_interactable", False):
-        #         defectSection = owner.plane.owner
-        #         if type(defectSection).__name__ == "DefectSection":
-        #             from .qt.interact_defect_section import InteractDefectSection
-        #             control = InteractDefectSection(owner, figure)
-        #             control.show()
-        #             # DEFECT_PLANE_GUI_ONLY_WARNING = (
-        #             #     "WARNING!!! \n"
-        #             #     "Due to incomplete implementation of the related functionality, "
-        #             #     "please modify the DefectSection ONLY through the GUI during interactive adjustments. "
-        #             #     "Do NOT manually change its properties from the command line, "
-        #             #     "as this may cause the internal state and the GUI to become out of sync."
-        #             # )
-        #             # self.owner.console.println(DEFECT_PLANE_GUI_ONLY_WARNING)
-        #             # print(DEFECT_PLANE_GUI_ONLY_WARNING)
-                
-        # if type(owner).__name__ == "PlotSurface" and getattr(owner, "_state_is_interactable", False):
-            
-        #     from .qt.interact_surface import InteractSurface
-        #     control = InteractSurface(owner)
-        #     control.show()
-            
-        #     figure = owner.fig
-        #     owner = owner.owner
-        #     if type(owner).__name__ in ["QPlane", "InterpolatePlane"] and getattr(owner, "_state_is_interactable", False):
-        #         from .qt.interact_plane import InteractPlane
-        #         control = InteractPlane(owner, figure)
-        #         control.show()
-            
             
 
         # reset to avoid triple-trigger

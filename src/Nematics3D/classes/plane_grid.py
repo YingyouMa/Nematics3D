@@ -301,6 +301,13 @@ class PlaneGrid(HostBase):
         msg = f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, origin={self.opts.origin} at {self.opts.alignment}"
         return msg
 
+    # ==================== OVERRIDE ====================
+    # PlaneGrid overrides ClassBase.__str__ to keep the plain string form
+    # short and aligned with the repository-wide default identity style.
+    # ==================================================
+    def __str__(self) -> str:
+        return f"{type(self).__name__}({self.name!r})"
+
     def __iter__(self):
         return iter(self._entity_grid)
 

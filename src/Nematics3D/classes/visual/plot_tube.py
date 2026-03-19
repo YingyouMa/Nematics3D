@@ -1,4 +1,5 @@
-﻿from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass
 from typing import Callable, Sequence, Any, Mapping, ClassVar
 import numpy as np
 import pyvista as pv
@@ -6,8 +7,9 @@ from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number
-from .plot_figure import PlotFigure
+from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from ..bounds import BoundsData
 from Nematics3D.general import closest_point_on_polyline, fmt_value
 from .qt.interact_tube import InteractTube
 from Nematics3D.classes.host_base import HostBase
@@ -97,9 +99,10 @@ class PlotTube(PlotGlyph):
         name: str | None = None,
         name_replace: str = "line",
         category: str = "tube",
-        figure: PlotFigure | None = None,
+        figure: FigureData | None = None,
         opts: OptsTube | None = None,
         line_index: Sequence | None = None,
+        bounds: BoundsData | None = None,
         clip_mode: str = "center",
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
@@ -114,6 +117,7 @@ class PlotTube(PlotGlyph):
             name_replace=name_replace,
             opts=opts,
             figure=figure,
+            bounds=bounds,
             clip_mode=clip_mode,
             opts_defaults_override=opts_defaults_override,
             **kwargs,

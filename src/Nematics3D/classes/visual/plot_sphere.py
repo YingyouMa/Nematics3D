@@ -5,13 +5,89 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from .plot_figure import PlotFigure
+from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 from .qt.interact_sphere import InteractSphere
 
 
 @dataclass(slots=True, repr=False)
 class OptsSphere(OptsGlyph):
+    """
+    Option container controlling how `PlotSphere` objects are rendered.
+
+    `OptsSphere` stores the visual settings for sphere glyphs. It does not
+    define where spheres are placed; the sphere centers come from the
+    `coords` passed to `PlotSphere`. Instead, this class controls how those
+    spheres look once they are drawn.
+
+    You will usually use `OptsSphere` in one of three ways:
+
+    - create an `OptsSphere(...)` instance and pass it into `PlotSphere`
+    - modify fields on an existing `sphere.opts`
+    - reuse one object's current settings on another object via
+      `other_sphere.act_commit(opts=sphere.opts)`
+
+    Many of the most important fields support several input styles. In
+    particular, quantities such as `radius`, `color`, `opacity`, and `scalars`
+    are commonly given as:
+
+    - one shared value applied to every sphere
+    - an array providing one value per sphere
+    - a function that receives the point coordinates and computes values from
+      them
+
+    The most commonly adjusted fields are:
+
+    - `radius`: sphere size
+    - `color`: direct RGB coloring
+    - `opacity`: transparency
+    - `paint_by`: choose between direct color and scalar-colormap rendering
+    - `scalars`: numeric values used when `paint_by="scalars"`
+    - `sides`: sphere smoothness
+
+    A few useful relationships to keep in mind:
+
+    - `color` and `scalars` are different pipelines; `paint_by` decides which
+      one is used for rendering
+    - `scalars` are numeric data, not RGB colors
+    - `is_clip_inside` matters when the owning glyph is clipped by bounds
+    - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
+      and `roughness` affect appearance but not sphere geometry
+
+    For the shared glyph option model, validation behavior, and lower-level
+    commit/update rules, see the docstrings of `OptsGlyph` and `OptsBase`.
+
+    Examples
+    --------
+    Create reusable sphere options:
+
+    >>> opts = OptsSphere(radius=0.2, color=(0.9, 0.2, 0.2), opacity=0.8)
+    >>> spheres = PlotSphere(coords, opts=opts)
+
+    Set one radius for all spheres:
+
+    >>> opts = OptsSphere(radius=0.15)
+
+    Set a different radius for each sphere:
+
+    >>> opts = OptsSphere(radius=np.array([0.1, 0.2, 0.3]))
+
+    Compute values from the point coordinates:
+
+    >>> opts = OptsSphere(
+    ...     radius=lambda pts: 0.1 + 0.2 * np.linalg.norm(pts, axis=1),
+    ...     opacity=lambda pts: np.clip(pts[:, 2], 0.2, 1.0),
+    ... )
+
+    Use scalar coloring:
+
+    >>> opts = OptsSphere(
+    ...     paint_by="scalars",
+    ...     scalars=lambda pts: pts[:, 2],
+    ...     scalars_cmap="viridis",
+    ... )
+    """
+
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {**dict(OptsGlyph._DEFAULTS_FROZEN), "sides": 12}
@@ -30,20 +106,132 @@ class OptsSphere(OptsGlyph):
 
 class PlotSphere(PlotGlyph):
     """
-    Glyph subclass for rendering point-like objects as spheres.
+    Render one sphere at each input coordinate.
 
-    For most users, PlotSphere is the simplest concrete glyph family: each input
-    point is rendered as a sphere whose appearance is controlled through
-    `opts` or `act_commit(...)`.
+    `PlotSphere` is a concrete glyph class for visualizing a set of 3D points as
+    spheres. The input `coords` defines the sphere centers, and the visual
+    appearance of those spheres is controlled through `opts`, keyword
+    arguments, or later updates via `act_commit(...)`.
 
-    Typical usage:
+    Each visual channel is resolved point-by-point. In particular, values such
+    as `radius`, `color`, `opacity`, and `scalars` may be given as a single
+    shared setting for all spheres, as explicit per-point data, or as a
+    function that computes those values from the input point coordinates
+    through the normal glyph option pipeline.
 
-    - create a sphere glyph from point coordinates
-    - attach it to a `PlotFigure` or let it create one automatically
-    - adjust visual settings such as color, radius, opacity, and scalar display
-      through `sphere.opts`
-    - use the built-in interaction panel for sphere-specific inspection and
-      tuning when running interactively
+    Typical workflow:
+
+    - provide an `N x 3` coordinate array
+    - optionally attach the object to an existing figure or plotter so
+      multiple objects share the same scene
+    - optionally bind `bounds` to clip which or which parts of spheres are shown
+    - choose visual settings such as `radius`, `color`, `opacity`, or
+      scalar-based coloring, either as constants, arrays, or coordinate-based
+      functions
+    - update the object later with `act_commit(...)`, direct edits on
+      `sphere.opts`, or by reusing `opts`
+
+    Parameters
+    ----------
+    coords
+        Sphere-center coordinates with shape `(N, 3)`. Each row gives the
+        center of one sphere.
+    name
+        Optional readable object name.
+    category
+        Category label used when the object is registered in a figure.
+        The default is `"sphere"`.
+    figure
+        Optional figure/container for this glyph. You may pass an existing
+        `PlotFigure`, a `pyvistaqt.BackgroundPlotter`, or a `pyvista.Plotter`.
+        Non-`PlotFigure` inputs are wrapped into a `PlotFigure` internally so
+        this glyph can join an existing scene without extra setup.
+    opts
+        Optional `OptsSphere` instance holding the visual configuration.
+        You can also reuse an existing options object later with
+        `sphere.act_commit(opts=other.opts)` to apply another object's current
+        option settings directly.
+    clip_mode
+        Controls how bounds clipping is applied.
+        - `"center"`: keep or remove spheres according to whether their
+          centers are inside the active bounds. Default setting.
+        - `"mesh"`: build the sphere geometry first, then clip the resulting
+          mesh against the bounds.
+    bounds
+        Optional clipping object forwarded through the underlying `PlotGlyph`
+        interface.
+    name_replace, opts_defaults_override, and other advanced keyword arguments
+        These mostly affect default resolution and higher-level host/glyph
+        behavior. New users can usually ignore them at first; see the
+        docstring of `PlotGlyph` if you want the full forwarding model.
+    **kwargs
+        Additional option values forwarded into the glyph configuration
+        pipeline. For the full list of supported visual options, see the
+        docstring of `OptsSphere` and its base option classes.
+
+    Interactive Behavior
+    --------------------
+    In an interactive figure window:
+
+    - left double-click adds a numbered marker at the resolved picked location,
+      or removes the nearest existing marker if you double-click near one
+    - right click toggles the silhouette highlight of the picked sphere object
+      and prints the object summary in the figure console
+    - right double-click opens the sphere-specific interaction panel
+
+    Examples
+    --------
+    Create a few spheres from point coordinates:
+
+    >>> import numpy as np
+    >>> pts = np.array([
+    ...     [0.0, 0.0, 0.0],
+    ...     [1.0, 0.0, 0.0],
+    ...     [0.0, 1.0, 0.0],
+    ... ])
+    >>> spheres = PlotSphere(
+    ...     pts,
+    ...     radius=0.2,
+    ...     color=(0.9, 0.2, 0.2), # RGB
+    ...     opacity=0.8,
+    ... )
+
+    Update the appearance after creation:
+
+    >>> spheres.act_commit(radius=0.35, color=(0.2, 0.4, 0.9))
+    >>> spheres.opts.opacity = 1
+
+    Reuse another opts:
+
+    >>> spheres.act_commit(opts=other_spheres.opts)
+
+    Compute per-point values from the coordinates:
+
+    >>> spheres.act_commit(
+    ...     radius=lambda pts: 0.1 + 0.2 * np.linalg.norm(pts, axis=1),
+    ...     color=lambda pts: np.column_stack([
+    ...         np.clip(pts[:, 0], 0.0, 1.0),
+    ...         np.clip(pts[:, 1], 0.0, 1.0),
+    ...         np.full(len(pts), 0.4),
+    ...     ]),
+    ... )
+
+    Use scalar coloring instead of a fixed RGB color:
+
+    >>> spheres.act_commit(
+    ...     paint_by="scalars",
+    ...     scalars=given_scalars_array,
+    ...     scalars_cmap="viridis",
+    ... )
+
+    See Also
+    --------
+    OptsSphere
+        Sphere-specific options.
+    PlotGlyph
+        Base glyph pipeline shared by drawable plot objects.
+    PlotFigure
+        Figure container that manages plotted objects.
     """
 
     __attrs__ = {
@@ -69,7 +257,7 @@ class PlotSphere(PlotGlyph):
         name: str | None = None,
         name_replace: str = "point",
         category: str = "sphere",
-        figure: PlotFigure | None = None,
+        figure: FigureData | None = None,
         opts: OptsSphere | None = None,
         clip_mode: str = "center",
         opts_defaults_override: Mapping[str, Any] | None = None,

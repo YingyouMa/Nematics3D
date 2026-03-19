@@ -13,8 +13,8 @@ class InteractDisclinationLine(InteractGlyphBase):
     # @logging_and_warning_decorator()
     def __init__(self, host, logger=None):
         # host is the PlotTube
-        self.wrapper = host.wrapper          # DisclinationLineSmoothPlot
-        self.smooth = host.wrapper.owner     # DisclinationLineSmooth
+        self.wrapper = host.wrapper  # DisclinationLineSmoothPlot
+        self.smooth = host.wrapper.owner  # DisclinationLineSmooth
 
         object.__setattr__(host, "_state_is_silhouette", False)
 
@@ -22,7 +22,10 @@ class InteractDisclinationLine(InteractGlyphBase):
             host=host,
             figure=host.fig,
             title="Smoothed disclination line control",
-            is_radius=True, is_sides=True, is_color=True, is_opacity=True
+            is_radius=True,
+            is_sides=True,
+            is_color=True,
+            is_opacity=True,
         )
 
         self.wrapper.act_save_opts(name=self.str_now)
@@ -30,11 +33,18 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.wrapper.act_save_opts(name=self.str_now_live)
         self.smooth.act_save_opts(name=self.str_now_live)
 
+        console = getattr(self.fig, "console", None)
+        if console is not None and self.name != "panel_unregistered":
+            console.println(
+                "In the command line, the corresponding smoothed-line object is also "
+                f"available as the current figure's interacts[{self.name!r}].host.wrapper.owner."
+            )
         object.__setattr__(self.smooth.opts, "min_line_length", 2)
 
         self.spheres = PlotSphere(
             self._helper_create_sphere_coords(self.wrapper.opts.is_wrap),
             figure=self.host.fig,
+            bounds=self.host.bounds,
             name="raw defect points of {self.smooth!r}",
             color=(0, 0, 0),
             is_reset_camera=False,
@@ -65,7 +75,9 @@ class InteractDisclinationLine(InteractGlyphBase):
         )
         self._custom_sliders.append(self.sliders["window_length"])
 
-        self.chk_is_smooth = QtWidgets.QCheckBox("Use smoothed coordinates", group_smooth)
+        self.chk_is_smooth = QtWidgets.QCheckBox(
+            "Use smoothed coordinates", group_smooth
+        )
         self.chk_is_smooth.setChecked(self.state["is_smooth"])
         gl_smooth.addWidget(self.chk_is_smooth)
         self.chk_is_smooth.stateChanged.connect(self._on_toggle_is_smooth)
@@ -97,7 +109,9 @@ class InteractDisclinationLine(InteractGlyphBase):
             if is_only_smooth:
                 self._is_gui_updating = True
                 try:
-                    self.smooth.act_commit(window_length=int(self.state["window_length"]))
+                    self.smooth.act_commit(
+                        window_length=int(self.state["window_length"])
+                    )
                 finally:
                     self._is_gui_updating = False
             else:
@@ -173,13 +187,15 @@ class InteractDisclinationLine(InteractGlyphBase):
     # ==================================================
     def _on_reset_to_live(self):
         smooth_live = {
-            k: v for k, v in self.smooth._opts_backup[self.str_now_live].items()
+            k: v
+            for k, v in self.smooth._opts_backup[self.str_now_live].items()
             if k not in self.smooth.attrs_forbidden
         }
         self.smooth.act_commit(**smooth_live)
         self.wrapper.act_commit(**self.wrapper._opts_backup[self.str_now_live])
         host_live = {
-            k: v for k, v in self.host._opts_backup[self.str_now_live].items()
+            k: v
+            for k, v in self.host._opts_backup[self.str_now_live].items()
             if k not in self.host.attrs_forbidden
         }
         self.host.act_commit(**host_live)
@@ -194,12 +210,14 @@ class InteractDisclinationLine(InteractGlyphBase):
     # ==================================================
     def _on_reset_to_original(self):
         original_smooth = {
-            k: v for k, v in self.smooth._opts_backup[self.str_now].items()
+            k: v
+            for k, v in self.smooth._opts_backup[self.str_now].items()
             if k not in self.smooth.attrs_forbidden
         }
         original_wrapper = dict(self.wrapper._opts_backup[self.str_now])
         original_host = {
-            k: v for k, v in self.host._opts_backup[self.str_now].items()
+            k: v
+            for k, v in self.host._opts_backup[self.str_now].items()
             if k not in self.host.attrs_forbidden
         }
         self.smooth.act_commit(**original_smooth)
@@ -222,9 +240,5 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.wrapper.act_detach_sync_task(self.str_now_live)
         self.smooth.act_detach_sync_task(self.str_now_live)
         object.__setattr__(self.host, "_state_is_silhouette", True)
+        self.spheres.act_unbind_bounds(is_apply=False)
         self.spheres.act_remove()
-
-
-
-
-

@@ -1,4 +1,5 @@
-﻿from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass
 from typing import Callable, Sequence, Any, Mapping, ClassVar
 import numpy as np
 import pyvista as pv
@@ -6,8 +7,9 @@ from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET, Unset
-from .plot_figure import PlotFigure
+from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
+from ..bounds import BoundsData
 from .qt.interact_rod import InteractRod
 from Nematics3D.datatypes import as_points
 from Nematics3D.general import fmt_value
@@ -88,8 +90,9 @@ class PlotRod(PlotGlyph):
         name: str = "rod",
         name_replace: str = "rod",
         category: str = "rods",
-        figure: PlotFigure | None = None,
+        figure: FigureData | None = None,
         opts: OptsRod | None = None,
+        bounds: BoundsData | None = None,
         clip_mode: str = "center",
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
@@ -110,6 +113,7 @@ class PlotRod(PlotGlyph):
             name_replace=name_replace,
             opts=opts,
             figure=figure,
+            bounds=bounds,
             clip_mode=clip_mode,
             opts_defaults_override=opts_defaults_override,
             **kwargs,

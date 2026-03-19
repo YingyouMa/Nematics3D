@@ -1,4 +1,5 @@
-﻿from dataclasses import dataclass
+from __future__ import annotations
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -20,8 +21,8 @@ from Nematics3D.datatypes import (
     as_points,
 )
 from ..host_base import OptsBase, HostBase
-from ..bounds import Bounds, as_bounds
-from .plot_figure import PlotFigure
+from ..bounds import Bounds, BoundsData, as_bounds
+from .plot_figure import FigureData, PlotFigure, as_PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import find_nearest_point, fmt_value
 
@@ -304,8 +305,8 @@ class PlotGlyph(HostBase):
         name: str,
         name_replace: str,
         opts: OptsGlyph | None = None,
-        figure: PlotFigure | None = None,
-        bounds: Bounds | None = None,
+        figure: FigureData | None = None,
+        bounds: BoundsData | None = None,
         clip_mode: str = "center",
         is_subscribe_bounds: bool = True,
         is_passive_bounds_sync: bool = False,
@@ -361,29 +362,7 @@ class PlotGlyph(HostBase):
                     "The default paint_by strategy will be applied."
                 )
 
-        if figure is not None:
-            if not isinstance(figure, PlotFigure):
-                try:
-                    raise TypeError("`figure` for plotting must be PlotFigure object!")
-                except TypeError:
-                    logger.exception("Check input")
-                    logger.recovery(
-                        "Create a new PlotFigure object and store it in self.fig"
-                    )
-                figure = PlotFigure()
-            elif not figure.is_alive:
-                try:
-                    raise RuntimeError(
-                        "The plotting window has been closed. Cannot update an inactive plotter."
-                    )
-                except RuntimeError:
-                    logger.exception("Check input")
-                    logger.recovery(
-                        "Create a new PlotFigure object and store it in self.fig"
-                    )
-                figure = PlotFigure()
-        elif figure is None:
-            figure = PlotFigure()
+        figure = as_PlotFigure(figure)
         self.act_bind_relation_base("fig", figure, is_weak=True)
 
         self.opts.act_finalize(self._opts_defaults)
@@ -426,7 +405,7 @@ class PlotGlyph(HostBase):
     @logging_and_warning_decorator(start_finish_level=5)
     def act_bind_bounds(
         self,
-        bounds,
+        bounds: BoundsData | None,
         is_apply=True,
         is_replace=True,
         is_subscribe=True,

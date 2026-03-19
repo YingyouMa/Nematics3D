@@ -475,7 +475,8 @@ class ClassBase:
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
                 f"[{cls_name}: {obj_name!r}] Assignment blocked: "
-                f"{key!r} is not a valid or registered attribute."
+                f"{key!r} resolves to internal attribute {target_key!r}, "
+                "which cannot be assigned through the public setattr path."
             )
 
         self._helper_setattr_final(target_key, value)

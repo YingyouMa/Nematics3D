@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
@@ -16,6 +16,7 @@ from .panel_base import (
 
 
 class InteractBounds(PanelBase):
+
     def __init__(self, host, figure):
         object.__setattr__(self, "_is_continuous_interacting", False)
         object.__setattr__(self, "_impl_silhouette_state_backup", {})
@@ -311,20 +312,6 @@ class InteractBounds(PanelBase):
             value_to_tick=lambda v: int(v * 10),
             value_fmt="{:.1f}",
         )
-
-        for key, item in self.sliders.items():
-            if key == "origin_move_step":
-                item.slider.valueChanged.connect(
-                    lambda _v=0: self.on_changed(is_commit=False)
-                )
-            else:
-                item.slider.valueChanged.connect(self.on_changed)
-                item.slider.sliderPressed.connect(
-                    self._helper_begin_continuous_interaction
-                )
-                item.slider.sliderReleased.connect(
-                    self._helper_end_continuous_interaction
-                )
 
         self.on_changed(0, is_commit=False)
         self._update_helper_visuals(is_visible=self.chk_is_show_helpers.isChecked())
