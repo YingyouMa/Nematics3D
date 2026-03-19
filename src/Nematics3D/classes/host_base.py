@@ -751,6 +751,9 @@ class HostBase(ClassBase):
         properties_host = self.__class__.__properties__
         if attr_name in properties_host:
             return f"{attr_name!r}: {properties_host[attr_name]}"
+        relations_host = self.__class__.__relations__
+        if attr_name in relations_host:
+            return f"{attr_name!r}: {relations_host[attr_name]}"
 
         opts = getattr(self, "_opts", None)
         if opts is not None:
@@ -761,12 +764,12 @@ class HostBase(ClassBase):
             if attr_name in properties_opts:
                 return f"{attr_name!r}: {properties_opts[attr_name]}"
             raise KeyError(
-                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ "
+                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__ "
                 f"or {type(opts).__name__}.__attrs__ / __properties__."
             )
 
         raise KeyError(
-            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__. "
+            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__. "
             "The opts attrs are not available yet because self._opts has not been initialized; "
             "the attribute may belong to opts."
         )

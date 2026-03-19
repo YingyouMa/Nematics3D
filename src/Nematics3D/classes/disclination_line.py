@@ -601,13 +601,6 @@ class OptsDefectLinePlot(OptsBase):
     )
 
 
-# DisclinationLineSmoothPlot is the HostBase wrapper that controls how a
-# smoothed disclination line is visualized through an internal PlotTube.
-#
-# Subclasses should preserve the coupling between the wrapper opts
-# (`is_smooth`, `is_wrap`) and the coordinates forwarded to the wrapped
-# PlotTube. If visualization logic changes, keep `_helper_get_coords()` and
-# the wrapped-enrichment task consistent.
 class DisclinationLineSmoothPlot(HostBase):
     """
     DisclinationLineSmoothPlot visualizes a smoothed disclination line.
@@ -999,8 +992,6 @@ class DefectSectionGrid(HostBase):
         for key, value in kwargs.items():
             object.__setattr__(self.opts, key, value)
         return self._helper_resolve_pose(), kwargs
-
-    @logging_and_warning_decorator()
 
     # ==================== OVERRIDE ====================
     # DefectSectionGrid overrides ClassBase.__repr__ because a section grid is

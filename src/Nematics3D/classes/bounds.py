@@ -665,45 +665,59 @@ def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> 
         others = np.delete(points, i, axis=0)
         dist = np.linalg.norm(others - origin, axis=1)
         order = np.argsort(dist)
-        candidate = others[order[:3]]
 
-        for perm in ((0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0)):
-            edge1 = candidate[perm[0]] - origin
-            edge2 = candidate[perm[1]] - origin
-            edge3 = candidate[perm[2]] - origin
+        for idx1 in range(len(order)):
+            for idx2 in range(idx1 + 1, len(order)):
+                edge1 = others[order[idx1]] - origin
+                edge2 = others[order[idx2]] - origin
 
-            try:
-                axis1, _ = _normalize_box_edge(edge1, name="edge1")
-                axis2, _ = _normalize_box_edge(edge2, name="edge2")
-                axis3, _ = _normalize_box_edge(edge3, name="edge3")
-            except ValueError:
-                continue
+                try:
+                    axis1, _ = _normalize_box_edge(edge1, name="edge1")
+                    axis2, _ = _normalize_box_edge(edge2, name="edge2")
+                except ValueError:
+                    continue
 
-            if not _is_orthogonal_triplet(axis1, axis2, axis3):
-                continue
+                if abs(float(axis1 @ axis2)) > _DEF_TOL:
+                    continue
 
-            expected = np.array(
-                [
-                    origin,
-                    origin + edge1,
-                    origin + edge2,
-                    origin + edge3,
-                    origin + edge1 + edge2,
-                    origin + edge1 + edge3,
-                    origin + edge2 + edge3,
-                    origin + edge1 + edge2 + edge3,
-                ],
-                dtype=float,
-            )
-            if _match_points_unordered(expected, points):
-                return _build_bounds_from_corner_edges(
-                    origin,
-                    edge1,
-                    edge2,
-                    edge3,
-                    name=name,
-                    is_preserve_axis_order=False,
-                )
+                axis3_dir = np.cross(axis1, axis2)
+                norm3 = float(np.linalg.norm(axis3_dir))
+                if norm3 <= _DEF_TOL:
+                    continue
+                axis3_dir = axis3_dir / norm3
+
+                for candidate in others:
+                    edge3 = candidate - origin
+                    try:
+                        axis3, _ = _normalize_box_edge(edge3, name="edge3")
+                    except ValueError:
+                        continue
+
+                    if abs(abs(float(axis3 @ axis3_dir)) - 1.0) > _DEF_TOL:
+                        continue
+
+                    expected = np.array(
+                        [
+                            origin,
+                            origin + edge1,
+                            origin + edge2,
+                            origin + edge3,
+                            origin + edge1 + edge2,
+                            origin + edge1 + edge3,
+                            origin + edge2 + edge3,
+                            origin + edge1 + edge2 + edge3,
+                        ],
+                        dtype=float,
+                    )
+                    if _match_points_unordered(expected, points):
+                        return _build_bounds_from_corner_edges(
+                            origin,
+                            edge1,
+                            edge2,
+                            edge3,
+                            name=name,
+                            is_preserve_axis_order=False,
+                        )
 
     raise ValueError(
         "The input 8-point geometry does not describe an orthogonal box. "

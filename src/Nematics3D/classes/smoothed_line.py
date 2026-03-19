@@ -310,7 +310,7 @@ class SmoothedLine(HostBase):
             )
             self._helper_fallback_no_smooth("system error")
 
-    def act_calc_tangent(self, x_param, is_return_coord=False):
+    def act_calc_tangent(self, u_percent, is_return_coord=False):
 
         tck = getattr(self, "_entity_tck", None)
         if tck is None:
@@ -319,24 +319,24 @@ class SmoothedLine(HostBase):
                 "Probably the line is not properly initialized or successfully smoothed."
             )
 
-        x_param = as_Number(
-            x_param,
+        u_percent = as_Number(
+            u_percent,
             value_range=(0, 100),
             name="Continuous spline parameter along the curve",
         )
-        x_param /= 100
-        dr_dx = np.asarray(splev(x_param, self._entity_tck, der=1), dtype=float)
+        u_percent /= 100
+        dr_dx = np.asarray(splev(u_percent, self._entity_tck, der=1), dtype=float)
 
         length = float(np.linalg.norm(dr_dx))
         if (not np.isfinite(length)) or length < 1e-9:
             raise ValueError(
-                f"Degenerate spline derivative at {x_param}: ||dr/dx||={length}."
+                f"Degenerate spline derivative at {u_percent}: ||dr/dx||={length}."
             )
 
         t_hat = dr_dx / length
 
         if is_return_coord:
-            coord = np.asarray(splev(x_param, self._entity_tck, der=0), dtype=float)
+            coord = np.asarray(splev(u_percent, self._entity_tck, der=0), dtype=float)
 
         return (t_hat, coord) if is_return_coord else t_hat
 

@@ -62,7 +62,7 @@ class InterpolatePlane(ClassBase):
 
         super().__init__(name=name, name_replace="interpolate plane")
 
-        if grid:
+        if grid is not None:
             grid = grid.act_copy(name=self.name + "-grid")
             if opts is not None or kwargs:
                 grid.act_commit(opts=opts, **kwargs)
