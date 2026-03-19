@@ -13,49 +13,57 @@ from .qt.interact_sphere import InteractSphere
 @dataclass(slots=True, repr=False)
 class OptsSphere(OptsGlyph):
     """
-    Option container controlling how `PlotSphere` objects are rendered.
+    Visual configuration object for `PlotSphere`.
 
-    `OptsSphere` stores the visual settings for sphere glyphs. It does not
-    define where spheres are placed; the sphere centers come from the
-    `coords` passed to `PlotSphere`. Instead, this class controls how those
-    spheres look once they are drawn.
+    `OptsSphere` stores the settings that control how sphere glyphs look
+    after they are created. It does not define the sphere centers; those
+    come from the `coords` passed to `PlotSphere`. Instead, this class
+    controls appearance, coloring, shading, scalar mapping, and sphere
+    meshing details.
 
-    You will usually use `OptsSphere` in one of three ways:
+    Common ways to use this object:
 
-    - create an `OptsSphere(...)` instance and pass it into `PlotSphere`
-    - modify fields on an existing `sphere.opts`
-    - apply one set of settings on an object via `sphere.act_commit(opts=opts_given)`
+    - create `OptsSphere(...)` first and pass it into `PlotSphere`
+    - modify fields on `sphere.opts` after a sphere glyph already exists
+    - apply a prepared settings object with `sphere.act_commit(opts=opts)`
 
-    Many of the most important fields support several input styles. In
-    particular, quantities such as `radius`, `color`, `opacity`, and `scalars`
-    are commonly given as:
+    Most visual fields support the same three input styles:
 
     - one shared value applied to every sphere
-    - an array providing one value per sphere
-    - a function that receives the point coordinates and computes values from
-      them
+    - one value per sphere, provided as an array
+    - a callable resolver that computes values from the source selected by
+      `resolver_source`
 
-    The most commonly adjusted fields are:
+    The most useful fields for day-to-day work are usually:
 
     - `radius`: sphere size
     - `color`: direct RGB coloring
     - `opacity`: transparency
-    - `paint_by`: choose between direct color and scalar-colormap rendering
+    - `paint_by`: choose direct coloring or scalar-colormap rendering
     - `scalars`: numeric values used when `paint_by="scalars"`
+    - `resolver_source`: choose what callable resolvers receive
     - `sides`: sphere smoothness
+
+    `resolver_source` controls the input passed to callable visual resolvers:
+
+    - `"coords"`: the callable receives the raw point coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0
+      to 100 along the glyph ordering
 
     A few useful relationships to keep in mind:
 
-    - `color` and `scalars` are different pipelines; `paint_by` decides which
-      one is used for rendering
+    - `color` and `scalars` belong to different rendering pipelines;
+      `paint_by` decides which one is active
     - `scalars` are numeric data, not RGB colors
+    - `resolver_source` matters only when a visual field is provided as a
+      callable
     - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
-      and `roughness` affect appearance but not sphere geometry
+      and `roughness` change appearance but not geometry
 
     If you want the full field list and their short descriptions, see
     `OptsSphere.__attrs__`.
-    For the shared glyph option model, validation behavior, and lower-level
-    commit/update rules, see the docstrings of `OptsGlyph` and `OptsBase`.
+    For the shared glyph option model and lower-level commit/update rules,
+    see the docstrings of `OptsGlyph` and `OptsBase`.
 
     Examples
     --------
@@ -64,19 +72,27 @@ class OptsSphere(OptsGlyph):
     >>> opts = OptsSphere(radius=0.2, color=(0.9, 0.2, 0.2), opacity=0.8)
     >>> spheres = PlotSphere(coords, opts=opts)
 
-    Set one radius for all spheres:
+    Use one radius for every sphere:
 
     >>> opts = OptsSphere(radius=0.15)
 
-    Set a different radius for each sphere:
+    Use one radius per sphere:
 
     >>> opts = OptsSphere(radius=np.array([0.1, 0.2, 0.3])) # three spheres
 
-    Compute values from the point coordinates:
+    Resolve values from coordinates:
 
     >>> opts = OptsSphere(
+    ...     resolver_source="coords",
     ...     radius=lambda pts: 0.1 + 0.2 * np.linalg.norm(pts, axis=1),
     ...     opacity=lambda pts: np.clip(pts[:, 2], 0.2, 1.0),
+    ... )
+
+    Resolve values from position along the glyph order:
+
+    >>> opts = OptsSphere(
+    ...     resolver_source="u_percent",
+    ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 
     Use scalar coloring:
@@ -95,40 +111,40 @@ class OptsSphere(OptsGlyph):
 
 class PlotSphere(PlotGlyph):
     """
-    Render one sphere at each input coordinate.
+    Render one sphere at each input point.
 
-    `PlotSphere` is a concrete glyph class for visualizing a set of 3D points as
-    spheres. The input `coords` defines the sphere centers, and the visual
-    appearance of those spheres is controlled through `opts`, keyword
-    arguments, or later updates via `act_commit(...)`.
+    `PlotSphere` is the sphere-based concrete glyph class. It takes point
+    coordinates as sphere centers and builds a sphere mesh for each point.
+    This makes it useful whenever your geometry is naturally point-like but
+    should still be shown with finite size rather than as abstract markers.
 
-    Each visual channel is resolved point-by-point. In particular, values such
-    as `radius`, `color`, `opacity`, and `scalars` may be given as a single
-    shared setting for all spheres, as explicit per-point data, or as a
-    function that computes those values from the input point coordinates
-    through the normal glyph option pipeline.
+    Visual appearance is controlled through `opts`, explicit keyword
+    arguments, or later updates with `act_commit(...)`. Most pointwise
+    visual fields such as `radius`, `color`, `opacity`, and `scalars` can be
+    provided as shared constants, per-point arrays, or callable resolvers.
+    Callable resolvers use the source selected by `resolver_source`.
 
     Typical workflow:
 
-    - provide an `N x 3` coordinate array
-    - optionally attach the object to an existing figure or plotter so
-      multiple objects share the same scene, or let `PlotSphere` create a
-      new figure automatically when `figure=None`
-    - optionally bind `bounds` to clip which or which parts of spheres are shown
-    - choose visual settings such as `radius`, `color`, `opacity`, or
-      scalar-based coloring, either as constants, arrays, or coordinate-based
-      functions
-    - update the object later with `act_commit(...)`, direct edits on
-      `sphere.opts`, or by reusing `opts`
+    - provide point coordinates for the sphere centers
+    - optionally attach the glyph to an existing figure or plotter so
+      multiple objects share the same scene
+    - optionally bind `bounds` and choose how clipping should work
+    - set visual properties such as size, color, opacity, scalar coloring,
+      or lighting
+    - update the object later with `act_commit(...)`, edits on `sphere.opts`,
+      or by reusing another prepared `opts` object
 
     Parameters
     ----------
     coords
-        Sphere-center coordinates with shape `(N, 3)`. Each row gives the
-        center of one sphere. A single point given as shape `(3,)` is also
-        accepted and is treated as one sphere center.
+        Sphere-center coordinates with shape `(N, 3)`. Each row gives one
+        sphere center. A single point given as shape `(3,)` is also accepted
+        and treated as one sphere center.
     name
         Optional readable object name.
+    name_replace
+        Fallback name used when `name` is not provided.
     category
         Category label used when the object is registered in a figure.
         The default is `"sphere"`.
@@ -141,20 +157,25 @@ class PlotSphere(PlotGlyph):
     opts
         Optional `OptsSphere` instance holding the visual configuration.
         You can also reuse an existing options object later with
-        `sphere.act_commit(opts=other.opts)` to apply another object's current
-        option settings directly.
-        If both `opts` and explicit option keyword arguments are provided,
-        the explicit keyword arguments are merged in and take precedence.
+        `sphere.act_commit(opts=other.opts)` to apply another object's
+        current option settings directly. If both `opts` and explicit option
+        keyword arguments are provided, the explicit keyword arguments are
+        merged in and take precedence.
     clip_mode
         Controls how bounds clipping is applied.
         - `"center"`: decide whether to keep a sphere from its center point.
           This is the default setting.
         - `"mesh"`: build the sphere geometry first, then clip the resulting
-          mesh against the bounds.
+          mesh against the bounds. Use this when you want the clipped sphere
+          surface itself, for example to show a hemisphere or a 3/4 sphere.
+    is_clip_inside
+        Controls whether clipping keeps the region inside the active bounds
+        (`True`) or outside it (`False`). This is a glyph/host setting, not
+        an `OptsSphere` field.
     bounds
         Optional clipping object forwarded through the underlying `PlotGlyph`
         interface.
-    name_replace, opts_defaults_override, and other advanced keyword arguments
+    opts_defaults_override and other advanced keyword arguments
         These mostly affect default resolution and higher-level host/glyph
         behavior. New users can usually ignore them at first; see the
         docstring of `PlotGlyph` if you want the full forwarding model.
@@ -163,19 +184,29 @@ class PlotSphere(PlotGlyph):
         pipeline. For the full list of supported visual options, see the
         docstring of `OptsSphere` and its base option classes.
 
+    Resolver Behavior
+    -----------------
+    When a visual field is provided as a callable, the callable input is
+    chosen by `resolver_source`:
+
+    - `"coords"`: the callable receives the raw sphere-center coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
+      100 along the glyph ordering
+
     Interactive Behavior
     --------------------
     In an interactive figure window:
 
-    - left double-click adds a numbered marker at the resolved picked location,
-      or removes the nearest existing marker if you double-click near one
-    - right click toggles the silhouette highlight of the picked sphere object
+    - left double-click adds a numbered marker at the resolved picked
+      location, or removes the nearest existing marker if you double-click
+      near one
+    - right click toggles the silhouette highlight of the picked sphere glyph
       and prints the object summary in the figure console
     - right double-click opens the sphere-specific interaction panel
 
     Examples
     --------
-    Create a few spheres from point coordinates:
+    Create spheres from point coordinates:
 
     >>> import numpy as np
     >>> pts = np.array([
@@ -186,7 +217,7 @@ class PlotSphere(PlotGlyph):
     >>> spheres = PlotSphere(
     ...     pts,
     ...     radius=0.2,
-    ...     color=(0.9, 0.2, 0.2), # RGB
+    ...     color=(0.9, 0.2, 0.2),
     ...     opacity=0.8,
     ... )
 
@@ -195,19 +226,27 @@ class PlotSphere(PlotGlyph):
     >>> spheres.act_commit(radius=0.35, color=(0.2, 0.4, 0.9))
     >>> spheres.opts.opacity = 1
 
-    Reuse another opts:
+    Reuse another options object:
 
     >>> spheres.act_commit(opts=other_spheres.opts)
 
-    Compute per-point values from the coordinates:
+    Resolve values from coordinates:
 
     >>> spheres.act_commit(
+    ...     resolver_source="coords",
     ...     radius=lambda pts: 0.1 + 0.2 * np.linalg.norm(pts, axis=1),
     ...     color=lambda pts: np.column_stack([
     ...         np.clip(pts[:, 0], 0.0, 1.0),
     ...         np.clip(pts[:, 1], 0.0, 1.0),
     ...         np.full(len(pts), 0.4),
     ...     ]),
+    ... )
+
+    Resolve values from point-order percentage:
+
+    >>> spheres.act_commit(
+    ...     resolver_source="u_percent",
+    ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 
     Use scalar coloring instead of a fixed RGB color:

@@ -6,7 +6,7 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import UNSET, Unset, as_bool, as_Number
+from Nematics3D.datatypes import UNSET, Unset, as_bool
 from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 from ..bounds import BoundsData
@@ -27,52 +27,60 @@ from Nematics3D.classes.host_base import HostBase
 @dataclass(slots=True, repr=False)
 class OptsTube(OptsGlyph):
     """
-    Option container controlling how `PlotTube` objects are rendered.
+    Visual configuration object for `PlotTube`.
 
-    `OptsTube` stores the visual settings for tube glyphs. It does not
-    define the centerline coordinates themselves; those come from the
-    `coords` passed to `PlotTube`. Instead, this class controls how the
-    resulting tube geometry is drawn.
+    `OptsTube` stores the settings that control how tube glyphs look after
+    they are created. It does not define the centerline coordinates; those
+    come from the `coords` passed to `PlotTube`. Instead, this class
+    controls appearance, coloring, shading, scalar mapping, and tube
+    meshing details.
 
-    You will usually use `OptsTube` in one of three ways:
+    Common ways to use this object:
 
-    - create an `OptsTube(...)` instance and pass it into `PlotTube`
-    - modify fields on an existing `tube.opts`
-    - apply one set of settings on an object via `tube.act_commit(opts=opts_given)`
+    - create `OptsTube(...)` first and pass it into `PlotTube`
+    - modify fields on `tube.opts` after a tube glyph already exists
+    - apply a prepared settings object with `tube.act_commit(opts=opts)`
 
-    Many of the most important fields support several input styles. In
-    particular, quantities such as `radius`, `color`, `opacity`, and `scalars`
-    are commonly given as:
+    Most visual fields support the same three input styles:
 
-    - one shared value applied to every tube point
-    - an array providing one value per point along the centerline
-    - a function that receives the point coordinates and computes values from
-      them
+    - one shared value applied to the whole tube
+    - one value per point along the centerline, provided as an array
+    - a callable resolver that computes values from the source selected by
+      `resolver_source`
 
-    The most commonly adjusted fields are:
+    The most useful fields for day-to-day work are usually:
 
     - `radius`: tube thickness along the path
     - `color`: direct RGB coloring
     - `opacity`: transparency
-    - `paint_by`: choose between direct color and scalar-colormap rendering
+    - `paint_by`: choose direct coloring or scalar-colormap rendering
     - `scalars`: numeric values used when `paint_by="scalars"`
+    - `resolver_source`: choose what callable resolvers receive
     - `sides`: roundness of the tube cross-section
     - `is_capping`: whether the tube ends are closed
-    - `smooth_iter`: smoothing applied to the centerline before meshing
+
+    `resolver_source` controls the input passed to callable visual resolvers:
+
+    - `"coords"`: the callable receives the raw centerline point coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0
+      to 100 along the glyph ordering. For tubes this follows the raw point
+      order, not true arc length, and does not restart for each `line_index`
+      segment.
 
     A few useful relationships to keep in mind:
 
-    - `color` and `scalars` are different pipelines; `paint_by` decides which
-      one is used for rendering
+    - `color` and `scalars` belong to different rendering pipelines;
+      `paint_by` decides which one is active
     - `scalars` are numeric data, not RGB colors
-    - `smooth_iter` changes the plotted path geometry, while lighting fields
-      such as `ambient`, `diffuse`, `specular`, `metallic`, and `roughness`
-      only affect appearance
+    - `resolver_source` matters only when a visual field is provided as a
+      callable
+    - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
+      and `roughness` change appearance but not topology
 
     If you want the full field list and their short descriptions, see
     `OptsTube.__attrs__`.
-    For the shared glyph option model, validation behavior, and lower-level
-    commit/update rules, see the docstrings of `OptsGlyph` and `OptsBase`.
+    For the shared glyph option model and lower-level commit/update rules,
+    see the docstrings of `OptsGlyph` and `OptsBase`.
 
     Examples
     --------
@@ -81,19 +89,27 @@ class OptsTube(OptsGlyph):
     >>> opts = OptsTube(radius=0.2, color=(0.9, 0.2, 0.2), opacity=0.8)
     >>> tube = PlotTube(coords, opts=opts)
 
-    Set one radius for the whole tube:
+    Use one radius for the whole tube:
 
     >>> opts = OptsTube(radius=0.15)
 
-    Set a different radius along the centerline:
+    Use one radius per centerline point:
 
     >>> opts = OptsTube(radius=np.array([0.1, 0.2, 0.3, 0.2])) # four points
 
-    Compute values from the point coordinates:
+    Resolve values from coordinates:
 
     >>> opts = OptsTube(
+    ...     resolver_source="coords",
     ...     radius=lambda pts: 0.05 + 0.1 * np.abs(pts[:, 2]),
     ...     opacity=lambda pts: np.clip(1.0 - pts[:, 0], 0.2, 1.0),
+    ... )
+
+    Resolve values from position along the glyph order:
+
+    >>> opts = OptsTube(
+    ...     resolver_source="u_percent",
+    ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
     Use scalar coloring:
@@ -107,27 +123,21 @@ class OptsTube(OptsGlyph):
 
     # --- Geometry & Topology (Tube-specific) ---
     is_capping: bool | Unset = UNSET
-    smooth_iter: int | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsGlyph.__attrs__),
         "is_capping": "Whether to close the ends of the tube.",
-        "smooth_iter": "Path smoothing iterations to remove jagged edges.",
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         **dict(OptsGlyph._validators),
         "is_capping": lambda v, d: as_bool(v, name=d),
-        "smooth_iter": lambda v, d: as_Number(
-            v, name=d, is_int=True, value_range=(0, 1000), bounded=True
-        ),
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
             **dict(OptsGlyph._DEFAULTS_FROZEN),
             "is_capping": True,
-            "smooth_iter": 0,
         }
     )
 
@@ -140,43 +150,43 @@ class OptsTube(OptsGlyph):
 # polyline-specific pick semantics when overriding geometry helpers.
 class PlotTube(PlotGlyph):
     """
-    Render one or more connected centerlines as tube geometry.
+    Render one or more centerlines as tube geometry.
 
-    `PlotTube` is a concrete glyph class for visualizing polyline data as
-    tubes. The input `coords` defines the centerline points, and the visual
-    appearance of the resulting tube geometry is controlled through `opts`,
-    keyword arguments, or later updates via `act_commit(...)`.
+    `PlotTube` is the tube-based concrete glyph class. It takes point
+    coordinates as centerline samples and builds tube geometry around those
+    paths. This makes it useful whenever your geometry is naturally curve-
+    like and should be shown with finite thickness rather than as a bare
+    polyline.
 
-    Each visual channel is resolved point-by-point along the centerline. In
-    particular, values such as `radius`, `color`, `opacity`, and `scalars` may
-    be given as a single shared setting, as explicit per-point data, or as a
-    function that computes those values from the input point coordinates
-    through the normal glyph option pipeline.
+    Visual appearance is controlled through `opts`, explicit keyword
+    arguments, or later updates with `act_commit(...)`. Most pointwise
+    visual fields such as `radius`, `color`, `opacity`, and `scalars` can be
+    provided as shared constants, per-point arrays, or callable resolvers.
+    Callable resolvers use the source selected by `resolver_source`.
 
     Typical workflow:
 
-    - provide an `N x 3` coordinate array describing the centerline points
-    - optionally provide `line_index` to split the points into multiple
+    - provide centerline coordinates for one tube path
+    - optionally provide `line_index` if one array should define multiple
       disconnected tube paths
-    - optionally attach the object to an existing figure or plotter so
-      multiple objects share the same scene, or let `PlotTube` create a new
-      figure automatically when `figure=None`
-    - optionally bind `bounds` to clip which paths or which parts of paths are
-      shown
-    - choose visual settings such as `radius`, `color`, `opacity`, or
-      scalar-based coloring, either as constants, arrays, or coordinate-based
-      functions
-    - update the object later with `act_commit(...)`, direct edits on
-      `tube.opts`, or by reusing `opts`
+    - optionally attach the glyph to an existing figure or plotter so
+      multiple objects share the same scene
+    - optionally bind `bounds` and choose how clipping should work
+    - set visual properties such as thickness, color, opacity, scalar
+      coloring, or lighting
+    - update the object later with `act_commit(...)`, edits on `tube.opts`,
+      or by reusing another prepared `opts` object
 
     Parameters
     ----------
     coords
-        Centerline coordinates with shape `(N, 3)`. Each row gives one point
-        on the tube path. A single point given as shape `(3,)` is also
-        accepted, but tube geometry needs at least two points to be drawn.
+        Centerline coordinates with shape `(N, 3)`. Each row gives one
+        sampled point on the path. A single point given as shape `(3,)` is
+        also accepted, but visible tube geometry needs at least two points.
     name
         Optional readable object name.
+    name_replace
+        Fallback name used when `name` is not provided.
     category
         Category label used when the object is registered in a figure.
         The default is `"tube"`.
@@ -190,25 +200,30 @@ class PlotTube(PlotGlyph):
         Optional `OptsTube` instance holding the visual configuration.
         You can also reuse an existing options object later with
         `tube.act_commit(opts=other.opts)` to apply another object's current
-        option settings directly.
-        If both `opts` and explicit option keyword arguments are provided,
-        the explicit keyword arguments are merged in and take precedence.
+        option settings directly. If both `opts` and explicit option keyword
+        arguments are provided, the explicit keyword arguments are merged in
+        and take precedence.
     line_index
-        Optional 1D integer array with length `N` that groups centerline points
-        into separate paths. Consecutive runs with the same index are treated
-        as one polyline. Use this when one `PlotTube` should contain multiple
-        disconnected tube segments.
+        Optional 1D integer array with length `N` that groups centerline
+        points into separate paths. Consecutive runs with the same index are
+        treated as one polyline. Use this when one `PlotTube` should contain
+        multiple disconnected tube segments.
+    clip_mode
+        Controls how bounds clipping is applied.
+        - `"center"`: decide whether to keep a tube from its centerline
+          points. Surviving points are then regrouped into tube segments.
+          This is the default setting.
+        - `"mesh"`: build the tube geometry first, then clip the resulting
+          mesh against the bounds. Use this when you want the clipped tube
+          surface itself, for example to show a tube cut by a plane or box.
+    is_clip_inside
+        Controls whether clipping keeps the region inside the active bounds
+        (`True`) or outside it (`False`). This is a glyph/host setting, not
+        an `OptsTube` field.
     bounds
         Optional clipping object forwarded through the underlying `PlotGlyph`
         interface.
-    clip_mode
-        Controls how bounds clipping is applied.
-        - `"center"`: decide whether to keep tube points from their centerline
-          positions, then rebuild tube segments from the surviving points.
-          This is the default setting.
-        - `"mesh"`: build the tube geometry first, then clip the resulting
-          mesh against the bounds.
-    name_replace, opts_defaults_override, and other advanced keyword arguments
+    opts_defaults_override and other advanced keyword arguments
         These mostly affect default resolution and higher-level host/glyph
         behavior. New users can usually ignore them at first; see the
         docstring of `PlotGlyph` if you want the full forwarding model.
@@ -217,6 +232,17 @@ class PlotTube(PlotGlyph):
         pipeline. For the full list of supported visual options, see the
         docstring of `OptsTube` and its base option classes.
 
+    Resolver Behavior
+    -----------------
+    When a visual field is provided as a callable, the callable input is
+    chosen by `resolver_source`:
+
+    - `"coords"`: the callable receives the raw centerline coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
+      100 along the glyph ordering. For `PlotTube`, this is based on the raw
+      centerline point order rather than true arc length, and it does not
+      restart separately for each disconnected `line_index` segment
+
     Interactive Behavior
     --------------------
     In an interactive figure window:
@@ -224,7 +250,7 @@ class PlotTube(PlotGlyph):
     - left double-click adds a numbered marker at the resolved picked
       location on the tube, or removes the nearest existing marker if you
       double-click near one
-    - right click toggles the silhouette highlight of the picked tube object
+    - right click toggles the silhouette highlight of the picked tube glyph
       and prints the object summary in the figure console
     - right double-click opens the tube-specific interaction panel
 
@@ -255,19 +281,27 @@ class PlotTube(PlotGlyph):
     >>> tube.act_commit(radius=0.12, color=(0.2, 0.4, 0.9))
     >>> tube.opts.opacity = 1
 
-    Reuse another opts:
+    Reuse another options object:
 
     >>> tube.act_commit(opts=other_tube.opts)
 
-    Compute per-point values from the coordinates:
+    Resolve values from coordinates:
 
     >>> tube.act_commit(
+    ...     resolver_source="coords",
     ...     radius=lambda pts: 0.05 + 0.05 * np.abs(pts[:, 2]),
     ...     color=lambda pts: np.column_stack([
     ...         np.clip(pts[:, 0], 0.0, 1.0),
     ...         np.clip(pts[:, 1], 0.0, 1.0),
     ...         np.full(len(pts), 0.4),
     ...     ]),
+    ... )
+
+    Resolve values from point-order percentage:
+
+    >>> tube.act_commit(
+    ...     resolver_source="u_percent",
+    ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
     Use scalar coloring instead of a fixed RGB color:
@@ -517,9 +551,6 @@ class PlotTube(PlotGlyph):
             else:
                 lines = np.concatenate(chunks).astype(np.int64)
                 poly = pv.PolyData(points, lines=lines)
-
-        if self.opts.smooth_iter > 0 and poly.n_points > 1:
-            poly = poly.smooth(n_iter=self.opts.smooth_iter)
 
         object.__setattr__(self, "_calc_poly", poly)
         self._helper_set_poly(poly)

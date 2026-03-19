@@ -175,11 +175,34 @@ class InteractGlyphBase(PanelBase):
     def _build_extra_group(self):
         pass
 
+    def _helper_get_first_used_point_radius(self):
+        if not hasattr(self.host, "_calc_radius"):
+            return None, None
+
+        radius_all = np.asarray(self.host._calc_radius, dtype=float)
+        if radius_all.size == 0:
+            return None, None
+
+        keep_index = getattr(self.host, "_calc_keep_index", None)
+        if keep_index is not None:
+            keep_index = np.asarray(keep_index, dtype=int)
+            if keep_index.size == 0:
+                return None, None
+            source_index = int(keep_index[0])
+            return float(radius_all[source_index]), source_index
+
+        return float(radius_all[0]), 0
+
     def _update_radius_label(self):
-        if hasattr(self, "lbl_radius") and hasattr(self.host, "_calc_radius"):
-            self.lbl_radius.setText(
-                f"The first radius is {self.host._calc_radius[0]:.2f}"
-            )
+        if not hasattr(self, "lbl_radius"):
+            return
+
+        radius, source_index = self._helper_get_first_used_point_radius()
+        if radius is None:
+            self.lbl_radius.setText("No currently used point is available.")
+            return
+
+        self.lbl_radius.setText(f"Radius at the red helper marker: {radius:.2f}")
 
     def _set_host_silhouette_enabled(self, is_enabled):
         if hasattr(self.host, "_state_is_silhouette"):

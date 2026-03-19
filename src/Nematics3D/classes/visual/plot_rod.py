@@ -19,6 +19,103 @@ LengthMode = float | Callable | Sequence
 
 @dataclass(slots=True, repr=False)
 class OptsRod(OptsGlyph):
+    """
+    Visual configuration object for `PlotRod`.
+
+    `OptsRod` stores the settings that control how rod glyphs look after
+    they are created. It does not define rod centers or orientations;
+    those come from the `coords` and `orient` passed to `PlotRod`.
+    Instead, this class controls appearance, coloring, shading, scalar
+    mapping, thickness, rod length, and meshing details.
+
+    Common ways to use this object:
+
+    - create `OptsRod(...)` first and pass it into `PlotRod`
+    - modify fields on `rod.opts` after a rod glyph already exists
+    - apply a prepared settings object with `rod.act_commit(opts=opts)`
+
+    Most visual fields support the same three input styles:
+
+    - one shared value applied to every rod
+    - one value per rod, provided as an array
+    - a callable resolver that computes values from the source selected by
+      `resolver_source`
+
+    The most useful fields for day-to-day work are usually:
+
+    - `length`: rod length
+    - `radius`: rod thickness
+    - `color`: direct RGB coloring
+    - `opacity`: transparency
+    - `paint_by`: choose direct coloring or scalar-colormap rendering
+    - `scalars`: numeric values used when `paint_by="scalars"`
+    - `resolver_source`: choose what callable resolvers receive
+    - `sides`: roundness of the rod cross-section
+
+    `resolver_source` controls the input passed to callable visual resolvers:
+
+    - `"coords"`: the callable receives the raw rod-center coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0
+      to 100 along the glyph ordering
+    - `"orient"`: the callable receives the raw orientation vectors. This is
+      the default setting for rods.
+
+    A few useful relationships to keep in mind:
+
+    - `color` and `scalars` belong to different rendering pipelines;
+      `paint_by` decides which one is active
+    - `scalars` are numeric data, not RGB colors
+    - `resolver_source` matters only when a visual field is provided as a
+      callable
+    - `length` and `orient` together determine the rod endpoints before the
+      rod is meshed
+    - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
+      and `roughness` change appearance but not geometry
+
+    If you want the full field list and their short descriptions, see
+    `OptsRod.__attrs__`.
+    For the shared glyph option model and lower-level commit/update rules,
+    see the docstrings of `OptsGlyph` and `OptsBase`.
+
+    Examples
+    --------
+    Create reusable rod options:
+
+    >>> opts = OptsRod(length=3.0, radius=0.3, color=(0.9, 0.2, 0.2))
+    >>> rods = PlotRod(coords, orient, opts=opts)
+
+    Use one length for every rod:
+
+    >>> opts = OptsRod(length=2.0)
+
+    Use one length per rod:
+
+    >>> opts = OptsRod(length=np.array([1.0, 2.0, 3.0])) # three rods
+
+    Resolve values from coordinates:
+
+    >>> opts = OptsRod(
+    ...     resolver_source="coords",
+    ...     length=lambda pts: 1.0 + np.abs(pts[:, 2]),
+    ... )
+
+    Resolve values from orientation vectors:
+
+    >>> opts = OptsRod(
+    ...     resolver_source="orient",
+    ...     color=lambda n: np.abs(n),
+    ...     length=lambda n: 1.0 + 2.0 * np.abs(n[:, 2]),
+    ... )
+
+    Use scalar coloring:
+
+    >>> opts = OptsRod(
+    ...     paint_by="scalars",
+    ...     scalars=lambda n: n[:, 2],
+    ...     resolver_source="orient",
+    ...     scalars_cmap="viridis",
+    ... )
+    """
 
     # --- Geometry & Topology (Tube-specific) ---
     length: LengthMode | Unset = UNSET
@@ -55,12 +152,174 @@ class OptsRod(OptsGlyph):
 # access because several resolved arrays are intentionally repeated per rod.
 class PlotRod(PlotGlyph):
     """
-    PlotRod visualizes oriented rods centered at the provided coordinates.
+    Render one oriented rod at each input point.
 
-    Normal users create rods from positions plus orientation vectors, then tune
-    appearance and geometry through `rod.opts` or `rod.act_commit(...)`.
-    Use `rod.show_modifiable_attrs()` to inspect configurable settings and
-    `repr(rod)` for a compact summary of the plotted object.
+    `PlotRod` is the rod-based concrete glyph class. It takes point
+    coordinates as rod centers and orientation vectors that define the rod
+    directions. Each rod is then built as an oriented line segment with
+    finite thickness.
+
+    This makes it useful whenever your geometry is naturally point-like but
+    also has a meaningful local direction, such as directors, normals, or
+    vector samples.
+
+    Visual appearance is controlled through `opts`, explicit keyword
+    arguments, or later updates with `act_commit(...)`. Most pointwise
+    visual fields such as `length`, `radius`, `color`, `opacity`, and
+    `scalars` can be provided as shared constants, per-rod arrays, or
+    callable resolvers. Callable resolvers use the source selected by
+    `resolver_source`.
+
+    Typical workflow:
+
+    - provide rod-center coordinates
+    - provide one orientation vector per rod
+    - optionally attach the glyph to an existing figure or plotter so
+      multiple objects share the same scene
+    - optionally bind `bounds` and choose how clipping should work
+    - set visual properties such as length, thickness, color, opacity,
+      scalar coloring, or lighting
+    - update the object later with `act_commit(...)`, edits on `rod.opts`,
+      or by reusing another prepared `opts` object
+
+    Parameters
+    ----------
+    coords
+        Rod-center coordinates with shape `(N, 3)`. Each row gives one rod
+        center. A single point given as shape `(3,)` is also accepted and
+        treated as one rod center.
+    orient
+        Rod orientation vectors with shape `(N, 3)`. There must be exactly
+        one orientation vector for each center point.
+    name
+        Optional readable object name.
+    name_replace
+        Fallback name used when `name` is not provided.
+    category
+        Category label used when the object is registered in a figure.
+        The default is `"rods"`.
+    figure
+        Optional figure/container for this glyph. You may pass an existing
+        `PlotFigure`, a `pyvistaqt.BackgroundPlotter`, or a `pyvista.Plotter`.
+        Non-`PlotFigure` inputs are wrapped into a `PlotFigure` internally so
+        this glyph can join an existing scene without extra setup. If `None`,
+        a new figure is created automatically.
+    opts
+        Optional `OptsRod` instance holding the visual configuration. You can
+        also reuse an existing options object later with
+        `rod.act_commit(opts=other.opts)` to apply another object's current
+        option settings directly. If both `opts` and explicit option keyword
+        arguments are provided, the explicit keyword arguments are merged in
+        and take precedence.
+    clip_mode
+        Controls how bounds clipping is applied.
+        - `"center"`: decide whether to keep a rod from its center point.
+          This is the default setting.
+        - `"mesh"`: build the rod geometry first, then clip the resulting
+          mesh against the bounds. Use this when you want the clipped rod
+          surface itself, for example to show rods cut by a plane or box.
+    is_clip_inside
+        Controls whether clipping keeps the region inside the active bounds
+        (`True`) or outside it (`False`). This is a glyph/host setting, not
+        an `OptsRod` field.
+    bounds
+        Optional clipping object forwarded through the underlying `PlotGlyph`
+        interface.
+    opts_defaults_override and other advanced keyword arguments
+        These mostly affect default resolution and higher-level host/glyph
+        behavior. New users can usually ignore them at first; see the
+        docstring of `PlotGlyph` if you want the full forwarding model.
+    **kwargs
+        Additional option values forwarded into the glyph configuration
+        pipeline. For the full list of supported visual options, see the
+        docstring of `OptsRod` and its base option classes.
+
+    Resolver Behavior
+    -----------------
+    When a visual field is provided as a callable, the callable input is
+    chosen by `resolver_source`:
+
+    - `"coords"`: the callable receives the raw rod-center coordinates
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
+      100 along the glyph ordering
+    - `"orient"`: the callable receives the raw orientation vectors. This is
+      the default resolver source for rods.
+
+    Interactive Behavior
+    --------------------
+    In an interactive figure window:
+
+    - left double-click adds a numbered marker at the resolved picked
+      location, or removes the nearest existing marker if you double-click
+      near one
+    - right click toggles the silhouette highlight of the picked rod glyph
+      and prints the object summary in the figure console
+    - right double-click opens the rod-specific interaction panel
+
+    Examples
+    --------
+    Create rods from centers and orientations:
+
+    >>> import numpy as np
+    >>> pts = np.array([
+    ...     [0.0, 0.0, 0.0],
+    ...     [1.0, 0.0, 0.0],
+    ...     [0.0, 1.0, 0.0],
+    ... ])
+    >>> orient = np.array([
+    ...     [1.0, 0.0, 0.0],
+    ...     [0.0, 1.0, 0.0],
+    ...     [0.0, 0.0, 1.0],
+    ... ])
+    >>> rods = PlotRod(
+    ...     pts,
+    ...     orient,
+    ...     length=2.0,
+    ...     radius=0.2,
+    ...     color=(0.9, 0.2, 0.2),
+    ... )
+
+    Update the appearance after creation:
+
+    >>> rods.act_commit(length=3.0, color=(0.2, 0.4, 0.9))
+    >>> rods.opts.opacity = 1
+
+    Reuse another options object:
+
+    >>> rods.act_commit(opts=other_rods.opts)
+
+    Resolve values from coordinates:
+
+    >>> rods.act_commit(
+    ...     resolver_source="coords",
+    ...     length=lambda pts: 1.0 + np.abs(pts[:, 2]),
+    ... )
+
+    Resolve values from orientations:
+
+    >>> rods.act_commit(
+    ...     resolver_source="orient",
+    ...     color=lambda n: np.abs(n),
+    ...     length=lambda n: 1.0 + 2.0 * np.abs(n[:, 2]),
+    ... )
+
+    Use scalar coloring instead of a fixed RGB color:
+
+    >>> rods.act_commit(
+    ...     paint_by="scalars",
+    ...     resolver_source="orient",
+    ...     scalars=lambda n: n[:, 2],
+    ...     scalars_cmap="viridis",
+    ... )
+
+    See Also
+    --------
+    OptsRod
+        Rod-specific options.
+    PlotGlyph
+        Base glyph pipeline shared by drawable plot objects.
+    PlotFigure
+        Figure container that manages plotted objects.
     """
 
     __attrs__ = {

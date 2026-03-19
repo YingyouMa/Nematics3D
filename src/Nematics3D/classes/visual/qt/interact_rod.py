@@ -41,11 +41,33 @@ class InteractRod(InteractGlyphBase):
         layout.addWidget(self.lbl_length)
         self._update_length_label()
 
+    def _helper_get_first_used_point_length(self):
+        if not hasattr(self.host, "_calc_length"):
+            return None
+
+        length_all = np.asarray(self.host._calc_length, dtype=float)
+        if length_all.size == 0:
+            return None
+
+        keep_index = getattr(self.host, "_calc_keep_index", None)
+        if keep_index is not None:
+            keep_index = np.asarray(keep_index, dtype=int)
+            if keep_index.size == 0:
+                return None
+            return float(length_all[int(keep_index[0])])
+
+        return float(length_all[0])
+
     def _update_length_label(self):
-        if hasattr(self, "lbl_length") and hasattr(self.host, "_calc_length"):
-            self.lbl_length.setText(
-                f"The first length is {self.host._calc_length[0]:.2f}"
-            )
+        if not hasattr(self, "lbl_length"):
+            return
+
+        length = self._helper_get_first_used_point_length()
+        if length is None:
+            self.lbl_length.setText("No currently used point is available.")
+            return
+
+        self.lbl_length.setText(f"Length at the red helper marker: {length:.2f}")
 
     def _extra_commit(self, params):
         current_length = self.host._opts_backup[self.str_now_live]["length"]

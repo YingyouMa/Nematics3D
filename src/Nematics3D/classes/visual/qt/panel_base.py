@@ -604,6 +604,10 @@ class PanelBase(QtWidgets.QWidget):
                 "In the command line, the controlled object is also available as "
                 f"the current figure's interacts[{self.name!r}].host."
             )
+            console.println(
+                "The red helper marker shows the first currently used point of "
+                "this object."
+            )
 
     def _sync_from_host_slider(self, attr: str, value: float):
         s = self.sliders[attr]

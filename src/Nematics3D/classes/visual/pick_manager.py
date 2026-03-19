@@ -561,7 +561,7 @@ class PickManager:
         pack["actor"].GetProperty().SetColor(*self.HELPER_MARKER_COLOR)
         pack["actor"].SetVisibility(True)
         text = pack["text_actor"]
-        text.GetTextProperty().SetColor(*self.HELPER_MARKER_COLOR)
+        text.GetTextProperty().SetColor(0.0, 0.0, 0.0)
         text.SetInput(str(pack["id"]))
         self._helper_update_one_marker_label_position(pack)
         text.SetVisibility(True)
