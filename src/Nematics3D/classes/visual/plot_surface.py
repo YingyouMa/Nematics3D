@@ -139,7 +139,7 @@ class PlotSurface(PlotGlyph):
         mask_inside = np.all(
             (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
         )
-        mask_keep = mask_inside if self.opts.is_clip_inside else ~mask_inside
+        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
         object.__setattr__(self, "_calc_keep_index", keep_index)
         return self.raw_coords[keep_index]

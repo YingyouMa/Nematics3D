@@ -26,7 +26,6 @@ from .plot_figure import FigureData, PlotFigure, as_PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import find_nearest_point, fmt_value
 
-#!!! resolver source
 #!!! colorbar name args manager
 #!!! is_reset_camera commit
 
@@ -61,6 +60,7 @@ class OptsGlyph(OptsBase):
     opacity:                    OpacityMode | Unset                 = UNSET
     scalars:                    ScalarsMode | Unset                 = UNSET
     radius:                     RadiusMode | Unset                  = UNSET
+    resolver_source:             str | Unset                         = UNSET
 
     # --- Scalars (used if color == "scalars") ---
     scalars_cmap:               str | Unset                         = UNSET
@@ -70,7 +70,6 @@ class OptsGlyph(OptsBase):
 
     # --- Geometry ---
     sides:                      int | Unset                         = UNSET
-    is_clip_inside:             bool | Unset                        = UNSET
     __attrs__: ClassVar[Mapping[str, str]] = {
         **(OptsBase.__attrs__),
         
@@ -117,6 +116,10 @@ class OptsGlyph(OptsBase):
             "2) Function (mapping function), "
             "3) radius data set manually."
         ),
+        "resolver_source": (
+            "Defines the input passed to callable visual resolvers. "
+            "Use 'coords' for raw coordinates or 'u_percent' for the point-index percentage along the glyph."
+        ),
         
         # === Scalars Control (Needs color_rule='scalars') ===
         "scalars_cmap":         "Colormap name (e.g., 'viridis') used if color is set to scalar.",
@@ -126,7 +129,6 @@ class OptsGlyph(OptsBase):
         
         # --- Geometry ---
         "sides":                "Number of facets around the glyph (higher = smoother).",
-        "is_clip_inside":       "Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -143,12 +145,12 @@ class OptsGlyph(OptsBase):
         "metallic":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
+        "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "u_percent")),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
         "scalars_clim":         lambda v, d: (v if v is None else as_Vect(v, name=d, dim=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
         "scalar_bar_title":     lambda v, d: as_str(v, name=d),
         "sides":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, 128), bounded=True),
-        "is_clip_inside":       lambda v, d: as_bool(v, name=d),
         }
 
 
@@ -170,12 +172,12 @@ class OptsGlyph(OptsBase):
         "opacity":              1.0,
         "scalars":              lambda x: np.arange(len(x)),
         "radius":               0.5,
+        "resolver_source":      "coords",
         "scalars_cmap":         "viridis",
         "scalars_clim":         None,
         "is_scalar_bar":        True,
         "scalar_bar_title":     "scalar",
         "sides":                12,
-        "is_clip_inside":       True,
     })
 
     _actor_attr: ClassVar[Mapping[str, str]] = {
@@ -240,7 +242,8 @@ class PlotGlyph(HostBase):
         **(HostBase.__attrs__),
         "raw_category":                 "The category of the glyph, used in the classfication of PlotFigure",
         "raw_coords":                   "The N x 3 input coordinates of each glyph",
-        "state_clip_mode":             "Clip strategy for bounds application. 'mesh' clips the built mesh while 'center' clips the center representation before meshing.",
+        "state_clip_mode":               "Clip strategy for bounds application. 'mesh' clips the built mesh while 'center' clips the center representation before meshing.",
+        "state_is_clip_inside":          "Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
         "_calc_coords":                "The effective coordinates used for the current glyph build after clip-mode preprocessing.",
         "_calc_poly":                   "The generated PyVista PolyData",
         "_calc_color":                  "The resolved per-point RGB color array of the glyph.",
@@ -250,7 +253,6 @@ class PlotGlyph(HostBase):
         "_entity":                      "The PyVista Actor corresponding to this object in the plotter.",
         "_entity_silhouette":           "The PyVista Actor as the silhouette of this object to highlight.",
         "_impl_name_pv":                "The unique identifier of this glyph stored in the PyVista plotter.",
-        "_impl_resolver_source":        "Field used to drive visual variations (e.g. color, opacity)",
         "_impl_interact_func":          "The function to trigger control window when the instance is double right-clicked.",
         "_state_is_silhouette":         "Whether silhouette actors should be rebuilt during glyph updates.",
         "_state_is_empty":              "Whether the glyph currently has no drawable geometry and should skip render-side updates.",
@@ -282,11 +284,12 @@ class PlotGlyph(HostBase):
         **(HostBase._impl_validators),
         "coords":       lambda v, d: as_points(v, name=d),
         "category":     lambda v, d: as_str(v, name=d),
-        "state_clip_mode": lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
+        "state_clip_mode":       lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
+        "state_is_clip_inside":  lambda v, d: as_bool(v, name=d),
         }
     
     _impl_attrs_reapply_opts_after_raw = (
-        HostBase._impl_attrs_reapply_opts_after_raw | {"coords", "state_clip_mode"}
+        HostBase._impl_attrs_reapply_opts_after_raw | {"coords", "state_clip_mode", "state_is_clip_inside"}
     )
     # fmt: on
 
@@ -308,6 +311,7 @@ class PlotGlyph(HostBase):
         figure: FigureData | None = None,
         bounds: BoundsData | None = None,
         clip_mode: str = "center",
+        is_clip_inside: bool = True,
         is_subscribe_bounds: bool = True,
         is_passive_bounds_sync: bool = False,
         opts_defaults_override: Mapping[str, Any] | None = None,
@@ -325,6 +329,11 @@ class PlotGlyph(HostBase):
             self.show_attr_desc("state_clip_mode"),
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
+        is_clip_inside = self.__class__._impl_validators["state_is_clip_inside"](
+            is_clip_inside,
+            self.show_attr_desc("state_is_clip_inside"),
+        )
+        object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "_calc_coords", coords.copy())
         category = self.__class__._impl_validators["category"](
             category,
@@ -336,7 +345,6 @@ class PlotGlyph(HostBase):
             name=self.show_attr_desc("raw_name"),
             replace=name_replace,
         )
-        object.__setattr__(self, "_impl_resolver_source", "raw_coords")
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_empty", False)
@@ -457,7 +465,7 @@ class PlotGlyph(HostBase):
             return mesh
         return mesh.clip_surface(
             bounds.clip_geometry,
-            invert=self.opts.is_clip_inside,
+            invert=self.state_is_clip_inside,
         )
 
     def _helper_bound_coords(self):
@@ -469,6 +477,19 @@ class PlotGlyph(HostBase):
     # Resolver function: to resolve point-wise properties (color, opacity, etc) for each inidividual glyph
     # ----------------------------------------------------------------------------------------------------
 
+    def _helper_get_resolver_source(self):
+        source_name = as_str(
+            self.opts.resolver_source,
+            name="glyph resolver source",
+            pool=("coords", "u_percent"),
+        )
+        if source_name == "coords":
+            return self.raw_coords
+        n_points = len(self.raw_coords)
+        if n_points == 0:
+            return np.empty((0,), dtype=np.float32)
+        return np.arange(n_points, dtype=np.float32) / float(n_points) * 100.0
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(
         self, attr_name, attr_input, default_val, is_recover=False, logger=None
@@ -479,7 +500,7 @@ class PlotGlyph(HostBase):
             if attr_name == "color"
             else (len(self.raw_coords),)
         )
-        source = getattr(self, self._impl_resolver_source)
+        source = self._helper_get_resolver_source()
 
         try:
             if attr_input is None:
@@ -787,10 +808,16 @@ class PlotGlyph(HostBase):
         else:
             object.__setattr__(self.opts, "paint_by", paint_method)
 
-        is_needs_remesh = is_reapply_opts
+        resolver_source = kwargs.pop("resolver_source", None)
+        is_reresolve = is_reapply_opts
+        if resolver_source is not None:
+            object.__setattr__(self.opts, "resolver_source", resolver_source)
+            is_reresolve = True
+
+        is_needs_remesh = is_reresolve
         for attr in self._pending_resolution_attrs:
             if attr not in kwargs:
-                if is_reapply_opts:
+                if is_reresolve:
                     self._helper_resolver_spec(attr)
             else:
                 self._helper_resolver_spec(attr, attr_value=kwargs.pop(attr))
@@ -827,7 +854,6 @@ class PlotGlyph(HostBase):
 
         for key, value in kwargs.items():
             try:
-
                 attr_path_actor = self.opts._actor_attr.get(key, None)
                 if attr_path_actor and getattr(self, "_entity", None) is not None:
                     parts = attr_path_actor.split(".")

@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
@@ -31,6 +31,7 @@ from ..general import pop_exclusive, find_plane_normal, is_given_str
 from .class_base import ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
+from .Q_plane import QPlanePolar
 from .registry_base import RegistryBase
 from .visual.qt.interact_disclination_line import InteractDisclinationLine
 
@@ -532,6 +533,45 @@ class DisclinationLineSmooth(SmoothedLine):
     def act_cross_section(self, x_param, **kwargs):
         plane = DefectSectionGrid(self, u_percent=x_param, **kwargs)
         return plane
+
+    def act_calc_omega(
+        self,
+        u_percent,
+        opts_grid: OptsPlaneGridPolar | None = None,
+        opts_grid_defaults_override: Mapping[str, Any] | None = None,
+        **kwargs,
+    ):
+        q_host = getattr(getattr(self.owner, "registry", None), "owner", None)
+        if q_host is None:
+            raise RuntimeError(
+                "Cannot resolve the owning Q object needed to build a QPlanePolar section."
+            )
+        if q_host.interpolator is None:
+            q_host.act_add_interpolator()
+
+        tangent, origin = self.act_calc_tangent(u_percent, is_return_coord=True)
+        grid = PlaneGridPolar(
+            normal=tangent,
+            origin=origin,
+            opts=opts_grid,
+            opts_defaults_override=opts_grid_defaults_override,
+            **kwargs,
+        )
+        q_plane = QPlanePolar(
+            interpolator=q_host.act_add_interpolator(),
+            grid=grid,
+            name=f"omega plane of {self.name!r}",
+        )
+
+        layer = int(q_plane.grid._calc_ring_offsets.shape[0] - 2)
+        if layer < 0:
+            raise ValueError(
+                "The local polar section does not contain a valid ring layer."
+            )
+
+        omega, metric = q_plane.act_calc_omega(layer)
+        metric["u_percent"] = float(u_percent)
+        return omega, metric
 
 
 @dataclass(slots=True, repr=False)

@@ -6,7 +6,7 @@ import pyvista as pv
 from types import MappingProxyType
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from Nematics3D.datatypes import UNSET, Unset
+from Nematics3D.datatypes import UNSET, Unset, as_str
 from .plot_figure import FigureData, PlotFigure
 from .glyph import OptsGlyph, PlotGlyph
 from ..bounds import BoundsData
@@ -28,11 +28,21 @@ class OptsRod(OptsGlyph):
         "length": "The length of rods",
     }
 
+    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
+        **dict(OptsGlyph._validators),
+        "resolver_source": lambda v, d: as_str(
+            v,
+            name=d,
+            pool=("coords", "u_percent", "orient"),
+        ),
+    }
+
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
             **dict(OptsGlyph._DEFAULTS_FROZEN),
             "length": 3,
             "radius": 0.3,
+            "resolver_source": "orient",
         }
     )
 
@@ -124,12 +134,25 @@ class PlotRod(PlotGlyph):
                 f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions."
             )
 
-        object.__setattr__(self, "_impl_resolver_source", "raw_orient")
         object.__setattr__(self, "_calc_keep_index", None)
 
         self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
 
         self._helper_init_end()
+
+    # ==================== OVERRIDE ====================
+    # PlotRod overrides PlotGlyph._helper_get_resolver_source to add rod
+    # orientation as a valid callable-resolver input source.
+    # ==================================================
+    def _helper_get_resolver_source(self):
+        source_name = as_str(
+            self.opts.resolver_source,
+            name="glyph resolver source",
+            pool=("coords", "u_percent", "orient"),
+        )
+        if source_name == "orient":
+            return self.raw_orient
+        return super()._helper_get_resolver_source()
 
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph.__getattribute__ because rod geometry expands
@@ -175,7 +198,7 @@ class PlotRod(PlotGlyph):
         mask_inside = np.all(
             (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
         )
-        mask_keep = mask_inside if self.opts.is_clip_inside else ~mask_inside
+        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
         object.__setattr__(self, "_calc_keep_index", keep_index)
         return self.raw_coords[keep_index]

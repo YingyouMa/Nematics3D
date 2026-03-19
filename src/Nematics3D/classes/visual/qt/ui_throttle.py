@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Callable
 
@@ -34,6 +34,13 @@ class UIThrottle(QObject):
     @property
     def interval_ms(self) -> int:
         return self._interval_ms
+
+    def set_interval_ms(self, interval_ms: int) -> None:
+        if interval_ms <= 0:
+            raise ValueError("`interval_ms` must be positive.")
+        self._interval_ms = int(interval_ms)
+        if self._timer.isActive():
+            self._timer.start(self._interval_ms)
 
     def schedule(self, func: Callable[..., Any], *args: Any, **kwargs: Any) -> None:
         if not callable(func):

@@ -24,8 +24,7 @@ class OptsSphere(OptsGlyph):
 
     - create an `OptsSphere(...)` instance and pass it into `PlotSphere`
     - modify fields on an existing `sphere.opts`
-    - reuse one object's current settings on another object via
-      `other_sphere.act_commit(opts=sphere.opts)`
+    - apply one set of settings on an object via `sphere.act_commit(opts=opts_given)`
 
     Many of the most important fields support several input styles. In
     particular, quantities such as `radius`, `color`, `opacity`, and `scalars`
@@ -50,10 +49,11 @@ class OptsSphere(OptsGlyph):
     - `color` and `scalars` are different pipelines; `paint_by` decides which
       one is used for rendering
     - `scalars` are numeric data, not RGB colors
-    - `is_clip_inside` matters when the owning glyph is clipped by bounds
     - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
       and `roughness` affect appearance but not sphere geometry
 
+    If you want the full field list and their short descriptions, see
+    `OptsSphere.__attrs__`.
     For the shared glyph option model, validation behavior, and lower-level
     commit/update rules, see the docstrings of `OptsGlyph` and `OptsBase`.
 
@@ -70,7 +70,7 @@ class OptsSphere(OptsGlyph):
 
     Set a different radius for each sphere:
 
-    >>> opts = OptsSphere(radius=np.array([0.1, 0.2, 0.3]))
+    >>> opts = OptsSphere(radius=np.array([0.1, 0.2, 0.3])) # three spheres
 
     Compute values from the point coordinates:
 
@@ -88,20 +88,9 @@ class OptsSphere(OptsGlyph):
     ... )
     """
 
-
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {**dict(OptsGlyph._DEFAULTS_FROZEN), "sides": 12}
     )
-
-
-# Subclassing rules:
-# - PlotSphere keeps the generic PlotGlyph pipeline and only specializes the
-#   sphere geometry. Subclasses should preserve that separation of concerns.
-# - If a subclass changes the mesh generation, keep radius handling compatible
-#   with the glyph pipeline so point-wise radius data still maps cleanly onto
-#   the generated geometry.
-# - Keep the default interaction behavior aligned with sphere-specific tooling
-#   unless there is a clear reason to expose a different interaction panel.
 
 
 class PlotSphere(PlotGlyph):
@@ -123,7 +112,8 @@ class PlotSphere(PlotGlyph):
 
     - provide an `N x 3` coordinate array
     - optionally attach the object to an existing figure or plotter so
-      multiple objects share the same scene
+      multiple objects share the same scene, or let `PlotSphere` create a
+      new figure automatically when `figure=None`
     - optionally bind `bounds` to clip which or which parts of spheres are shown
     - choose visual settings such as `radius`, `color`, `opacity`, or
       scalar-based coloring, either as constants, arrays, or coordinate-based
@@ -135,7 +125,8 @@ class PlotSphere(PlotGlyph):
     ----------
     coords
         Sphere-center coordinates with shape `(N, 3)`. Each row gives the
-        center of one sphere.
+        center of one sphere. A single point given as shape `(3,)` is also
+        accepted and is treated as one sphere center.
     name
         Optional readable object name.
     category
@@ -145,16 +136,19 @@ class PlotSphere(PlotGlyph):
         Optional figure/container for this glyph. You may pass an existing
         `PlotFigure`, a `pyvistaqt.BackgroundPlotter`, or a `pyvista.Plotter`.
         Non-`PlotFigure` inputs are wrapped into a `PlotFigure` internally so
-        this glyph can join an existing scene without extra setup.
+        this glyph can join an existing scene without extra setup. If `None`,
+        a new figure is created automatically.
     opts
         Optional `OptsSphere` instance holding the visual configuration.
         You can also reuse an existing options object later with
         `sphere.act_commit(opts=other.opts)` to apply another object's current
         option settings directly.
+        If both `opts` and explicit option keyword arguments are provided,
+        the explicit keyword arguments are merged in and take precedence.
     clip_mode
         Controls how bounds clipping is applied.
-        - `"center"`: keep or remove spheres according to whether their
-          centers are inside the active bounds. Default setting.
+        - `"center"`: decide whether to keep a sphere from its center point.
+          This is the default setting.
         - `"mesh"`: build the sphere geometry first, then clip the resulting
           mesh against the bounds.
     bounds
@@ -315,7 +309,7 @@ class PlotSphere(PlotGlyph):
         mask_inside = np.all(
             (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
         )
-        mask_keep = mask_inside if self.opts.is_clip_inside else ~mask_inside
+        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
         object.__setattr__(self, "_calc_keep_index", keep_index)
         return self.raw_coords[keep_index]

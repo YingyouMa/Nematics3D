@@ -500,7 +500,7 @@ class PanelBase(QtWidgets.QWidget):
         host,
         figure,
         title: str = "Panel",
-        slider_throttle_ms: int = 20,
+        slider_throttle_ms: int | None = None,
     ):
 
         title = as_str(title, name="The title of panel", replace="Panel")
@@ -540,6 +540,15 @@ class PanelBase(QtWidgets.QWidget):
         self._is_block_chk_commit = False
 
         self.state: dict[str, object] = {}
+        if slider_throttle_ms is None:
+            pick_manager = (
+                getattr(self.fig, "pick_manager", None)
+                if self.fig is not None
+                else None
+            )
+            slider_throttle_ms = getattr(
+                getattr(pick_manager, "opts", None), "slider_throttle_ms", 20
+            )
         self.sliders: dict[str, SliderItem] = {}
         if not hasattr(self, "_custom_sliders"):
             self._custom_sliders = []
@@ -662,6 +671,10 @@ class PanelBase(QtWidgets.QWidget):
 
     def _sync_func(self):
         raise NotImplementedError
+
+    def act_set_slider_throttle_ms(self, value: int):
+        self.slider_throttle_ms = int(value)
+        self._slider_throttle.set_interval_ms(self.slider_throttle_ms)
 
     def _on_reset_to_live(self):
         self.host.act_commit(**self.host._opts_backup[self.str_now_live])

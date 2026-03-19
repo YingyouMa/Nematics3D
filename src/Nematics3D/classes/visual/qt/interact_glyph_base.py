@@ -14,6 +14,29 @@ from .panel_base import (
 
 
 class InteractGlyphBase(PanelBase):
+    def _helper_panel_marker_key(self):
+        return f"{self.str_now}::calc0"
+
+    def _helper_update_first_point_marker(self):
+        pm = getattr(self.fig, "pick_manager", None) if self.fig is not None else None
+        if pm is None:
+            return
+        coords = getattr(self.host, "_calc_coords", None)
+        if coords is None or len(coords) == 0:
+            pm.act_remove_helper_marker(self._helper_panel_marker_key())
+            return
+        pm.act_set_helper_marker(
+            self._helper_panel_marker_key(),
+            np.asarray(coords[0], dtype=float),
+            marker_id=0,
+        )
+
+    def _helper_remove_first_point_marker(self):
+        pm = getattr(self.fig, "pick_manager", None) if self.fig is not None else None
+        if pm is None:
+            return
+        pm.act_remove_helper_marker(self._helper_panel_marker_key())
+
     def __init__(
         self,
         host,
@@ -37,6 +60,7 @@ class InteractGlyphBase(PanelBase):
 
         display_title = title or f"Control of {host}"
         super().__init__(host, figure, title=display_title)
+        self._helper_update_first_point_marker()
 
     def build_ui(self):
         # ----------------------------
@@ -215,6 +239,7 @@ class InteractGlyphBase(PanelBase):
         self._is_gui_updating = True
         try:
             self._helper_run_commit(params)
+            self._helper_update_first_point_marker()
         finally:
             self._is_gui_updating = False
 
@@ -252,3 +277,9 @@ class InteractGlyphBase(PanelBase):
                 self._is_block_chk_commit = True
                 self.chk_use_opacity.setChecked(False)
                 self._is_block_chk_commit = False
+
+            self._helper_update_first_point_marker()
+
+    def on_close(self):
+        self._helper_remove_first_point_marker()
+        super().on_close()
