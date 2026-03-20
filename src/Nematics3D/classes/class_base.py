@@ -9,8 +9,20 @@ from ..datatypes import as_str
 #   These tables drive both the object model and the inspection interface.
 # - Keep `__slots__` consistent with the stored fields declared in `__attrs__`.
 #   Do not add stored instance state that bypasses this metadata layer.
-# - Persisted or directly assignable stored fields should follow the existing
-#   naming conventions such as `raw_*`, `state_*`, and `default_*`.
+# - Field naming conventions used throughout the object system:
+#   `raw_*`     original inputs or user-provided base values.
+#   `state_*`   current control state or active behavioral mode.
+#   `default_*` default parameters or fallback configuration values.
+#   Leading underscores may be added to these three families when the field
+#   should not be modified through the public setattr/commit path.
+#   `_calc_*`   derived results and computed caches.
+#   `_entity_*` owned object-like entities, backends, or runtime carriers.
+#   `_impl_*`   internal implementation details outside the public model.
+# - Names in `__relations__` should be semantic object links exposed as readable
+#   relations, while names in `__properties__` should remain public derived
+#   accessors.
+# - Prefer `__relations__` over `_entity_*` when a field represents a semantic
+#   one-to-one object relationship rather than an internal runtime carrier.
 # - New relations should be declared in `__relations__` and managed through the
 #   relation helpers instead of ad hoc direct assignment.
 # - Runtime user-defined attributes should go through `act_add_attr()` rather

@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from typing import Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev, interp1d
@@ -9,7 +9,7 @@ from typing import Mapping, Any
 from ..logging_decorator import logging_and_warning_decorator
 from .host_base import OptsBase, HostBase
 from .class_base import ClassBase
-from .opts import cover_value
+from .opts import cover_value, diff_dict_values
 from ..datatypes import Number, as_Number, as_str, as_bool, UNSET, Unset, as_points
 
 # fmt: off
@@ -385,6 +385,7 @@ class SmoothedLineFunc(ClassBase):
         "_raw_func": "Numerical function that maps a single u_percent sample to a value or to a (value, metric) pair.",
         "_raw_u_samples": "Sampling locations in u_percent used to evaluate the numerical function.",
         "_raw_func_kwargs": "Extra keyword arguments passed to the numerical function during sampling.",
+        "_raw_owner_opts_snapshot": "Snapshot of owner.opts at the time this line function was last sampled.",
         "_calc_values": "Values returned by the numerical function at each sampling location.",
         "_calc_metrics": "Per-sample metrics returned by the numerical function, or None if unavailable.",
         "_entity_interpolator": "Interpolator object built from the sampled values.",
@@ -397,10 +398,32 @@ class SmoothedLineFunc(ClassBase):
 
     __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
 
-    # ==================== OVERRIDE ====================
-    # SmoothedLineFunc overrides ClassBase.__init__ because it must validate
-    # inputs, sample the function immediately, and build the interpolator.
-    # ==================================================
+    @staticmethod
+    def _helper_validate_u_samples(u_samples):
+        u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
+        if u_samples.ndim != 1 or len(u_samples) == 0:
+            raise ValueError("`u_samples` must be a non-empty one-dimensional array.")
+        if np.any(~np.isfinite(u_samples)):
+            raise ValueError("`u_samples` must contain only finite values.")
+        if np.min(u_samples) < 0 or np.max(u_samples) > 100:
+            raise ValueError("`u_samples` must stay within the range [0, 100].")
+        u_samples = np.unique(np.sort(u_samples))
+        if len(u_samples) == 0:
+            raise ValueError(
+                "`u_samples` must remain non-empty after sorting and deduplication."
+            )
+        return u_samples
+
+    def _helper_get_owner_mode_from(self, opts_dict):
+        owner_mode = None if opts_dict is None else opts_dict.get("mode", None)
+        return (
+            "interp"
+            if owner_mode is None
+            else as_str(
+                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
+            )
+        )
+
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
@@ -418,18 +441,7 @@ class SmoothedLineFunc(ClassBase):
         if not callable(func):
             raise TypeError("`func` for SmoothedLineFunc must be callable.")
 
-        u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
-        if u_samples.ndim != 1 or len(u_samples) == 0:
-            raise ValueError("`u_samples` must be a non-empty one-dimensional array.")
-        if np.any(~np.isfinite(u_samples)):
-            raise ValueError("`u_samples` must contain only finite values.")
-        if np.min(u_samples) < 0 or np.max(u_samples) > 100:
-            raise ValueError("`u_samples` must stay within the range [0, 100].")
-        u_samples = np.unique(np.sort(u_samples))
-        if len(u_samples) == 0:
-            raise ValueError(
-                "`u_samples` must remain non-empty after sorting and deduplication."
-            )
+        u_samples = self._helper_validate_u_samples(u_samples)
 
         object.__setattr__(self, "_raw_func", func)
         object.__setattr__(self, "_raw_u_samples", u_samples)
@@ -438,10 +450,47 @@ class SmoothedLineFunc(ClassBase):
             "_raw_func_kwargs",
             {} if func_kwargs is None else dict(func_kwargs),
         )
+        object.__setattr__(self, "_raw_owner_opts_snapshot", None)
         object.__setattr__(self, "_calc_values", None)
         object.__setattr__(self, "_calc_metrics", None)
         object.__setattr__(self, "_entity_interpolator", None)
         self.act_bind_relation_base("owner", owner, is_weak=True)
+
+        self.act_refresh(u_samples=u_samples)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_warn_if_owner_opts_changed(self, logger=None):
+        owner = self.owner
+        if owner is None:
+            return
+
+        opts_now = owner.opts.act_asdict()
+        opts_then = self._raw_owner_opts_snapshot
+        diff_then, diff_now = diff_dict_values(opts_then, opts_now)
+        if not diff_then and not diff_now:
+            return
+
+        logger.warning(
+            f"Smoothed line function {self.name!r} was sampled with stale owner opts.\n"
+            f"Recorded opts diff: {diff_then}\n"
+            f"Current owner opts diff: {diff_now}\n"
+            "Consider calling `act_refresh(...)` to rebuild the sampled interpolator."
+        )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_refresh(self, u_samples=None, logger=None):
+        owner = self.owner
+        if owner is None:
+            raise RuntimeError(
+                "Cannot refresh a SmoothedLineFunc without a live owner."
+            )
+
+        if u_samples is not None:
+            object.__setattr__(
+                self,
+                "_raw_u_samples",
+                self._helper_validate_u_samples(u_samples),
+            )
 
         values = []
         metrics = []
@@ -459,14 +508,8 @@ class SmoothedLineFunc(ClassBase):
         values = np.stack(values, axis=0)
         metrics = metrics if has_metric else None
 
-        owner_mode = getattr(owner.opts, "mode", None)
-        mode = (
-            "interp"
-            if owner_mode is None
-            else as_str(
-                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
-            )
-        )
+        opts_snapshot = owner.opts.act_asdict()
+        mode = self._helper_get_owner_mode_from(opts_snapshot)
 
         if mode == "wrap":
             u_interp = np.concatenate(
@@ -491,20 +534,15 @@ class SmoothedLineFunc(ClassBase):
             assume_sorted=True,
         )
 
+        object.__setattr__(self, "_raw_owner_opts_snapshot", dict(opts_snapshot))
         object.__setattr__(self, "_calc_values", values)
         object.__setattr__(self, "_calc_metrics", metrics)
         object.__setattr__(self, "_entity_interpolator", interpolator)
 
     def interpolate(self, u_percent):
+        self._helper_warn_if_owner_opts_changed()
         u_percent = np.asarray(u_percent, dtype=float)
-        owner_mode = getattr(self.owner.opts, "mode", None)
-        mode = (
-            "interp"
-            if owner_mode is None
-            else as_str(
-                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
-            )
-        )
+        mode = self._helper_get_owner_mode_from(self._raw_owner_opts_snapshot)
         if mode == "wrap":
             u_percent = np.mod(u_percent, 100.0)
         return self._entity_interpolator(u_percent)
@@ -512,28 +550,13 @@ class SmoothedLineFunc(ClassBase):
     def __call__(self, u_percent):
         return self.interpolate(u_percent)
 
-    # ==================== OVERRIDE ====================
-    # SmoothedLineFunc overrides ClassBase.__repr__ because the sampled
-    # function is most useful when summarized by sample count and owner mode.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        owner_mode = getattr(self.owner.opts, "mode", None)
-        mode = (
-            "interp"
-            if owner_mode is None
-            else as_str(
-                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
-            )
-        )
+        mode = self._helper_get_owner_mode_from(self._raw_owner_opts_snapshot)
         return (
             f"{cls_name}({self.name!r}), num_samples={len(self._raw_u_samples)}, "
             f"mode={mode!r}"
         )
 
-    # ==================== OVERRIDE ====================
-    # SmoothedLineFunc overrides object.__str__ so plain string display stays
-    # concise, matching the short ClassBase-style identity representation.
-    # ==================================================
     def __str__(self) -> str:
         return ClassBase.__repr__(self)
