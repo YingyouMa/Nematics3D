@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping, Type, Sequence
 import weakref
@@ -8,6 +9,7 @@ import numpy as np
 import datetime
 
 
+from ..format import load_opts_json, save_opts_json
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
@@ -184,6 +186,50 @@ class OptsBase:
 
     def act_asdict(self, is_include_UNSET=False):
         return self._helper_asdict_basic(is_include_UNSET=is_include_UNSET)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_save_json(
+        self,
+        path: str | Path,
+        *,
+        max_inline_array_size: int = 64,
+        is_include_UNSET: bool = False,
+        logger=None,
+    ) -> Path:
+        path = save_opts_json(
+            self.act_asdict(is_include_UNSET=is_include_UNSET),
+            path,
+            opts_class_name=type(self).__name__,
+            max_inline_array_size=max_inline_array_size,
+        )
+        logger.info(f"Saved opts JSON to {path}.")
+        return path
+
+    @classmethod
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_load_json(
+        cls,
+        path: str | Path,
+        *,
+        is_finalize: bool = False,
+        logger=None,
+    ):
+        path, data = load_opts_json(path)
+
+        opts = cls()
+        for key, value in data.items():
+            if key not in cls.__attrs__:
+                logger.warning(
+                    f"Skip unknown opts field {key!r} while loading {path.name}."
+                )
+                continue
+            object.__setattr__(opts, key, value)
+
+        if is_finalize:
+            opts.act_finalize()
+
+        logger.info(f"Loaded opts JSON from {path}.")
+        return opts
 
     def __repr__(self) -> str:
         cls = type(self)
@@ -741,19 +787,48 @@ class HostBase(ClassBase):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
 
     # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_getattrs so host exploration focuses on
+    # user-facing readable names while still exposing `_opts_backup`, which is a
+    # useful saved-state surface for end users.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_getattrs(self, is_return=False, logger=None):
+        names = sorted(
+            name for name in self._impl_getattr_names if not name.startswith("_impl_")
+        )
+
+        hidden_names = {
+            "_opts",
+            "_opts_defaults",
+        }
+        lines = [
+            "When reading or assigning, the 'raw_' prefix may be omitted where a public alias exists."
+        ]
+        for name in names:
+            if name in hidden_names:
+                continue
+            try:
+                lines.append(self.show_attr_desc(name))
+            except KeyError:
+                continue
+
+        if len(lines) == 1:
+            lines.append("<none>")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+
+    # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.show_attr_desc so descriptions can be
     # resolved from both the host layer and the paired opts layer.
     # ==================================================
     def show_attr_desc(self, attr_name: str) -> str:
-        descriptions_host = self.__class__.__attrs__
-        if attr_name in descriptions_host:
-            return f"{attr_name!r}: {descriptions_host[attr_name]}"
-        properties_host = self.__class__.__properties__
-        if attr_name in properties_host:
-            return f"{attr_name!r}: {properties_host[attr_name]}"
-        relations_host = self.__class__.__relations__
-        if attr_name in relations_host:
-            return f"{attr_name!r}: {relations_host[attr_name]}"
+        try:
+            return super().show_attr_desc(attr_name)
+        except KeyError:
+            pass
 
         opts = getattr(self, "_opts", None)
         if opts is not None:
@@ -764,12 +839,12 @@ class HostBase(ClassBase):
             if attr_name in properties_opts:
                 return f"{attr_name!r}: {properties_opts[attr_name]}"
             raise KeyError(
-                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__ "
+                f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__ / extra attrs "
                 f"or {type(opts).__name__}.__attrs__ / __properties__."
             )
 
         raise KeyError(
-            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__. "
+            f"Attribute {attr_name!r} was not found in {type(self).__name__}.__attrs__ / __properties__ / __relations__ / extra attrs. "
             "The opts attrs are not available yet because self._opts has not been initialized; "
             "the attribute may belong to opts."
         )
@@ -784,12 +859,16 @@ class HostBase(ClassBase):
             "When assigning host fields, the 'raw_' prefix may be omitted.",
         ]
 
+        attrs_forbidden = self.attrs_forbidden
         attrs_host = sorted(
             k
             for k in self.__class__.__attrs__.keys()
-            if k.startswith("raw_") or k.startswith("state_")
+            if (k.startswith("raw_") or k.startswith("state_"))
+            and (k not in attrs_forbidden)
         )
-        attrs_opts = sorted(self.opts.__class__.__attrs__.keys())
+        attrs_opts = sorted(
+            k for k in self.opts.__class__.__attrs__.keys() if k not in attrs_forbidden
+        )
         if "tag" in attrs_opts:
             attrs_opts.remove("tag")
             attrs_opts.insert(0, "tag")
@@ -797,11 +876,13 @@ class HostBase(ClassBase):
             k
             for k in self.__class__.__properties__.keys()
             if self.__class__._helper_is_writable_property(k)
+            and (k not in attrs_forbidden)
         )
         attrs_opts_properties = sorted(
             k
             for k in getattr(self.opts.__class__, "__properties__", {}).keys()
             if self.opts.__class__._helper_is_writable_property(k)
+            and (k not in attrs_forbidden)
         )
 
         if attrs_host:
@@ -832,6 +913,11 @@ class HostBase(ClassBase):
         ):
             lines.append("  (None)")
 
+        if attrs_forbidden:
+            lines.append(
+                "Protected or wrapped fields are excluded from the lists above and cannot be modified through normal commit/setattr paths."
+            )
+
         output = "\n".join(lines)
         logger.info(output)
 
@@ -842,6 +928,32 @@ class HostBase(ClassBase):
         if not name:
             name = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         self._opts_backup[name] = self.opts.act_asdict()
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_saved_opts(self, is_return=False, logger=None):
+        backups = self._opts_backup
+        lines = ["Saved opts snapshots in '_opts_backup':"]
+
+        if backups:
+            for name in backups.keys():
+                lines.append(f"  - {name}")
+        else:
+            lines.append("  - <none>")
+
+        lines.append(
+            "Use `self._opts_backup[name]` to inspect a full saved opts dictionary."
+        )
+        lines.append(
+            "To restore one manually, call `self.act_commit(**self._opts_backup[name])`."
+        )
+        lines.append(
+            "To compare two saved opts dictionaries, use `diff_dict_values(dict1, dict2)` from `Nematics3D.classes.opts`."
+        )
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
 
     def act_attach_sync_task(self, name: str, func: Callable):
         if not callable(func):

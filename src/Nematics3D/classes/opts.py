@@ -2,7 +2,8 @@ from dataclasses import fields, is_dataclass, replace
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET
-from Nematics3D.general import is_equal
+from Nematics3D.format import is_equal
+
 
 @logging_and_warning_decorator(start_finish_level=5)
 def merge_opts(opts, kwargs, prefix="", logger=None):
@@ -53,7 +54,7 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
     """
     if not is_dataclass(opts):
         raise TypeError("opts must be a dataclass instance")
-    
+
     field_names = {f.name for f in fields(opts)}
 
     updates = {}
@@ -65,13 +66,16 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
                 kwargs.pop(key)  # consume the key
             else:
                 try:
-                    raise AttributeError(f"Invalid option '{key}' for {type(opts).__name__}")
+                    raise AttributeError(
+                        f"Invalid option '{key}' for {type(opts).__name__}"
+                    )
                 except:
                     logger.exception("Please check input.")
                     logger.recovery("Ignore this key in the following.")
                     kwargs.pop(key)
 
     return replace(opts, **updates), kwargs
+
 
 @logging_and_warning_decorator(start_finish_level=5)
 def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
@@ -170,7 +174,7 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
         new_opts, kwargs = merge_opts(opts, kwargs, prefix)
         results[prefix] = new_opts
 
-    if kwargs:  
+    if kwargs:
         msg = f"Unexpected keyword arguments for class {name!r}: {list(kwargs.keys())}. \n"
         msg += "Ignore them in the following."
         logger.warning(msg)
@@ -184,35 +188,35 @@ def build_dict_override(
     dict_override: dict | None = None,
     *,
     name: str = "input",
-    logger = None
+    logger=None,
 ):
     """
     Merge an override dictionary into a base dictionary with key validation.
-    
+
     This function creates a shallow copy of ``dict_origin`` and applies values
     from ``dict_override`` on top of it.  Only keys that already exist in
     ``dict_origin`` are allowed to be overridden; any unknown keys appearing
     in ``dict_override`` are considered invalid and will be ignored with a
     warning.
-    
+
     The merge operation is non-destructive to the input dictionaries:
     ``dict_origin`` is never modified, and a new dictionary is returned.
-    
+
     Parameters
     ----------
     dict_origin : dict
         The base dictionary defining the allowed set of keys and their default
         values.
-    
+
     dict_override : dict or None, optional
         A dictionary containing override values.  Only keys present in
         ``dict_origin`` are applied.  If ``None``, an empty override is assumed.
-    
+
     name : str, optional
         A human-readable name used in warning or error messages to identify
         the configuration context (e.g. ``"input"``, ``"options"``,
         ``"visual"``).
-    
+
     Returns
     -------
     dict
@@ -274,14 +278,14 @@ def cover_value(
         # Target-side constraint: whether existing values may be overwritten
         if not is_allow_cover_target_set and getattr(obj, key, UNSET) is not UNSET:
             continue
-        
+
         try:
             setattr(obj, key, value)
         except Exception:
             logger.exception("Check input.")
             logger.recovery("Automatically ignore this modification")
-            
-            
+
+
 @logging_and_warning_decorator(start_finish_level=5)
 def diff_dict_values(dict1: dict, dict2: dict, logger=None):
 
@@ -305,7 +309,3 @@ def diff_dict_values(dict1: dict, dict2: dict, logger=None):
             diff2[k] = dict2[k]
 
     return diff1, diff2
-
-
-
-

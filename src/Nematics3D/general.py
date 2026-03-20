@@ -5,6 +5,7 @@ module yet, it can live here for now.
 
 import numpy as np
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping, Optional
+from Nematics3D.format import fmt_value, is_equal, is_equal_array
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from .datatypes import as_ColorRGB, Vect, as_Vect, Tensor
 
@@ -923,44 +924,6 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
 
 def is_given_str(a, b):
     return True if isinstance(a, str) and a == b else False
-
-
-def fmt_value(v, ndigits=2):
-    """Format scalar or ndarray with fixed decimals (zero-padded)."""
-    if isinstance(v, np.ndarray):
-        fmt = np.vectorize(lambda x: f"{float(x):.{ndigits}f}", otypes=[str])
-        return (
-            "[" + ", ".join(fmt(v).ravel()) + "]"
-            if v.ndim == 1
-            else np.array2string(fmt(v), separator=", ")
-        )
-    try:
-        return f"{float(v):.{ndigits}f}"
-    except Exception:
-        return str(v)
-
-
-def is_equal_array(v1, v2, logger=None):
-    try:
-        arr1 = np.asarray(v1)
-        arr2 = np.asarray(v2)
-    except Exception as e:
-        raise TypeError(f"Input value cannot be converted to numpy array: {e}")
-
-    if (not isinstance(arr1, np.ndarray)) or (not isinstance(arr2, np.ndarray)):
-        raise TypeError("Both inputs must be numpy arrays or array-like values.")
-
-    return np.array_equal(arr1, arr2, equal_nan=True)
-
-
-def is_equal(v1, v2):
-    try:
-        return is_equal_array(v1, v2)
-    except TypeError:
-        try:
-            return v1 == v2
-        except Exception:
-            return False
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):
