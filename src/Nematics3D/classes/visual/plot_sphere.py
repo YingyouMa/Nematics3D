@@ -27,6 +27,10 @@ class OptsSphere(OptsGlyph):
     - modify fields on `sphere.opts` after a sphere glyph already exists
     - apply a prepared settings object with `sphere.act_commit(opts=opts)`
 
+    Important readable attributes on `OptsSphere` include:
+
+    - `host` to access the owning `PlotSphere` when the opts is attached
+
     Most visual fields support the same three input styles:
 
     - one shared value applied to every sphere
@@ -134,6 +138,15 @@ class PlotSphere(PlotGlyph):
       or lighting
     - update the object later with `act_commit(...)`, edits on `sphere.opts`,
       or by reusing another prepared `opts` object
+
+    Important readable attributes on `PlotSphere` include:
+
+    - `opts` to access the paired `OptsSphere` object controlling rendering
+    - `fig` to access the containing `PlotFigure`
+    - `bounds` to inspect the currently bound clipping `Bounds` object
+    - `raw_coords` to inspect the original sphere-center coordinates
+    - `_calc_keep_index` to inspect which raw points remain after center-based
+      clipping
 
     Parameters
     ----------
@@ -292,7 +305,9 @@ class PlotSphere(PlotGlyph):
         category: str = "sphere",
         figure: FigureData | None = None,
         opts: OptsSphere | None = None,
+        bounds=None,
         clip_mode: str = "center",
+        is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -306,7 +321,9 @@ class PlotSphere(PlotGlyph):
             name_replace=name_replace,
             opts=opts,
             figure=figure,
+            bounds=bounds,
             clip_mode=clip_mode,
+            is_clip_inside=is_clip_inside,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )

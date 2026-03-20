@@ -64,6 +64,22 @@ class ClassBase:
     attributes are intended to be modified, and how the object is currently
     connected to other objects.
 
+    User-facing `show_*` methods on `ClassBase` include:
+
+    - `show_getattrs()` to list readable names and their descriptions
+    - `show_attr_desc()` to explain one readable attribute, relation, or alias
+    - `show_modifiable_attrs()` to list public attributes intended for assignment
+    - `show_relations()` to summarize currently bound semantic relations
+    - `show_relation_tree()` to print the current relation graph as a tree
+
+    User-facing `act_*` methods on `ClassBase` include:
+
+    - `act_set_name()` to rename the object through the validated name path
+    - `act_bind_relation_base()` / `act_unbind_relation_base()` to manage
+      semantic object links
+    - `act_register_protected_attr()` / `act_unregister_protected_attr()` to
+      control which attributes are externally writable
+    - `act_add_attr()` to register user-defined runtime attributes with docs
     Most users should not need to subclass ClassBase directly. Its main purpose
     is to give higher-level objects in the package a consistent identity,
     relation model, and attribute-inspection interface.

@@ -9,11 +9,16 @@ import numpy as np
 import datetime
 
 
-from ..format import load_opts_json, save_opts_json
+from ..format import repr_format, save_opts_json
 from ..logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import Unset, UNSET, as_str
 from Nematics3D.general import pop_exclusive
-from .opts import merge_opts_all, build_dict_override, diff_dict_values
+from .opts import (
+    merge_opts_all,
+    build_dict_override,
+    diff_dict_values,
+    load_json_into_opts,
+)
 from .class_base import ClassBase
 
 
@@ -39,6 +44,20 @@ class OptsBase:
           request and forwarded to the associated Host via the commit pipeline.
     4.  **Data Export**: The current state of all non-hidden attributes can
         be retrieved as a standard dictionary via ``act_asdict()``.
+
+    Important readable attributes on ``OptsBase`` include:
+    - ``host`` to access the owning host object, if one is currently attached
+
+    User-facing convenience methods on ``OptsBase`` are:
+    - ``act_finalize()`` to fill defaults and enter the functioning state
+    - ``act_asdict()`` to export the current option payload
+    - ``act_save_json()`` to serialize the current opts to disk
+    - ``act_load_json()`` to load a saved JSON payload back into this instance
+
+    Representation behavior is split intentionally:
+    - ``str(opts)`` gives a compact one-line identity like ``OptsFigure``
+    - ``repr(opts)`` prints the full field-by-field summary that is meant for
+      interactive inspection
     """
 
     tag: str | Unset = UNSET
@@ -205,31 +224,22 @@ class OptsBase:
         logger.info(f"Saved opts JSON to {path}.")
         return path
 
-    @classmethod
     @logging_and_warning_decorator(start_finish_level=5)
     def act_load_json(
-        cls,
+        self,
         path: str | Path,
         *,
         is_finalize: bool = False,
         logger=None,
     ):
-        path, data = load_opts_json(path)
+        return load_json_into_opts(
+            self,
+            path,
+            is_finalize=is_finalize,
+        )
 
-        opts = cls()
-        for key, value in data.items():
-            if key not in cls.__attrs__:
-                logger.warning(
-                    f"Skip unknown opts field {key!r} while loading {path.name}."
-                )
-                continue
-            object.__setattr__(opts, key, value)
-
-        if is_finalize:
-            opts.act_finalize()
-
-        logger.info(f"Loaded opts JSON from {path}.")
-        return opts
+    def __str__(self) -> str:
+        return type(self).__name__
 
     def __repr__(self) -> str:
         cls = type(self)
@@ -254,25 +264,9 @@ class OptsBase:
                 v = getattr(self, k)
             except AttributeError:
                 v = "<missing>"
-            lines.append(f"  {k:<{width}} = {self._repr_format(v)}")
+            lines.append(f"  {k:<{width}} = {repr_format(v)}")
 
         return "\n".join(lines)
-
-    @staticmethod
-    def _repr_format(v):
-        if isinstance(v, np.generic):
-            v = v.item()
-
-        if isinstance(v, float):
-            return f"{v:.2g}"
-
-        if isinstance(v, np.ndarray):
-            if v.size > 6:
-                return f"<ndarray shape={v.shape}, too many elements to display>"
-            else:
-                return repr(v)
-
-        return repr(v)
 
 
 # Subclassing rules:
@@ -291,8 +285,6 @@ class OptsBase:
 # - Wrapper hosts that transform inputs must write transformed values back into
 #   the forwarded kwargs so downstream wrapped hosts receive the resolved
 #   parameters.
-# - Overriding `act_commit()`, `_helper_commit_pre_opts()`, or forwarding/sync
-#   helpers is high-risk and should preserve the established commit pipeline.
 class HostBase(ClassBase):
     """
     Shared host controller for objects that manage state through an associated
@@ -309,6 +301,36 @@ class HostBase(ClassBase):
     The `show_*` helpers are especially useful when exploring an unfamiliar
     host object. In particular, `show_modifiable_attrs()` helps distinguish
     host-side fields from opts-managed fields before making updates.
+
+    Important readable attributes on `HostBase` include:
+    - `opts` to access the paired options object that controls host behavior
+
+    User-facing `show_*` methods on `HostBase` include both the inherited
+    inspection helpers and the host-specific saved-opts view:
+
+    - `show_getattrs()` to list readable host and visible saved-state surfaces
+    - `show_attr_desc()` to explain a host attr, relation, alias, or opts attr
+    - `show_modifiable_attrs()` to separate host attrs, opts attrs, extra attrs,
+      and writable properties
+    - `show_relations()` / `show_relation_tree()` to inspect current object links
+    - `show_saved_opts()` to list named snapshots stored in `_opts_backup`
+
+    User-facing `act_*` methods on `HostBase` include both the inherited
+    `ClassBase` actions and the host-specific commit utilities. Common ones are:
+
+    - `act_set_name()` to rename the host through the validated identity path
+    - `act_bind_relation_base()` / `act_unbind_relation_base()` to manage
+      semantic host relations such as wrapper or owner links
+    - `act_add_attr()` to register user-defined runtime attributes with docs
+    - `act_register_protected_attr()` / `act_unregister_protected_attr()` to
+      protect or unprotect host and opts-facing public attributes
+    - `act_commit()` to apply host and opts updates through the managed commit
+      pipeline
+    - `act_save_opts()` to snapshot current opts into `_opts_backup`
+    - `act_attach_sync_task()` / `act_detach_sync_task()` and the related
+      enrich-kwargs task registration helpers
+    - `act_register_wrapped_attr()` / `act_unregister_wrapped_attr()` and
+      `act_bind_wrapper()` / `act_unbind_wrapper()` for wrapper forwarding
 
     Most package users should work with concrete host subclasses rather than
     subclassing HostBase directly.
@@ -357,6 +379,7 @@ class HostBase(ClassBase):
     }
     __properties__ = {
         **(ClassBase.__properties__),
+        "opts": "Read-only: The paired Opts object controlling this host.",
         "attrs_forbidden": (
             "Read-only: Union of wrapped-protected attrs and host-declared protected attrs."
         ),
@@ -457,6 +480,10 @@ class HostBase(ClassBase):
     def opts(self):
         return self._opts
 
+    # ------------------------------------------------------------------
+    # Commit entrypoint
+    # ------------------------------------------------------------------
+
     # -------------------------------
     # -------------------------------
     # The functions to commit update
@@ -516,22 +543,9 @@ class HostBase(ClassBase):
 
         self._helper_kwargs_to_wrapped(kwargs, opts_wrapped=opts_wrapped)
 
-    @logging_and_warning_decorator()
-    def _helper_kwargs_to_wrapped(self, kwargs, opts_wrapped=None, logger=None):
-        kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs)
-        if kwargs or opts_wrapped:
-            if self.wrapped is not None:
-                with self.wrapped._helper_wrapped_update():
-                    self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
-            else:
-                cls_name = self.__class__.__name__
-                obj_name = getattr(self, "raw_name", "Uninitialized")
-                lines = [f"[{cls_name}: {obj_name!r}] Unhandled commit arguments."]
-                if kwargs:
-                    lines.append(f"  Remaining kwargs keys: {list(kwargs.keys())}")
-                if opts_wrapped is not None:
-                    lines.append(f"  opts_wrapped: {opts_wrapped!r}")
-                logger.warning("\n".join(lines))
+    # ------------------------------------------------------------------
+    # Commit preprocessing
+    # ------------------------------------------------------------------
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_pop_private_key(self, kwargs, logger=None):
@@ -671,6 +685,10 @@ class HostBase(ClassBase):
                 reapply_key in self.__class__._impl_attrs_reapply_opts_after_raw
             )
 
+    # ------------------------------------------------------------------
+    # Opts application
+    # ------------------------------------------------------------------
+
     # -----------------------
     # _helper_commit_self
     # -----------------------
@@ -733,6 +751,10 @@ class HostBase(ClassBase):
         # the corresponding key should also be removed from ``kwargs`` so it is not
         # forwarded to the wrapped object or the sync func.
 
+    # ------------------------------------------------------------------
+    # Sync and wrapped forwarding
+    # ------------------------------------------------------------------
+
     @logging_and_warning_decorator()
     def _helper_trigger_sync_batch(self, logger=None, **kwargs):
         for name, func in self._impl_sync_func.items():
@@ -785,6 +807,35 @@ class HostBase(ClassBase):
 
     def act_detach_enrich_kwargs_wrapped_task(self, name: str):
         self._impl_enrich_kwargs_wrapped_func.pop(name, None)
+
+    def act_attach_sync_task(self, name: str, func: Callable):
+        if not callable(func):
+            raise TypeError(f"The sync task '{name}' must be callable.")
+        self._impl_sync_func[name] = func
+
+    def act_detach_sync_task(self, name: str):
+        self._impl_sync_func.pop(name, None)
+
+    @logging_and_warning_decorator()
+    def _helper_kwargs_to_wrapped(self, kwargs, opts_wrapped=None, logger=None):
+        kwargs = self._helper_commit_enrich_kwargs_wrapped(kwargs)
+        if kwargs or opts_wrapped:
+            if self.wrapped is not None:
+                with self.wrapped._helper_wrapped_update():
+                    self.wrapped.act_commit(opts=opts_wrapped, **kwargs)
+            else:
+                cls_name = self.__class__.__name__
+                obj_name = getattr(self, "raw_name", "Uninitialized")
+                lines = [f"[{cls_name}: {obj_name!r}] Unhandled commit arguments."]
+                if kwargs:
+                    lines.append(f"  Remaining kwargs keys: {list(kwargs.keys())}")
+                if opts_wrapped is not None:
+                    lines.append(f"  opts_wrapped: {opts_wrapped!r}")
+                logger.warning("\n".join(lines))
+
+    # ------------------------------------------------------------------
+    # Inspection helpers
+    # ------------------------------------------------------------------
 
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.show_getattrs so host exploration focuses on
@@ -869,6 +920,9 @@ class HostBase(ClassBase):
         attrs_opts = sorted(
             k for k in self.opts.__class__.__attrs__.keys() if k not in attrs_forbidden
         )
+        attrs_extra = sorted(
+            k for k in self._impl_extra_attrs_docs.keys() if k not in attrs_forbidden
+        )
         if "tag" in attrs_opts:
             attrs_opts.remove("tag")
             attrs_opts.insert(0, "tag")
@@ -895,6 +949,11 @@ class HostBase(ClassBase):
             for attr_name in attrs_opts:
                 lines.append(f"  - {self.show_attr_desc(attr_name)}")
 
+        if attrs_extra:
+            lines.append("[Extra attributes]")
+            for attr_name in attrs_extra:
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+
         if attrs_properties:
             lines.append("[Host writable properties]")
             for attr_name in attrs_properties:
@@ -908,6 +967,7 @@ class HostBase(ClassBase):
         if (
             (not attrs_host)
             and (not attrs_opts)
+            and (not attrs_extra)
             and (not attrs_properties)
             and (not attrs_opts_properties)
         ):
@@ -923,6 +983,10 @@ class HostBase(ClassBase):
 
         if is_return:
             return output
+
+    # ------------------------------------------------------------------
+    # Saved opts
+    # ------------------------------------------------------------------
 
     def act_save_opts(self, name=None):
         if not name:
@@ -955,13 +1019,9 @@ class HostBase(ClassBase):
         if is_return:
             return output
 
-    def act_attach_sync_task(self, name: str, func: Callable):
-        if not callable(func):
-            raise TypeError(f"The sync task '{name}' must be callable.")
-        self._impl_sync_func[name] = func
-
-    def act_detach_sync_task(self, name: str):
-        self._impl_sync_func.pop(name, None)
+    # ------------------------------------------------------------------
+    # Protection and wrapping
+    # ------------------------------------------------------------------
 
     @logging_and_warning_decorator()
     def _helper_register_protected_attr(
@@ -1057,6 +1117,30 @@ class HostBase(ClassBase):
             attr_name="The name of attr to be protected",
         )
 
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.act_unregister_protected_attr because the
+    # protected-name surface may include host aliases and paired opts attrs.
+    # ==================================================
+    def act_unregister_protected_attr(self, attrs: Sequence[str] | str) -> None:
+        if isinstance(attrs, str):
+            attrs = [attrs]
+        elif not isinstance(attrs, (list, tuple, set)):
+            raise TypeError(
+                "attrs must be a string or a sequence of strings, "
+                f"got {type(attrs).__name__}."
+            )
+
+        for attr in attrs:
+            attr = as_str(attr, name="The name of attr to be unprotected")
+            if attr.startswith("raw_"):
+                self._impl_attrs_protected.discard(attr)
+                self._impl_attrs_protected.discard(attr[4:])
+            elif attr.startswith("state_"):
+                self._impl_attrs_protected.discard(attr)
+            else:
+                self._impl_attrs_protected.discard(attr)
+                self._impl_attrs_protected.discard("raw_" + attr)
+
     @property
     def attrs_forbidden(self):
         return set(self._impl_attrs_wrapped) | set(self._impl_attrs_protected)
@@ -1101,6 +1185,10 @@ class HostBase(ClassBase):
             wrapper.act_unbind_relation_base("wrapped")
         self.act_unbind_relation_base("wrapper")
         self.act_unregister_wrapped_attr()
+
+    # ------------------------------------------------------------------
+    # Public assignment
+    # ------------------------------------------------------------------
 
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase._helper_setattr_final so public assignment is

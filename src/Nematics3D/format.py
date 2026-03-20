@@ -23,6 +23,7 @@ def fmt_value(v, ndigits=2):
 
 
 def is_equal_array(v1, v2, logger=None):
+    """Compare two array-like values as ndarrays, treating NaNs as equal."""
     try:
         arr1 = np.asarray(v1)
         arr2 = np.asarray(v2)
@@ -36,6 +37,7 @@ def is_equal_array(v1, v2, logger=None):
 
 
 def is_equal(v1, v2):
+    """Safely compare scalars or array-like values with ndarray-aware fallback logic."""
     try:
         return is_equal_array(v1, v2)
     except TypeError:
@@ -163,7 +165,13 @@ def json_decode_value(value: Any, *, parent_dir: Path) -> Any:
     if ndarray_mode == "inline":
         return np.asarray(value["data"], dtype=value.get("dtype", None))
     if ndarray_mode == "file":
-        return np.load(parent_dir / value["path"])
+        array_path = parent_dir / value["path"]
+        try:
+            return np.load(array_path)
+        except FileNotFoundError as exc:
+            raise FileNotFoundError(
+                f"Missing external ndarray file while loading opts JSON: {array_path}"
+            ) from exc
 
     return {k: json_decode_value(v, parent_dir=parent_dir) for k, v in value.items()}
 
@@ -175,6 +183,7 @@ def save_opts_json(
     opts_class_name: str,
     max_inline_array_size: int = 64,
 ) -> Path:
+    """Save an opts dictionary to JSON, externalizing large ndarrays into sidecar `.npy` files."""
     path = Path(path)
     if path.suffix.lower() != ".json":
         path = path.with_suffix(".json")
@@ -199,7 +208,8 @@ def save_opts_json(
     return path
 
 
-def load_opts_json(path: str | Path) -> tuple[Path, dict[str, Any]]:
+def load_opts_json(path: str | Path) -> tuple[Path, str | None, dict[str, Any]]:
+    """Load an opts JSON payload, restoring inline arrays and sidecar `.npy` arrays."""
     path = Path(path)
     with path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
@@ -215,6 +225,30 @@ def load_opts_json(path: str | Path) -> tuple[Path, dict[str, Any]]:
             f"Invalid opts JSON file {path}: 'opts' must be a mapping, got {type(data).__name__}."
         )
 
-    return path, {
-        k: json_decode_value(v, parent_dir=path.parent) for k, v in data.items()
-    }
+    opts_class_name = payload.get("__opts_class__", None)
+    if opts_class_name is not None and not isinstance(opts_class_name, str):
+        raise TypeError(
+            f"Invalid opts JSON file {path}: '__opts_class__' must be a string when present."
+        )
+
+    return (
+        path,
+        opts_class_name,
+        {k: json_decode_value(v, parent_dir=path.parent) for k, v in data.items()},
+    )
+
+
+def repr_format(v):
+    """Format a value for compact repository-style repr output."""
+    if isinstance(v, np.generic):
+        v = v.item()
+
+    if isinstance(v, float):
+        return f"{v:.2g}"
+
+    if isinstance(v, np.ndarray):
+        if v.size > 6:
+            return f"<ndarray shape={v.shape}, too many elements to display>"
+        return repr(v)
+
+    return repr(v)

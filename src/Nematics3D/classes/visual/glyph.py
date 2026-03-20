@@ -1,5 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
 import pyvista as pv
@@ -25,6 +26,7 @@ from ..bounds import Bounds, BoundsData, as_bounds
 from .plot_figure import FigureData, PlotFigure, as_PlotFigure
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.general import find_nearest_point, fmt_value
+from Nematics3D.format import save_opts_json
 
 #!!! colorbar name args manager
 #!!! is_reset_camera commit
@@ -37,6 +39,30 @@ ScalarsMode = Callable | Sequence | None
 # fmt: off
 @dataclass(slots=True, repr=False)
 class OptsGlyph(OptsBase):
+    """
+    Glyph-specific opts object for visual style, resolver inputs, and scalar
+    display behavior.
+
+    For most users, an ``OptsGlyph`` instance is accessed through ``glyph.opts``
+    rather than created in isolation.
+
+    Important readable attributes on ``OptsGlyph`` include:
+    - ``host`` to access the owning glyph object when attached
+
+    User-facing `act_*` methods on `OptsGlyph` include the inherited `OptsBase`
+    helpers, with glyph-aware JSON export behavior:
+
+    - ``act_finalize()`` to fill defaults and enter the functioning state
+    - ``act_asdict()`` to export the current glyph opts payload
+    - ``act_save_json()`` to serialize glyph opts, replacing callable visual
+      resolvers with the current resolved ``_calc_*`` arrays when available
+    - ``act_load_json()`` to load a saved JSON payload back into this instance
+
+    Representation behavior is split intentionally:
+    - ``str(opts)`` gives a compact one-line identity like ``OptsGlyph``
+    - ``repr(opts)`` prints the full field-by-field summary that is meant for
+      interactive inspection
+    """
     # --- Visibility & Global ---
     is_visible:                 bool | Unset                        = UNSET
     is_pickable:                bool | Unset                        = UNSET
@@ -202,6 +228,39 @@ class OptsGlyph(OptsBase):
         if self.host:
             self.host.act_commit(**{key: value})
             return value
+
+    # ==================== OVERRIDE ====================
+    # OptsGlyph overrides OptsBase.act_save_json so callable visual resolvers
+    # are saved as the current resolved `_calc_*` arrays when the owning glyph
+    # is available.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_save_json(
+        self,
+        path: str | Path,
+        *,
+        max_inline_array_size: int = 64,
+        is_include_UNSET: bool = False,
+        logger=None,
+    ) -> Path:
+        opts_dict = self.act_asdict(is_include_UNSET=is_include_UNSET)
+        host = self.host
+        if host is not None:
+            for key, value in list(opts_dict.items()):
+                if callable(value):
+                    calc_name = f"_calc_{key}"
+                    calc_value = getattr(host, calc_name, None)
+                    if isinstance(calc_value, np.ndarray):
+                        opts_dict[key] = calc_value.copy()
+
+        path = save_opts_json(
+            opts_dict,
+            path,
+            opts_class_name=type(self).__name__,
+            max_inline_array_size=max_inline_array_size,
+        )
+        logger.info(f"Saved opts JSON to {path}.")
+        return path
 # fmt: on
 
 
@@ -222,16 +281,42 @@ class PlotGlyph(HostBase):
     """
     Base class for drawable glyph-style objects attached to a PlotFigure.
 
-    For most users, concrete subclasses of PlotGlyph are created by higher-level
-    visualization helpers rather than instantiated directly.
+    For most users, concrete subclasses of ``PlotGlyph`` are created by
+    higher-level visualization helpers rather than instantiated directly.
 
-    Typical usage:
+    A ``PlotGlyph`` combines the normal ``HostBase`` object/opts model with a
+    glyph-specific render pipeline:
 
-    - create or obtain a glyph object attached to a `PlotFigure`
-    - inspect and modify its visual settings through `glyph.opts`
-    - use `glyph.act_commit(...)` or `glyph.opts.<name> = value` to update how
-      the glyph is rendered
-    - use the containing figure to manage registration, picking, and display
+    - raw geometric inputs such as ``raw_coords``
+    - resolved visual arrays such as ``_calc_color`` and ``_calc_radius``
+    - live plotter entities such as the actor and optional silhouette
+
+    Important readable attributes on ``PlotGlyph`` include:
+    - ``opts`` to access the paired ``OptsGlyph`` object controlling rendering
+    - ``fig`` to access the containing ``PlotFigure``
+    - ``bounds`` to inspect the currently bound clipping ``Bounds`` object
+
+    User-facing `show_*` methods on `PlotGlyph` are inherited from `HostBase`:
+
+    - ``show_getattrs()`` to list readable glyph, host, and opts surfaces
+    - ``show_attr_desc()`` to explain one glyph attr, relation, alias, or opts attr
+    - ``show_modifiable_attrs()`` to separate host attrs, opts attrs, extra attrs,
+      and writable properties
+    - ``show_relations()`` / ``show_relation_tree()`` to inspect figure, bounds,
+      wrapper, and other object links
+    - ``show_saved_opts()`` to list named snapshots stored in ``_opts_backup``
+
+    User-facing `act_*` methods on `PlotGlyph` include both inherited host
+    actions and glyph-specific rendering helpers. Common ones are:
+
+    - ``act_commit()`` to apply host and opts updates through the managed glyph
+      update pipeline
+    - ``act_bind_bounds()`` / ``act_unbind_bounds()`` to manage clipping bounds
+    - ``act_save_opts()`` to snapshot current opts into ``_opts_backup``
+    - ``act_highlight()`` / ``act_dehighlight()`` to control silhouette emphasis
+    - ``act_interact()`` / ``act_set_interact_func()`` to manage glyph-side
+      interaction hooks
+    - ``act_remove()`` to detach the glyph from its figure and live plotter state
 
     PlotGlyph manages both the resolved visual data of the glyph and the live
     actor created in the plotter.
@@ -714,9 +799,13 @@ class PlotGlyph(HostBase):
         object.__setattr__(self, "_entity_silhouette", actor_silhouette)
 
     def _helper_clear_silhouette(self):
-        plotter = self.fig.pl
-        if getattr(self, "_entity_silhouette", None):
-            plotter.remove_actor(self._entity_silhouette)
+        fig = self.fig
+        actor_silhouette = getattr(self, "_entity_silhouette", None)
+        if fig is None or actor_silhouette is None:
+            object.__setattr__(self, "_entity_silhouette", None)
+            return
+
+        fig.pl.remove_actor(actor_silhouette)
         object.__setattr__(self, "_entity_silhouette", None)
 
     # ----------------------------------------------------------------------------------------------------
@@ -781,9 +870,11 @@ class PlotGlyph(HostBase):
                 bounds_visual_sync_name,
                 tube=self,
             )
+        figure = self.fig
         self.act_unbind_bounds(is_apply=False)
         self._helper_clear_live_actor()
-        self.fig.act_unregister(self, is_missing_ok=True)
+        if figure is not None:
+            figure.act_unregister(self, is_missing_ok=True)
 
     # ==================== OVERRIDE ====================
     # PlotGlyph overrides HostBase._helper_commit_apply_opts_main to resolve

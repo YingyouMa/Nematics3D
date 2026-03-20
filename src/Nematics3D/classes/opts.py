@@ -1,8 +1,9 @@
 from dataclasses import fields, is_dataclass, replace
+from pathlib import Path
 
 from Nematics3D.logging_decorator import logging_and_warning_decorator
 from Nematics3D.datatypes import UNSET
-from Nematics3D.format import is_equal
+from Nematics3D.format import is_equal, load_opts_json
 
 
 @logging_and_warning_decorator(start_finish_level=5)
@@ -69,7 +70,7 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
                     raise AttributeError(
                         f"Invalid option '{key}' for {type(opts).__name__}"
                     )
-                except:
+                except AttributeError:
                     logger.exception("Please check input.")
                     logger.recovery("Ignore this key in the following.")
                     kwargs.pop(key)
@@ -79,6 +80,12 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
 
 @logging_and_warning_decorator(start_finish_level=5)
 def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
+    # This helper is a convenience overlay on top of already constructed opts
+    # objects. The primary structured interface should remain the explicit opts
+    # parameters themselves, while prefixed flat kwargs act as lightweight
+    # overrides such as `figure_color=...` or `grid_spacing=...`.
+    # Prefix choices should therefore stay non-overlapping whenever possible,
+    # because ambiguous schemes make routing order-sensitive.
     """
     Distribute keyword arguments into multiple dataclass-based option objects
     according to their name prefixes, with automatic validation and leftover
@@ -288,7 +295,7 @@ def cover_value(
 
 @logging_and_warning_decorator(start_finish_level=5)
 def diff_dict_values(dict1: dict, dict2: dict, logger=None):
-
+    """Return the differing entries between two dictionaries using ndarray-aware comparison."""
     diff1 = {}
     diff2 = {}
 
@@ -309,3 +316,40 @@ def diff_dict_values(dict1: dict, dict2: dict, logger=None):
             diff2[k] = dict2[k]
 
     return diff1, diff2
+
+
+@logging_and_warning_decorator(start_finish_level=5)
+def load_json_into_opts(
+    opts, path: str | Path, *, is_finalize: bool = False, logger=None
+):
+    """Load an opts JSON file into an existing opts instance by mutating it in place."""
+    path, opts_class_name, data = load_opts_json(path)
+
+    cls = type(opts)
+    if opts_class_name is not None and opts_class_name != cls.__name__:
+        logger.warning(
+            f"Loaded opts JSON declares class {opts_class_name!r}, but current opts is {cls.__name__!r}. Continue anyway."
+        )
+
+    unknown_keys = []
+
+    with opts._helper_internal_update():
+        for key in cls.__attrs__.keys():
+            setattr(opts, key, UNSET)
+
+        for key, value in data.items():
+            if key not in cls.__attrs__:
+                unknown_keys.append(key)
+                continue
+            setattr(opts, key, value)
+
+    if unknown_keys:
+        logger.warning(
+            f"Skip unknown opts fields while loading {path.name}: {unknown_keys}."
+        )
+
+    if is_finalize and not getattr(opts, "_state_is_functioning", False):
+        opts.act_finalize()
+
+    logger.info(f"Loaded opts JSON into {cls.__name__} from {path}.")
+    return opts
