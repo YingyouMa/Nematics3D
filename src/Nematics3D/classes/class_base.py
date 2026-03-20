@@ -23,10 +23,27 @@ from ..datatypes import as_str
 #   accessors.
 # - Prefer `__relations__` over `_entity_*` when a field represents a semantic
 #   one-to-one object relationship rather than an internal runtime carrier.
-# - New relations should be declared in `__relations__` and managed through the
-#   relation helpers instead of ad hoc direct assignment.
+# - Long-lived or user-facing relations should be declared in `__relations__`
+#   so they remain documented and visible in inspection helpers. Runtime-only
+#   or ad hoc links may be added through `act_bind_relation_base()`.
+# - Dynamic relations should still be managed through the relation helpers
+#   instead of ad hoc direct assignment. If `doc=None` is passed when binding,
+#   declared relations keep their existing documentation while newly added
+#   relations receive the default doc string "Newly added relation."
+# - `raw_*` fields are readable through alias names without the prefix.
+#   Keep these aliases aligned with the actual stored fields so inspection
+#   helpers and public attribute access stay consistent.
 # - Runtime user-defined attributes should go through `act_add_attr()` rather
 #   than introducing parallel extension mechanisms.
+# - Inside subclass implementation, use `object.__setattr__()` only for
+#   initialization, validated internal state transitions, or cache/runtime
+#   writes that intentionally bypass the public assignment contract.
+# - If the subclass needs option finalization, reactive commits, wrapped-host
+#   forwarding, or synchronized state updates, prefer subclassing `HostBase`
+#   instead of extending `ClassBase` directly.
+# - Keep readable names, declared relations, and dynamic relations consistent
+#   with inspection helpers such as `show_getattrs()`, `show_relations()`,
+#   and `show_relation_tree()`.
 # - Overriding `__getattr__`, `__setattr__`, or name-handling behavior is
 #   high-risk and should preserve the semantics expected by downstream classes.
 class ClassBase:
@@ -63,6 +80,10 @@ class ClassBase:
             "Runtime storage for object relations. "
             "Key: relation name; value: target object or weakref.ref(target)."
         ),
+        "_impl_relation_docs": (
+            "A dictionary storing relation documentation strings. "
+            "Key: relation name; value: description."
+        ),
         "_impl_getattr_names": (
             "A set storing all public names that __getattr__ is allowed to resolve."
         ),
@@ -98,6 +119,8 @@ class ClassBase:
             object.__setattr__(self, "_impl_extra_attrs_docs", {})
         if not hasattr(self, "_impl_relations"):
             object.__setattr__(self, "_impl_relations", {})
+        if not hasattr(self, "_impl_relation_docs"):
+            object.__setattr__(self, "_impl_relation_docs", {})
         if not hasattr(self, "_impl_getattr_names"):
             object.__setattr__(self, "_impl_getattr_names", set())
         if not hasattr(self, "_impl_attrs_protected"):
@@ -125,8 +148,10 @@ class ClassBase:
 
     def _helper_init_relations_basic(self):
         relations = object.__getattribute__(self, "_impl_relations")
+        relation_docs = object.__getattribute__(self, "_impl_relation_docs")
         for key in type(self).__relations__.keys():
             relations.setdefault(key, None)
+            relation_docs.setdefault(key, type(self).__relations__[key])
 
     # ------------------------------------------------------------------
     # Readable-name registry
@@ -157,6 +182,7 @@ class ClassBase:
         name: str,
         target,
         *,
+        doc: str | None = None,
         is_weak: bool = True,
         is_replace: bool = True,
     ):
@@ -168,6 +194,13 @@ class ClassBase:
 
         if name not in self._impl_relations:
             self._helper_register_getattr_name(name)
+            if doc is None:
+                doc = "Newly added relation."
+        elif doc is not None:
+            doc = as_str(doc, name=f"Relation doc for instance {self.raw_name!r}")
+
+        if doc is not None:
+            self._impl_relation_docs[name] = doc
         old_target = self._helper_resolve_relation_value(name)
         if old_target is not None and old_target is not target and (not is_replace):
             raise RuntimeError(
@@ -262,11 +295,18 @@ class ClassBase:
         if attr_name in descriptions_attrs:
             return f"{attr_name!r}: {descriptions_attrs[attr_name]}"
 
+        potential_raw = f"raw_{attr_name}"
+        if potential_raw in descriptions_attrs:
+            return (
+                f"{attr_name!r}: Alias of {potential_raw!r}. "
+                f"{descriptions_attrs[potential_raw]}"
+            )
+
         descriptions_properties = self.__class__.__properties__
         if attr_name in descriptions_properties:
             return f"{attr_name!r}: {descriptions_properties[attr_name]}"
 
-        descriptions_relations = self.__class__.__relations__
+        descriptions_relations = self._impl_relation_docs
         if attr_name in descriptions_relations:
             return f"{attr_name!r}: {descriptions_relations[attr_name]}"
 
@@ -285,7 +325,9 @@ class ClassBase:
             name for name in self._impl_getattr_names if not name.startswith("_impl_")
         )
 
-        lines = []
+        lines = [
+            "When reading or assigning, the 'raw_' prefix may be omitted where a public alias exists."
+        ]
         for name in names:
             try:
                 lines.append(self.show_attr_desc(name))
@@ -363,11 +405,11 @@ class ClassBase:
     def show_relations(self, is_return=False, logger=None):
         lines = []
 
-        for name in type(self).__relations__.keys():
+        for name in self._impl_relations.keys():
             target = getattr(self, name, None)
             if target is None:
                 continue
-            desc = type(self).__relations__[name]
+            desc = self._impl_relation_docs.get(name, "Newly added relation.")
             lines.append(f"{name}: {desc}")
             lines.append(f"  current: {target}")
 
@@ -375,6 +417,101 @@ class ClassBase:
             lines.append("<none>")
 
         output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+
+    def _helper_relation_tree_node_label(self):
+        return str(self)
+
+    def _helper_relation_tree_walk(
+        self,
+        *,
+        depth: int,
+        is_include_none: bool,
+        is_follow_registry: bool,
+        _prefix: str = "",
+        _visited: set[int] | None = None,
+    ) -> list[str]:
+        if _visited is None:
+            _visited = set()
+
+        node_id = id(self)
+        lines = [f"{_prefix}{self._helper_relation_tree_node_label()}"]
+        if node_id in _visited:
+            lines[-1] += " [visited]"
+            return lines
+        _visited.add(node_id)
+
+        if depth <= 0:
+            return lines
+
+        entries = []
+        for name in self._impl_relations.keys():
+            target = self._helper_resolve_relation_value(name)
+            if target is None and not is_include_none:
+                continue
+            entries.append((name, target))
+
+        if is_follow_registry and hasattr(self, "_entity"):
+            try:
+                registry_items = list(self._entity)
+            except TypeError:
+                registry_items = []
+            for index, item in enumerate(registry_items):
+                if item is None and not is_include_none:
+                    continue
+                entries.append((f"[{index}]", item))
+
+        if not entries:
+            lines.append(f"{_prefix}  <none>")
+            return lines
+
+        last_index = len(entries) - 1
+        for index, (name, target) in enumerate(entries):
+            branch = "└─ " if index == last_index else "├─ "
+            child_prefix = _prefix + ("   " if index == last_index else "│  ")
+            if target is None:
+                lines.append(f"{_prefix}{branch}{name}: <none>")
+                continue
+
+            lines.append(f"{_prefix}{branch}{name}:")
+            walk = getattr(target, "_helper_relation_tree_walk", None)
+            if callable(walk):
+                lines.extend(
+                    walk(
+                        depth=depth - 1,
+                        is_include_none=is_include_none,
+                        is_follow_registry=is_follow_registry,
+                        _prefix=child_prefix,
+                        _visited=_visited,
+                    )
+                )
+            else:
+                lines.append(f"{child_prefix}{target}")
+
+        return lines
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_relation_tree(
+        self,
+        depth: int = 2,
+        is_return=False,
+        is_include_none: bool = False,
+        is_follow_registry: bool = False,
+        logger=None,
+    ):
+        depth = int(depth)
+        if depth < 0:
+            raise ValueError("depth must be >= 0.")
+
+        output = "\n".join(
+            self._helper_relation_tree_walk(
+                depth=depth,
+                is_include_none=is_include_none,
+                is_follow_registry=is_follow_registry,
+            )
+        )
         logger.info(output)
         if is_return:
             return output
