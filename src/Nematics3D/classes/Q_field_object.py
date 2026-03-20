@@ -252,6 +252,7 @@ class QFieldObject(ClassBase):
 
         object.__setattr__(self, "_calc_corners_index", corners_index)
         object.__setattr__(self, "_calc_corners", bounds)
+        self.objs.act_register(bounds, is_contain_ok=True)
         logger.debug(
             f"Box corners in lattice-index units is {self._calc_corners_index}."
             f"Box bounds in real-space coordinates is {self._calc_corners}."
@@ -480,19 +481,12 @@ class QFieldObject(ClassBase):
         if bounds is None:
             return self._calc_corners
 
-        bounds_name = f"{label} bounds"
         try:
-            bounds_obj = as_bounds(bounds, name=bounds_name)
+            bounds_obj = as_bounds(bounds, name=f"{label} bounds")
         except Exception:
             logger.exception("Check input.")
             logger.recovery("Use the default Q bounds instead.")
             return self._calc_corners
-
-        if bounds_obj not in self.objs:
-            set_name = getattr(bounds_obj, "act_set_name", None)
-            if callable(set_name):
-                set_name(bounds_name)
-            self.objs.act_register(bounds_obj, is_contain_ok=True)
 
         return bounds_obj
 
