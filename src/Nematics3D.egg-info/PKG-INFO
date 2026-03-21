@@ -1,3 +1,29 @@
+Metadata-Version: 2.4
+Name: Nematics3D
+Version: 0.9.0b1
+Summary: Tools for 3D nematic field analysis and visualization
+Author: Yingyou Ma
+License: MIT
+Project-URL: Homepage, https://github.com/YingyouMa/Nematics3D
+Project-URL: Issues, https://github.com/YingyouMa/Nematics3D/issues
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Scientific/Engineering :: Physics
+Requires-Python: <3.13,>=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: numpy==2.3.2
+Requires-Dist: scipy==1.16.0
+Requires-Dist: pyvista==0.46.4
+Requires-Dist: pyvistaqt==0.11.3
+Requires-Dist: vtk==9.3.1
+Requires-Dist: qtpy==2.4.1
+Requires-Dist: PyQt5==5.15.11
+
 # Nematics3D
 
 ## Creator Information

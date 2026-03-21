@@ -48,7 +48,7 @@ class InteractDisclinationLine(InteractGlyphBase):
             self._helper_create_sphere_coords(self.wrapper.opts.is_wrap),
             figure=self.host.fig,
             bounds=self.host.bounds,
-            name=f"raw defect points of {self.smooth!r}",
+            name="raw defect points of {self.smooth!r}",
             color=(0, 0, 0),
             is_reset_camera=False,
         )
@@ -142,21 +142,18 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.smooth._opts_backup[self.str_now_live].update(kwargs)
 
     def _helper_create_sphere_coords(self, is_wrap):
-        owner = self.smooth.owner
         if is_wrap:
             boundary_flag = boundary_periodic_size_to_flag(
-                owner._raw_box_size_periodic_index
+                self.smooth.owner._raw_box_size_periodic_index
             )
-            coords_index = np.where(
+            coords = np.where(
                 boundary_flag,
-                owner._raw_defect_indices % owner._raw_box_size_periodic_index,
-                owner._raw_defect_indices,
-            )
-            coords = owner._raw_grid_offset + np.dot(
-                coords_index, owner._raw_grid_transform.T
+                self.smooth.owner._calc_defect_coords
+                % self.smooth.owner._raw_box_size_periodic_index,
+                self.smooth.owner._calc_defect_coords,
             )
         else:
-            coords = owner._calc_defect_coords
+            coords = self.smooth.owner._calc_defect_coords
         return coords
 
     # ==================== OVERRIDE ====================
@@ -175,7 +172,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.wrapper.act_commit(is_wrap=is_wrap)
         finally:
             self._is_gui_updating = False
-        self.wrapper._opts_backup[self.str_now_live]["is_wrap"] = is_wrap
 
     def _on_toggle_is_smooth(self, _state):
         is_smooth = self.chk_is_smooth.isChecked()
@@ -186,7 +182,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.wrapper.act_commit(is_smooth=is_smooth)
         finally:
             self._is_gui_updating = False
-        self.wrapper._opts_backup[self.str_now_live]["is_smooth"] = is_smooth
 
     # ==================== OVERRIDE ====================
     # InteractDisclinationLine overrides PanelBase reset actions

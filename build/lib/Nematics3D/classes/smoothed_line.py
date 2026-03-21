@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from typing import Literal
 from scipy.signal import savgol_filter
 from scipy.interpolate import splprep, splev, interp1d
@@ -189,7 +189,6 @@ class SmoothedLine(HostBase):
     _impl_validators = {
         **HostBase._impl_validators,
         "coords": lambda v, d: as_points(v, name=d, dim=None),
-        "is_window_warning": lambda v, d: as_bool(v, name=d),
     }
 
     _impl_attrs_reapply_opts_after_raw = {"coords"}
@@ -209,7 +208,6 @@ class SmoothedLine(HostBase):
         name: str | None = None,
         opts: OptsSmooth | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        is_window_warning: bool = True,
         **kwargs,
     ):
 
@@ -217,18 +215,12 @@ class SmoothedLine(HostBase):
             line_coord_input,
             self.__attrs__["raw_coords"],
         )
-        if is_window_warning is None:
-            is_window_warning = True
-        is_window_warning = self._impl_validators["is_window_warning"](
-            is_window_warning,
-            self.__attrs__["state_is_window_warning"],
-        )
 
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "_calc_coords", self.raw_coords)
 
         object.__setattr__(self, "_state_is_smoothed", False)
-        object.__setattr__(self, "state_is_window_warning", is_window_warning)
+        object.__setattr__(self, "state_is_window_warning", True)
         object.__setattr__(self, "_state_status", "Failure, reason unknown.")
 
         super().__init__(

@@ -119,10 +119,7 @@ def _get_method_logging_context(func, args):
     if obj_cls is None or obj_cls.__name__ != cls_name_in_def:
         return base_display_name, owner_label
 
-    try:
-        name_attr = getattr(owner_target, "name", None)
-    except Exception:
-        name_attr = None
+    name_attr = getattr(owner_target, "name", None)
     if name_attr is not None:
         owner_label = f"{cls_name_in_def}[name={name_attr!r}]"
     else:

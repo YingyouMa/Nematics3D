@@ -56,40 +56,18 @@ from .class_base import ClassBase
 @dataclass(slots=True)
 class InputQ:
     """
-    Validated input bundle for initializing a `QFieldObject`.
+    Structured input bundle for initializing a QFieldObject.
 
-    At least one field description must be provided:
+    Important readable attributes:
 
-    - provide `Q`, or
-    - provide `n`, optionally together with `S`.
-
-    If `n` is provided while `S` is omitted, `S=1` is used everywhere.
-    If both `Q` and `n` are provided, `n`/`S` take priority and `Q` is ignored.
-
-    Parameters
-    ----------
-    Q
-        Q-tensor field on the lattice. Compatible input representations are
-        accepted and normalized to the internal `QField5` representation.
-    S
-        Scalar order parameter field with shape matching `n.shape[:3]`.
-        Used together with `n` to reconstruct `Q`.
-    n
-        Director field with shape `(..., 3)`. Used to reconstruct `Q` when a
-        raw Q-tensor field is not supplied or should be overridden.
-    box_periodic_flag
-        Periodic-boundary-condition flags for the three lattice directions.
-    grid_offset
-        Translation offset that maps lattice indices to real-space coordinates.
-    grid_transform
-        3x3 linear transform that maps lattice indices to real-space
-        coordinates.
-    default_miminum_line_length_smooth
-        Default minimum disclination-line length required for smoothing.
-    default_smooth_window_length
-        Default smoothing window length used for line smoothing.
-    default_miminum_line_length_visual
-        Default minimum disclination-line length required for visualization.
+    - `Q`: raw Q-tensor field, either in 5-component or 3x3 form.
+    - `S`: scalar-order field paired with the director field.
+    - `n`: director field used to reconstruct Q when `Q` is omitted.
+    - `box_periodic_flag`: per-axis periodic-boundary-condition flags.
+    - `grid_offset` / `grid_transform`: mapping from lattice indices to real-space coordinates.
+    - `default_miminum_line_length_smooth`: default minimum line length for smoothing.
+    - `default_smooth_window_length`: default smoothing window length.
+    - `default_miminum_line_length_visual`: default minimum line length for visualization.
     """
 
     Q: Union[QField5, QField9] | Unset = UNSET
@@ -390,15 +368,9 @@ class QFieldObject(ClassBase):
     # -------------------------------
     # Defect and line analysis
     # -------------------------------
+
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
-        """
-        Detect defect points from the current director field.
-
-        This updates both `_calc_defect_indices` in lattice-index coordinates
-        and `_calc_defect_grid` in real-space coordinates using the current
-        grid transform and offset.
-        """
         object.__setattr__(
             self,
             "_calc_defect_indices",
@@ -989,6 +961,3 @@ class QFieldObject(ClassBase):
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q
-
-
-

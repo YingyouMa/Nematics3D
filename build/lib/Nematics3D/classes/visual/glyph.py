@@ -390,7 +390,7 @@ class PlotGlyph(HostBase):
         coords: np.ndarray,
         opts_type: Type[OptsBase],
         category: str,
-        name: str | None,
+        name: str,
         name_replace: str,
         opts: OptsGlyph | None = None,
         figure: FigureData | None = None,
@@ -425,14 +425,11 @@ class PlotGlyph(HostBase):
             self.show_attr_desc("raw_category"),
         )
         object.__setattr__(self, "raw_category", category)
-        if name is None:
-            name = name_replace
-        else:
-            name = as_str(
-                name,
-                name=self.show_attr_desc("raw_name"),
-                replace=name_replace,
-            )
+        name = as_str(
+            name,
+            name=self.show_attr_desc("raw_name"),
+            replace=name_replace,
+        )
         object.__setattr__(self, "_opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_empty", False)
