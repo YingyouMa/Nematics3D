@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import time
 from typing import Union
 from dataclasses import replace, dataclass, field, fields
@@ -55,6 +55,21 @@ from .class_base import ClassBase
 
 @dataclass(slots=True)
 class InputQ:
+    """
+    Structured input bundle for initializing a QFieldObject.
+
+    Important readable attributes:
+
+    - `Q`: raw Q-tensor field, either in 5-component or 3x3 form.
+    - `S`: scalar-order field paired with the director field.
+    - `n`: director field used to reconstruct Q when `Q` is omitted.
+    - `box_periodic_flag`: per-axis periodic-boundary-condition flags.
+    - `grid_offset` / `grid_transform`: mapping from lattice indices to real-space coordinates.
+    - `default_miminum_line_length_smooth`: default minimum line length for smoothing.
+    - `default_smooth_window_length`: default smoothing window length.
+    - `default_miminum_line_length_visual`: default minimum line length for visualization.
+    """
+
     Q: Union[QField5, QField9] | Unset = UNSET
     S: SField | Unset = UNSET
     n: nField | Unset = UNSET
@@ -95,6 +110,10 @@ class InputQ:
         ),
     }
 
+    # ==================== OVERRIDE ====================
+    # InputQ overrides dataclass assignment so every field stays validated both
+    # during initialization and during later interactive edits.
+    # ==================================================
     def __setattr__(self, key, value):
         if key in self._validators:
             if value is not UNSET:
@@ -104,6 +123,47 @@ class InputQ:
 
 
 class QFieldObject(ClassBase):
+    """
+    QFieldObject stores a Q-tensor field together with derived geometry,
+    detected defects, disclination lines, and common visualization helpers.
+
+    Important readable attributes:
+
+    - `name`: identity of this Q field object.
+    - `S`: scalar-order field derived from or paired with the Q data.
+    - `n`: director field derived from or paired with the Q data.
+    - `lines`: classified disclination lines registered under this Q field.
+    - `figures` / `figs`: FigureManager storing figures created from this Q field.
+    - `objects` / `objs`: RegistryBase storing physical objects derived from this Q field.
+    - `interpolator`: QInterpolator used for off-grid sampling.
+    - `_calc_grid`: full real-space lattice coordinates of the Q field.
+    - `_calc_corners`: Bounds object describing the Q-field box.
+    - `_calc_defect_indices` / `_calc_defect_grid`: detected defect positions in index and world coordinates.
+
+    Common inspection helpers:
+
+    - `show_getattrs()`: show the main readable Q-field attributes.
+    - `show_attr_desc(name)`: describe a specific readable attribute.
+    - `show_relations()`: show bound figures, object registry, and interpolator.
+    - `show_relation_tree()`: show how this Q field connects to derived objects.
+
+    Common user actions:
+
+    - `act_defect_detect()`: detect defect points from the director field.
+    - `act_lines_classify()`: classify detected defects into disclination lines.
+    - `act_lines_smooth(...)`: smooth eligible classified lines.
+    - `act_add_interpolator()`: create and bind a QInterpolator if absent.
+    - `act_interpolate(points, ...)`: interpolate the Q field at arbitrary points.
+    - `act_visualize_disclination_lines(...)`: draw disclination lines on a figure.
+    - `act_visualize_n_plane(...)`: create a Cartesian director analysis plane.
+    - `act_visualize_S_plane(...)`: create a Cartesian scalar-order analysis plane.
+    - `act_visualize_n_near_defect(...)`: create a polar director analysis plane around a smoothed line.
+
+    Representation:
+
+    - `str(obj)` returns the short ClassBase-style identity.
+    - `repr(obj)` returns the compact ClassBase summary.
+    """
 
     __attrs__ = {
         # --- Identity ---
@@ -148,7 +208,17 @@ class QFieldObject(ClassBase):
         "figs": "Read-only: Visualization figures. Alias of `figures`.",
         "objs": "Read-only: Physical objects. Alias of `objects`.",
     }
+    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
 
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # QFieldObject overrides ClassBase.__init__ because it must normalize input
+    # Q/S/n data, derive geometry caches, optionally detect defects and lines,
+    # and create the default interpolator and figure/object managers.
+    # ==================================================
     @logging_and_warning_decorator()
     def __init__(
         self,
@@ -295,6 +365,10 @@ class QFieldObject(ClassBase):
         self.act_bind_relation_base("figures", figures, is_weak=False)
         figures.act_bind_relation_base("owner", self, is_weak=True)
 
+    # -------------------------------
+    # Defect and line analysis
+    # -------------------------------
+
     @logging_and_warning_decorator(start_finish_level=5)
     def act_defect_detect(self, logger=None):
         object.__setattr__(
@@ -413,6 +487,10 @@ class QFieldObject(ClassBase):
             self.act_add_interpolator()
         return self.interpolator.interpolate(points, is_index=is_index)
 
+    # -------------------------------
+    # Visualization helpers
+    # -------------------------------
+
     @logging_and_warning_decorator()
     def _helper_set_figure(
         self,
@@ -460,7 +538,7 @@ class QFieldObject(ClassBase):
                         "`figure` input must be either index in FigureManager (str or int) "
                         "or a valid PlotFigure object, or a valid pyvistaqt BackgroundPlotter object, "
                         "or None (creating a new figure) "
-                        "Got type {type(figure)!r} instead."
+                        f"Got type {type(figure)!r} instead."
                     )
             except Exception:
                 logger.exception("Could not find figure in FigureManager.")
@@ -855,6 +933,10 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
+    # -------------------------------
+    # Readable properties and array-style access
+    # -------------------------------
 
     @property
     def lines(self):

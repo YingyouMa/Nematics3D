@@ -495,6 +495,10 @@ class MovePointConsole:
 
 class PanelBase(QtWidgets.QWidget):
 
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
     def __init__(
         self,
         host,
@@ -609,6 +613,10 @@ class PanelBase(QtWidgets.QWidget):
                 "this object."
             )
 
+    # -------------------------------
+    # Slider synchronization and scheduling
+    # -------------------------------
+
     def _sync_from_host_slider(self, attr: str, value: float):
         s = self.sliders[attr]
         s.set_tick(value, is_block_signals=True)
@@ -667,6 +675,10 @@ class PanelBase(QtWidgets.QWidget):
                 slider.sliderPressed.connect(self._helper_begin_slider_interaction)
                 slider.sliderReleased.connect(self._helper_end_slider_interaction)
 
+    # -------------------------------
+    # Subclass hooks
+    # -------------------------------
+
     def build_ui(self):
         raise NotImplementedError
 
@@ -675,6 +687,10 @@ class PanelBase(QtWidgets.QWidget):
 
     def _sync_func(self):
         raise NotImplementedError
+
+    # -------------------------------
+    # Public panel actions
+    # -------------------------------
 
     def act_set_slider_throttle_ms(self, value: int):
         self.slider_throttle_ms = int(value)
@@ -687,6 +703,15 @@ class PanelBase(QtWidgets.QWidget):
         original = self.host._opts_backup[self.str_now]
         self.host.act_commit(**original)
         self.host._opts_backup[self.str_now_live] = dict(original)
+
+    # -------------------------------
+    # Qt lifecycle
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # PanelBase overrides QWidget.closeEvent so panel-specific cleanup always
+    # runs before the window is accepted and removed.
+    # ==================================================
 
     def closeEvent(self, event: QtGui.QCloseEvent):
         try:
@@ -701,6 +726,10 @@ class PanelBase(QtWidgets.QWidget):
         self.host.act_detach_sync_task(self.str_now_live)
         if self.fig is not None and hasattr(self.fig, "act_unregister_interact"):
             self.fig.act_unregister_interact(self)
+
+    # -------------------------------
+    # Geometry and naming helpers
+    # -------------------------------
 
     @staticmethod
     def _vect_text(vect, name):
@@ -718,6 +747,10 @@ class PanelBase(QtWidgets.QWidget):
     @staticmethod
     def get_polar_angle(vec):
         return geometry_get_polar_angle(vec)
+
+    # -------------------------------
+    # Readable identity
+    # -------------------------------
 
     @property
     def name(self):

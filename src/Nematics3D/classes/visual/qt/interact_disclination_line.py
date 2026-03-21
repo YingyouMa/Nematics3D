@@ -10,7 +10,7 @@ from Nematics3D.logging_decorator import logging_and_warning_decorator
 
 class InteractDisclinationLine(InteractGlyphBase):
 
-    # @logging_and_warning_decorator()
+    @logging_and_warning_decorator()
     def __init__(self, host, logger=None):
         # host is the PlotTube
         self.wrapper = host.wrapper  # DisclinationLineSmoothPlot
@@ -40,6 +40,9 @@ class InteractDisclinationLine(InteractGlyphBase):
                 f"available as the current figure's interacts[{self.name!r}].host.wrapper.owner."
             )
         object.__setattr__(self.smooth.opts, "min_line_length", 2)
+        logger.warning(
+            "Opening this panel temporarily forces smooth.opts.min_line_length to 2 so short disclination lines can still adjust window_length here."
+        )
 
         self.spheres = PlotSphere(
             self._helper_create_sphere_coords(self.wrapper.opts.is_wrap),

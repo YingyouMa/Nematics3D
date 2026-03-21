@@ -446,7 +446,7 @@ class PlotRod(PlotGlyph):
         self._helper_init_end()
 
     # -------------------------------
-    # Resolver and expanded attribute helpers
+    # Resolver helpers
     # -------------------------------
 
     # ==================== OVERRIDE ====================
@@ -463,17 +463,6 @@ class PlotRod(PlotGlyph):
             return self.raw_orient
         return super()._helper_get_resolver_source()
 
-    # ==================== OVERRIDE ====================
-    # PlotRod overrides PlotGlyph.__getattribute__ because rod geometry expands
-    # each logical sample into two endpoints, so several resolved per-rod arrays
-    # must be repeated to stay aligned with the endpoint-based polydata.
-    # ==================================================
-    def __getattribute__(self, name):
-        value = object.__getattribute__(self, name)
-        if name in ["_calc_color", "_calc_opacity", "_calc_radius", "_calc_scalars"]:
-            value = np.repeat(value, 2, axis=0)
-        return value
-
     # -------------------------------
     # Center clipping and polyline preparation
     # -------------------------------
@@ -482,6 +471,13 @@ class PlotRod(PlotGlyph):
     # PlotRod overrides PlotGlyph._helper_bound_coords because rods can
     # center-clip by filtering their raw center points directly.
     # ==================================================
+    def _helper_expand_endpoint_values(self, values, keep_index=None):
+        values = np.asarray(values)
+        if keep_index is not None:
+            keep_index = np.asarray(keep_index, dtype=int)
+            values = values[keep_index]
+        return np.repeat(values, 2, axis=0)
+
     def _helper_bound_coords(self):
         bounds = self.bounds
         if bounds is None:
@@ -571,9 +567,6 @@ class PlotRod(PlotGlyph):
     # can directly filter per-rod pointwise visual data with the kept indices.
     # ==================================================
     def _helper_set_poly(self, poly):
-        if self.state_clip_mode != "center":
-            return super()._helper_set_poly(poly)
-
         if poly.n_points == 0:
             return
 
@@ -586,10 +579,10 @@ class PlotRod(PlotGlyph):
         radius_raw = object.__getattribute__(self, "_calc_radius")
         scalars_raw = object.__getattribute__(self, "_calc_scalars")
 
-        color = np.repeat(color_raw[keep_index], 2, axis=0)
-        opacity = np.repeat(opacity_raw[keep_index], 2, axis=0)
-        radius = np.repeat(radius_raw[keep_index], 2, axis=0)
-        scalars = np.repeat(scalars_raw[keep_index], 2, axis=0)
+        color = self._helper_expand_endpoint_values(color_raw, keep_index)
+        opacity = self._helper_expand_endpoint_values(opacity_raw, keep_index)
+        radius = self._helper_expand_endpoint_values(radius_raw, keep_index)
+        scalars = self._helper_expand_endpoint_values(scalars_raw, keep_index)
 
         poly.point_data["radius"] = radius
         poly.point_data["opacity"] = opacity

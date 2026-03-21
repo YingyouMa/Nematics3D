@@ -1,13 +1,17 @@
-﻿"""
+"""
 Miscellaneous shared utilities. If a helper does not clearly belong to a more specific
 module yet, it can live here for now.
 """
 
 import numpy as np
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping, Optional
-from Nematics3D.format import fmt_value, is_equal, is_equal_array
+from Nematics3D.format import fmt_value, is_equal, is_equal_array, is_given_str
 from Nematics3D.logging_decorator import logging_and_warning_decorator
-from .datatypes import as_ColorRGB, Vect, as_Vect, Tensor
+from .geometry import (
+    find_plane_normal,
+    find_rotation_axis,
+    rotation_matrix_from_vectors,
+)
 
 
 def make_hash_table(
@@ -533,7 +537,8 @@ def split_points(
     - Works for arbitrary D (not just 3).
     - Exact equality is used. For floating-point data, consider pre-rounding if your points come from
       numerical computations with tiny differences (e.g., `np.round(points, decimals=9)`).
-    - This implementation uses a per-row â€œbyte viewâ€ (np.void) to enable row-wise set operations efficiently.
+    - Each C-contiguous row is temporarily reinterpreted as one ``np.void`` blob, so ``setdiff1d`` and
+      ``intersect1d`` compare whole rows instead of comparing elements independently.
     - Empty arrays are fully supported as long as they have shape (0, D).
 
     Examples
@@ -868,7 +873,7 @@ def find_nearest_point(query_pt, coords, is_return_idx=False):
     if pts.ndim != 2 or pts.shape[1] != len(q):
         raise ValueError(
             f"`coords` shape is {pts.shape},"
-            f"while `query_pt` shape is {query_pt.shape}"
+            f"while normalized `query_pt` shape is {q.shape}"
         )
 
     d = pts - q
@@ -920,10 +925,6 @@ def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.
 
     idx = int(np.argmin(d2))
     return proj[idx]
-
-
-def is_given_str(a, b):
-    return True if isinstance(a, str) and a == b else False
 
 
 # def find_neighbor_coord(x, reservoir, dist_large, dist_small=0, strict=(0, 0)):

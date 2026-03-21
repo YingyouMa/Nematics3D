@@ -22,7 +22,7 @@ def fmt_value(v, ndigits=2):
         return str(v)
 
 
-def is_equal_array(v1, v2, logger=None):
+def is_equal_array(v1, v2):
     """Compare two array-like values as ndarrays, treating NaNs as equal."""
     try:
         arr1 = np.asarray(v1)
@@ -45,6 +45,11 @@ def is_equal(v1, v2):
             return v1 == v2
         except Exception:
             return False
+
+
+def is_given_str(a, b):
+    """Return True only when ``a`` is exactly the given string ``b``."""
+    return isinstance(a, str) and a == b
 
 
 def json_callable_note(value: Callable) -> str:

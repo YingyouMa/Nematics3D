@@ -3,7 +3,6 @@ Field-level utilities for structured data on grids, including Q-tensor conversio
 coordinate-grid generation, transforms, and periodic-boundary operations.
 """
 
-
 import time
 from typing import Tuple, Optional, Union, Sequence, List
 
@@ -211,19 +210,22 @@ def align_directors(n_reference: nField, n_target: nField) -> nField:
     """
     n_reference = check_Sn(n_reference, "n", is_3d_strict=False)
     n_target = check_Sn(n_target, "n", is_3d_strict=False)
-    signs = np.sign(np.einsum("...i,...i->...", n_reference, n_target))
+    dots = np.einsum("...i,...i->...", n_reference, n_target)
+    signs = np.where(dots < 0, -1, 1)
     return np.einsum("...,...i->...i", signs, n_target)
 
+
 def align_stack(stack):
-    
-    dots = np.einsum('...i,...i->...', stack[:-1], stack[1:])
-    
+
+    dots = np.einsum("...i,...i->...", stack[:-1], stack[1:])
+
     flips = np.ones(stack.shape[:-1])
     flips[1:] = np.where(dots < 0, -1, 1)
-    
+
     acc_flips = np.cumprod(flips, axis=0)
 
     return stack * acc_flips[..., np.newaxis]
+
 
 def generate_coordinate_grid(
     shape_source: Tuple[int, ...], shape_target: Tuple[int, ...]
@@ -349,6 +351,7 @@ def generate_fixed_step_grid(
     grid_int = np.stack(mesh_int, axis=-1)
 
     return grid, grid_int, (size1_eff, size2_eff)
+
 
 def apply_linear_transform(
     points: np.ndarray,
@@ -718,6 +721,3 @@ def n_color_immerse(n: nField) -> List[Tuple]:
         colors.append(tuple(color))
 
     return colors
-
-
-

@@ -3,7 +3,7 @@ from qtpy import QtWidgets
 
 from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper
 from ..plot_rod import PlotRod
-from Nematics3D.general import is_equal, is_given_str
+from Nematics3D.format import is_equal, is_given_str
 
 
 class InteractDefectSection(PanelBase):
@@ -250,7 +250,6 @@ class InteractDefectSection(PanelBase):
             value_init=int(self.state["layers"]),
             value_fmt="{:.0f}",
         )
-
 
         self.on_changed(0, is_commit=False)
 

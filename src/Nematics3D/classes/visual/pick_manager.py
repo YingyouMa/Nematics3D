@@ -125,7 +125,6 @@ class PickManager:
             "A weak reference to the PlotFigure that owns this pick manager."
         ),
         "_impl_registry": "A registry dict: actor -> visual object",
-        "_impl_active_glyphs": "Set of currently active glyphs (multi-selection).",
         "_state_pick_count": "Monotonic counter for marker numbering (never decreases).",
         "_state_last_click_time": "Last click timestamp (monotonic time) for double-click detection.",
         "_state_last_click_actor": "Last clicked actor for double-click detection.",
@@ -151,7 +150,6 @@ class PickManager:
         object.__setattr__(self, "_state_last_rclick_actor", None)
         object.__setattr__(self, "_entity_markers", [])
         object.__setattr__(self, "_entity_helper_markers", {})
-        object.__setattr__(self, "_impl_active_glyphs", [])
         object.__setattr__(self, "_entity_settings_action", None)
 
         if opts is None:
@@ -388,9 +386,13 @@ class PickManager:
 
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
-        # World-space threshold (tune as needed)
+        # Compare squared distances against the squared world-space threshold.
         thr = self.opts.marker_proximity_threshold
-        if nearest_pack is not None and nearest_d2 is not None and nearest_d2 <= thr:
+        if (
+            nearest_pack is not None
+            and nearest_d2 is not None
+            and nearest_d2 <= (thr * thr)
+        ):
             self._helper_remove_marker_pack(nearest_pack)
             pos = nearest_pack["world_xyz"]
             self.owner.console.println(

@@ -14,6 +14,10 @@ from .panel_base import (
 
 
 class InteractGlyphBase(PanelBase):
+    # -------------------------------
+    # Helper marker management
+    # -------------------------------
+
     def _helper_panel_marker_key(self):
         return f"{self.str_now}::calc0"
 
@@ -36,6 +40,15 @@ class InteractGlyphBase(PanelBase):
         if pm is None:
             return
         pm.act_remove_helper_marker(self._helper_panel_marker_key())
+
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # InteractGlyphBase overrides PanelBase.__init__ to install glyph-specific
+    # configuration flags and the first-point helper marker workflow.
+    # ==================================================
 
     def __init__(
         self,
@@ -61,6 +74,15 @@ class InteractGlyphBase(PanelBase):
         display_title = title or f"Control of {host}"
         super().__init__(host, figure, title=display_title)
         self._helper_update_first_point_marker()
+
+    # -------------------------------
+    # UI construction hooks
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # InteractGlyphBase overrides PanelBase.build_ui to construct the shared
+    # glyph-control widgets before subclass-specific extra groups are added.
+    # ==================================================
 
     def build_ui(self):
         # ----------------------------
@@ -175,6 +197,10 @@ class InteractGlyphBase(PanelBase):
     def _build_extra_group(self):
         pass
 
+    # -------------------------------
+    # Radius and silhouette helpers
+    # -------------------------------
+
     def _helper_get_first_used_point_radius(self):
         if not hasattr(self.host, "_calc_radius"):
             return None, None
@@ -189,7 +215,11 @@ class InteractGlyphBase(PanelBase):
             if keep_index.size == 0:
                 return None, None
             source_index = int(keep_index[0])
-            return float(radius_all[source_index]), source_index
+            radius_index = source_index
+            raw_coords = getattr(self.host, "raw_coords", None)
+            if raw_coords is not None and len(radius_all) == 2 * len(raw_coords):
+                radius_index = 2 * source_index
+            return float(radius_all[radius_index]), source_index
 
         return float(radius_all[0]), 0
 
@@ -217,6 +247,10 @@ class InteractGlyphBase(PanelBase):
         self._set_host_silhouette_enabled(True)
         if hasattr(self.host, "_helper_add_silhouette"):
             self.host._helper_add_silhouette()
+
+    # -------------------------------
+    # Commit pipeline
+    # -------------------------------
 
     def _helper_build_commit_params(self):
         params = {}
@@ -256,6 +290,11 @@ class InteractGlyphBase(PanelBase):
     def _helper_run_commit(self, params):
         self.host.act_commit(**params)
 
+    # ==================== OVERRIDE ====================
+    # InteractGlyphBase overrides PanelBase.commit to translate UI state into
+    # glyph-specific commit parameters and refresh helper markers afterward.
+    # ==================================================
+
     def commit(self):
         params = self._helper_build_commit_params()
 
@@ -284,6 +323,11 @@ class InteractGlyphBase(PanelBase):
         if not self._is_block_chk_commit:
             self.commit()
 
+    # ==================== OVERRIDE ====================
+    # InteractGlyphBase overrides PanelBase._sync_func so live host updates can
+    # be reflected back into the panel widgets and helper marker state.
+    # ==================================================
+
     def _sync_func(self, **kwargs):
         if not getattr(self, "_is_gui_updating", False):
             self.host._opts_backup[self.str_now_live].update(kwargs)
@@ -302,6 +346,15 @@ class InteractGlyphBase(PanelBase):
                 self._is_block_chk_commit = False
 
             self._helper_update_first_point_marker()
+
+    # -------------------------------
+    # Panel lifecycle
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # InteractGlyphBase overrides PanelBase.on_close to remove the helper
+    # marker before the shared panel cleanup runs.
+    # ==================================================
 
     def on_close(self):
         self._helper_remove_first_point_marker()

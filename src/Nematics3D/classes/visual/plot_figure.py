@@ -152,6 +152,8 @@ class PlotFigure(HostBase, RegistryBase):
       apply a standard camera view and sync it back to `opts`.
     - `act_register(term)` / `act_unregister(term)`: manage plotted objects in
       the figure registry.
+    - `act_clear_category(category, ...)`: remove all registered objects in one
+      category.
     - `act_savefig(...)`: save a screenshot of the current figure.
 
     Representation:
@@ -669,6 +671,25 @@ class PlotFigure(HostBase, RegistryBase):
         super().act_register(term, is_contain_ok=is_contain_ok)
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
+
+    def act_clear_category(self, category, is_missing_ok=True):
+        category = as_str(category, name="The category to clear from figure")
+        terms = [
+            term for term in list(self) if getattr(term, "category", None) == category
+        ]
+        if not terms:
+            if is_missing_ok:
+                return []
+            raise KeyError(f"Category {category!r} does not exist in this figure.")
+
+        removed = []
+        for term in terms:
+            if callable(getattr(term, "act_remove", None)):
+                term.act_remove()
+            else:
+                self.act_unregister(term, is_missing_ok=True)
+            removed.append(term)
+        return removed
 
     def act_savefig(
         self, filename, scale=1, is_transparent_background=False, window_size=None
