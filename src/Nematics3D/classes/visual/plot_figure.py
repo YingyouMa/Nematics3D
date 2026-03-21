@@ -29,6 +29,36 @@ from .qt.console import ScopedConsoleDock
 
 @dataclass(slots=True, repr=False)
 class OptsFigure(OptsBase):
+    """
+    Options object controlling a PlotFigure camera and window state.
+
+    This is the user-facing options container paired with PlotFigure. Most figure
+    configuration is read through `figure.opts` and updated through
+    `figure.opts.<name> = value`, `figure.act_commit(...)`, or the inherited
+    OptsBase helper methods.
+
+    Important readable attributes:
+
+    - `host`: the PlotFigure currently using this opts object, if any.
+    - `azimuth`, `elevation`, `roll`, `distance`, `focal_point`: the camera pose
+      stored in spherical form around the focal point.
+    - `size`: the figure window size.
+    - `bg_color`: the figure background color.
+
+    Common user actions:
+
+    - `act_finalize()`: validate defaults and lock the opts into functioning use.
+    - `act_asdict()`: export the current opts values as a plain dictionary.
+    - `act_save_json()`: save the current opts to JSON, with large arrays stored
+      as sidecar `.npy` files when needed.
+    - `act_load_json()`: load a JSON snapshot into this existing opts object.
+
+    Representation:
+
+    - `str(opts)` returns a short one-line identity.
+    - `repr(opts)` returns the full current opts summary.
+    """
+
     azimuth: float | Unset = UNSET
     elevation: float | Unset = UNSET
     roll: float | Unset = UNSET
@@ -91,25 +121,44 @@ class PlotFigure(HostBase, RegistryBase):
     """
     Figure object for interactive or off-screen 3D visualization.
 
-    For most users, PlotFigure is the main visualization container used by
-    plotting and visualization methods across the package.
+    PlotFigure is the main scene container used by the visual classes in this
+    repository. It combines HostBase-style opts/commit behavior with RegistryBase
+    management of the plotted objects attached to the scene.
 
-    Typical usage:
+    Important readable attributes:
 
-    - create a new figure with `PlotFigure()` or `PlotFigure(is_off_screen=True)`
-    - pass the figure into other visualization helpers so multiple objects share
-      the same scene
-    - read the current figure settings through `figure.opts`
-    - modify figure settings through `figure.opts.<name> = value` or
-      `figure.act_commit(...)`
-    - inspect available figure settings through `figure.opts`
-    - access attached plotted objects through the registry behavior inherited by
-      the figure
-    - use `str(figure)` for a short identity view and `repr(figure)` for a more
-      detailed summary of attached objects
+    - `opts`: the paired OptsFigure controlling camera and figure settings.
+    - `pl`: the underlying PyVista plotter or BackgroundPlotter backend.
+    - `pl_type`: short plotter identifier, `'B'` for BackgroundPlotter and `'P'`
+      for plain PyVista Plotter.
+    - `is_alive`: whether the wrapped plotter window/backend is still valid.
 
-    PlotFigure manages both the rendering backend and the registry of objects
-    attached to that backend.
+    Common inspection helpers:
+
+    - `show_getattrs()`: show the main readable figure attributes.
+    - `show_modifiable_attrs()`: show which figure or opts attributes can be
+      changed through the public interface.
+    - `show_attr_desc(name)`: describe a specific readable attribute.
+    - `show_relations()`: show object relations inherited from HostBase/ClassBase.
+
+    Common user actions:
+
+    - `act_commit(...)`: update figure settings through the host/opts pipeline.
+    - `act_set_name(name)`: rename the figure and sync the interactive window
+      title when applicable.
+    - `act_reset_camera()`: reset the camera and sync the resulting pose back to
+      `opts`.
+    - `act_view_xy()`, `act_view_xz()`, `act_view_yz()`, `act_view_isometric()`:
+      apply a standard camera view and sync it back to `opts`.
+    - `act_register(term)` / `act_unregister(term)`: manage plotted objects in
+      the figure registry.
+    - `act_savefig(...)`: save a screenshot of the current figure.
+
+    Representation:
+
+    - `str(figure)` returns the short host-style identity.
+    - `repr(figure)` returns the detailed host summary together with the attached
+      registry contents.
     """
 
     _DEFAULT_NAME = "unnamed figure"
@@ -177,6 +226,9 @@ class PlotFigure(HostBase, RegistryBase):
         ),
         "interacts": (
             "Read-only: Alias of `_entity_interacts` (or None if not initialized)."
+        ),
+        "is_alive": (
+            "Read-only: Whether the wrapped plotter/window backend is still alive."
         ),
     }
 
@@ -308,6 +360,10 @@ class PlotFigure(HostBase, RegistryBase):
 
             main_window.closeEvent = _close_event_with_interacts
 
+    # -------------------------------
+    # Interactive figure services
+    # -------------------------------
+
     @property
     def console(self):
         return getattr(self, "_entity_console", None)
@@ -346,6 +402,10 @@ class PlotFigure(HostBase, RegistryBase):
             except Exception:
                 pass
 
+    # -------------------------------
+    # Naming and commit hooks
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotFigure overrides HostBase/ClassBase name handling so BackgroundPlotter
     # window titles stay synchronized with the figure name.
@@ -381,6 +441,10 @@ class PlotFigure(HostBase, RegistryBase):
             )
 
         self._helper_sync_from_opts()
+
+    # -------------------------------
+    # Plotter state and liveness
+    # -------------------------------
 
     @property
     def pl(self):
@@ -426,6 +490,10 @@ class PlotFigure(HostBase, RegistryBase):
             "Please explicitly use the `is_alive` property instead."
         )
 
+    # -------------------------------
+    # Plotter backend helpers
+    # -------------------------------
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_init_overlay_renderer(self, logger=None) -> vtk.vtkRenderer:
         """
@@ -455,7 +523,7 @@ class PlotFigure(HostBase, RegistryBase):
         return overlay
 
     # -------------------------------
-    # Functions about camera settings
+    # Camera synchronization
     # -------------------------------
 
     def _helper_sync_from_plotter(
@@ -564,6 +632,10 @@ class PlotFigure(HostBase, RegistryBase):
 
         return pos, focal, up
 
+    # -------------------------------
+    # Camera view actions
+    # -------------------------------
+
     def act_reset_camera(self):
         self.pl.reset_camera()
         self._helper_sync_from_plotter()
@@ -583,6 +655,10 @@ class PlotFigure(HostBase, RegistryBase):
     def act_view_isometric(self):
         self.pl.view_isometric()
         self._helper_sync_from_plotter()
+
+    # -------------------------------
+    # Registry integration and export
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotFigure overrides RegistryBase.act_register so camera state can be
@@ -606,6 +682,10 @@ class PlotFigure(HostBase, RegistryBase):
             window_size=window_size,
         )
 
+    # -------------------------------
+    # Representation
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotFigure overrides HostBase.__repr__ to combine the host summary with
     # the registry-style listing of objects attached to the figure.
@@ -622,7 +702,7 @@ class PlotFigure(HostBase, RegistryBase):
     # ==================================================
 
     def __str__(self):
-        return HostBase.__repr__(self)
+        return HostBase.__str__(self)
 
 
 FigureData = PlotFigure | BackgroundPlotter | pv.Plotter
@@ -654,9 +734,9 @@ def as_PlotFigure(figure, opts_figure=None, logger=None):
                 "`figure` input must be a valid PlotFigure object, "
                 "or a valid pyvista plotter object (including BackgroundPlotter) "
                 "or None (creating a new figure) "
-                "Got type {type(figure)!r} instead."
+                f"Got type {type(figure)!r} instead."
             )
-    except:
+    except Exception:
         logger.exception("Invalid figure input")
         logger.recovery("Create a new figure instead.")
         figure = PlotFigure(opts=opts_figure)

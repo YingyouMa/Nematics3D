@@ -24,6 +24,23 @@ class OptsSurface(OptsGlyph):
     scalar mapping, and other display properties of the generated surface
     mesh.
 
+    Important readable attributes:
+
+    - `host`: the PlotSurface currently using this opts object, if any.
+    - `color`, `opacity`, `scalars`: the main pointwise visual controls.
+    - `paint_by`: chooses direct RGBA painting or scalar-colormap rendering.
+    - `resolver_source`: selects the input used by callable visual resolvers.
+    - `shading_type`, `ambient`, `diffuse`, `specular`, `metallic`,
+      `roughness`: the main surface-lighting controls.
+
+    Common user actions:
+
+    - `act_finalize()`: validate defaults and lock the opts into functioning use.
+    - `act_asdict()`: export the current opts values as a plain dictionary.
+    - `act_save_json()`: save the current opts to JSON, using sidecar `.npy`
+      files when large arrays are present.
+    - `act_load_json()`: load a JSON snapshot into this existing opts object.
+
     Common ways to use this object:
 
     - create `OptsSurface(...)` first and pass it into `PlotSurface`
@@ -138,6 +155,27 @@ class PlotSurface(PlotGlyph):
     `scalars`; these can be provided as shared constants, per-point arrays,
     or callable resolvers. Callable resolvers use the source selected by
     `resolver_source`.
+
+    Important readable attributes:
+
+    - `opts`: the paired OptsSurface controlling surface appearance.
+    - `fig`: the PlotFigure currently hosting this glyph, if any.
+    - `bounds`: the currently bound clipping object, if any.
+    - `raw_coords`: the raw surface sample coordinates.
+    - `_calc_keep_index`: the raw point indices kept after center-based clipping.
+
+    Common inspection helpers:
+
+    - `show_getattrs()`: show the main readable surface attributes.
+    - `show_modifiable_attrs()`: show which surface or opts attributes can be changed.
+    - `show_attr_desc(name)`: describe a specific readable attribute.
+    - `show_relations()`: show object relations inherited from PlotGlyph.
+
+    Common user actions:
+
+    - `act_commit(...)`: update surface raw fields or visual options.
+    - `act_set_name(name)`: rename the surface object.
+    - `act_remove()`: remove the surface actor from its figure.
 
     Typical workflow:
 
@@ -295,6 +333,10 @@ class PlotSurface(PlotGlyph):
 
     _pending_resolution_attrs = ["color", "scalars", "opacity"]
 
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotSurface overrides PlotGlyph.__init__ only to select the surface opts
     # type and install the surface-specific interaction entry point.
@@ -310,6 +352,7 @@ class PlotSurface(PlotGlyph):
         opts: OptsSurface | None = None,
         bounds: BoundsData | None = None,
         clip_mode: str = "center",
+        is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -325,6 +368,7 @@ class PlotSurface(PlotGlyph):
             figure=figure,
             bounds=bounds,
             clip_mode=clip_mode,
+            is_clip_inside=is_clip_inside,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
@@ -333,6 +377,10 @@ class PlotSurface(PlotGlyph):
         self.act_set_interact_func(lambda: InteractSurface(self, self.fig).show())
 
         self._helper_init_end()
+
+    # -------------------------------
+    # Center clipping and point preparation
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotSurface overrides PlotGlyph._helper_bound_coords because
@@ -395,6 +443,10 @@ class PlotSurface(PlotGlyph):
         poly.point_data["scalars"] = scalars
         rgba_values = np.hstack([color, opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
+
+    # -------------------------------
+    # Mesh generation and silhouette
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotSurface overrides PlotGlyph._helper_build_mesh because surfaces are

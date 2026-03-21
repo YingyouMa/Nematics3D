@@ -28,6 +28,23 @@ class OptsRod(OptsGlyph):
     Instead, this class controls appearance, coloring, shading, scalar
     mapping, thickness, rod length, and meshing details.
 
+    Important readable attributes:
+
+    - `host`: the PlotRod currently using this opts object, if any.
+    - `length`, `radius`, `color`, `opacity`, `scalars`: the main per-rod
+      visual controls.
+    - `paint_by`: chooses direct RGBA painting or scalar-colormap rendering.
+    - `resolver_source`: selects the input used by callable visual resolvers.
+    - `sides`: the main rod-meshing control.
+
+    Common user actions:
+
+    - `act_finalize()`: validate defaults and lock the opts into functioning use.
+    - `act_asdict()`: export the current opts values as a plain dictionary.
+    - `act_save_json()`: save the current opts to JSON, using sidecar `.npy`
+      files when large arrays are present.
+    - `act_load_json()`: load a JSON snapshot into this existing opts object.
+
     Common ways to use this object:
 
     - create `OptsRod(...)` first and pass it into `PlotRod`
@@ -117,7 +134,7 @@ class OptsRod(OptsGlyph):
     ... )
     """
 
-    # --- Geometry & Topology (Tube-specific) ---
+    # --- Geometry & Topology (Rod-specific) ---
     length: LengthMode | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -169,6 +186,29 @@ class PlotRod(PlotGlyph):
     `scalars` can be provided as shared constants, per-rod arrays, or
     callable resolvers. Callable resolvers use the source selected by
     `resolver_source`.
+
+    Important readable attributes:
+
+    - `opts`: the paired OptsRod controlling rod appearance and length.
+    - `fig`: the PlotFigure currently hosting this glyph, if any.
+    - `bounds`: the currently bound clipping object, if any.
+    - `raw_coords`: the raw rod-center coordinates.
+    - `raw_orient`: the raw rod orientation vectors.
+    - `_calc_length`: the resolved per-rod lengths used for geometry building.
+    - `_calc_keep_index`: the raw rod indices kept after center-based clipping.
+
+    Common inspection helpers:
+
+    - `show_getattrs()`: show the main readable rod attributes.
+    - `show_modifiable_attrs()`: show which rod or opts attributes can be changed.
+    - `show_attr_desc(name)`: describe a specific readable attribute.
+    - `show_relations()`: show object relations inherited from PlotGlyph.
+
+    Common user actions:
+
+    - `act_commit(...)`: update rod raw fields or visual options.
+    - `act_set_name(name)`: rename the rod object.
+    - `act_remove()`: remove the rod actor from its figure.
 
     Typical workflow:
 
@@ -346,6 +386,10 @@ class PlotRod(PlotGlyph):
         "orient": lambda v, d: as_points(v, name=d),
     }
 
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph.__init__ because it must accept
     # rod-specific raw orientation data before the generic glyph
@@ -363,6 +407,7 @@ class PlotRod(PlotGlyph):
         opts: OptsRod | None = None,
         bounds: BoundsData | None = None,
         clip_mode: str = "center",
+        is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -384,6 +429,7 @@ class PlotRod(PlotGlyph):
             figure=figure,
             bounds=bounds,
             clip_mode=clip_mode,
+            is_clip_inside=is_clip_inside,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
@@ -398,6 +444,10 @@ class PlotRod(PlotGlyph):
         self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
 
         self._helper_init_end()
+
+    # -------------------------------
+    # Resolver and expanded attribute helpers
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph._helper_get_resolver_source to add rod
@@ -423,6 +473,10 @@ class PlotRod(PlotGlyph):
         if name in ["_calc_color", "_calc_opacity", "_calc_radius", "_calc_scalars"]:
             value = np.repeat(value, 2, axis=0)
         return value
+
+    # -------------------------------
+    # Center clipping and polyline preparation
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph._helper_bound_coords because rods can
@@ -543,6 +597,10 @@ class PlotRod(PlotGlyph):
         rgba_values = np.hstack([color, opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
 
+    # -------------------------------
+    # Mesh generation
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph._helper_build_mesh because rods use the
     # rod-specific endpoint polydata and rely on tube filtering without capping
@@ -563,6 +621,10 @@ class PlotRod(PlotGlyph):
 
         object.__setattr__(self, "_calc_poly", poly)
         return mesh
+
+    # -------------------------------
+    # Picking
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotRod overrides PlotGlyph._helper_resolve_pick to expose

@@ -251,10 +251,6 @@ class InteractDefectSection(PanelBase):
             value_fmt="{:.0f}",
         )
 
-        for key, item in self.sliders.items():
-            item.slider.valueChanged.connect(self.on_changed)
-            item.slider.sliderPressed.connect(self._helper_begin_continuous_interaction)
-            item.slider.sliderReleased.connect(self._helper_end_continuous_interaction)
 
         self.on_changed(0, is_commit=False)
 

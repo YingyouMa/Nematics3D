@@ -35,6 +35,23 @@ class OptsTube(OptsGlyph):
     controls appearance, coloring, shading, scalar mapping, and tube
     meshing details.
 
+    Important readable attributes:
+
+    - `host`: the PlotTube currently using this opts object, if any.
+    - `radius`, `color`, `opacity`, `scalars`: the main pointwise visual
+      controls for tube appearance.
+    - `paint_by`: chooses direct RGBA painting or scalar-colormap rendering.
+    - `resolver_source`: selects the input used by callable visual resolvers.
+    - `sides`, `is_capping`: the main tube-meshing controls.
+
+    Common user actions:
+
+    - `act_finalize()`: validate defaults and lock the opts into functioning use.
+    - `act_asdict()`: export the current opts values as a plain dictionary.
+    - `act_save_json()`: save the current opts to JSON, using sidecar `.npy`
+      files when large arrays are present.
+    - `act_load_json()`: load a JSON snapshot into this existing opts object.
+
     Common ways to use this object:
 
     - create `OptsTube(...)` first and pass it into `PlotTube`
@@ -163,6 +180,29 @@ class PlotTube(PlotGlyph):
     visual fields such as `radius`, `color`, `opacity`, and `scalars` can be
     provided as shared constants, per-point arrays, or callable resolvers.
     Callable resolvers use the source selected by `resolver_source`.
+
+    Important readable attributes:
+
+    - `opts`: the paired OptsTube controlling tube appearance and meshing.
+    - `fig`: the PlotFigure currently hosting this glyph, if any.
+    - `bounds`: the currently bound clipping object, if any.
+    - `raw_coords`: the raw centerline coordinates.
+    - `raw_line_index`: the optional raw segmentation array for multiple paths.
+    - `_calc_line_index`: the effective segmentation after center-based clipping.
+    - `_calc_keep_index`: the raw point indices kept after center-based clipping.
+
+    Common inspection helpers:
+
+    - `show_getattrs()`: show the main readable tube attributes.
+    - `show_modifiable_attrs()`: show which tube or opts attributes can be changed.
+    - `show_attr_desc(name)`: describe a specific readable attribute.
+    - `show_relations()`: show object relations inherited from PlotGlyph.
+
+    Common user actions:
+
+    - `act_commit(...)`: update tube raw fields or visual options.
+    - `act_set_name(name)`: rename the tube object.
+    - `act_remove()`: remove the tube actor from its figure.
 
     Typical workflow:
 
@@ -339,6 +379,10 @@ class PlotTube(PlotGlyph):
         PlotGlyph._impl_attrs_reapply_opts_after_raw | {"line_index"}
     )
 
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
     # ==================== OVERRIDE ====================
     # PlotTube overrides PlotGlyph.__init__ only to accept
     # and validate the tube-specific raw field `line_index`.
@@ -355,6 +399,7 @@ class PlotTube(PlotGlyph):
         line_index: Sequence | None = None,
         bounds: BoundsData | None = None,
         clip_mode: str = "center",
+        is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
         logger=None,
         **kwargs,
@@ -370,6 +415,7 @@ class PlotTube(PlotGlyph):
             figure=figure,
             bounds=bounds,
             clip_mode=clip_mode,
+            is_clip_inside=is_clip_inside,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
@@ -381,6 +427,10 @@ class PlotTube(PlotGlyph):
 
         self._helper_init_end()
         self.act_set_interact_func(lambda: InteractTube(self, self.fig).show())
+
+    # -------------------------------
+    # Tube raw topology helpers
+    # -------------------------------
 
     def _helper_check_index(self, line_index, name):
         if line_index is None:
@@ -426,6 +476,10 @@ class PlotTube(PlotGlyph):
         starts = np.r_[0, breaks]
         ends = np.r_[breaks, len(self.raw_line_index)]
         return list(zip(starts, ends))
+
+    # -------------------------------
+    # Center clipping and polyline preparation
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotTube overrides PlotGlyph._helper_bound_coords because
@@ -582,6 +636,10 @@ class PlotTube(PlotGlyph):
         rgba_values = np.hstack([color, opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
 
+    # -------------------------------
+    # Mesh generation and commit hooks
+    # -------------------------------
+
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
         """
@@ -615,6 +673,10 @@ class PlotTube(PlotGlyph):
             kwargs_applied | kwargs_applied_line,
             is_reapply_opts or is_reapply_opts_line,
         )
+
+    # -------------------------------
+    # Picking
+    # -------------------------------
 
     # ==================== OVERRIDE ====================
     # PlotTube overrides PlotGlyph._helper_resolve_pick to report
