@@ -45,5 +45,9 @@ Q.act_visualize_n_plane(
     n_length=spacing,
 )
 
-figure.act_view_yz()
-figure.opts.azimuth = 90
+figure.act_commit(
+    elevation=0,
+    azimuth=90,
+    distance=150
+)
+

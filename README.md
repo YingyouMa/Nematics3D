@@ -54,7 +54,7 @@ S = np.load("example/data/S_example_global.npy")
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
 Q.act_lines_smooth()  # smooth the detected disclination lines
-Q.act_visualize_disclination_lines()  # open a 3D visualization window
+Q.act_visualize_disclination_lines()  # visualize the disclination lines in the system
 ```
 
 Running this script produces a disclination-line visualization like the one below:
@@ -77,18 +77,18 @@ n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
-Q.act_lines_smooth()
+Q.act_lines_smooth()  # smooth the detected disclination lines
 
 bounds_max = 60
-bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))
-figure = Nematics3D.PlotFigure(name="lines and directors")
+bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))  # focus on a smaller region
+figure = Nematics3D.PlotFigure(name="lines and directors")  # create one shared figure
 
 Q.act_visualize_disclination_lines(
     figure=figure,
     bounds=bounds,
     line_color=(0.5, 0.5, 0.5),
     line_radius=0.3,
-)
+)  # draw the disclination lines inside the selected box
 
 Q.act_visualize_n_plane(
     figure=figure,
@@ -100,10 +100,15 @@ Q.act_visualize_n_plane(
     grid_size=100,
     grid_spacing=3,
     n_length=3,
-)
+)  # add the director field on a tilted plane
 
-figure.act_view_yz()
-figure.opts.azimuth = 90
+figure.act_commit(
+    elevation=0,
+    azimuth=90,
+    distance=150,
+)  # adjust the camera for a clearer view
+
+figure.act_savefig("docs/example/informative/2.png")  # save the rendered figure
 ```
 
 This example creates one shared figure, restricts the view to a `0` to `60` box, draws the disclination lines inside that box, adds a director field on a tilted plane through the same region, and then rotates the view for a clearer presentation.
