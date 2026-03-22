@@ -90,6 +90,8 @@ Q.act_visualize_disclination_lines(
     line_radius=0.3,
 )  # draw the disclination lines inside the selected box
 
+# Here the `grid_*` arguments control the geometry of the director plane,
+# such as its orientation, position, size, and sampling spacing.
 Q.act_visualize_n_plane(
     figure=figure,
     bounds=bounds,

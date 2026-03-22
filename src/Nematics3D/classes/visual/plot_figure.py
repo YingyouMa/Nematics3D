@@ -696,6 +696,7 @@ class PlotFigure(HostBase, RegistryBase):
     ):
         if window_size is None:
             window_size = self.opts.size
+        window_size = tuple(int(x) for x in window_size)
         self.pl.screenshot(
             filename,
             scale=scale,

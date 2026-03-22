@@ -51,3 +51,4 @@ figure.act_commit(
     distance=150
 )
 
+figure.act_savefig("../docs/example/informative/2.png")
