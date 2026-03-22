@@ -53,8 +53,8 @@ n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
 
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
-Q.act_lines_smooth()
-Q.act_visualize_disclination_lines()
+Q.act_lines_smooth()  # smooth the detected disclination lines
+Q.act_visualize_disclination_lines()  # open a 3D visualization window
 ```
 
 Running this script produces a disclination-line visualization like the one below:
@@ -64,3 +64,50 @@ Running this script produces a disclination-line visualization like the one belo
 During execution, you will see progress and info messages in the terminal. These messages report steps such as Q-field initialization, defect detection, line classification, smoothing, and visualization. They are normal and do not indicate an error.
 
 The visualization opens in an interactive 3D figure window. The example above shows one typical view of that window after the disclination lines have been rendered.
+
+## A More Informative Example
+
+The next example combines disclination lines with a director field on a plane inside a smaller region of the sample. This gives a more informative view of the local structure while still keeping the code compact. The full script is available as [`example/example_informative.py`](/D:/Document/GitHub/Nematics3D/example/example_informative.py).
+
+```python
+import numpy as np
+import Nematics3D
+
+n = np.load("example/data/n_example_global.npy")
+S = np.load("example/data/S_example_global.npy")
+
+Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
+Q.act_lines_smooth()
+
+bounds_max = 60
+bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))
+figure = Nematics3D.PlotFigure(name="lines and directors")
+
+Q.act_visualize_disclination_lines(
+    figure=figure,
+    bounds=bounds,
+    line_color=(0.5, 0.5, 0.5),
+    line_radius=0.3,
+)
+
+Q.act_visualize_n_plane(
+    figure=figure,
+    bounds=bounds,
+    is_new=False,
+    is_extent=False,
+    grid_normal=(1, 1, 1),
+    grid_origin=(24, 24, 24),
+    grid_size=100,
+    grid_spacing=3,
+    n_length=3,
+)
+
+figure.act_view_yz()
+figure.opts.azimuth = 90
+```
+
+This example creates one shared figure, restricts the view to a `0` to `60` box, draws the disclination lines inside that box, adds a director field on a tilted plane through the same region, and then rotates the view for a clearer presentation.
+
+One example output is shown below:
+
+![Informative example result](docs/example/informative/2.png)
