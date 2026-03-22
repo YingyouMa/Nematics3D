@@ -421,7 +421,12 @@ class QFieldObject(ClassBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_lines_classify(self, logger=None):
+        """
+        Classify detected defect points into disclination lines.
 
+        The classified lines are sorted by defect count, renamed in display
+        order, registered into `self.objects`, and returned as a list.
+        """
         lines = defect_classify_into_lines(
             self._calc_defect_indices,
             box_size_periodic=self._calc_box_size_periodic_index,
@@ -444,7 +449,53 @@ class QFieldObject(ClassBase):
         logger=None,
         **kwargs,
     ):
+        """
+        Smooth eligible disclination lines using shared smoothing options.
 
+        Lines shorter than the configured minimum length are skipped. Missing
+        smoothing defaults are filled from the Q-field object before
+        delegating the actual smoothing to each line.
+
+        Parameters
+        ----------
+        opts
+            Base `OptsSmooth` configuration applied to all candidate lines.
+        **kwargs
+            Keyword overrides merged into `opts` before smoothing. Supported
+            keys are the fields of `OptsSmooth`, including commonly used
+            options such as `window_length`, `window_ratio`,
+            `min_line_length`, and `order`.
+
+        Notes
+        -----
+        If `min_line_length` is not provided, the method uses
+        `self.default_miminum_line_length_smooth`.
+
+        If both `window_length` and `window_ratio` are omitted, the method
+        uses `self.default_smooth_window_length` as the default window length.
+
+        If both `window_length` and `window_ratio` are provided,
+        `window_length` takes priority and `window_ratio` is ignored.
+
+        Examples
+        --------
+        Smooth all eligible lines with the object defaults::
+
+            q.act_lines_smooth()
+
+        Smooth using an explicit window length::
+
+            q.act_lines_smooth(window_length=31)
+
+        Smooth only sufficiently long lines::
+
+            q.act_lines_smooth(min_line_length=100, window_ratio=8)
+
+        See Also
+        --------
+        OptsSmooth
+            Full smoothing-option container used by each line.
+        """
         if opts is None:
             opts = OptsSmooth()
 
@@ -453,7 +504,7 @@ class QFieldObject(ClassBase):
         if opts.min_line_length is UNSET:
             opts.min_line_length = self.default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_smooth_window_length}."
+            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_miminum_line_length_smooth}."
             logger.info(msg)
 
         opts.act_finalize()
@@ -480,7 +531,7 @@ class QFieldObject(ClassBase):
         window_list = {}
         for line in self.lines:
             if line._calc_defect_num >= opts.min_line_length:
-                line.act_smooth(opts=opts, state_is_window_warning=False)
+                line.act_smooth(opts=opts, is_window_warning=False)
                 num_smooth += 1
                 window_list[line.name] = line.smooth.opts.window_length
             else:
@@ -500,7 +551,7 @@ class QFieldObject(ClassBase):
 
     @logging_and_warning_decorator()
     def act_add_interpolator(self, logger=None):
-
+        """Create and bind a `QInterpolator` if one is not already present."""
         interpolator_old = self.interpolator
         if isinstance(interpolator_old, QInterpolator):
             return interpolator_old
@@ -511,6 +562,18 @@ class QFieldObject(ClassBase):
         return self.interpolator
 
     def act_interpolate(self, points: np.ndarray, is_index=False):
+        """
+        Interpolate the Q field at arbitrary sample points.
+
+        Parameters
+        ----------
+        points
+            Sample positions where the Q field should be evaluated.
+        is_index
+            If False, `points` are interpreted in real-space coordinates.
+            If True, `points` are interpreted in lattice-index coordinates
+            before interpolation.
+        """
         if self.interpolator is None:
             self.act_add_interpolator()
         return self.interpolator.interpolate(points, is_index=is_index)
@@ -606,37 +669,89 @@ class QFieldObject(ClassBase):
         is_extent: bool = True,
         min_line_length: int | None = None,
         opts_figure: OptsFigure | None = None,
-        opts_tube: OptsTube | None = None,
+        opts_line: OptsTube | None = None,
         opts_extent: OptsTube | None = None,
         bounds=None,
         title: str = "disclination lines",
         logger=None,
         **kwargs,
     ):
+        """
+        Visualize classified disclination lines on a figure.
 
-        #!!! lines_scalars_name
+        Parameters
+        ----------
+        figure
+            Target figure, plotter, registered figure name/index, or `None`.
+        is_new
+            If True, always create a new figure instead of reusing an existing
+            one.
+        is_wrap
+            Whether periodic wrapping should be applied before plotting each
+            line.
+        is_smooth
+            Whether smoothed line geometry should be used when available.
+        is_extent
+            Whether to also draw the bounding extent.
+        min_line_length
+            Minimum defect count required for a line to be plotted. If not
+            provided, `self.default_miminum_line_length_visual` is used.
+        opts_figure
+            Base `OptsFigure` configuration for the target figure.
+        opts_line
+            Base `OptsTube` configuration for the plotted lines.
+        opts_extent
+            Base `OptsTube` configuration for the optional bounding extent.
+        bounds
+            Bounds used for visualization and optional clipping. If omitted,
+            the default Q-field bounds are used.
+        title
+            Title used when a new figure is created.
+        **kwargs
+            Keyword overrides merged into `opts_figure`, `opts_line`, and
+            `opts_extent` using the prefixes `figure_`, `line_`, and
+            `extent_`.
 
+        Examples
+        --------
+        Plot lines with the default visualization settings::
+
+            q.act_visualize_disclination_lines()
+
+        Plot only longer lines on a new figure::
+
+            q.act_visualize_disclination_lines(is_new=True, min_line_length=100)
+
+        Override line and extent options through keyword prefixes::
+
+            q.act_visualize_disclination_lines(
+                line_radius=0.8,
+                extent_color=(0, 0, 0),
+            )
+        """
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
             opts_figure = OptsFigure()
-        if opts_tube is None:
-            opts_tube = OptsTube(color="sample_far")
+        if opts_line is None:
+            opts_line = OptsTube(color="sample_far")
 
         merge = merge_opts_all(
-            {"figure_": opts_figure, "line_": opts_tube, "extent_": opts_extent},
+            {"figure_": opts_figure, "line_": opts_line, "extent_": opts_extent},
             kwargs,
             type(self).__name__,
         )
 
         opts_figure = merge["figure_"]
-        opts_tube = merge["line_"]
+        opts_line = merge["line_"]
         opts_extent = merge["extent_"]
 
         check_bool_flags(locals())
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
+        bounds_input = bounds
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
+        line_bounds = None if not is_wrap and bounds_input is None else bounds
 
         if min_line_length is None:
             logger.info(
@@ -648,23 +763,10 @@ class QFieldObject(ClassBase):
         logger.debug(f"min_line_length = {min_line_length}")
 
         lines_plot = [
-            line for line in self.lines if line._calc_defect_num > min_line_length
+            line for line in self.lines if line._calc_defect_num >= min_line_length
         ]
 
-        # if lines_scalars_name is not None:
-        #     logger.info("Scalars of lines are input")
-        #     try:
-        #         lines_scalars = [getattr(line, lines_scalars_name) for line in lines_plot]
-        #         lines_colors = 'scalars'
-        #         if opts_tube.color is not 'scalars':
-        #             logger.warning(
-        #                 "scalars of lines are input. Their color_input will be ignored"
-        #             )
-        # else:
-        #     lines_scalars = [None for line in lines_plot]
-        lines_scalars = [UNSET for line in lines_plot]
-
-        if opts_tube.color == "sample_far":
+        if opts_line.color == "sample_far":
             from ..general import blue_red_in_white_bg, sample_far
 
             color_map = blue_red_in_white_bg()
@@ -673,24 +775,21 @@ class QFieldObject(ClassBase):
                 (sample_far(len(lines_plot)) * color_map_length).astype(int)
             ]
         else:
-            lines_colors = [opts_tube.color for line in lines_plot]
+            lines_colors = [opts_line.color for line in lines_plot]
 
         logger.debug("Start to draw disclination lines")
-        for line, line_color, line_scalar in zip(
-            lines_plot, lines_colors, lines_scalars
-        ):
-            opts_tube = replace(opts_tube, color=line_color)
-            line_visual = line.act_visualize(
+        for line, line_color in zip(lines_plot, lines_colors):
+            opts_line = replace(opts_line, color=line_color)
+            line.act_visualize(
                 figure=figure,
                 is_wrap=is_wrap,
                 is_smooth=is_smooth,
-                bounds=bounds,
-                # scalars=line_scalar,
-                opts=opts_tube,
+                bounds=line_bounds,
+                opts=opts_line,
             )
 
         if is_extent:
-            extent = bounds.act_visualize(
+            bounds.act_visualize(
                 figure=figure,
                 opts=opts_extent,
                 is_reset_camera=False,
@@ -716,7 +815,68 @@ class QFieldObject(ClassBase):
         logger=None,
         **kwargs,
     ):
+        """
+        Visualize the director field on a Cartesian analysis plane.
 
+        This creates a `QPlane` from the current Q-field interpolator, then
+        renders directors in bulk and near-defect regions on the target plane.
+
+        Parameters
+        ----------
+        figure
+            Target figure, plotter, registered figure name/index, or `None`.
+        is_new
+            If True, always create a new figure instead of reusing an existing
+            one.
+        is_extent
+            Whether to also draw the bounding extent.
+        is_defect
+            Whether detected defect points on the plane should be visible.
+        opts_grid
+            Base `OptsPlaneGrid` configuration for constructing the analysis
+            plane.
+        opts_n
+            Shared base `OptsRod` configuration copied into both bulk and
+            near-defect director visuals unless those visuals override it.
+        opts_nb
+            `OptsRod` overrides for directors in bulk regions.
+        opts_nd
+            `OptsRod` overrides for directors near detected defects.
+        opts_figure
+            Base `OptsFigure` configuration for the target figure.
+        opts_extent
+            Base `OptsTube` configuration for the optional bounding extent.
+        opts_defect
+            `OptsSphere` configuration for defect-point markers.
+        bounds
+            Bounds used for the plane construction and optional extent drawing.
+            If omitted, the default Q-field bounds are used.
+        title
+            Title used when a new figure is created.
+        name_plane
+            Name assigned to the generated `QPlane` object.
+        **kwargs
+            Keyword overrides merged into the option objects using the prefixes
+            `figure_`, `grid_`, `extent_`, `n_`, `nb_`, `nd_`, and `defect_`.
+
+        Examples
+        --------
+        Visualize the director plane with default settings::
+
+            q.act_visualize_n_plane()
+
+        Show defect markers on a new figure::
+
+            q.act_visualize_n_plane(is_new=True, is_defect=True)
+
+        Override plane-grid and director options through keyword prefixes::
+
+            q.act_visualize_n_plane(
+                grid_spacing=2,
+                n_radius=0.4,
+                defect_radius=1.5,
+            )
+        """
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
@@ -808,7 +968,59 @@ class QFieldObject(ClassBase):
         logger=None,
         **kwargs,
     ):
+        """
+        Visualize the scalar order parameter on a Cartesian analysis plane.
 
+        This creates a `QPlane` from the current Q-field interpolator, then
+        renders the plane as an `S` surface on the target figure.
+
+        Parameters
+        ----------
+        figure
+            Target figure, plotter, registered figure name/index, or `None`.
+        is_new
+            If True, always create a new figure instead of reusing an existing
+            one.
+        is_extent
+            Whether to also draw the bounding extent.
+        opts_grid
+            Base `OptsPlaneGrid` configuration for constructing the analysis
+            plane.
+        opts_S
+            Base `OptsSurface` configuration for the rendered scalar-order
+            surface.
+        opts_figure
+            Base `OptsFigure` configuration for the target figure.
+        opts_extent
+            Base `OptsTube` configuration for the optional bounding extent.
+        bounds
+            Bounds used for the plane construction and optional extent drawing.
+            If omitted, the default Q-field bounds are used.
+        title
+            Title used when a new figure is created.
+        name_plane
+            Name assigned to the generated `QPlane` object.
+        **kwargs
+            Keyword overrides merged into the option objects using the prefixes
+            `figure_`, `grid_`, `extent_`, and `S_`.
+
+        Examples
+        --------
+        Visualize the scalar-order plane with default settings::
+
+            q.act_visualize_S_plane()
+
+        Create the plane on a new figure without the extent box::
+
+            q.act_visualize_S_plane(is_new=True, is_extent=False)
+
+        Override plane-grid and surface options through keyword prefixes::
+
+            q.act_visualize_S_plane(
+                grid_spacing=2,
+                S_opacity=0.8,
+            )
+        """
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
@@ -887,6 +1099,70 @@ class QFieldObject(ClassBase):
         logger=None,
         **kwargs,
     ):
+        """
+        Visualize the director field on a polar cross-section around a defect.
+
+        This creates a `DefectSectionGrid` from the given smoothed
+        disclination line, wraps it as a `QPlanePolar`, and renders the
+        director field near the selected cross-section.
+
+        Parameters
+        ----------
+        x_param
+            Parametric position along the smoothed disclination line used to
+            choose the cross-section.
+        smooth
+            Smoothed disclination line supplying the local cross-section frame.
+        figure
+            Target figure, plotter, registered figure name/index, or `None`.
+        is_new
+            If True, always create a new figure instead of reusing an existing
+            one.
+        is_extent
+            Whether to also draw the bounding extent.
+        opts_grid
+            Base `OptsPlaneGridPolar` configuration for constructing the polar
+            cross-section grid.
+        opts_n
+            Shared base `OptsRod` configuration copied into both bulk and
+            near-defect director visuals unless those visuals override it.
+        opts_nb
+            `OptsRod` overrides for directors in bulk regions.
+        opts_nd
+            `OptsRod` overrides for directors near detected defects.
+        opts_figure
+            Base `OptsFigure` configuration for the target figure.
+        opts_extent
+            Base `OptsTube` configuration for the optional bounding extent.
+        opts_defect
+            Reserved `OptsSphere` configuration for defect-point markers.
+        bounds
+            Bounds used for cross-section construction and optional extent
+            drawing. If omitted, the default Q-field bounds are used.
+        title
+            Title used when a new figure is created.
+        plane_name
+            Name assigned to the generated polar plane object.
+        **kwargs
+            Keyword overrides merged into the option objects using the prefixes
+            `figure_`, `grid_`, `extent_`, `n_`, `nb_`, `nd_`, and `defect_`.
+
+        Examples
+        --------
+        Visualize the director field near the middle of a smoothed line::
+
+            q.act_visualize_n_near_defect(0.5, smooth_line)
+
+        Create a new figure and override polar-grid settings::
+
+            q.act_visualize_n_near_defect(
+                0.25,
+                smooth_line,
+                is_new=True,
+                grid_N_r=40,
+                grid_N_theta=80,
+            )
+        """
 
         if opts_grid is None:
             opts_grid = OptsPlaneGridPolar()
@@ -989,6 +1265,3 @@ class QFieldObject(ClassBase):
 
     def __call__(self) -> np.ndarray:
         return self._raw_Q
-
-
-

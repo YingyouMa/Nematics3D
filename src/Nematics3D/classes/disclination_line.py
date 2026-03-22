@@ -314,6 +314,7 @@ class DisclinationLine(ClassBase):
         is_new=True,
         opts: OptsSmooth | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
+        is_window_warning: bool = True,
         **kwargs,
     ):
 
@@ -327,6 +328,7 @@ class DisclinationLine(ClassBase):
             name=name,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
+            is_window_warning=is_window_warning,
             **kwargs,
         )
         self.smooths.append(item)
@@ -371,7 +373,11 @@ class DisclinationLine(ClassBase):
             smooth_obj = self.smooths[-1]
 
         if getattr(smooth_obj, "visual", None):
-            smooth_obj = self.act_smooth(is_new=True, opts=smooth_obj.opts)
+            smooth_obj = self.act_smooth(
+                is_new=True,
+                opts=smooth_obj.opts,
+                is_window_warning=False,
+            )
 
         line_plot = smooth_obj.act_visualize(
             figure=figure,

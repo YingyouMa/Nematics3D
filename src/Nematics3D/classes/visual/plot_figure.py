@@ -723,7 +723,7 @@ class PlotFigure(HostBase, RegistryBase):
     # ==================================================
 
     def __str__(self):
-        return HostBase.__str__(self)
+        return f"{type(self).__name__}({self.name!r})"
 
 
 FigureData = PlotFigure | BackgroundPlotter | pv.Plotter

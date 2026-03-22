@@ -128,19 +128,12 @@ class PlaneGrid(HostBase):
         "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
         "_impl_name_bounds_sync": "Internal sync-task name used to react to bounds geometry updates.",
     }
+    # Each plane grid binds to at most one field and one bounds object at a time.
     __relations__ = {
         **(HostBase.__relations__),
-        "field": (
-            "The interpolated field object attached to this plane grid. "
-            "A plane grid can be associated with at most one field at a time."
-        ),
-        "bounds": (
-            "The Bounds instance limiting this plane grid. "
-            "An instance can bind to at most one bounds object at a time."
-        ),
+        "field": "The interpolated field object attached to this plane grid.",
+        "bounds": "The Bounds instance limiting this plane grid.",
     }
-
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
 
     # ==================== OVERRIDE ====================
     # PlaneGrid overrides HostBase.__init__ because it must validate required

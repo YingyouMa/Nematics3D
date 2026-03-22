@@ -217,8 +217,7 @@ class SmoothedLine(HostBase):
             line_coord_input,
             self.__attrs__["raw_coords"],
         )
-        if is_window_warning is None:
-            is_window_warning = True
+
         is_window_warning = self._impl_validators["is_window_warning"](
             is_window_warning,
             self.__attrs__["state_is_window_warning"],
@@ -378,13 +377,23 @@ class SmoothedLine(HostBase):
 
             is_periodic = self.opts.mode == "wrap"
             if is_periodic:
-                uspline = np.linspace(0.0, 1.0, self._calc_N_init, endpoint=False)
+                # FITPACK periodic splines treat the last sample as the seam copy
+                # of the first one. Provide that seam explicitly so no genuine
+                # endpoint sample is overwritten in-place by `splprep(per=1)`.
+                line_points_spline = np.concatenate((line_points, [line_points[0]]))
+                uspline = np.linspace(0.0, 1.0, len(line_points_spline))
                 u_out = np.linspace(0.0, 1.0, self._calc_N_out, endpoint=False)
             else:
+                line_points_spline = line_points
                 uspline = np.linspace(0.0, 1.0, self._calc_N_init)
                 u_out = np.linspace(0.0, 1.0, self._calc_N_out)
 
-            tck = splprep(line_points.T, u=uspline, s=0, per=int(is_periodic))[0]
+            tck = splprep(
+                line_points_spline.T.copy(),
+                u=uspline,
+                s=0,
+                per=int(is_periodic),
+            )[0]
             result = np.array(splev(u_out, tck)).T
             object.__setattr__(self, "_entity_tck", tck)
             object.__setattr__(self, "_calc_result", result)

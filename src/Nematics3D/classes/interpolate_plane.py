@@ -30,18 +30,12 @@ class InterpolatePlane(ClassBase):
         "raw_name": "The name identifier of this plane object",
         "_calc_result": "The interpolated value of the physics quantity on the 2D plane grid.",
     }
+    # Each interpolated plane binds to at most one grid and one interpolator at a time.
     __relations__ = {
         **(ClassBase.__relations__),
-        "grid": (
-            "The plane grid associated with this interpolated field. "
-            "A field can be associated with at most one grid at a time."
-        ),
-        "interpolator": (
-            "The QInterpolator object used to sample this plane. "
-            "A plane can bind to at most one interpolator."
-        ),
+        "grid": "The plane grid associated with this interpolated field.",
+        "interpolator": "The QInterpolator object used to sample this plane.",
     }
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
 
     # ==================== OVERRIDE ====================
     # InterpolatePlane overrides ClassBase.__init__ because it must create or

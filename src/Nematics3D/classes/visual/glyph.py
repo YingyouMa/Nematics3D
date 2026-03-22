@@ -344,18 +344,12 @@ class PlotGlyph(HostBase):
         "_state_is_interactable":       "Whether to create a control window when the instance is double right-clicked."
         }
     
+    # Each glyph belongs to at most one figure and binds to at most one bounds object at a time.
     __relations__: ClassVar[Mapping[str, str]] = {
         **(HostBase.__relations__),
-        "fig": (
-            "The PlotFigure instance containing this glyph. "
-            "An instance can belong to at most one figure at a time."
-        ),
-        "bounds": (
-            "The Bounds instance clipping this glyph. "
-            "An instance can bind to at most one bounds object at a time."
-        ),
+        "fig": "The PlotFigure instance containing this glyph.",
+        "bounds": "The Bounds instance clipping this glyph.",
     }
-    
     __slots__ = tuple(
             k for k in __attrs__.keys()
             if k not in HostBase.__slots__

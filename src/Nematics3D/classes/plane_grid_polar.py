@@ -127,20 +127,13 @@ class PlaneGridPolar(HostBase):
         "_calc_box_mask": "Boolean mask selecting the polar grid points kept after optional bounds filtering.",
         "_impl_name_bounds_sync": "Internal sync-task name used to react to bounds geometry updates.",
     }
+    # Each polar plane grid binds to at most one field and one bounds object at a time.
     __relations__ = {
         **(HostBase.__relations__),
-        "field": (
-            "The interpolated field object attached to this polar plane grid. "
-            "A polar plane grid can be associated with at most one field at a time."
-        ),
-        "bounds": (
-            "The Bounds instance limiting this polar plane grid. "
-            "An instance can bind to at most one bounds object at a time."
-        ),
+        "field": "The interpolated field object attached to this polar plane grid.",
+        "bounds": "The Bounds instance limiting this polar plane grid.",
     }
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
 
-    # ==================== OVERRIDE ====================
     # PlaneGridPolar overrides HostBase.__init__ because it must validate
     # required polar-plane parameters, install the bounds-sync helper state,
     # and trigger the first polar-grid generation after opts finalization.

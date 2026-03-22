@@ -109,15 +109,10 @@ class ClassBase:
         ),
     }
 
+    # Each instance has at most one owner and at most one registry relation at a time.
     __relations__ = {
-        "owner": (
-            "The object that owns this instance. "
-            "An instance can belong to at most one owner."
-        ),
-        "registry": (
-            "The Registry object where this instance is registered. "
-            "An instance can belong to at most one registry."
-        ),
+        "owner": "The object that owns this instance.",
+        "registry": "The Registry object where this instance is registered.",
     }
     __properties__ = {}
 

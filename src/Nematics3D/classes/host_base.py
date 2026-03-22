@@ -366,16 +366,11 @@ class HostBase(ClassBase):
             "Key: unique identifier (str); Value: callable task(host, kwargs_sync)."
         ),
     }
+    # Each host has at most one wrapper relation and at most one wrapped relation at a time.
     __relations__ = {
         **(ClassBase.__relations__),
-        "wrapper": (
-            "The wrapper host that controls this host. "
-            "An instance can be wrapped by at most one wrapper at a time."
-        ),
-        "wrapped": (
-            "The wrapped host controlled by this host as a wrapper. "
-            "An instance can wrap at most one wrapped host at a time."
-        ),
+        "wrapper": "The wrapper host that controls this host.",
+        "wrapped": "The wrapped host controlled by this host as a wrapper.",
     }
     __properties__ = {
         **(ClassBase.__properties__),
