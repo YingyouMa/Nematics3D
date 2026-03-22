@@ -43,7 +43,7 @@ import Nematics3D
 
 ## Quick Start
 
-The following example loads the sample `S` and `n` fields from `example/data`, builds a `QFieldObject`, smooths the detected disclination lines, and visualizes them:
+The following example loads the sample `S` and `n` fields from `example/data`, builds a `QFieldObject`, smooths the detected disclination lines, and visualizes them. The full script is available as [`example/example_quickstart.py`](/D:/Document/GitHub/Nematics3D/example/example_quickstart.py).
 
 ```python
 import numpy as np
@@ -56,3 +56,11 @@ Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
 Q.act_lines_smooth()
 Q.act_visualize_disclination_lines()
 ```
+
+Running this script produces a disclination-line visualization like the one below:
+
+![Quick Start result](/D:/Document/GitHub/Nematics3D/docs/example/quick_start/1.png)
+
+During execution, you will see progress and info messages in the terminal. These messages report steps such as Q-field initialization, defect detection, line classification, smoothing, and visualization. They are normal and do not indicate an error.
+
+The visualization opens in an interactive 3D figure window. The example above shows one typical view of that window after the disclination lines have been rendered.
