@@ -17,7 +17,10 @@ Q.act_lines_smooth()
 
 bounds_max = 60
 bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))
-figure = Nematics3D.PlotFigure(name="lines and directors")
+figure = Nematics3D.PlotFigure(
+    name="lines and directors",
+    is_off_screen=True,
+)
 
 Q.act_visualize_disclination_lines(
     figure=figure,
@@ -32,7 +35,6 @@ trans = 6
 Q.act_visualize_n_plane(
     figure=figure,
     bounds=bounds,
-    is_new=False,
     is_extent=False,
     grid_normal=(1, 1, 1),
     grid_origin=(
@@ -45,10 +47,6 @@ Q.act_visualize_n_plane(
     n_length=spacing,
 )
 
-figure.act_commit(
-    elevation=0,
-    azimuth=90,
-    distance=150
-)
+figure.act_commit(elevation=0, azimuth=90, distance=150)
 
 figure.act_savefig("../docs/example/informative/2.png")

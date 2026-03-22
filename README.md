@@ -65,7 +65,9 @@ During execution, you will see progress and info messages in the terminal. These
 
 The visualization opens in an interactive 3D figure window. The example above shows one typical view of that window after the disclination lines have been rendered.
 
-## A More Informative Example
+## More Informative Examples
+
+### Example 1: Lines and a Tilted Director Plane
 
 The next example combines disclination lines with a director field on a plane inside a smaller region of the sample. This gives a more informative view of the local structure while still keeping the code compact. The full script is available as [`example/example_informative.py`](/D:/Document/GitHub/Nematics3D/example/example_informative.py).
 
@@ -81,7 +83,10 @@ Q.act_lines_smooth()  # smooth the detected disclination lines
 
 bounds_max = 60
 bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))  # focus on a smaller region
-figure = Nematics3D.PlotFigure(name="lines and directors")  # create one shared figure
+figure = Nematics3D.PlotFigure(
+    name="lines and directors",
+    is_off_screen=True,
+)  # create one shared figure in off-screen mode for direct saving
 
 Q.act_visualize_disclination_lines(
     figure=figure,
@@ -95,8 +100,7 @@ Q.act_visualize_disclination_lines(
 Q.act_visualize_n_plane(
     figure=figure,
     bounds=bounds,
-    is_new=False,
-    is_extent=False,
+    is_extent=False,  # do not draw another bounding box for this layer
     grid_normal=(1, 1, 1),
     grid_origin=(24, 24, 24),
     grid_size=100,
@@ -114,6 +118,10 @@ figure.act_savefig("docs/example/informative/2.png")  # save the rendered figure
 ```
 
 This example creates one shared figure, restricts the view to a `0` to `60` box, draws the disclination lines inside that box, adds a director field on a tilted plane through the same region, and then rotates the view for a clearer presentation.
+
+With the default settings, directors near defects are highlighted by being fully opaque, while directors farther from defects remain semi-transparent. In this example, you can observe that the opaque directors surround the intersection between the disclination line and the plane.
+
+During detailed tuning, you may sometimes see opaque directors without a visible disclination line. This is usually caused by visualization choices rather than by an inconsistency in the data, for example the minimum line length chosen for plotting or the smoothing settings used for the line. We explain these details in the corresponding function-level documentation.
 
 One example output is shown below:
 
