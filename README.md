@@ -59,7 +59,7 @@ Q.act_visualize_disclination_lines()
 
 Running this script produces a disclination-line visualization like the one below:
 
-![Quick Start result](/D:/Document/GitHub/Nematics3D/docs/example/quick_start/1.png)
+![Quick Start result](docs/example/quick_start/1.png)
 
 During execution, you will see progress and info messages in the terminal. These messages report steps such as Q-field initialization, defect detection, line classification, smoothing, and visualization. They are normal and do not indicate an error.
 
