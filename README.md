@@ -129,9 +129,9 @@ One example output is shown below:
 
 ![Informative example result](docs/example/informative/2.png)
 
-### Example 2: Director Field Near One Defect Line
+### Example 2: Local Disclination Lines
 
-The next example zooms into a smaller `0` to `20` box, plots the disclination lines in that region, and then visualizes the director field near the smoothed version of line `0` at `u_percent=0.3`. The full script is available as [`example/example_informative_near_defect.py`](/D:/Document/GitHub/Nematics3D/example/example_informative_near_defect.py).
+The next example crops the sample further to a `0` to `30` subvolume, smooths the detected disclination lines with shorter thresholds, and then renders the local lines only. The full script is available as [`example/example_informative_near_defect.py`](/D:/Document/GitHub/Nematics3D/example/example_informative_near_defect.py).
 
 ```python
 import numpy as np
@@ -139,32 +139,24 @@ import Nematics3D
 
 n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
+n = n[:30, :30, :30]
+S = S[:30, :30, :30]
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
-Q.act_lines_smooth()  # smooth the detected disclination lines
+Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
+Q.act_lines_smooth(min_line_length=20, window_length=10)  # smooth shorter local lines
 
-bounds_max = 20
-bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))  # focus on a smaller local region
 figure = Nematics3D.PlotFigure(
     name="near-defect director field",
     is_off_screen=True,
-)  # create an off-screen figure for direct saving
+)  # render off-screen so the example can save the figure directly
 
 Q.act_visualize_disclination_lines(
     figure=figure,
-    bounds=bounds,
     line_color=(0.5, 0.5, 0.5),
-    line_radius=0.3,
-)  # draw the disclination lines inside the selected box
-
-smooth0 = Q.lines[0].smooth  # use the smoothed version of disclination line 0
-Q.act_visualize_n_near_defect(
-    u_percent=0.3,  # choose the position along the smoothed line
-    smooth=smooth0,
-    figure=figure,
-    bounds=bounds,
-    is_extent=False,  # do not draw another bounding box for this layer
-)  # visualize the director field near that defect
+    line_radius=0.1,
+    extent_radius=0.05,
+    min_line_length=20,
+)  # draw only the local disclination lines in the cropped subvolume
 
 figure.act_commit(
     elevation=0,
@@ -175,8 +167,8 @@ figure.act_commit(
 figure.act_savefig("docs/example/informative/3.png")  # save the rendered figure
 ```
 
-This example focuses on one local neighborhood of a smoothed disclination line and shows the director field on a polar cross-section centered on that defect. It is useful when you want to inspect the local structure around one selected line instead of viewing the whole system at once.
+This example focuses on a smaller local subvolume and uses a shorter smoothing window together with a shorter minimum line length so that local defect structure can be shown more clearly. It is useful when you want to inspect local disclination geometry without introducing additional plane or near-defect visualization layers.
 
-One example output can be placed here after it is generated:
+One example output is shown below:
 
 ![Near-defect example result](docs/example/informative/3.png)
