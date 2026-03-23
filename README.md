@@ -163,7 +163,13 @@ figure.act_commit(
     distance=70,
 )  # adjust the camera for a clearer view
 
-figure.act_savefig("docs/example/informative/3.png")  # save the rendered figure
+smooth0 = Q.lines[0].smooth  # take the first smoothed disclination line for local analysis
+Q.act_visualize_n_near_defect(
+    u_percent=46.5,
+    smooth=smooth0,
+    figure=figure,
+    is_extent=False,
+)  # visualize the local director field near one selected position on that line
 ```
 
 This example focuses on local detail. The smoothing `window_length` is reduced, and the `min_line_length` thresholds in both `act_lines_smooth()` and `act_visualize_disclination_lines()` are also reduced; otherwise there would be no disclination lines left to plot in this smaller subvolume.
@@ -181,3 +187,9 @@ To inspect local physical information quickly and directly from the rendered ima
 ![Interactive point inspection](docs/example/informative/5.png)
 
 This normalized position parameter is convenient because it gives a one-dimensional position label along the disclination line. For a curved 3D disclination line, this is often more intuitive and easier to reproduce than recording a spatial coordinate directly. After selecting one interesting point in the figure, we can then use this position parameter to specify later calculations, for example by plotting the local director field near that point.
+
+In the code above, `smooth0 = Q.lines[0].smooth` selects the smoothed version of disclination line `0`, so that the later `u_percent=46.5` can be interpreted on a specific line rather than on the whole system.
+
+The following image shows the local director field rendered around that selected position. The camera was then adjusted using the built-in PyVista interaction tools.
+
+![Near-defect director field](docs/example/informative/6.png)

@@ -35,13 +35,13 @@ figure.act_commit(
     distance=70,
 )
 
-# smooth0 = Q.lines[0].smooth
-# Q.act_visualize_n_near_defect(
-#     u_percent=0.3,
-#     smooth=smooth0,
-#     figure=figure,
-#     is_extent=False,
-# )
+smooth0 = Q.lines[0].smooth
+Q.act_visualize_n_near_defect(
+    u_percent=46.5,
+    smooth=smooth0,
+    figure=figure,
+    is_extent=False,
+)
 
 # figure.act_commit(
 #     elevation=0,

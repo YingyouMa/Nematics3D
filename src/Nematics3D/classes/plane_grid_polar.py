@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -87,7 +87,7 @@ class OptsPlaneGridPolar(OptsBase):
             **(OptsBase._DEFAULTS_FROZEN),
             "tag": "polar plane grid options",
             "theta0_axis": None,
-            "R_min": 0.0,
+            "R_min": None,
             "layers": 4,
             "dr": 0.5,
             "arc_dist": None,
@@ -194,7 +194,7 @@ class PlaneGridPolar(HostBase):
             )
 
         arc_dist = self.opts.dr if self.opts.arc_dist is None else self.opts.arc_dist
-        R_min = self.opts.R_min
+        R_min = self.opts.dr if self.opts.R_min is None else self.opts.R_min
         origin = self.opts.origin
         dr = self.opts.dr
         normal = self.opts.normal
