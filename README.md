@@ -7,7 +7,7 @@ Nematics3D provides a Python interface for working with 3D nematic fields. It su
 
 ## Installation
 
-Nematics3D is currently tested with Python 3.12. A dedicated virtual environment is recommended for installation.
+Nematics3D is currently tested with Python 3.12. Compatibility with other Python versions has not yet been confirmed. A dedicated virtual environment is recommended for installation.
 
 
 ```bash
@@ -56,7 +56,7 @@ import Nematics3D
 n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
 
-Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
+Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
 Q.act_lines_smooth()  # smooth the detected disclination lines
 Q.act_visualize_disclination_lines()  # visualize the disclination lines in the system
 ```
