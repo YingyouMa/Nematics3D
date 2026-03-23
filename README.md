@@ -147,8 +147,7 @@ Q.act_lines_smooth(min_line_length=20, window_length=10)  # smooth shorter local
 
 figure = Nematics3D.PlotFigure(
     name="near-defect director field",
-    is_off_screen=True,
-)  # render off-screen so the example can save the figure directly
+)  # create one shared figure
 
 Q.act_visualize_disclination_lines(
     figure=figure,
@@ -167,7 +166,7 @@ figure.act_commit(
 figure.act_savefig("docs/example/informative/3.png")  # save the rendered figure
 ```
 
-This example focuses on a smaller local subvolume and uses a shorter smoothing window together with a shorter minimum line length so that local defect structure can be shown more clearly. It is useful when you want to inspect local disclination geometry without introducing additional plane or near-defect visualization layers.
+This example focuses on local detail. The smoothing `window_length` is reduced, and the `min_line_length` thresholds in both `act_lines_smooth()` and `act_visualize_disclination_lines()` are also reduced; otherwise there would be no disclination lines left to plot in this smaller subvolume.
 
 One example output is shown below:
 
