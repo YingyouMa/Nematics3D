@@ -35,8 +35,6 @@ figure.act_commit(
     distance=70,
 )
 
-figure.act_savefig("docs/example/informative/3.png")
-
 # smooth0 = Q.lines[0].smooth
 # Q.act_visualize_n_near_defect(
 #     u_percent=0.3,
