@@ -176,6 +176,6 @@ Besides the built-in PyVista camera controls, this figure also supports object-l
 
 ![Interactive line selection](docs/example/informative/4.png)
 
-In addition, a left double-click can pick one point on the plotted object. Different plotted objects may report different local information. In this tube example, the console reports the closest point on the tube, the normalized position along the tube, the local tangent, and the current local visual properties such as color, radius, and opacity. A right double-click opens the control panel for the picked object.
+To inspect local physical information quickly and directly from the rendered image, you can left double-click to pick one point on a plotted object and display related information in the console. Different plotted objects report different contents. In this example, for a `PlotTube` object, one useful quantity is the normalized position along the tube, which is defined from `0` to `100` by the ordering of the tube centerline points.
 
 ![Interactive point inspection](docs/example/informative/5.png)
