@@ -199,3 +199,13 @@ The following image shows the local director field rendered around that selected
 The last interaction mode is right double-click, which opens a live control panel. For example, if you right double-click the plotted directors here, two panels appear: one controls the polar grid on which these directors are sampled, and the other controls the visual parameters of the director rods themselves.
 
 ![Near-defect interaction panels](docs/example/informative/7.png)
+
+Up to this point, we have already shown how to build a `QFieldObject` from field data, detect and smooth disclination lines, visualize global and local director structures, inspect local line information interactively, and open live control panels for further adjustment. This is already enough for the most basic analysis of a 3D nematic field.
+
+Before moving on to more specific tutorials, we first look at the core objects in the package and how they are related to one another.
+
+## Core Objects
+
+Most workflows in this package start from a `QFieldObject`. It stores the input field, runs defect detection and line classification, and serves as the main entry point for later visualization and local analysis.
+
+The rendered scene is managed by a `PlotFigure`, which holds the plotted objects and provides the interactive figure window. Plane-based analysis is then represented by `QPlane` or `QPlanePolar`, while each detected defect line is represented by a `DisclinationLine` object together with one or more smoothed versions stored in its `smooths` attribute.
