@@ -183,9 +183,9 @@ This normalized position parameter is convenient because it gives a one-dimensio
 For example, we can continue with the following code:
 
 ```python
-smooth0 = Q.lines[0].smooth  # select the smoothed version of disclination line 0
+smooth0 = Q.lines[0].smooths[0]  # select the smoothed version 0 of disclination line 0, as stated in the console
 Q.act_visualize_n_near_defect(
-    u_percent=46.5,
+    u_percent=46.5, # the normalized position selected in the last figure
     smooth=smooth0,
     figure=figure,
     is_extent=False,
@@ -195,3 +195,7 @@ Q.act_visualize_n_near_defect(
 The following image shows the local director field rendered around that selected position. The camera was then adjusted using the built-in PyVista interaction tools.
 
 ![Near-defect director field](docs/example/informative/6.png)
+
+The last interaction mode is right double-click, which opens a live control panel. For example, if you right double-click the plotted directors here, two panels appear: one controls the polar grid on which these directors are sampled, and the other controls the visual parameters of the director rods themselves.
+
+![Near-defect interaction panels](docs/example/informative/7.png)

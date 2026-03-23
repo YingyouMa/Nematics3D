@@ -35,7 +35,7 @@ figure.act_commit(
     distance=70,
 )
 
-smooth0 = Q.lines[0].smooth
+smooth0 = Q.lines[0].smooths[0]
 Q.act_visualize_n_near_defect(
     u_percent=46.5,
     smooth=smooth0,
