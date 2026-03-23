@@ -172,14 +172,10 @@ One example output is shown below:
 
 ![Near-defect example result](docs/example/informative/3.png)
 
-### Interactive Inspection in the Figure Window
-
-After you generate a figure, you can also inspect individual disclination lines interactively in the Qt figure window.
-
-If you click a tube, the scoped console shows which plotted object is currently selected. In the example below, the selected object is the smoothed version of disclination line `0`.
-
 ![Interactive line selection](docs/example/informative/4.png)
 
-You can also pick a point on the selected tube. The console then reports the closest point on that tube together with its normalized position, local tangent, and current visual properties such as color, radius, and opacity.
+This local-line example is also a good place to try the interactive tools in the Qt figure window. If you click a tube, the scoped console shows which plotted object is currently selected. In the example below, the selected object is the smoothed version of disclination line `0`.
 
 ![Interactive point inspection](docs/example/informative/5.png)
+
+You can also pick a point on the selected tube. The console then reports the closest point on that tube together with its normalized position, local tangent, and current visual properties such as color, radius, and opacity.
