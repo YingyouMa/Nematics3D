@@ -15,11 +15,10 @@ S = np.load(DATA_DIR / "S_example_global.npy")
 Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
 Q.act_lines_smooth()
 
-bounds_max = 60
+bounds_max = 20
 bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))
 figure = Nematics3D.PlotFigure(
-    name="lines and directors",
-    # is_off_screen=True,
+    name="near-defect director field",
 )
 
 Q.act_visualize_disclination_lines(
@@ -29,24 +28,19 @@ Q.act_visualize_disclination_lines(
     line_radius=0.3,
 )
 
-spacing = 3
-trans = 6
-
-Q.act_visualize_n_plane(
+smooth0 = Q.lines[0].smooth
+Q.act_visualize_n_near_defect(
+    u_percent=0.3,
+    smooth=smooth0,
     figure=figure,
     bounds=bounds,
     is_extent=False,
-    grid_normal=(1, 1, 1),
-    grid_origin=(
-        bounds_max / 2 - trans,
-        bounds_max / 2 - trans,
-        bounds_max / 2 - trans,
-    ),
-    grid_size=100,
-    grid_spacing=spacing,
-    n_length=spacing,
 )
 
-figure.act_commit(elevation=0, azimuth=90, distance=150)
+figure.act_commit(
+    elevation=0,
+    azimuth=90,
+    distance=70,
+)
 
-figure.act_savefig("../docs/example/informative/2.png")
+figure.act_savefig("docs/example/informative/3.png")

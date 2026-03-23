@@ -480,6 +480,47 @@ def generate_mirror_point_periodic_boundary(
     return mirror_points
 
 
+def wrap_points_to_box(
+    points: Union[np.ndarray, Sequence[Sequence[float]], Sequence[float]],
+    box_size_periodic: DimensionPeriodicInput = np.inf,
+) -> np.ndarray:
+    """
+    Wrap one point or an array of points into the principal periodic box.
+
+    Parameters
+    ----------
+    points : array-like of shape (..., 3)
+        Index-space coordinates to wrap. The last axis must represent the
+        three spatial coordinates.
+
+    box_size_periodic : DimensionPeriodicInput, optional
+        Periodic box size along each axis. Finite values indicate periodic
+        dimensions, while `np.inf` leaves the corresponding coordinate
+        unchanged.
+
+    Returns
+    -------
+    np.ndarray
+        Wrapped coordinates with the same shape as the input. Periodic
+        dimensions are mapped into `[0, L)`, while non-periodic dimensions are
+        returned unchanged.
+    """
+    box_size_periodic = as_dimension_info(box_size_periodic)
+    points = np.asarray(points, dtype=float)
+
+    if points.shape[-1] != 3:
+        raise ValueError(
+            "`points` must have shape (..., 3) so the last axis stores x, y, z coordinates."
+        )
+
+    wrapped = points.copy()
+    mask_periodic = np.isfinite(box_size_periodic)
+    wrapped[..., mask_periodic] = np.mod(
+        wrapped[..., mask_periodic], box_size_periodic[mask_periodic]
+    )
+    return wrapped
+
+
 def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
     """
     Shift the entire trajectory so that the first point is inside the periodic box.

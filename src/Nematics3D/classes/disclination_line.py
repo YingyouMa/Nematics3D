@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
@@ -22,7 +22,7 @@ from ..datatypes import (
     UNSET,
     Unset,
 )
-from ..field import apply_linear_transform, unwrap_trajectory
+from ..field import apply_linear_transform, unwrap_trajectory, wrap_points_to_box
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all, cover_value
@@ -681,6 +681,7 @@ class DisclinationLineSmooth(SmoothedLine):
         self,
         u_percent,
         opts_grid: OptsPlaneGridPolar | None = None,
+        is_wrap: bool | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
@@ -1014,6 +1015,8 @@ class OptsDefectSectionGrid(OptsBase):
 
     - `host`: the DefectSectionGrid currently using this opts object, if any.
     - `u_percent`: normalized spline position along the smoothed defect line.
+    - `is_wrap`: whether the resolved section origin should be wrapped into the
+      principal periodic box before building the local polar plane.
 
     Common user actions:
 
@@ -1029,6 +1032,7 @@ class OptsDefectSectionGrid(OptsBase):
     """
 
     u_percent: float | Unset = UNSET
+    is_wrap: bool | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **OptsBase.__attrs__,
@@ -1036,11 +1040,16 @@ class OptsDefectSectionGrid(OptsBase):
             "Normalized spline parameter percentage along the smoothed defect line. "
             "0 means the start of the spline parameter domain and 100 means the end."
         ),
+        "is_wrap": (
+            "Whether the resolved section origin should be wrapped into the "
+            "principal periodic box before constructing the local polar plane."
+        ),
     }
 
     _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         **OptsBase._validators,
         "u_percent": lambda v, d: as_Number(v, name=d, value_range=(0, 100)),
+        "is_wrap": lambda v, d: as_bool(v, name=d),
     }
 
     _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -1048,6 +1057,7 @@ class OptsDefectSectionGrid(OptsBase):
             **dict(getattr(OptsBase, "_DEFAULTS_FROZEN", {})),
             "tag": "defect section grid options",
             "u_percent": 50,
+            "is_wrap": False,
         }
     )
 
@@ -1130,6 +1140,7 @@ class DefectSectionGrid(HostBase):
         normals: Mapping[str, Any] | None = None,
         opts: OptsDefectSectionGrid | None = None,
         opts_grid: OptsPlaneGridPolar | None = None,
+        is_wrap: bool | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
@@ -1148,6 +1159,8 @@ class DefectSectionGrid(HostBase):
         }
         if u_percent is not None:
             self_kwargs["u_percent"] = u_percent
+        if is_wrap is not None:
+            self_kwargs["is_wrap"] = is_wrap
 
         super().__init__(
             opts_type=OptsDefectSectionGrid,
@@ -1172,14 +1185,11 @@ class DefectSectionGrid(HostBase):
         )
         object.__setattr__(self, "state_normal", state_normal)
 
-        tangent, origin = line.act_calc_tangent(
-            self.opts.u_percent, is_return_coord=True
-        )
-        normal = self._helper_resolve_normal(tangent)
+        pose = self._helper_resolve_pose()
 
         grid = PlaneGridPolar(
-            normal=normal,
-            origin=origin,
+            normal=pose["normal"],
+            origin=pose["origin"],
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
             **kwargs,
@@ -1226,6 +1236,10 @@ class DefectSectionGrid(HostBase):
         tangent, origin = self.owner.act_calc_tangent(
             self.opts.u_percent, is_return_coord=True
         )
+        if self.opts.is_wrap:
+            origin = wrap_points_to_box(
+                origin, self.owner.owner._raw_box_size_periodic_index
+            )
         normal = self._helper_resolve_normal(tangent)
         return {"origin": origin, "normal": normal}
 

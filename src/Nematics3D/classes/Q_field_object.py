@@ -693,6 +693,9 @@ class QFieldObject(ClassBase):
             Whether smoothed line geometry should be used when available.
         is_extent
             Whether to also draw the bounding extent.
+        is_wrap
+            Whether the selected cross-section origin should be wrapped into
+            the principal periodic box before the local polar grid is built.
         min_line_length
             Minimum defect count required for a line to be plotted. If not
             provided, `self.default_miminum_line_length_visual` is used.
@@ -811,7 +814,7 @@ class QFieldObject(ClassBase):
         opts_defect: OptsSphere | None = None,
         bounds=None,
         title: str = "visualization of n plane",
-        name_plane: str = "n-plane",
+        plane_name: str = "n-plane",
         logger=None,
         **kwargs,
     ):
@@ -853,7 +856,7 @@ class QFieldObject(ClassBase):
             If omitted, the default Q-field bounds are used.
         title
             Title used when a new figure is created.
-        name_plane
+        plane_name
             Name assigned to the generated `QPlane` object.
         **kwargs
             Keyword overrides merged into the option objects using the prefixes
@@ -925,7 +928,7 @@ class QFieldObject(ClassBase):
 
         n_plane = QPlane(
             self.interpolator,
-            name=name_plane,
+            name=plane_name,
             opts=opts_grid,
             bounds=bounds,
             opts_defaults_override={
@@ -964,7 +967,7 @@ class QFieldObject(ClassBase):
         opts_extent: OptsTube | None = None,
         bounds=None,
         title: str = "visualization of S plane",
-        name_plane: str = "S-plane",
+        plane_name: str = "S-plane",
         logger=None,
         **kwargs,
     ):
@@ -998,7 +1001,7 @@ class QFieldObject(ClassBase):
             If omitted, the default Q-field bounds are used.
         title
             Title used when a new figure is created.
-        name_plane
+        plane_name
             Name assigned to the generated `QPlane` object.
         **kwargs
             Keyword overrides merged into the option objects using the prefixes
@@ -1054,7 +1057,7 @@ class QFieldObject(ClassBase):
 
         S_plane = QPlane(
             self.interpolator,
-            name=name_plane,
+            name=plane_name,
             opts=opts_grid,
             bounds=bounds,
             opts_defaults_override={
@@ -1081,11 +1084,12 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_visualize_n_near_defect(
         self,
-        x_param: float,
+        u_percent: float,
         smooth: DisclinationLineSmooth,
         figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
         is_new: bool = False,
         is_extent: bool = False,
+        is_wrap: bool = True,
         opts_grid: OptsPlaneGridPolar | None = None,
         opts_n: OptsRod | None = None,
         opts_nb: OptsRod | None = None,
@@ -1108,7 +1112,7 @@ class QFieldObject(ClassBase):
 
         Parameters
         ----------
-        x_param
+        u_percent
             Parametric position along the smoothed disclination line used to
             choose the cross-section.
         smooth
@@ -1211,10 +1215,11 @@ class QFieldObject(ClassBase):
             self.act_add_interpolator()
 
         section = smooth.act_cross_section(
-            x_param,
+            u_percent,
             opts_grid=opts_grid,
             name=plane_name,
             bounds=bounds,
+            is_wrap=is_wrap,
         )
         plane_grid = section.wrapped
         n_plane_name = section.name + " of " + smooth.name
