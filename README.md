@@ -19,6 +19,8 @@ python -m pip install --upgrade pip
 pip install .
 ```
 
+Here `.venv` is only an example environment-folder name. You can replace it with any folder name you prefer, as long as the activation command is updated consistently.
+
 If you prefer conda, you can create an environment first and then install the package with pip:
 
 ```bash
@@ -26,6 +28,8 @@ conda create -n Nematics3D python=3.12
 conda activate Nematics3D
 pip install .
 ```
+
+Here `Nematics3D` is only an example conda environment name. You can replace it with any name you prefer.
 
 You can verify the installation with:
 
