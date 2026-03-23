@@ -172,10 +172,10 @@ One example output is shown below:
 
 ![Near-defect example result](docs/example/informative/3.png)
 
-![Interactive line selection](docs/example/informative/4.png)
-
 Besides the built-in PyVista camera controls, this figure also supports object-level interactions. A right click highlights the picked object with a silhouette and reports its name in the scoped console. In the example shown above, the selected object is `PlotTube('disclination line 0 smooth_version 0')`.
 
-![Interactive point inspection](docs/example/informative/5.png)
+![Interactive line selection](docs/example/informative/4.png)
 
 In addition, a left double-click can pick one point on the plotted object. Different plotted objects may report different local information. In this tube example, the console reports the closest point on the tube, the normalized position along the tube, the local tangent, and the current local visual properties such as color, radius, and opacity. A right double-click opens the control panel for the picked object.
+
+![Interactive point inspection](docs/example/informative/5.png)
