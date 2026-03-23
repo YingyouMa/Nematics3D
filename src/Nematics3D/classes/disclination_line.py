@@ -3,6 +3,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
 from types import MappingProxyType
+from scipy.interpolate import splprep
 
 from ..general import sort_line_indices  # , get_plane, get_tangent
 from ..logging_decorator import logging_and_warning_decorator
@@ -631,6 +632,13 @@ class DisclinationLineSmooth(SmoothedLine):
                 result = self._calc_result[trim:-trim]
                 object.__setattr__(self, "_calc_result", result)
                 object.__setattr__(self, "_calc_N_out", len(result))
+                tck = splprep(
+                    result.T.copy(),
+                    u=np.linspace(0.0, 1.0, len(result)),
+                    s=0,
+                    per=0,
+                )[0]
+                object.__setattr__(self, "_entity_tck", tck)
 
         if not self._state_is_smoothed:
             object.__setattr__(

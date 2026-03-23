@@ -1228,6 +1228,9 @@ class QFieldObject(ClassBase):
             name=n_plane_name,
             grid=plane_grid,
         )
+        if plane_grid.wrapper is section:
+            plane_grid.act_unbind_wrapper()
+            n_plane.grid.act_bind_wrapper(section, protected_attrs=["origin", "normal"])
         self.objs.act_register(n_plane)
 
         n_plane.act_visualize_n(

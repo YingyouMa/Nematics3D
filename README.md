@@ -52,7 +52,7 @@ import Nematics3D
 n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
+Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
 Q.act_lines_smooth()  # smooth the detected disclination lines
 Q.act_visualize_disclination_lines()  # visualize the disclination lines in the system
 ```
@@ -79,29 +79,27 @@ import Nematics3D
 
 n = np.load("example/data/n_example_global.npy")
 S = np.load("example/data/S_example_global.npy")
+n = n[:60, :60, :60]
+S = S[:60, :60, :60]
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ")
+Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
 Q.act_lines_smooth()  # smooth the detected disclination lines
 
-bounds_max = 60
-bounds = Nematics3D.as_bounds((0, bounds_max, 0, bounds_max, 0, bounds_max))  # focus on a smaller region
 figure = Nematics3D.PlotFigure(
     name="lines and directors",
     is_off_screen=True,
-)  # create one shared figure in off-screen mode for direct saving
+)  # render off-screen so the example can save the figure directly
 
 Q.act_visualize_disclination_lines(
     figure=figure,
-    bounds=bounds,
     line_color=(0.5, 0.5, 0.5),
     line_radius=0.3,
-)  # draw the disclination lines inside the selected box
+)  # draw the disclination lines in the loaded subvolume
 
 # Here the `grid_*` arguments control the geometry of the director plane,
 # such as its orientation, position, size, and sampling spacing.
 Q.act_visualize_n_plane(
     figure=figure,
-    bounds=bounds,
     is_extent=False,  # do not draw another bounding box for this layer
     grid_normal=(1, 1, 1),
     grid_origin=(24, 24, 24),
@@ -119,11 +117,11 @@ figure.act_commit(
 figure.act_savefig("docs/example/informative/2.png")  # save the rendered figure
 ```
 
-This example creates one shared figure, restricts the view to a `0` to `60` box, draws the disclination lines inside that box, adds a director field on a tilted plane through the same region, and then rotates the view for a clearer presentation.
+This example first crops the example data to the `0` to `60` subvolume in each direction, then creates one shared figure, draws the disclination lines in that cropped system, adds a director field on a tilted plane, and finally rotates the view for a clearer presentation.
 
 With the default settings, directors near defects are highlighted by being fully opaque, while directors farther from defects remain semi-transparent. In this example, you can observe that the opaque directors surround the intersection between the disclination line and the plane.
 
-During detailed tuning, you may sometimes see opaque directors without a visible disclination line. This is usually caused by visualization choices rather than by an inconsistency in the data, for example the minimum line length chosen for plotting or the smoothing settings used for the line. We explain these details in the corresponding function-level documentation.
+You may also notice an opaque director near the upper-right part of the image without a visible disclination line. In this example, that happens because the corresponding local defect line segment inside the cropped Q-field is shorter than the minimum line length required for plotting. This threshold can be adjusted in `act_visualize_disclination_lines()`; see that function's docstring for the relevant options.
 
 In this example, the director field also uses its default coloring. The rods are colored according to their orientation, which helps reveal directional variation across the plane.
 

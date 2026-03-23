@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 from qtpy import QtWidgets
 
 from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper
@@ -147,8 +147,9 @@ class InteractDefectSection(PanelBase):
             value_min=0,
             value_max=100,
             value_init=self.state["u_percent"],
-            tick_to_value=float,
-            value_to_tick=int,
+            tick_to_value=lambda t: t / 1000,
+            value_to_tick=lambda v: int(round(v * 1000)),
+            value_fmt="{:.3f}",
         )
 
         self.normal_info = QtWidgets.QLabel(
@@ -164,9 +165,9 @@ class InteractDefectSection(PanelBase):
             value_min=0,
             value_max=360,
             value_init=self.get_azimuth(self.host.opts.normal),
-            tick_to_value=lambda t: t / 10,
+            tick_to_value=lambda t: t / 1000,
             value_to_tick=lambda v: int(v * 10),
-            value_fmt="{:.1f}",
+            value_fmt="{:.3f}",
         )
 
         self.sliders["normal_polar_angle"] = make_labeled_slider_row(
@@ -177,9 +178,9 @@ class InteractDefectSection(PanelBase):
             value_min=0,
             value_max=180,
             value_init=self.get_polar_angle(self.host.opts.normal),
-            tick_to_value=lambda t: t / 10,
+            tick_to_value=lambda t: t / 1000,
             value_to_tick=lambda v: int(v * 10),
-            value_fmt="{:.1f}",
+            value_fmt="{:.3f}",
         )
 
         self.chk_use_normal = QtWidgets.QCheckBox("Use controlled normal", group_vector)

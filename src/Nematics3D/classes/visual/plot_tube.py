@@ -691,7 +691,6 @@ class PlotTube(PlotGlyph):
             f"The closest point on the tube is {fmt_value(pos_close)}, where: \n"
             f"The normalized position along the tube is {u_percent:.3f} \n"
         )
-        print(pos_close, self.wrapper.owner.act_calc_tangent(u_percent, is_return_coord=True)[1])
         try:
             smooth = self.wrapper.owner
             tgt = smooth.act_calc_tangent(u_percent)
