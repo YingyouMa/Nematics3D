@@ -1,4 +1,4 @@
-from .field import *
+﻿from .field import *
 from .disclination import *
 
 # from .elastic import *
@@ -21,5 +21,6 @@ from .general import *
 from .logging_decorator import logging_and_warning_decorator
 from .classes.visual import qt
 
-__version__ = "0.1.7"
+__version__ = "0.9.0b1"
+
 
