@@ -172,10 +172,12 @@ One example output is shown below:
 
 ![Near-defect example result](docs/example/informative/3.png)
 
+Besides the built-in PyVista camera controls, this figure also supports three object-level click interactions: right click highlights one plotted object and reports its identity in the scoped console, left double-click places a numbered picked point and reports local information, and right double-click opens the control panel for that plotted object.
+
 ![Interactive line selection](docs/example/informative/4.png)
 
-This local-line example is also a good place to try the interactive tools in the Qt figure window. If you click a tube, the scoped console shows which plotted object is currently selected. In the example below, the selected object is the smoothed version of disclination line `0`.
+Here a right click selects one tube and reports that the chosen plotted object is `PlotTube('disclination line 0 smooth_version 0')`.
 
 ![Interactive point inspection](docs/example/informative/5.png)
 
-You can also pick a point on the selected tube. The console then reports the closest point on that tube together with its normalized position, local tangent, and current visual properties such as color, radius, and opacity.
+Here a left double-click picks one point on that tube. Different plotted objects can report different local information. In this tube example, the console reports the closest point on the tube, the normalized position along the tube, the local tangent, and the current local visual properties such as color, radius, and opacity.
