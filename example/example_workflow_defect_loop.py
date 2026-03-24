@@ -56,9 +56,9 @@ Q.act_visualize_n_plane(
 )
 
 Q.figs.active_fig.act_commit(
-    azimuth=86,
-    elevation=21,
-    roll=-0.97,
+    azimuth=90,
+    elevation=34,
+    roll=0,
     distance=2.2e02,
     focal_point=[98.63580312, 49.5, 49.5],
 )

@@ -290,17 +290,17 @@ This call therefore draws the smoothed disclination lines together with the oute
 
 The result should look like this:
 
-![Workflow defect loops](docs/example/informative/8.png)
+![Workflow defect loops](docs/example/workflow/8.png)
 
 At this point, we can use the built-in PyVista interactions mentioned earlier to rotate and translate the camera for a better view of the loops. In particular, you can rotate the camera by holding the left mouse button and dragging, zoom by rolling the mouse wheel or by holding the right mouse button and dragging, and translate the camera by holding the middle mouse button and dragging.
 
 For example, suppose we are interested in the third loop from the left. After adjusting the camera interactively, we may choose a view like the following:
 
-![Workflow selected loop view](docs/example/informative/9.png)
+![Workflow selected loop view](docs/example/workflow/9.png)
 
 As mentioned earlier, right-clicking a plotted object will highlight it through a silhouette and show related information in the console below. For example:
 
-![Workflow selected loop console](docs/example/informative/10.png)
+![Workflow selected loop console](docs/example/workflow/10.png)
 
 Here the console shows `PlotTube('disclination line 4 smooth_version 0')`. `PlotTube` means that this plotted object is a `PlotTube`, which is our wrapped object for tube rendering. The name inside the parentheses is the name of this tube. In this case, it means the first smoothed version of the fifth-longest disclination line in the system.
 
@@ -308,7 +308,7 @@ One natural concern at this point is whether the smoothing parameters chosen ear
 
 As mentioned earlier, double-clicking a plotted object opens its control panel, as shown below:
 
-![Workflow line control panel](docs/example/informative/11.png)
+![Workflow line control panel](docs/example/workflow/11.png)
 
 When opening this panel, you will see a warning. You can safely ignore it in this workflow. For interested users, the warning simply means that the smoothing option `min_line_length` has been automatically lowered to its minimum value `2`, so that this line can be adjusted more conveniently from the control panel.
 
@@ -340,6 +340,12 @@ Here `is_extent=False` means that we do not draw the outer box again, because it
 
 After plotting the directors, the result looks like this:
 
-![Workflow director plane](docs/example/informative/12.png)
+![Workflow director plane](docs/example/workflow/12.png)
 
 Here we have again adjusted the camera to a view that is more convenient for inspecting the overall director field.
+
+As mentioned earlier, the default coloring of the directors is based on their orientation through a built-in colormap. In addition, directors near defects are rendered opaque, while directors farther away are rendered semi-transparent. This helps highlight the directors around the defect and makes the local geometry near the defect easier to inspect.
+
+Right double-clicking these directors also opens a control panel. For example, right double-clicking one of the semi-transparent directors produces the following panel:
+
+![Workflow director control panel](docs/example/workflow/13.png)
