@@ -1,3 +1,11 @@
+"""
+Base object model for structured nematics3d classes.
+
+This module defines ClassBase, the shared foundation for repository objects
+that expose named attributes, semantic relations, controlled assignment, and
+inspection helpers.
+"""
+
 import weakref
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -160,9 +168,9 @@ class ClassBase:
     def _helper_init_relations_basic(self):
         relations = object.__getattribute__(self, "_impl_relations")
         relation_docs = object.__getattribute__(self, "_impl_relation_docs")
-        for key in type(self).__relations__.keys():
+        for key, doc in type(self).__relations__.items():
             relations.setdefault(key, None)
-            relation_docs.setdefault(key, type(self).__relations__[key])
+            relation_docs.setdefault(key, doc)
 
     # ------------------------------------------------------------------
     # Readable-name registry
@@ -173,7 +181,8 @@ class ClassBase:
         names = self._impl_getattr_names
         if (name in names) and (not allow_existing):
             raise AttributeError(
-                f"Cannot register readable name {name!r}: it conflicts with an existing readable name of {type(self).__name__}."
+                f"Cannot register readable name {name!r}: "
+                f"it conflicts with an existing readable name of {type(self).__name__}."
             )
         names.add(name)
         return name
@@ -239,7 +248,7 @@ class ClassBase:
         except (TypeError, ValueError):
             logger.exception("Invalid name.")
             logger.recovery("Ignore this modification.")
-            return
+            return None
 
         check_name = getattr(self.registry, "_helper_check_name", None)
         if callable(check_name):
@@ -360,7 +369,7 @@ class ClassBase:
         attrs_extra = []
         attrs_properties = []
 
-        for attr_name in type(self).__attrs__.keys():
+        for attr_name in type(self).__attrs__:
             if attr_name in protected:
                 continue
             if (
@@ -370,7 +379,7 @@ class ClassBase:
             ):
                 attrs_fields.append(attr_name)
 
-        for attr_name in self._impl_extra_attrs_docs.keys():
+        for attr_name in self._impl_extra_attrs_docs:
             if attr_name not in protected:
                 attrs_extra.append(attr_name)
 
