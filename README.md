@@ -349,3 +349,66 @@ As mentioned earlier, the default coloring of the directors is based on their or
 Right double-clicking these directors also opens a control panel. For example, right double-clicking one of the semi-transparent directors produces the following panel:
 
 ![Workflow director control panel](docs/example/workflow/13.png)
+
+From this control panel, we can see that one part controls the grid and the other part controls the rendered directors.
+
+You may also notice that this panel allows parameter adjustment directly from the command-line backend. In the figure above, it says: `In the command line, the controlled object is also available as the current figure's interacts['panel2'].host`.
+
+So how do we find the current figure? For a `QFieldObject`, the canvases created by its `act_visualize_*()` methods are stored in `.figs`. If you type `Q.figs` in the command line, you will get something like:
+
+```python
+FigureManager('figures')
+0:       disclination lines
+```
+
+Here `0` is the figure index, ordered by creation time, and `disclination lines` is the name of that figure. You can access the figure either by index or by name. In other words, both `Q.figs[0]` and `Q.figs["disclination lines"]` work.
+
+So, going back to the control panel, the note `In the command line, the controlled object is also available as the current figure's interacts['panel2'].host` means that, while this panel is open, the corresponding object can also be modified directly through `Q.figs[0].interacts['panel2'].host`.
+
+In this case, from the console information shown above, we know that the controlled object is `PlaneGrid('n-plane-grid')`, namely the grid object of the director plane.
+
+This is convenient for two reasons. First, some parameters are not easy to adjust from the panel itself, or may not be exposed there at all, so it is often more convenient to modify them directly from the command line. Second, even when you already know that you want to work from the command line, it is often not easy to find the variable name that refers to the relevant object.
+
+This grid object is a typical example of that second difficulty: `PlaneGrid('n-plane-grid')` is certainly relevant to the current figure, but without this hint it is not obvious how to access it directly from the command line. Here the control panel gives that reference path explicitly, so you can immediately access and modify the object without having to search for it yourself.
+
+Now that we can directly access the object from the command line, we should first explain one important concept in this library: `opts`.
+
+Roughly speaking, `opts` stores the option-like parameters of a host object, especially the non-core input data that is still frequently modified after initialization.
+
+`opts` can be accessed directly. For example, if you type `Q.figs[0].interacts['panel2'].host.opts` in the command line and press Enter, you will get the opts of this grid object:
+
+```python
+OptsPlaneGrid: the options of PlaneGrid('n-plane-grid')
+  tag            = 'plane grid options'
+  normal         = array([0., 0., 1.])
+  spacing        = 4
+  spacing_extra  = None
+  size           = 200
+  size_extra     = None
+  origin         = array([100.,  50.,  50.])
+  alignment      = 'center'
+  axis1          = array([1., 0., 0.])
+  is_clip_inside = True
+  grid_offset    = array([0., 0., 0.])
+  grid_transform = <ndarray shape=(3, 3), too many elements to display>
+```
+
+We do not explain the detailed meaning of each field here. Please see the docstring for that.
+
+Here we modify two fields as simple examples: `spacing` and `origin`, which represent the distance between neighboring grid points and the grid origin position, respectively.
+
+From the command line, there are two common ways to modify them. One is direct assignment:
+
+```python
+Q.figs[0].interacts['panel2'].host.opts.origin = (100, 50, 75)  # move the plane upward
+Q.figs[0].interacts['panel2'].host.opts.spacing = 4.5
+```
+
+The other is to call `act_commit()` directly:
+
+```python
+Q.figs[0].interacts['panel2'].host.act_commit(
+    origin=(100, 50, 75),
+    spacing=4.5,
+)
+```

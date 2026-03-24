@@ -378,15 +378,19 @@ class InteractPlane(PanelBase):
         axisy = rotation @ np.array([0.0, 1.0, 0.0])
         axis1_now = np.cos(axis1_azimuth) * axisx + np.sin(axis1_azimuth) * axisy
 
-        self.host.act_commit(
-            alignment=alignment,
-            spacing=float(self.state["spacing"]),
-            spacing_extra=spacing_extra_now,
-            size=float(self.state["size"]),
-            size_extra=size_extra_now,
-            normal=normal_now,
-            axis1=axis1_now,
-        )
+        self._is_gui_updating = True
+        try:
+            self.host.act_commit(
+                alignment=alignment,
+                spacing=float(self.state["spacing"]),
+                spacing_extra=spacing_extra_now,
+                size=float(self.state["size"]),
+                size_extra=size_extra_now,
+                normal=normal_now,
+                axis1=axis1_now,
+            )
+        finally:
+            self._is_gui_updating = False
 
     def _on_toggle_is_origin_center(self, _state: int):
         self.state["is_origin_center"] = self.chk_is_origin_center.isChecked()

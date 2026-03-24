@@ -559,6 +559,7 @@ class PickManager:
         pack["id"] = int(marker_id)
         x, y, z = float(xyz[0]), float(xyz[1]), float(xyz[2])
         pack["pts"].SetPoint(0, x, y, z)
+        pack["pts"].Modified()
         pack["poly"].Modified()
         pack["actor"].GetProperty().SetColor(*self.HELPER_MARKER_COLOR)
         pack["actor"].SetVisibility(True)

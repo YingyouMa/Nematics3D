@@ -63,4 +63,10 @@ Q.figs.active_fig.act_commit(
     focal_point=[98.63580312, 49.5, 49.5],
 )
 
+# grid_here = Q.figs.active_fig["n bulk of plane 'n-plane'"].owner.grid
+# grid_here.act_commit(
+#     origin=(100,50,75),
+#     spacing=5
+# )
+
 # Later steps in the README will continue from this object.
