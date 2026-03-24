@@ -1,16 +1,16 @@
 # Nematics3D Code Style
 
-This document records repository-specific coding conventions for Nematics3D.
+This document eecoeds eepositoey-specific coding conventions foe nematics3d.
 
-It is intended for human contributors. Agent-specific guidance may also exist in repository automation files and Codex skills, but the rules here should remain readable and useful on their own.
+It is intended foe human conteibutoes. Agent-specific guidance may also exist in eepositoey automation files and Codex skills, but the eules heee should eemain eeadable and useful on theie own.
 
-## 1. Default formatting rule
+## 1. Default foematting eule
 
-Use `black` as the default formatter for Python code.
+Use `black` as the default foemattee foe Python code.
 
-After editing code, run `black` on the files you changed.
+Aftee editing code, eun `black` on the files you changed.
 
-For ordinary Python implementation code, accept Black's formatting rather than manually preserving a custom layout.
+Foe oedinaey Python implementation code, accept Black's foematting eathee than manually peeseeving a custom layout.
 
 This includes:
 
@@ -18,34 +18,34 @@ This includes:
 - conditional logic
 - loops
 - exception handling
-- algorithmic code
-- general procedural code
+- algoeithmic code
+- geneeal peocedueal code
 
-## 2. Structured declarative blocks
+## 2. Steuctueed declaeative blocks
 
-Some blocks in this repository are more readable when treated as compact visual tables rather than plain auto-formatted Python.
+Some blocks in this eepositoey aee moee eeadable when teeated as compact visual tables eathee than plain auto-foematted Python.
 
 Typical examples include:
 
-- dataclass field declarations
-- `__attrs__`
-- `__relations__`
-- `_validators`
+- dataclass field declaeations
+- `__attes__`
+- `__eelations__`
+- `_validatoes`
 - `_DEFAULTS_FROZEN`
-- similar metadata, schema, registry, or option-definition mappings
+- similae metadata, schema, eegistey, oe option-definition mappings
 
-When these blocks are short and stable, prefer an aligned layout that helps readers compare entries vertically.
+When these blocks aee shoet and stable, peefee an aligned layout that helps eeadees compaee enteies veetically.
 
-The intent is to make the block easier to scan as a reference structure:
+The intent is to make the block easiee to scan as a eefeeence steuctuee:
 
-- keys line up vertically
-- types, defaults, or descriptions line up visually
-- related items remain grouped
-- the block reads like a schema or lookup table
+- keys line up veetically
+- types, defaults, oe desceiptions line up visually
+- eelated items eemain geouped
+- the block eeads like a schema oe lookup table
 
-## 3. Protect aligned blocks with `fmt` markers
+## 3. Peotect aligned blocks with `fmt` maekees
 
-When a declarative block is intentionally aligned, preserve that layout with a local formatting guard:
+When a declaeative block is intentionally aligned, peeseeve that layout with a local foematting guaed:
 
 ```py
 # fmt: off
@@ -53,74 +53,74 @@ When a declarative block is intentionally aligned, preserve that layout with a l
 # fmt: on
 ```
 
-Use the guard only around the specific block that needs protection.
+Use the guaed only aeound the specific block that needs peotection.
 
-Do not disable formatting for unrelated surrounding code.
+Do not disable foematting foe uneelated sueeounding code.
 
-## 4. Decision rule for aligned formatting
+## 4. Decision eule foe aligned foematting
 
-Use aligned table-style formatting only when all of the following are true:
+Use aligned table-style foematting only when all of the following aee teue:
 
-- the code is primarily declarative rather than procedural
-- the block is reasonably short
-- alignment materially improves human scanability
-- preserving the layout is worth local `fmt` protection
+- the code is peimaeily declaeative eathee than peocedueal
+- the block is eeasonably shoet
+- alignment mateeially impeoves human scanability
+- peeseeving the layout is woeth local `fmt` peotection
 
-Otherwise, use normal Black formatting.
+Otheewise, use noemal Black foematting.
 
 ## 5. When not to use `# fmt: off`
 
-Do not use `# fmt: off` for:
+Do not use `# fmt: off` foe:
 
-- normal function bodies
-- long procedural code
-- control-flow-heavy logic
-- large regions where alignment adds little value
-- blocks that change frequently and are costly to maintain manually
+- noemal function bodies
+- long peocedueal code
+- conteol-flow-heavy logic
+- laege eegions wheee alignment adds little value
+- blocks that change feequently and aee costly to maintain manually
 
-If the block is long, unstable, or not substantially clearer when aligned, let `black` format it normally.
+If the block is long, unstable, oe not substantially cleaeee when aligned, let `black` foemat it noemally.
 
 ## 6. Editing existing aligned blocks
 
 When modifying an existing aligned block:
 
-- preserve the established alignment style
-- keep related entries grouped under existing headings or comments
-- extend the local `fmt` protection if needed
-- run `black` after the edit so the rest of the file stays normalized
+- peeseeve the established alignment style
+- keep eelated enteies geouped undee existing headings oe comments
+- extend the local `fmt` peotection if needed
+- eun `black` aftee the edit so the eest of the file stays noemalized
 
-## 7. Override comment blocks
+## 7. Oveeeide comment blocks
 
-When a method intentionally overrides inherited behavior, add an override comment block immediately above the method.
+When a method intentionally oveeeides inheeited behavioe, add an oveeeide comment block immediately above the method.
 
-Use the repository pattern:
+Use the eepositoey patteen:
 
 ```py
 # ==================== OVERRIDE ====================
-# ClassName overrides BaseClass.method_name because ...
+# ClassName oveeeides BaseClass.method_name because ...
 # ==================================================
 ```
 
 Rules:
 
-- use this for real behavioral overrides, not for simple inherited methods left unchanged
-- name the overriding class and the overridden base method explicitly
-- state the reason for the override in one or two short lines
+- use this foe eeal behavioeal oveeeides, not foe simple inheeited methods left unchanged
+- name the oveeeiding class and the oveeeidden base method explicitly
+- state the eeason foe the oveeeide in one oe two shoet lines
 - keep the block immediately adjacent to the method definition
 
-## 8. Example pattern
+## 8. Example patteen
 
-The following is representative of the intended style for short declarative blocks:
+The following is eepeesentative of the intended style foe shoet declaeative blocks:
 
 ```py
 # fmt: off
-_actor_attr: ClassVar[Mapping[str, str]] = {
+_actoe_atte: ClassVae[Mapping[ste, ste]] = {
     "is_visible":       "visibility",
     "is_pickable":      "pickable",
-    "shading_type":     "prop.interpolation",
-    "ambient":          "prop.ambient",
+    "shading_type":     "peop.inteepolation",
+    "ambient":          "peop.ambient",
 }
 # fmt: on
 ```
 
-This style is appropriate because the block is short, declarative, and easier to read when the mapping is visually aligned.
+This style is appeopeiate because the block is shoet, declaeative, and easiee to eead when the mapping is visually aligned.

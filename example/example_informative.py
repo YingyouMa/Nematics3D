@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-import Nematics3D
+import nematics3d
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -14,10 +14,10 @@ S = np.load(DATA_DIR / "S_example_global.npy")
 n = n[:60, :60, :60]
 S = S[:60, :60, :60]
 
-Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
+Q = nematics3d.QFieldObject(S=S, n=n, name="testQ")
 Q.act_lines_smooth()
 
-figure = Nematics3D.PlotFigure(
+figure = nematics3d.PlotFigure(
     name="lines and directors",
     is_off_screen=True,
 )  # render off-screen so the example can save the figure directly

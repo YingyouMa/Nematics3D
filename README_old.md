@@ -31,7 +31,7 @@ For example, in Windows, I'm applying:
 ```python
 import sys
 sys.path.insert(0, r"WhereYouPutTheRepo\src")
-import Nematics3D
+import nematics3d
 ```
 To install Mayavi using conda, run the following line on Anaconda Prompt
 ```
@@ -50,13 +50,13 @@ There are two ways to initialize an object of ```QFieldObject```.
 
 1. **Provide the $Q$ field directly**:
 ```python
-Q = Nematics3D.QFieldObject(Q=Q_data)
+Q = nematics3d.QFieldObject(Q=Q_data)
 ```
 The initialization automatically derive the scalar order parameter field $S$ and director field $n$, represented by ```Q.S``` and ```Q.n```. The input $Q$ data could either in the 5-component form ```(Nx, Ny, Nz, 5)``` or in tensorial structure ```(Nx, Ny, Nz, 9)```.    
 
 2. **Provide $S$ and $n$**, in which case $Q$ is constructed as $Q = S,(nn-\frac{I}{3})$:
 ```python
-Q = Nematics3D.QFieldObject(S=S_data, n=n_data)
+Q = nematics3d.QFieldObject(S=S_data, n=n_data)
 ```
 
 Another important argument for ```QFieldObject``` is the periodic-boundary-condition flag. For example, ```box_periodic_flag=(True, False, False)``` indicates that only in $x$-direction there is periodic. This setting is crucial for disclination analysis: if PBC is specified incorrectly, a disclination line crossing a periodic boundary would be identified as multiple independent segments.
@@ -71,7 +71,7 @@ An example dataset of $S$ and $n$ field is provided under ```example/data```. Th
 n = np.load( 'data/n_example_global.npy')
 S = np.load( 'data/S_example_global.npy')
 
-Q = Nematics3D.QFieldObject(S=S, n=n, box_periodic_flag=True)
+Q = nematics3d.QFieldObject(S=S, n=n, box_periodic_flag=True)
 
 Q.act_lines_classify()
 Q.act_lines_smooth()
@@ -145,7 +145,7 @@ It will be beneficial to plot disclination lines and directos in the same figure
 index_max =  64
 n = np.load( 'data/n_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
 S = np.load( 'data/S_example_global.npy')[0:index_max, 0:index_max, 0:index_max]
-Q = Nematics3D.QFieldObject(S=S, n=n)
+Q = nematics3d.QFieldObject(S=S, n=n)
 Q.act_lines_classify()
 Q.act_lines_smooth()
 
@@ -265,7 +265,7 @@ As an example, the visualization function in Section **Defects detection and bas
 ```
 You can also include timestamps by setting ```show_timestamp=True```. This is helpful to further handle the time management. For example:
 ```python
-@Nematics3D.logging_and_warning_decorator
+@nematics3d.logging_and_warning_decorator
 def example_visualize(Q, logger=None):
     Q.update_defects(logger=logger)
     Q.update_lines_classify(logger=logger)

@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Nematics3D"
+name = "nematics3d"
 version = "0.9.0b1"
 description = "Tools for 3D nematic field analysis and visualization"
 readme = "README.md"

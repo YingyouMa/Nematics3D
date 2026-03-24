@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-import Nematics3D
+import nematics3d
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -14,10 +14,10 @@ S = np.load(DATA_DIR / "S_example_global.npy")
 n = n[:30, :30, :30]
 S = S[:30, :30, :30]
 
-Q = Nematics3D.QFieldObject(S=S, n=n, name="testQ")
+Q = nematics3d.QFieldObject(S=S, n=n, name="testQ")
 Q.act_lines_smooth(min_line_length=20, window_length=10)
 
-figure = Nematics3D.PlotFigure(
+figure = nematics3d.PlotFigure(
     name="near-defect director field",
 )
 

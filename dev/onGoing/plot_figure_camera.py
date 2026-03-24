@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 import numpy as np
 import weakref
-from Nematics3D.datatypes import as_Number, Vect, as_Vect
-from Nematics3D.logging_decorator import logging_and_warning_decorator
+from nematics3d.datatypes import as_Number, Vect, as_Vect
+from nematics3d.logging_decorator import logging_and_warning_decorator
 
 
 @dataclass(slots=True)
