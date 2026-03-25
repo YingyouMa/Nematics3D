@@ -425,9 +425,9 @@ class InteractPlane(PanelBase):
     # with PlaneGrid option changes from the host side.
     # ==================================================
     def _sync_func(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
-            self.host._opts_backup[self.str_now_live].update(kwargs)
+        is_external = self._helper_sync_update_live_backup(kwargs)
 
+        if is_external:
             if "origin" in kwargs:
                 self.state["origin"] = np.asarray(
                     self.host.opts.origin, dtype=float
@@ -475,7 +475,11 @@ class InteractPlane(PanelBase):
                     "axis1_azimuth",
                     self.get_axis1_azimuth(self.host.opts.axis1, self.host.opts.normal),
                 )
-                self.axis1_info.setText(self._vect_text(self.host.opts.axis1, "axis1"))
+
+        if "normal" in kwargs:
+            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
+        if "axis1" in kwargs or "normal" in kwargs:
+            self.axis1_info.setText(self._vect_text(self.host.opts.axis1, "axis1"))
 
         if self.chk_is_show_axes.isChecked():
             self._update_axes_visuals(is_visible=True)

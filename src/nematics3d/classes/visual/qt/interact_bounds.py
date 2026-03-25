@@ -373,9 +373,6 @@ class InteractBounds(PanelBase):
         self._is_gui_updating = True
         try:
             self.host.act_commit(origin=np.asarray(center, dtype=float))
-            self._update_axis_info_labels()
-            if self.chk_is_show_helpers.isChecked():
-                self._update_helper_visuals(is_visible=True)
         finally:
             self._is_gui_updating = False
 
@@ -442,9 +439,6 @@ class InteractBounds(PanelBase):
                 axis1=axis1_now,
                 axis2=axis2_now,
             )
-            self._update_axis_info_labels()
-            if self.chk_is_show_helpers.isChecked():
-                self._update_helper_visuals(is_visible=True)
         finally:
             self._is_gui_updating = False
 
@@ -458,9 +452,9 @@ class InteractBounds(PanelBase):
     # with Bounds updates that may come from outside the panel.
     # ==================================================
     def _sync_func(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
-            self.host._opts_backup[self.str_now_live].update(kwargs)
+        is_external = self._helper_sync_update_live_backup(kwargs)
 
+        if is_external:
             if "origin" in kwargs:
                 self.state["origin"] = np.asarray(
                     self.host.opts.origin, dtype=float
@@ -500,10 +494,11 @@ class InteractBounds(PanelBase):
                     "axis2_roll",
                     self._helper_get_axis2_roll(axis1, axis2),
                 )
-                self._update_axis_info_labels()
+        if "axis1" in kwargs or "axis2" in kwargs:
+            self._update_axis_info_labels()
 
-            if self.chk_is_show_helpers.isChecked():
-                self._update_helper_visuals(is_visible=True)
+        if self.chk_is_show_helpers.isChecked():
+            self._update_helper_visuals(is_visible=True)
 
     def on_close(self):
         self._helper_end_continuous_interaction()

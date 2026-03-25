@@ -622,6 +622,26 @@ class PanelBase(QtWidgets.QWidget):
         s.set_tick(value, is_block_signals=True)
         self.on_changed(0, is_commit=False)
 
+    def _helper_sync_update_live_backup(self, kwargs, *, host=None) -> bool:
+        """
+        Update the panel live snapshot only for changes that come from outside
+        the panel itself.
+
+        Design note
+        -----------
+        In this repository, panel-originated commits and external command-line
+        commits should share the same synchronization side effects such as
+        label refreshes, helper-visual updates, and marker movement. The only
+        behavior that should remain exclusive to external updates is advancing
+        the panel's live backup, which powers ``Reset to Live``.
+        """
+        if getattr(self, "_is_gui_updating", False):
+            return False
+        if host is None:
+            host = self.host
+        host._opts_backup[self.str_now_live].update(kwargs)
+        return True
+
     def on_changed(self, _v=0, is_commit=True):
         for item in self.sliders.values():
             item.sync_to_state(self.state)

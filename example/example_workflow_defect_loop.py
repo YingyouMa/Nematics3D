@@ -69,4 +69,33 @@ Q.figs.active_fig.act_commit(
 #     spacing=5
 # )
 
+bounds_local = nematics3d.as_bounds((145, 175, 13, 51, 64, 94), name="small-loop bounds")
+
+Q.act_visualize_disclination_lines(
+    is_new=True,
+    bounds=bounds_local,
+    min_line_length=61,
+    line_color=(0.45, 0.45, 0.45),
+    line_radius=0.35,
+    extent_color=(0.15, 0.15, 0.15),
+    extent_radius=0.08,
+)
+
+Q.act_visualize_n_plane(
+    bounds=bounds_local,
+    grid_normal=(0, 0, 1),
+    grid_origin=(160, 32, 80),
+    grid_spacing=2.5,
+    grid_size=60,
+    n_length=2.8,
+    n_radius=0.25,
+)
+
+Q.figs.active_fig.act_commit(
+    azimuth=110,
+    elevation=30    
+)
+
+bounds_local.opts.origin = (150, 13, 64)
+
 # Later steps in the README will continue from this object.

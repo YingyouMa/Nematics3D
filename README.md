@@ -127,6 +127,8 @@ With the default settings, directors near defects are highlighted by being fully
 
 You may also notice an opaque director near the upper-right part of the image without a visible disclination line. In this example, that happens because the corresponding local defect line segment inside the cropped Q-field is shorter than the minimum line length required for plotting. This threshold can be adjusted in `act_visualize_disclination_lines()`; see that function's docstring for the relevant options.
 
+More generally, you may also notice a small spatial mismatch between a plotted disclination line and the region highlighted by opaque directors. Based on our current tests, this appears to come mainly from interpolation effects and finite spatial resolution, and the mismatch is usually small. If you observe a large or obvious mismatch, please feel free to report it.
+
 In this example, the director field also uses its default coloring. The rods are colored according to their orientation, which helps reveal directional variation across the plane.
 
 One example output is shown below:
@@ -412,3 +414,80 @@ Q.figs[0].interacts['panel2'].host.act_commit(
     spacing=4.5,
 )
 ```
+
+At this point, we can control the object through both the panel and the command line.
+
+We have already mentioned the `Restore Original` button in the panel. It restores the object's `opts` to the snapshot taken when the panel was opened. The other button, `Reset to Live`, removes all modifications made from the panel itself, so that only the modifications made from the command line after the panel was opened are kept.
+
+Now suppose we want to inspect the smallest defect loop in the figure, namely the second one from the left. Using the grid control panel we just opened together with the usual camera interactions, we can focus the view into a zoomed-in image like the following:
+
+![Workflow zoomed-in loop](docs/example/workflow/14.png)
+
+If we now want to inspect this defect more specifically, a natural next step is to open a new figure that only shows this defect loop together with the nearby directors. In other words, from this point on we no longer analyze the full Q field, but instead focus on a local Q subvolume around this loop.
+
+To estimate the index range of that local Q field, we can again use the object-information interaction mentioned earlier. For example, if we left-double-click the director with the largest `y` component among the directors of interest, this creates a marker together with its coordinate readout, from which we can see that the largest relevant `y` index of the local Q field is around `50`. In the screenshot, this marker happens to be labeled as `marker4`, simply because it is the fourth marker created in the current session.
+
+![Workflow local-index probe](docs/example/workflow/15.png)
+
+Suppose that at this point we have decided to focus on a local Q subvolume with indices `x=145:175`, `y=13:51`, and `z=64:94`. How can we keep only the Q information in this region and clip away the rest of the plotted scene?
+
+The most straightforward method is to do what we already did in the section `Example 2: Local Disclination Lines`: directly construct a new `QFieldObject` from the local Q data and work on that smaller system only.
+
+There is also another built-in option: use a `Bounds` object. A `Bounds` object represents a clipping region in real space and can be passed directly into the `bounds=` argument of `act_visualize_*()` functions. In the present example, the simplest way to create such a bounds object is to enter the six boundary numbers directly, namely `xmin`, `xmax`, `ymin`, `ymax`, `zmin`, and `zmax`:
+
+```python
+bounds_local = nematics3d.as_bounds((145, 175, 13, 51, 64, 94), name="small-loop bounds")
+```
+
+We can then use this bounds object to draw only the disclination lines inside this local box, and to draw a middle `n` plane inside it:
+
+```python
+bounds_local = nematics3d.as_bounds((145, 175, 13, 51, 64, 94), name="small-loop bounds")
+
+Q.act_visualize_disclination_lines(
+    is_new=True,  # start a new figure instead of adding to the previous one
+    bounds=bounds_local,
+    min_line_length=61,  # only plot disclination lines longer than this threshold
+    line_color=(0.45, 0.45, 0.45),  # `line_*` controls the plotted disclination lines
+    line_radius=0.35,
+    extent_color=(0.15, 0.15, 0.15),  # `extent_*` controls the plotted outer frame
+    extent_radius=0.08,
+)
+
+Q.act_visualize_n_plane(
+    bounds=bounds_local,
+    grid_normal=(0, 0, 1),  # `grid_*` controls the sampling lattice of the plane
+    grid_origin=(160, 32, 80),
+    grid_spacing=2.5,  # spacing between neighboring grid points
+    grid_size=60,
+    n_length=2.8,  # `n_*` controls the plotted director field
+    n_radius=0.25,
+)
+```
+
+After adjusting the camera, we obtain the following view:
+
+![Workflow local bounds view](docs/example/workflow/16.png)
+
+We can see that, with this initial choice of index range, the right-hand side of the image still includes a little more space than we really need. This is one place where using `Bounds` instead of constructing a new local `QFieldObject` is especially convenient. If we right-double-click the outer frame, we can open its control panel and adjust the size, position, and orientation of this bounds directly, as shown below:
+
+![Workflow bounds control panel](docs/example/workflow/17.png)
+
+Here, simply shifting the bounds in the `x` direction, for example by clicking the `+X` button in the panel, is enough to bring the defect loop to the center of the local box. You can inspect the current parameters of this bounds object at any time through `bounds_local.opts`.
+
+At this stage, it is worth noting that, when studying a local system, constructing a new local `QFieldObject` and using a shared `Bounds` object each has its own advantages and disadvantages. We will return to that comparison later when discussing `Bounds` more explicitly.
+
+As a side remark, your backend should now also print two warnings. One of them typically looks like:
+
+```text
+[WARNING]
+            <RegistryBase[name='objects manager']._helper_check_name>
+'n-plane' already exists in Registry 'objects manager' (physical objects attached to Q field 'workflow_Q')! Renamed to 'n-plane_1'.
+            Current warning call: D:\Document\GitHub\Nematics3D\src\nematics3d\classes\registry_base.py:120
+            Caller: D:\Document\GitHub\Nematics3D\src\nematics3d\classes\registry_base.py:155
+            code: name = self._helper_check_name(term.name)
+```
+
+On your machine, the file path in this message may differ, but the rest should be similar.
+
+As before, you can safely ignore this warning in the present workflow. If you are curious, it simply means that the system has automatically renamed the new object so that its name does not collide with the similarly named object from the previous figure, and it prints this warning only to let you know.

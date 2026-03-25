@@ -289,20 +289,6 @@ class InteractDefectSection(PanelBase):
         finally:
             self._is_gui_updating = False
 
-        self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
-        self.origin_info.setText(self._vect_text(self.host.opts.origin, "origin"))
-
-        if self.chk_is_show_axes.isChecked():
-            object.__setattr__(self.visual_normal, "_state_is_silhouette", False)
-            try:
-                self._update_normal_visual(is_visible=True)
-            finally:
-                object.__setattr__(
-                    self.visual_normal,
-                    "_state_is_silhouette",
-                    not self._is_continuous_interacting,
-                )
-
     def _on_toggle_use_normal(self, _state: int):
         result = self.chk_use_normal.isChecked()
         self.state["is_use_control_normal"] = result
@@ -317,13 +303,9 @@ class InteractDefectSection(PanelBase):
         self.commit()
 
     def _sync_func(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
-            self.host._opts_backup[self.str_now_live].update(kwargs)
+        is_external = self._helper_sync_update_live_backup(kwargs)
 
-            if "origin" in kwargs:
-                self.origin_info.setText(
-                    self._vect_text(self.host.opts.origin, "origin")
-                )
+        if is_external:
             if "normal" in kwargs:
                 if self.state["is_use_control_normal"]:
                     self._sync_from_host_slider(
@@ -334,9 +316,6 @@ class InteractDefectSection(PanelBase):
                         "normal_polar_angle",
                         self.get_polar_angle(self.host.opts.normal),
                     )
-                self.normal_info.setText(
-                    self._vect_text(self.host.opts.normal, "normal")
-                )
             if "dr" in kwargs:
                 self._sync_from_host_slider("dr", self.host.opts.dr)
             if "arc_dist" in kwargs:
@@ -353,13 +332,20 @@ class InteractDefectSection(PanelBase):
             if "layers" in kwargs:
                 self._sync_from_host_slider("layers", int(self.host.opts.layers))
 
+        if "origin" in kwargs:
+            self.origin_info.setText(self._vect_text(self.host.opts.origin, "origin"))
+        if "normal" in kwargs:
+            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
+
         if self.chk_is_show_axes.isChecked():
             self._update_normal_visual(is_visible=True)
 
     def _sync_func_defect_plane(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
-            self.defect_plane._opts_backup[self.str_now_live].update(kwargs)
+        is_external = self._helper_sync_update_live_backup(
+            kwargs, host=self.defect_plane
+        )
 
+        if is_external:
             if "u_percent" in kwargs:
                 self._sync_from_host_slider(
                     "u_percent", self.defect_plane.opts.u_percent
@@ -386,9 +372,8 @@ class InteractDefectSection(PanelBase):
                         "normal_polar_angle",
                         self.get_polar_angle(self.host.opts.normal),
                     )
-                self.normal_info.setText(
-                    self._vect_text(self.host.opts.normal, "normal")
-                )
+        if "state_normal" in kwargs:
+            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
 
     def _on_reset_to_live(self):
         defect_live = {

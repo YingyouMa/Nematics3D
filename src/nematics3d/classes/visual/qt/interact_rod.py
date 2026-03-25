@@ -78,13 +78,3 @@ class InteractRod(InteractGlyphBase):
             params["length"] = scale * float(current_length)
         else:
             params["length"] = scale * np.asarray(current_length, dtype=float)
-
-    # ==================== OVERRIDE ====================
-    # InteractRod extends InteractGlyphBase._sync_func to keep the
-    # rod-specific length slider and label in sync with host updates.
-    # ==================================================
-    def _sync_func(self, **kwargs):
-        super()._sync_func(**kwargs)
-        if not getattr(self, "_is_gui_updating", False) and "length" in kwargs:
-            self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
-            self._update_length_label()

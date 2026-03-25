@@ -132,14 +132,13 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.spheres.act_commit(
                 coords=self._helper_create_sphere_coords(bool(kwargs["is_wrap"]))
             )
-        if not getattr(self, "_is_gui_updating", False):
-            self.wrapper._opts_backup[self.str_now_live].update(kwargs)
+        self._helper_sync_update_live_backup(kwargs, host=self.wrapper)
 
     def _sync_func_smooth(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
+        is_external = self._helper_sync_update_live_backup(kwargs, host=self.smooth)
+        if is_external:
             if "window_length" in kwargs:
                 self._sync_from_host_slider("window_length", kwargs["window_length"])
-            self.smooth._opts_backup[self.str_now_live].update(kwargs)
 
     def _helper_create_sphere_coords(self, is_wrap):
         owner = self.smooth.owner
@@ -175,7 +174,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.wrapper.act_commit(is_wrap=is_wrap)
         finally:
             self._is_gui_updating = False
-        self.wrapper._opts_backup[self.str_now_live]["is_wrap"] = is_wrap
 
     def _on_toggle_is_smooth(self, _state):
         is_smooth = self.chk_is_smooth.isChecked()
@@ -186,7 +184,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.wrapper.act_commit(is_smooth=is_smooth)
         finally:
             self._is_gui_updating = False
-        self.wrapper._opts_backup[self.str_now_live]["is_smooth"] = is_smooth
 
     # ==================== OVERRIDE ====================
     # InteractDisclinationLine overrides PanelBase reset actions

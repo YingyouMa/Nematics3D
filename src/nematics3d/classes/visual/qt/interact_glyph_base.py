@@ -292,7 +292,9 @@ class InteractGlyphBase(PanelBase):
 
     # ==================== OVERRIDE ====================
     # InteractGlyphBase overrides PanelBase.commit to translate UI state into
-    # glyph-specific commit parameters and refresh helper markers afterward.
+    # glyph-specific commit parameters for the host itself. Any follow-up UI
+    # refresh is handled in `_sync_func`, regardless of whether the change
+    # came from this panel or from an external command-line commit.
     # ==================================================
 
     def commit(self):
@@ -301,7 +303,6 @@ class InteractGlyphBase(PanelBase):
         self._is_gui_updating = True
         try:
             self._helper_run_commit(params)
-            self._helper_update_first_point_marker()
         finally:
             self._is_gui_updating = False
 
@@ -329,13 +330,11 @@ class InteractGlyphBase(PanelBase):
     # ==================================================
 
     def _sync_func(self, **kwargs):
-        if not getattr(self, "_is_gui_updating", False):
-            self.host._opts_backup[self.str_now_live].update(kwargs)
+        is_external = self._helper_sync_update_live_backup(kwargs)
+
+        if is_external:
             if "sides" in kwargs and self.config["is_sides"]:
                 self._sync_from_host_slider("sides", kwargs["sides"])
-            if "radius" in kwargs and self.config["is_radius"]:
-                self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
-                self._update_radius_label()
             if "color" in kwargs and self.config["is_color"]:
                 self._is_block_chk_commit = True
                 self.chk_use_color.setChecked(False)
@@ -345,7 +344,18 @@ class InteractGlyphBase(PanelBase):
                 self.chk_use_opacity.setChecked(False)
                 self._is_block_chk_commit = False
 
-            self._helper_update_first_point_marker()
+        if "radius" in kwargs and self.config["is_radius"]:
+            if is_external:
+                self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
+            self._update_radius_label()
+
+        update_length_label = getattr(self, "_update_length_label", None)
+        if callable(update_length_label) and "length" in kwargs:
+            if is_external and "length_rescale" in self.sliders:
+                self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
+            update_length_label()
+
+        self._helper_update_first_point_marker()
 
     # -------------------------------
     # Panel lifecycle
