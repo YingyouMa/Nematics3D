@@ -491,3 +491,5 @@ As a side remark, your backend should now also print two warnings. One of them t
 On your machine, the file path in this message may differ, but the rest should be similar.
 
 As before, you can safely ignore this warning in the present workflow. If you are curious, it simply means that the system has automatically renamed the new object so that its name does not collide with the similarly named object from the previous figure, and it prints this warning only to let you know.
+
+Up to this point, all of our director-field visualizations have been drawn on two-dimensional sampling grids in Cartesian coordinates. In some situations, a polar grid can produce a better result. We now open a new figure to do exactly that.

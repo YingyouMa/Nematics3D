@@ -284,6 +284,21 @@ class Bounds(HostBase):
     def clip_geometry(self):
         return self._entity_clip_geometry
 
+    def act_copy(self, name: str | None = None):
+        """
+        Create a detached copy of this bounds geometry.
+
+        The copied bounds keeps the same geometric options, but does not carry
+        over figure visuals or subscriber relations from the original bounds.
+        """
+        if name is None:
+            name_new = f"{self.name}_2"
+        else:
+            name_new = name
+
+        opts_new = type(self.opts)(**self.opts.act_asdict())
+        return type(self)(name=name_new, opts=opts_new)
+
     def _helper_is_subscriber_alive(self, entry: _BoundsSubscriberEntry) -> bool:
         return entry.host is not None
 
