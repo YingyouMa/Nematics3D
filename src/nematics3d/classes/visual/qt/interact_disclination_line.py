@@ -15,6 +15,16 @@ class InteractDisclinationLine(InteractGlyphBase):
         # host is the PlotTube
         self.wrapper = host.wrapper  # DisclinationLineSmoothPlot
         self.smooth = host.wrapper.owner  # DisclinationLineSmooth
+        object.__setattr__(
+            self,
+            "_impl_silhouette_state_backup",
+            bool(getattr(host, "_state_is_silhouette", True)),
+        )
+        object.__setattr__(
+            self,
+            "_impl_min_line_length_backup",
+            self.smooth.opts.min_line_length,
+        )
 
         object.__setattr__(host, "_state_is_silhouette", False)
 
@@ -244,6 +254,15 @@ class InteractDisclinationLine(InteractGlyphBase):
         super().on_close()
         self.wrapper.act_detach_sync_task(self.str_now_live)
         self.smooth.act_detach_sync_task(self.str_now_live)
-        object.__setattr__(self.host, "_state_is_silhouette", True)
+        object.__setattr__(
+            self.host,
+            "_state_is_silhouette",
+            getattr(self, "_impl_silhouette_state_backup", True),
+        )
+        object.__setattr__(
+            self.smooth.opts,
+            "min_line_length",
+            getattr(self, "_impl_min_line_length_backup", self.smooth.opts.min_line_length),
+        )
         self.spheres.act_unbind_bounds(is_apply=False)
         self.spheres.act_remove()

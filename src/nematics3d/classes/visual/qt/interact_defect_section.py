@@ -165,7 +165,7 @@ class InteractDefectSection(PanelBase):
             value_min=0,
             value_max=360,
             value_init=self.get_azimuth(self.host.opts.normal),
-            tick_to_value=lambda t: t / 1000,
+            tick_to_value=lambda t: t / 10,
             value_to_tick=lambda v: int(v * 10),
             value_fmt="{:.3f}",
         )
@@ -178,7 +178,7 @@ class InteractDefectSection(PanelBase):
             value_min=0,
             value_max=180,
             value_init=self.get_polar_angle(self.host.opts.normal),
-            tick_to_value=lambda t: t / 1000,
+            tick_to_value=lambda t: t / 10,
             value_to_tick=lambda v: int(v * 10),
             value_fmt="{:.3f}",
         )
