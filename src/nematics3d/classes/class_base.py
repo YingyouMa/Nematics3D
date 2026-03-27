@@ -39,13 +39,17 @@ class ClassBase:
             if not name_final:
                 name_final = name_replace
 
+        self._helper_assign_name(name_final)
+
+    def _helper_assign_name(self, name):
         check_name = getattr(
             getattr(self, "registry", None), "_helper_check_name", None
         )
         if callable(check_name):
-            name_final = check_name(name_final)
+            name = check_name(name)
 
-        object.__setattr__(self, "raw_name", name_final)
+        object.__setattr__(self, "raw_name", name)
+        return name
 
     def __getattr__(self, key):
         raw_key = f"raw_{key}"
@@ -102,15 +106,9 @@ class ClassBase:
             )
 
         if target_key == "raw_name":
-            value = attr_def["validator"](
-                value,
-                name=attr_def["doc"],
-            )
-            check_name = getattr(
-                getattr(self, "registry", None), "_helper_check_name", None
-            )
-            if callable(check_name):
-                value = check_name(value)
+            value = attr_def["validator"](value, name=attr_def["doc"])
+            value = self._helper_assign_name(value)
+            return
 
         object.__setattr__(self, target_key, value)
 
