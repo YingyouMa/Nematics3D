@@ -130,6 +130,42 @@ class ClassBase:
     # Attribute definition / registration
     # ------------------------------------------------------------------
 
+    def _helper_collect_readable_names(self, *, is_exclude_name: str | None = None):
+        """Collect the currently occupied readable attribute surface names."""
+        readable_names: set[str] = set()
+
+        for attr_name in self.impl_attrs:
+            if attr_name == is_exclude_name:
+                continue
+
+            readable_names.add(attr_name)
+            if attr_name.startswith("raw_"):
+                readable_names.add(attr_name[4:])
+
+        return readable_names
+
+    def _helper_check_readable_name_conflict(
+        self,
+        name: str,
+        *,
+        is_overwrite: bool,
+    ) -> None:
+        """Reject new registrations whose readable names collide with existing ones."""
+        readable_names = {name}
+        if name.startswith("raw_"):
+            readable_names.add(name[4:])
+
+        existing_names = self._helper_collect_readable_names(
+            is_exclude_name=name if is_overwrite else None,
+        )
+        conflict_names = readable_names & existing_names
+        if conflict_names:
+            raise AttributeError(
+                "Cannot register readable name(s) "
+                f"{sorted(conflict_names)!r}: they conflict with an existing "
+                f"readable surface of {type(self).__name__}."
+            )
+
     def _helper_register_attr_def(
         self,
         name: str,
@@ -147,6 +183,8 @@ class ClassBase:
             raise ValueError(
                 f"Invalid attribute name {name!r}: must be a valid Python identifier."
             )
+
+        self._helper_check_readable_name_conflict(name, is_overwrite=is_overwrite)
 
         if (name in self.impl_attrs) and (not is_overwrite):
             raise KeyError(

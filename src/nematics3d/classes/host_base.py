@@ -371,6 +371,15 @@ class HostBase(ClassBase):
             "relation_value": None,
             "doc_runtime": None,
         },
+        "attrs_forbidden": {
+            "doc": (
+                "Read-only union of wrapped attrs and host-declared " "protected attrs."
+            ),
+            "kind": "property",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
     }
 
     __slots__ = (
@@ -388,6 +397,11 @@ class HostBase(ClassBase):
     # Initialization
     # ------------------------------------------------------------------
 
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.__init__ because a host must bind a paired
+    # OptsBase instance and initialize host-side runtime stores in addition to
+    # the base ClassBase identity and relation skeleton.
+    # ==================================================
     def __init__(
         self,
         opts_type: Type[OptsBase],
@@ -413,14 +427,7 @@ class HostBase(ClassBase):
 
         # Normalize or create the paired opts instance, then merge any
         # remaining option kwargs into it.
-        if opts is None:
-            opts = opts_type()
-        elif not isinstance(opts, opts_type):
-            raise TypeError(
-                f"opts must be an instance of {opts_type.__name__}, "
-                f"got {type(opts).__name__}."
-            )
-
+        opts = self._helper_check_opts(opts, opts_type=opts_type)
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "impl_host_ref", weakref.ref(self))
         object.__setattr__(self, "opts", opts)
@@ -457,3 +464,173 @@ class HostBase(ClassBase):
         # Remaining work for HostBase.__init__:
         # - finalize opts at the appropriate lifecycle stage
         # - define how finalized opts are consumed and applied by the host
+
+    # ------------------------------------------------------------------
+    # Readable properties / basic helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def attrs_forbidden(self) -> set[str]:
+        """Return the union of wrapped attrs and host-declared protected attrs."""
+        return set(self.impl_attrs_wrapped) | set(self.impl_attrs_protected)
+
+    def _helper_check_opts(
+        self,
+        opts: OptsBase | None,
+        opts_type: Type[OptsBase] | None = None,
+    ) -> OptsBase:
+        """Normalize one opts input against the required opts class."""
+        if opts_type is None:
+            opts_type = type(self.opts)
+
+        if opts is None:
+            return opts_type()
+
+        if not isinstance(opts, opts_type):
+            raise TypeError(
+                f"opts must be an instance of {opts_type.__name__}, "
+                f"got {type(opts).__name__}."
+            )
+
+        return opts
+
+    # ------------------------------------------------------------------
+    # Attribute inspection
+    # ------------------------------------------------------------------
+
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_getattrs so the readable surface also
+    # includes the paired opts fields in addition to host-side attrs.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_getattrs(self, is_return=False, logger=None):
+        """Show readable host and opts-facing surfaces."""
+        lines = [
+            "When reading host fields, the 'raw_' prefix may be omitted "
+            "where a public alias exists."
+        ]
+
+        host_attr_names = []
+        for attr_name, attr_info in self.impl_attrs.items():
+            if attr_info["kind"] == "impl":
+                continue
+            host_attr_names.append(attr_name)
+
+        for attr_name in host_attr_names:
+            lines.append(self.show_attr_desc(attr_name))
+            if attr_name.startswith("raw_"):
+                lines.append(self.show_attr_desc(attr_name[4:]))
+
+        if self.opts is not None:
+            lines.append("[Opts attributes]")
+            for attr_name in type(self.opts).__attrs__:
+                lines.append(self.show_attr_desc(attr_name))
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_attr_desc so descriptions can be
+    # resolved from both the host layer and the paired opts layer.
+    # ==================================================
+    def show_attr_desc(self, attr_name: str) -> str:
+        """Return a description from the host layer or the paired opts layer."""
+        try:
+            return super().show_attr_desc(attr_name)
+        except KeyError:
+            pass
+
+        if self.opts is not None and attr_name in type(self.opts).__attrs__:
+            return f"{attr_name!r}: {type(self.opts).__attrs__[attr_name]}"
+
+        raise KeyError(
+            f"Attribute {attr_name!r} was not found in "
+            f"{type(self).__name__}.impl_attrs or {type(self.opts).__name__}.__attrs__."
+        )
+
+    # ==================== OVERRIDE ====================
+    # HostBase overrides ClassBase.show_modifiable_attrs so writable surfaces
+    # are presented by host-side attrs, opts attrs, and host properties.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_modifiable_attrs(self, is_return=False, logger=None):
+        """Show modifiable host and opts attributes by category."""
+        lines = [
+            "When assigning host fields, the 'raw_' prefix may be omitted.",
+        ]
+
+        attrs_forbidden = self.attrs_forbidden
+        attrs_host = []
+        attrs_opts = []
+        attrs_properties = []
+
+        for attr_name, attr_info in self.impl_attrs.items():
+            if attr_info["kind"] == "property":
+                if attr_info.get("is_public_settable", False):
+                    attrs_properties.append(attr_name)
+                continue
+
+            if attr_info["kind"] not in {"raw", "state", "extra"}:
+                continue
+            if not attr_info["is_public_settable"]:
+                continue
+            if attr_info["is_protected"]:
+                continue
+            if attr_name in attrs_forbidden:
+                continue
+
+            attrs_host.append(attr_name)
+            if attr_name.startswith("raw_"):
+                attrs_host.append(attr_name[4:])
+
+        for attr_name in type(self.opts).__attrs__:
+            if attr_name in attrs_forbidden:
+                continue
+            attrs_opts.append(attr_name)
+
+        if attrs_host:
+            lines.append("[Host attributes]")
+            for attr_name in sorted(attrs_host):
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+        else:
+            lines.append("[Host attributes]")
+            lines.append("  - <none>")
+
+        if attrs_opts:
+            lines.append("[Opts attributes]")
+            for attr_name in sorted(attrs_opts):
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+        else:
+            lines.append("[Opts attributes]")
+            lines.append("  - <none>")
+
+        if attrs_properties:
+            lines.append("[Writable properties]")
+            for attr_name in sorted(attrs_properties):
+                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+        else:
+            lines.append("[Writable properties]")
+            lines.append("  - <none>")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_saved_opts(self, is_return=False, logger=None):
+        """Show saved option snapshots currently stored on this host."""
+        if self.opts_backup:
+            lines = [f"{key!r}" for key in self.opts_backup]
+        else:
+            lines = ["<none>"]
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
