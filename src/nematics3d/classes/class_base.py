@@ -1,4 +1,5 @@
 from copy import deepcopy
+import weakref
 
 from ..datatypes import as_list, as_str
 from ..logging_decorator import logging_and_warning_decorator
@@ -11,6 +12,20 @@ class ClassBase:
             "kind": "raw",
             "validator": as_str,
             "is_public_settable": True,
+        },
+        "owner": {
+            "doc": "The object that owns this instance.",
+            "kind": "relation",
+            "validator": None,
+            "is_public_settable": False,
+            "is_weak_by_default": True,
+        },
+        "registry": {
+            "doc": "The Registry object where this instance is registered.",
+            "kind": "relation",
+            "validator": None,
+            "is_public_settable": False,
+            "is_weak_by_default": True,
         },
         "impl_attr_defs": {
             "doc": "Runtime attribute-definition metadata copied from the class template.",
@@ -74,6 +89,49 @@ class ClassBase:
         return name
 
     # ------------------------------------------------------------------
+    # Attribute definition / registration
+    # ------------------------------------------------------------------
+
+    def _helper_register_attr_def(
+        self,
+        name: str,
+        *,
+        doc: str,
+        kind: str,
+        validator=None,
+        is_public_settable: bool,
+        is_overwrite: bool = False,
+        **extra_def,
+    ):
+        """Register or update one runtime attribute definition and its base state."""
+        name = as_str(name, name="Attribute name")
+        if not name.isidentifier():
+            raise ValueError(
+                f"Invalid attribute name {name!r}: must be a valid Python identifier."
+            )
+
+        if (name in self.impl_attr_defs) and (not is_overwrite):
+            raise KeyError(
+                f"Attribute {name!r} is already registered in {type(self).__name__}.impl_attr_defs."
+            )
+
+        attr_def = {
+            "doc": as_str(doc, name=f"Definition doc for {name!r}"),
+            "kind": as_str(kind, name=f"Definition kind for {name!r}"),
+            "validator": validator,
+            "is_public_settable": bool(is_public_settable),
+        }
+        attr_def.update(extra_def)
+        self.impl_attr_defs[name] = attr_def
+
+        if name not in self.impl_attr_state:
+            self.impl_attr_state[name] = {
+                "is_protected": False,
+            }
+
+        return attr_def
+
+    # ------------------------------------------------------------------
     # Protection
     # ------------------------------------------------------------------
 
@@ -104,6 +162,93 @@ class ClassBase:
         return None
 
     # ------------------------------------------------------------------
+    # Relations
+    # ------------------------------------------------------------------
+
+    def _helper_resolve_relation_value(self, name: str):
+        """Return the current relation target, resolving weak references when needed."""
+        relation_value = self.impl_attr_state[name].get("relation_value", None)
+        if isinstance(relation_value, weakref.ReferenceType):
+            return relation_value()
+        return relation_value
+
+    def _helper_get_relation_doc(self, name: str) -> str:
+        """Return the runtime doc override for a relation, or its declared doc."""
+        doc_runtime = self.impl_attr_state[name].get("doc_runtime", None)
+        if doc_runtime is not None:
+            return doc_runtime
+        return self.impl_attr_defs[name]["doc"]
+
+    def act_bind_relation_base(
+        self,
+        name: str,
+        target,
+        *,
+        doc: str | None = None,
+        is_weak: bool | None = None,
+        is_replace: bool = True,
+    ):
+        """Bind or update a named relation on this instance."""
+        name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
+
+        if name not in self.impl_attr_defs:
+            self._helper_register_attr_def(
+                name,
+                doc="Newly added relation." if doc is None else doc,
+                kind="relation",
+                validator=None,
+                is_public_settable=False,
+                is_overwrite=False,
+                is_weak_by_default=True,
+            )
+
+        attr_def = self.impl_attr_defs[name]
+        if attr_def["kind"] != "relation":
+            raise AttributeError(
+                f"Cannot bind relation {name!r}: it is registered as kind {attr_def['kind']!r}, not 'relation'."
+            )
+
+        if doc is not None:
+            self.impl_attr_state[name]["doc_runtime"] = as_str(
+                doc, name=f"Relation doc for instance {self.raw_name!r}"
+            )
+
+        old_target = self._helper_resolve_relation_value(name)
+        if old_target is not None and old_target is not target and (not is_replace):
+            raise RuntimeError(
+                f"Relation {name!r} of {type(self).__name__} is already bound."
+            )
+
+        if is_weak is None:
+            is_weak = bool(attr_def.get("is_weak_by_default", True))
+
+        self.impl_attr_state[name]["is_weak"] = bool(is_weak)
+        self.impl_attr_state[name]["relation_value"] = (
+            weakref.ref(target) if (is_weak and target is not None) else target
+        )
+        return target
+
+    def act_unbind_relation_base(self, name: str):
+        """Clear the current target of a named relation."""
+        name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
+        if name not in self.impl_attr_defs:
+            raise AttributeError(
+                f"Cannot unbind relation {name!r}: it is not registered in "
+                f"{type(self).__name__}.impl_attr_defs."
+            )
+        if self.impl_attr_defs[name]["kind"] != "relation":
+            raise AttributeError(
+                f"Cannot unbind relation {name!r}: it is registered as kind "
+                f"{self.impl_attr_defs[name]['kind']!r}, not 'relation'."
+            )
+
+        self.impl_attr_state[name]["relation_value"] = None
+        self.impl_attr_state[name]["is_weak"] = bool(
+            self.impl_attr_defs[name].get("is_weak_by_default", True)
+        )
+        return None
+
+    # ------------------------------------------------------------------
     # Attribute inspection
     # ------------------------------------------------------------------
 
@@ -118,6 +263,8 @@ class ClassBase:
     def show_attr_desc(self, attr_name: str) -> str:
         """Return the description of a registered attribute or its public alias."""
         if attr_name in self.impl_attr_defs:
+            if self.impl_attr_defs[attr_name]["kind"] == "relation":
+                return f"{attr_name!r}: {self._helper_get_relation_doc(attr_name)}"
             return f"{attr_name!r}: {self.impl_attr_defs[attr_name]['doc']}"
 
         raw_attr_name = f"raw_{attr_name}"
@@ -196,6 +343,31 @@ class ClassBase:
             return output
         return None
 
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_relations(self, is_return=False, logger=None):
+        """Show currently bound relations and their descriptions."""
+        lines = []
+
+        for attr_name, attr_def in self.impl_attr_defs.items():
+            if attr_def["kind"] != "relation":
+                continue
+
+            target = self._helper_resolve_relation_value(attr_name)
+            if target is None:
+                continue
+
+            lines.append(f"{attr_name}: {self._helper_get_relation_doc(attr_name)}")
+            lines.append(f"  current: {target}")
+
+        if not lines:
+            lines.append("<none>")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
     # ------------------------------------------------------------------
     # Attribute access / assignment
     # ------------------------------------------------------------------
@@ -204,6 +376,12 @@ class ClassBase:
         raw_key = f"raw_{key}"
         if raw_key in self.impl_attr_defs:
             return object.__getattribute__(self, raw_key)
+
+        if (
+            key in self.impl_attr_defs
+            and self.impl_attr_defs[key]["kind"] == "relation"
+        ):
+            return self._helper_resolve_relation_value(key)
 
         cls_name = type(self).__name__
         try:
