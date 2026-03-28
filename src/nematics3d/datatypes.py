@@ -443,6 +443,31 @@ def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
     return input_data
 
 
+@logging_and_warning_decorator(start_finish_level=5)
+def as_list(input_data, name="input_data", replace=None, logger=None):
+    """
+    Normalize input into a list.
+
+    If ``input_data`` is already a list, it is returned unchanged. If it is a
+    tuple or set, it is converted to a list of its elements. Otherwise the value
+    is treated as a single item and wrapped into a one-element list.
+    """
+
+    try:
+        if isinstance(input_data, list):
+            return input_data
+        if isinstance(input_data, (tuple, set)):
+            return list(input_data)
+        return [input_data]
+    except Exception:
+        if replace is None:
+            raise
+
+        logger.exception(f"Failed to normalize {name!r} into a list.")
+        logger.recovery(f"Change {name!r} into {replace!r} in the following.")
+        return replace
+
+
 # -------------------------
 # Dimension info types
 # -------------------------

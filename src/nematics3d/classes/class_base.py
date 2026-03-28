@@ -1,4 +1,4 @@
-from ..datatypes import as_str
+from ..datatypes import as_list, as_str
 
 
 class ClassBase:
@@ -50,6 +50,34 @@ class ClassBase:
 
         object.__setattr__(self, "raw_name", name)
         return name
+
+    def act_register_protected_attr(self, attrs):
+        for attr_name in as_list(attrs, name="attrs"):
+            target_key = attr_name
+            if target_key not in type(self).__attr_defs__:
+                raw_key = f"raw_{attr_name}"
+                if raw_key in type(self).__attr_defs__:
+                    target_key = raw_key
+                else:
+                    raise AttributeError(
+                        f"Cannot protect {attr_name!r}: it is not registered in "
+                        f"{type(self).__name__}.__attr_defs__."
+                    )
+            self.impl_attr_state[target_key]["is_protected"] = True
+
+    def act_unregister_protected_attr(self, attrs):
+        for attr_name in as_list(attrs, name="attrs"):
+            target_key = attr_name
+            if target_key not in type(self).__attr_defs__:
+                raw_key = f"raw_{attr_name}"
+                if raw_key in type(self).__attr_defs__:
+                    target_key = raw_key
+                else:
+                    raise AttributeError(
+                        f"Cannot unprotect {attr_name!r}: it is not registered in "
+                        f"{type(self).__name__}.__attr_defs__."
+                    )
+            self.impl_attr_state[target_key]["is_protected"] = False
 
     def __getattr__(self, key):
         raw_key = f"raw_{key}"
@@ -103,6 +131,14 @@ class ClassBase:
                 f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                 f"{key!r} resolves to internal attribute {target_key!r}, "
                 "which cannot be assigned through the public setattr path."
+            )
+
+        if self.impl_attr_state[target_key]["is_protected"]:
+            cls_name = type(self).__name__
+            obj_name = getattr(self, "raw_name", "Uninitialized")
+            raise AttributeError(
+                f"[{cls_name}: {obj_name!r}] Assignment blocked: "
+                f"{target_key!r} is protected."
             )
 
         if target_key == "raw_name":
