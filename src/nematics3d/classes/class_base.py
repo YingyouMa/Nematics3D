@@ -91,11 +91,13 @@ class ClassBase:
     # ------------------------------------------------------------------
 
     def __init__(self, *, name: str | None, name_replace: str):
-        # Each instance starts from a private copy of the class-level attribute template.
+        # Each instance starts from a private copy of the class-level
+        # attribute template.
         impl_attrs = deepcopy(type(self).__attr_defs__)
         object.__setattr__(self, "impl_attrs", impl_attrs)
 
-        # Normalize the initial name before routing it through the shared name assignment path.
+        # Normalize the initial name before routing it through the shared
+        # name assignment path.
         if name is None:
             name_final = name_replace
         else:
@@ -108,7 +110,6 @@ class ClassBase:
                 name_final = name_replace
 
         self._helper_assign_name(name_final)
-        return None
 
     # ------------------------------------------------------------------
     # Name handling
@@ -149,7 +150,8 @@ class ClassBase:
 
         if (name in self.impl_attrs) and (not is_overwrite):
             raise KeyError(
-                f"Attribute {name!r} is already registered in {type(self).__name__}.impl_attrs."
+                f"Attribute {name!r} is already registered in "
+                f"{type(self).__name__}.impl_attrs."
             )
 
         attr_info = {
@@ -177,21 +179,19 @@ class ClassBase:
                     target_key = raw_key
                 else:
                     raise AttributeError(
-                        f"Cannot update protection for {attr_name!r}: it is not registered in "
+                        f"Cannot update protection for {attr_name!r}: "
+                        "it is not registered in "
                         f"{type(self).__name__}.impl_attrs."
                     )
             self.impl_attrs[target_key]["is_protected"] = is_protected
-        return None
 
     def act_register_protected_attr(self, attrs):
-        """Mark one or more registered attributes as protected from public assignment."""
+        """Mark registered attributes as protected from public assignment."""
         self._helper_set_protected_attr(attrs, True)
-        return None
 
     def act_unregister_protected_attr(self, attrs):
         """Remove the protected flag from one or more registered attributes."""
         self._helper_set_protected_attr(attrs, False)
-        return None
 
     # ------------------------------------------------------------------
     # Relations
@@ -305,7 +305,8 @@ class ClassBase:
         attr_info = self.impl_attrs[name]
         if attr_info["kind"] != "relation":
             raise AttributeError(
-                f"Cannot bind relation {name!r}: it is registered as kind {attr_info['kind']!r}, not 'relation'."
+                f"Cannot bind relation {name!r}: it is registered as kind "
+                f"{attr_info['kind']!r}, not 'relation'."
             )
 
         if doc is not None:
@@ -344,7 +345,6 @@ class ClassBase:
 
         self.impl_attrs[name]["relation_value"] = None
         self.impl_attrs[name]["is_weak"] = None
-        return None
 
     @logging_and_warning_decorator(start_finish_level=5)
     def show_relations(self, is_return=False, logger=None):
@@ -418,7 +418,6 @@ class ClassBase:
 
         if is_overwrite or (not hasattr(self, name)):
             object.__setattr__(self, name, default)
-        return None
 
     # ------------------------------------------------------------------
     # Attribute inspection
@@ -447,7 +446,8 @@ class ClassBase:
     def show_getattrs(self, is_return=False, logger=None):
         """Show readable attributes, aliases, and declared properties."""
         lines = [
-            "When reading or assigning, the 'raw_' prefix may be omitted where a public alias exists."
+            "When reading or assigning, the 'raw_' prefix may be omitted "
+            "where a public alias exists."
         ]
 
         for attr_name in self.impl_attrs:
@@ -528,7 +528,6 @@ class ClassBase:
 
     def __setattr__(self, key, value):
         self._helper_setattr_basic(key, value)
-        return None
 
     def _helper_setattr_basic(self, key, value):
         """Resolve a public assignment target and apply validation/protection rules."""
@@ -568,10 +567,9 @@ class ClassBase:
         if target_key == "raw_name":
             value = attr_info["validator"](value, name=attr_info["doc"])
             self._helper_assign_name(value)
-            return None
+            return
 
         object.__setattr__(self, target_key, value)
-        return None
 
     # ------------------------------------------------------------------
     # Representation
