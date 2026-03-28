@@ -42,6 +42,7 @@ class ClassBase:
         self._helper_assign_name(name_final)
 
     def _helper_assign_name(self, name):
+        """Validate registry-level naming constraints and store ``raw_name``."""
         check_name = getattr(
             getattr(self, "registry", None), "_helper_check_name", None
         )
@@ -51,7 +52,8 @@ class ClassBase:
         object.__setattr__(self, "raw_name", name)
         return name
 
-    def act_register_protected_attr(self, attrs):
+    def _helper_set_protected_attr(self, attrs, is_protected: bool):
+        """Set the protected flag for one or more registered attributes."""
         for attr_name in as_list(attrs, name="attrs"):
             target_key = attr_name
             if target_key not in type(self).__attr_defs__:
@@ -60,24 +62,18 @@ class ClassBase:
                     target_key = raw_key
                 else:
                     raise AttributeError(
-                        f"Cannot protect {attr_name!r}: it is not registered in "
+                        f"Cannot update protection for {attr_name!r}: it is not registered in "
                         f"{type(self).__name__}.__attr_defs__."
                     )
-            self.impl_attr_state[target_key]["is_protected"] = True
+            self.impl_attr_state[target_key]["is_protected"] = is_protected
+
+    def act_register_protected_attr(self, attrs):
+        """Mark one or more registered attributes as protected from public assignment."""
+        self._helper_set_protected_attr(attrs, True)
 
     def act_unregister_protected_attr(self, attrs):
-        for attr_name in as_list(attrs, name="attrs"):
-            target_key = attr_name
-            if target_key not in type(self).__attr_defs__:
-                raw_key = f"raw_{attr_name}"
-                if raw_key in type(self).__attr_defs__:
-                    target_key = raw_key
-                else:
-                    raise AttributeError(
-                        f"Cannot unprotect {attr_name!r}: it is not registered in "
-                        f"{type(self).__name__}.__attr_defs__."
-                    )
-            self.impl_attr_state[target_key]["is_protected"] = False
+        """Remove the protected flag from one or more registered attributes."""
+        self._helper_set_protected_attr(attrs, False)
 
     def __getattr__(self, key):
         raw_key = f"raw_{key}"
@@ -92,6 +88,7 @@ class ClassBase:
         raise AttributeError(f"[{cls_name}: {obj_name!r}] has no attribute {key!r}.")
 
     def show_attr_desc(self, attr_name: str) -> str:
+        """Return the description of a registered attribute or its public alias."""
         if attr_name in type(self).__attr_defs__:
             return f"{attr_name!r}: {type(self).__attr_defs__[attr_name]['doc']}"
 
