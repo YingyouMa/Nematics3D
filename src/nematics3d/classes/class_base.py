@@ -179,6 +179,71 @@ class ClassBase:
             return doc_runtime
         return self.impl_attr_defs[name]["doc"]
 
+    def _helper_relation_tree_node_label(self):
+        """Return the display label used for this node in relation trees."""
+        return str(self)
+
+    def _helper_relation_tree_walk(
+        self,
+        *,
+        depth: int,
+        is_include_none: bool,
+        _prefix: str = "",
+        _visited: set[int] | None = None,
+    ) -> list[str]:
+        """Walk the current relation graph and return a tree-formatted line list."""
+        if _visited is None:
+            _visited = set()
+
+        node_id = id(self)
+        lines = [f"{_prefix}{self._helper_relation_tree_node_label()}"]
+        if node_id in _visited:
+            lines[-1] += " [visited]"
+            return lines
+        _visited.add(node_id)
+
+        if depth <= 0:
+            return lines
+
+        entries = []
+        for attr_name, attr_def in self.impl_attr_defs.items():
+            if attr_def["kind"] != "relation":
+                continue
+            target = self._helper_resolve_relation_value(attr_name)
+            if target is None and (not is_include_none):
+                continue
+            entries.append((attr_name, target))
+
+        if not entries:
+            lines.append(f"{_prefix}  <none>")
+            return lines
+
+        last_index = len(entries) - 1
+        for index, (attr_name, target) in enumerate(entries):
+            is_last = index == last_index
+            branch = "└─ " if is_last else "├─ "
+            child_prefix = _prefix + ("   " if is_last else "│  ")
+
+            if target is None:
+                lines.append(f"{_prefix}{branch}{attr_name}: <none>")
+                continue
+
+            lines.append(f"{_prefix}{branch}{attr_name}:")
+            walk = getattr(target, "_helper_relation_tree_walk", None)
+            if callable(walk):
+                lines.extend(
+                    walk(
+                        depth=depth - 1,
+                        is_include_none=is_include_none,
+                        _prefix=child_prefix,
+                        _visited=_visited,
+                    )
+                )
+            else:
+                lines.append(f"{child_prefix}{target}")
+
+        return lines
+
     def act_bind_relation_base(
         self,
         name: str,
@@ -246,6 +311,31 @@ class ClassBase:
         self.impl_attr_state[name]["is_weak"] = bool(
             self.impl_attr_defs[name].get("is_weak_by_default", True)
         )
+        return None
+
+    # ------------------------------------------------------------------
+    # Extra attributes
+    # ------------------------------------------------------------------
+
+    def act_add_attr(
+        self,
+        name: str,
+        doc: str,
+        default=None,
+        is_overwrite: bool = False,
+    ):
+        """Register a dynamic extra attribute with documentation and a default value."""
+        self._helper_register_attr_def(
+            name,
+            doc=doc,
+            kind="extra",
+            validator=None,
+            is_public_settable=True,
+            is_overwrite=is_overwrite,
+        )
+
+        if is_overwrite or (not hasattr(self, name)):
+            object.__setattr__(self, name, default)
         return None
 
     # ------------------------------------------------------------------
@@ -363,6 +453,30 @@ class ClassBase:
             lines.append("<none>")
 
         output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_relation_tree(
+        self,
+        depth: int = 2,
+        is_return=False,
+        is_include_none: bool = False,
+        logger=None,
+    ):
+        """Show the current relation graph as a tree."""
+        depth = int(depth)
+        if depth < 0:
+            raise ValueError("depth must be >= 0.")
+
+        output = "\n".join(
+            self._helper_relation_tree_walk(
+                depth=depth,
+                is_include_none=is_include_none,
+            )
+        )
         logger.info(output)
         if is_return:
             return output
