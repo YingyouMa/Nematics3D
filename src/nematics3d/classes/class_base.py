@@ -40,7 +40,7 @@ class ClassBase:
     This class supports ordinary raw/public attribute access, runtime protection
     of registered attributes, dynamic registration of extra attributes, semantic
     relation binding for object links such as ``owner`` and ``registry``, and
-    inspection helpers such as ``show_attr_desc()``, ``show_getattrs()``,
+    inspection helpers such as ``show_attr_desc()``, ``show_readable_attrs()``,
     ``show_modifiable_attrs()``, ``show_relations()``, and
     ``show_relation_tree()``.
     """
@@ -130,12 +130,19 @@ class ClassBase:
     # Attribute definition / registration
     # ------------------------------------------------------------------
 
-    def _helper_collect_readable_names(self, *, is_exclude_name: str | None = None):
+    def _helper_collect_readable_names(
+        self,
+        *,
+        is_exclude_name: str | None = None,
+        is_exclude_impl: bool = False,
+    ):
         """Collect the currently occupied readable attribute surface names."""
         readable_names: set[str] = set()
 
-        for attr_name in self.impl_attrs:
+        for attr_name, attr_info in self.impl_attrs.items():
             if attr_name == is_exclude_name:
+                continue
+            if is_exclude_impl and attr_info["kind"] == "impl":
                 continue
 
             readable_names.add(attr_name)
@@ -481,17 +488,17 @@ class ClassBase:
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def show_getattrs(self, is_return=False, logger=None):
-        """Show readable attributes, aliases, and declared properties."""
+    def show_readable_attrs(self, is_return=False, logger=None):
+        """Show the public readable attribute surface for this instance."""
         lines = [
             "When reading or assigning, the 'raw_' prefix may be omitted "
             "where a public alias exists."
         ]
 
-        for attr_name in self.impl_attrs:
+        for attr_name in sorted(
+            self._helper_collect_readable_names(is_exclude_impl=True)
+        ):
             lines.append(self.show_attr_desc(attr_name))
-            if attr_name.startswith("raw_"):
-                lines.append(self.show_attr_desc(attr_name[4:]))
 
         output = "\n".join(lines)
         logger.info(output)
@@ -604,6 +611,13 @@ class ClassBase:
 
         if target_key == "raw_name":
             value = attr_info["validator"](value, name=attr_info["doc"])
+
+        self._helper_setattr_final(key, value, target_key=target_key)
+
+    def _helper_setattr_final(self, key, value, *, target_key=None):
+        """Apply one validated public assignment to final storage."""
+        target_key = key if target_key is None else target_key
+        if target_key == "raw_name":
             self._helper_assign_name(value)
             return
 

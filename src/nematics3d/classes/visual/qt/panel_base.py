@@ -520,7 +520,7 @@ class PanelBase(QtWidgets.QWidget):
         missing_methods = [
             name for name in required_methods if not callable(getattr(host, name, None))
         ]
-        missing_attrs = [name for name in ("_opts_backup",) if not hasattr(host, name)]
+        missing_attrs = [name for name in ("opts_backup",) if not hasattr(host, name)]
         if missing_methods or missing_attrs:
             lines = [
                 "PanelBase requires a host object compatible with the panel sync/reset workflow.",
@@ -639,7 +639,7 @@ class PanelBase(QtWidgets.QWidget):
             return False
         if host is None:
             host = self.host
-        host._opts_backup[self.str_now_live].update(kwargs)
+        host.opts_backup[self.str_now_live].update(kwargs)
         return True
 
     def on_changed(self, _v=0, is_commit=True):
@@ -717,12 +717,12 @@ class PanelBase(QtWidgets.QWidget):
         self._slider_throttle.set_interval_ms(self.slider_throttle_ms)
 
     def _on_reset_to_live(self):
-        self.host.act_commit(**self.host._opts_backup[self.str_now_live])
+        self.host.act_commit(**self.host.opts_backup[self.str_now_live])
 
     def _on_reset_to_original(self):
-        original = self.host._opts_backup[self.str_now]
+        original = self.host.opts_backup[self.str_now]
         self.host.act_commit(**original)
-        self.host._opts_backup[self.str_now_live] = dict(original)
+        self.host.opts_backup[self.str_now_live] = dict(original)
 
     # -------------------------------
     # Qt lifecycle

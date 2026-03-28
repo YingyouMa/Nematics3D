@@ -77,9 +77,9 @@ class OptsPlaneGrid(OptsBase):
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
     }
 
-    _DEFAULTS_FROZEN = MappingProxyType(
+    impl_defaults_frozen = MappingProxyType(
         {
-            **(OptsBase._DEFAULTS_FROZEN),
+            **(OptsBase.impl_defaults_frozen),
             "tag": "plane grid options",
             "spacing_extra": None,
             "size_extra": None,
@@ -173,7 +173,7 @@ class PlaneGrid(HostBase):
                 raise ValueError(
                     f"Missing required variable {name!r} to generate plane_grid"
                 )
-        self.opts.act_finalize(defaults=self._opts_defaults)
+        self.opts.act_finalize(defaults=self.opts_defaults)
         self.act_bind_bounds(bounds, is_apply=False)
 
         self._helper_commit_apply_opts(is_reapply_opts=True)

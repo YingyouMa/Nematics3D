@@ -378,12 +378,12 @@ class InteractDefectSection(PanelBase):
     def _on_reset_to_live(self):
         defect_live = {
             k: v
-            for k, v in self.defect_plane._opts_backup[self.str_now_live].items()
+            for k, v in self.defect_plane.opts_backup[self.str_now_live].items()
             if k not in self.defect_plane.attrs_forbidden
         }
         host_live = {
             k: v
-            for k, v in self.host._opts_backup[self.str_now_live].items()
+            for k, v in self.host.opts_backup[self.str_now_live].items()
             if k not in self.host.attrs_forbidden
         }
         self.defect_plane.act_commit(**defect_live)
@@ -392,18 +392,18 @@ class InteractDefectSection(PanelBase):
     def _on_reset_to_original(self):
         defect_original = {
             k: v
-            for k, v in self.defect_plane._opts_backup[self.str_now].items()
+            for k, v in self.defect_plane.opts_backup[self.str_now].items()
             if k not in self.defect_plane.attrs_forbidden
         }
         host_original = {
             k: v
-            for k, v in self.host._opts_backup[self.str_now].items()
+            for k, v in self.host.opts_backup[self.str_now].items()
             if k not in self.host.attrs_forbidden
         }
         self.defect_plane.act_commit(**defect_original)
         self.host.act_commit(**host_original)
-        self.defect_plane._opts_backup[self.str_now_live] = dict(defect_original)
-        self.host._opts_backup[self.str_now_live] = dict(host_original)
+        self.defect_plane.opts_backup[self.str_now_live] = dict(defect_original)
+        self.host.opts_backup[self.str_now_live] = dict(host_original)
 
     def on_close(self):
         self._helper_end_continuous_interaction()

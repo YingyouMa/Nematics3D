@@ -108,9 +108,9 @@ class OptsBounds(OptsBase):
         "alignment": lambda v, d: as_str(v, name=d, pool=("min_corner", "center")),
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **dict(OptsBase._DEFAULTS_FROZEN),
+            **dict(OptsBase.impl_defaults_frozen),
             "tag": "bounds options",
             "origin": (0.0, 0.0, 0.0),
             "axis1": (1.0, 0.0, 0.0),
@@ -188,7 +188,7 @@ class Bounds(HostBase):
                     f"Missing required variable {attr_name!r} to generate bounds"
                 )
 
-        self.opts.act_finalize(defaults=self._opts_defaults)
+        self.opts.act_finalize(defaults=self.opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
     @logging_and_warning_decorator()

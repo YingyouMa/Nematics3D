@@ -203,14 +203,14 @@ class InteractDisclinationLine(InteractGlyphBase):
     def _on_reset_to_live(self):
         smooth_live = {
             k: v
-            for k, v in self.smooth._opts_backup[self.str_now_live].items()
+            for k, v in self.smooth.opts_backup[self.str_now_live].items()
             if k not in self.smooth.attrs_forbidden
         }
         self.smooth.act_commit(**smooth_live)
-        self.wrapper.act_commit(**self.wrapper._opts_backup[self.str_now_live])
+        self.wrapper.act_commit(**self.wrapper.opts_backup[self.str_now_live])
         host_live = {
             k: v
-            for k, v in self.host._opts_backup[self.str_now_live].items()
+            for k, v in self.host.opts_backup[self.str_now_live].items()
             if k not in self.host.attrs_forbidden
         }
         self.host.act_commit(**host_live)
@@ -226,21 +226,21 @@ class InteractDisclinationLine(InteractGlyphBase):
     def _on_reset_to_original(self):
         original_smooth = {
             k: v
-            for k, v in self.smooth._opts_backup[self.str_now].items()
+            for k, v in self.smooth.opts_backup[self.str_now].items()
             if k not in self.smooth.attrs_forbidden
         }
-        original_wrapper = dict(self.wrapper._opts_backup[self.str_now])
+        original_wrapper = dict(self.wrapper.opts_backup[self.str_now])
         original_host = {
             k: v
-            for k, v in self.host._opts_backup[self.str_now].items()
+            for k, v in self.host.opts_backup[self.str_now].items()
             if k not in self.host.attrs_forbidden
         }
         self.smooth.act_commit(**original_smooth)
         self.wrapper.act_commit(**original_wrapper)
         self.host.act_commit(**original_host)
-        self.smooth._opts_backup[self.str_now_live] = dict(original_smooth)
-        self.wrapper._opts_backup[self.str_now_live] = dict(original_wrapper)
-        self.host._opts_backup[self.str_now_live] = dict(original_host)
+        self.smooth.opts_backup[self.str_now_live] = dict(original_smooth)
+        self.wrapper.opts_backup[self.str_now_live] = dict(original_wrapper)
+        self.host.opts_backup[self.str_now_live] = dict(original_host)
         self.spheres.act_commit(
             coords=self._helper_create_sphere_coords(self.wrapper.opts.is_wrap)
         )
@@ -262,7 +262,9 @@ class InteractDisclinationLine(InteractGlyphBase):
         object.__setattr__(
             self.smooth.opts,
             "min_line_length",
-            getattr(self, "_impl_min_line_length_backup", self.smooth.opts.min_line_length),
+            getattr(
+                self, "_impl_min_line_length_backup", self.smooth.opts.min_line_length
+            ),
         )
         self.spheres.act_unbind_bounds(is_apply=False)
         self.spheres.act_remove()

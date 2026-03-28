@@ -151,9 +151,9 @@ class OptsTube(OptsGlyph):
         "is_capping": lambda v, d: as_bool(v, name=d),
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **dict(OptsGlyph._DEFAULTS_FROZEN),
+            **dict(OptsGlyph.impl_defaults_frozen),
             "is_capping": True,
         }
     )
@@ -193,7 +193,7 @@ class PlotTube(PlotGlyph):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable tube attributes.
+    - `show_readable_attrs()`: show the main readable tube attributes.
     - `show_modifiable_attrs()`: show which tube or opts attributes can be changed.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations inherited from PlotGlyph.

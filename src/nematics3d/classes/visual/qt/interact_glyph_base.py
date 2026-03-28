@@ -9,7 +9,7 @@ from .panel_base import (
 
 # NOTE: This panel is intentionally coupled to PlotGlyph-like hosts.
 # The host is expected to provide glyph internals such as:
-# `opts`, `_calc_color`, `_calc_opacity`, `_calc_radius`, `_opts_backup`,
+# `opts`, `_calc_color`, `_calc_opacity`, `_calc_radius`, `opts_backup`,
 # `_state_is_silhouette`, `_helper_clear_silhouette`, and `_helper_add_silhouette`.
 
 
@@ -255,7 +255,7 @@ class InteractGlyphBase(PanelBase):
     def _helper_build_commit_params(self):
         params = {}
         if self.config["is_radius"]:
-            current_radius = self.host._opts_backup[self.str_now_live]["radius"]
+            current_radius = self.host.opts_backup[self.str_now_live]["radius"]
             scale = float(self.state["radius_rescale"])
             if callable(current_radius):
                 params["radius"] = lambda x: scale * current_radius(x)
@@ -272,15 +272,15 @@ class InteractGlyphBase(PanelBase):
                 )
                 params["paint_by"] = "color"
             else:
-                params["color"] = self.host._opts_backup[self.str_now_live]["color"]
-                params["paint_by"] = self.host._opts_backup[self.str_now_live][
+                params["color"] = self.host.opts_backup[self.str_now_live]["color"]
+                params["paint_by"] = self.host.opts_backup[self.str_now_live][
                     "paint_by"
                 ]
         if self.config["is_opacity"]:
             params["opacity"] = (
                 self.state["opacity"]
                 if self.state.get("is_use_control_opacity")
-                else self.host._opts_backup[self.str_now_live]["opacity"]
+                else self.host.opts_backup[self.str_now_live]["opacity"]
             )
         if self.config["is_sides"]:
             params["sides"] = int(self.state["sides"])

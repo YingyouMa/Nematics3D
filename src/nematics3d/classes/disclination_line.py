@@ -132,7 +132,7 @@ class DisclinationLine(ClassBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable line attributes.
+    - `show_readable_attrs()`: show the main readable line attributes.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations inherited from ClassBase.
 
@@ -471,7 +471,7 @@ class DisclinationLineSmooth(SmoothedLine):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable smoothed-line attributes.
+    - `show_readable_attrs()`: show the main readable smoothed-line attributes.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations such as the owner, visual, and sections registry.
 
@@ -771,9 +771,9 @@ class OptsDefectLinePlot(OptsBase):
         "is_wrap": lambda v, d: as_bool(v, name=d),
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **dict(getattr(OptsBase, "_DEFAULTS_FROZEN", {})),
+            **dict(getattr(OptsBase, "impl_defaults_frozen", {})),
             "is_smooth": True,
             "is_wrap": True,
         }
@@ -797,7 +797,7 @@ class DisclinationLineSmoothPlot(HostBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable visualization-wrapper attributes.
+    - `show_readable_attrs()`: show the main readable visualization-wrapper attributes.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations such as the owner and wrapped PlotTube.
 
@@ -868,7 +868,7 @@ class DisclinationLineSmoothPlot(HostBase):
 
         self.act_bind_relation_base("owner", line, is_weak=True)
 
-        self.opts.act_finalize(defaults=self._opts_defaults)
+        self.opts.act_finalize(defaults=self.opts_defaults)
 
         line_coords, line_index = self._helper_get_coords()
         tube = PlotTube(
@@ -1060,9 +1060,9 @@ class OptsDefectSectionGrid(OptsBase):
         "is_wrap": lambda v, d: as_bool(v, name=d),
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **dict(getattr(OptsBase, "_DEFAULTS_FROZEN", {})),
+            **dict(getattr(OptsBase, "impl_defaults_frozen", {})),
             "tag": "defect section grid options",
             "u_percent": 50,
             "is_wrap": False,
@@ -1099,7 +1099,7 @@ class DefectSectionGrid(HostBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable section-grid attributes.
+    - `show_readable_attrs()`: show the main readable section-grid attributes.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations such as the owner and wrapped grid.
     - `show_normals()`: show the currently registered named normals.
@@ -1182,7 +1182,7 @@ class DefectSectionGrid(HostBase):
         self.act_bind_relation_base("owner", line, is_weak=True)
         object.__setattr__(self, "_impl_normals", {"tangent": None})
         object.__setattr__(self, "_calc_normal", None)
-        self.opts.act_finalize(defaults=self._opts_defaults)
+        self.opts.act_finalize(defaults=self.opts_defaults)
 
         if normals is not None:
             for key, value in normals.items():

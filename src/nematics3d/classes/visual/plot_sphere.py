@@ -108,8 +108,8 @@ class OptsSphere(OptsGlyph):
     ... )
     """
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
-        {**dict(OptsGlyph._DEFAULTS_FROZEN), "sides": 12}
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {**dict(OptsGlyph.impl_defaults_frozen), "sides": 12}
     )
 
 

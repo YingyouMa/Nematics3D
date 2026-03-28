@@ -164,7 +164,7 @@ class QFieldObject(ClassBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable Q-field attributes.
+    - `show_readable_attrs()`: show the main readable Q-field attributes.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show bound figures, object registry, and interpolator.
     - `show_relation_tree()`: show how this Q field connects to derived objects.

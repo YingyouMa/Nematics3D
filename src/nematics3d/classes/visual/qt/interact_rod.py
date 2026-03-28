@@ -70,7 +70,7 @@ class InteractRod(InteractGlyphBase):
         self.lbl_length.setText(f"Length at the red helper marker: {length:.2f}")
 
     def _extra_commit(self, params):
-        current_length = self.host._opts_backup[self.str_now_live]["length"]
+        current_length = self.host.opts_backup[self.str_now_live]["length"]
         scale = float(self.state["length_rescale"])
         if callable(current_length):
             params["length"] = lambda x: scale * current_length(x)

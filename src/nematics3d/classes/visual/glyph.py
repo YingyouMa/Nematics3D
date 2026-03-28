@@ -180,7 +180,7 @@ class OptsGlyph(OptsBase):
         }
 
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType({
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType({
         "tag":                  "glyph options",
         "is_visible":           True,
         "is_pickable":          True,
@@ -298,13 +298,13 @@ class PlotGlyph(HostBase):
 
     User-facing `show_*` methods on `PlotGlyph` are inherited from `HostBase`:
 
-    - ``show_getattrs()`` to list readable glyph, host, and opts surfaces
+    - ``show_readable_attrs()`` to list readable glyph, host, and opts surfaces
     - ``show_attr_desc()`` to explain one glyph attr, relation, alias, or opts attr
     - ``show_modifiable_attrs()`` to separate host attrs, opts attrs, extra attrs,
       and writable properties
     - ``show_relations()`` / ``show_relation_tree()`` to inspect figure, bounds,
       wrapper, and other object links
-    - ``show_saved_opts()`` to list named snapshots stored in ``_opts_backup``
+    - ``show_saved_opts()`` to list named snapshots stored in ``opts_backup``
 
     User-facing `act_*` methods on `PlotGlyph` include both inherited host
     actions and glyph-specific rendering helpers. Common ones are:
@@ -312,7 +312,7 @@ class PlotGlyph(HostBase):
     - ``act_commit()`` to apply host and opts updates through the managed glyph
       update pipeline
     - ``act_bind_bounds()`` / ``act_unbind_bounds()`` to manage clipping bounds
-    - ``act_save_opts()`` to snapshot current opts into ``_opts_backup``
+    - ``act_save_opts()`` to snapshot current opts into ``opts_backup``
     - ``act_highlight()`` / ``act_dehighlight()`` to control silhouette emphasis
     - ``act_interact()`` / ``act_set_interact_func()`` to manage glyph-side
       interaction hooks
@@ -427,7 +427,7 @@ class PlotGlyph(HostBase):
                 name=self.show_attr_desc("raw_name"),
                 replace=name_replace,
             )
-        object.__setattr__(self, "_opts_backup", {})
+        object.__setattr__(self, "opts_backup", {})
         object.__setattr__(self, "_state_is_silhouette", True)
         object.__setattr__(self, "_state_is_empty", False)
         object.__setattr__(self, "_state_is_interactable", True)
@@ -455,7 +455,7 @@ class PlotGlyph(HostBase):
         figure = as_PlotFigure(figure)
         self.act_bind_relation_base("fig", figure, is_weak=True)
 
-        self.opts.act_finalize(self._opts_defaults)
+        self.opts.act_finalize(self.opts_defaults)
         str_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         unique_id = self.name + str_now
         object.__setattr__(self, "_impl_name_pv", unique_id)
@@ -620,7 +620,7 @@ class PlotGlyph(HostBase):
                 else:
                     logger.recovery(
                         f"Reset {attr_name!r} to default."
-                        f"To find it, check self._opts_defaults['{attr_name}']."
+                        f"To find it, check self.opts_defaults['{attr_name}']."
                     )
                     self._helper_resolver_generic(
                         attr_name, default_val, default_val, is_recover=True
@@ -633,7 +633,7 @@ class PlotGlyph(HostBase):
             attr_value = getattr(self.opts, attr_name)
 
         return self._helper_resolver_generic(
-            attr_name, attr_value, self._opts_defaults[attr_name]
+            attr_name, attr_value, self.opts_defaults[attr_name]
         )
 
     # ----------------------------------------------------------------------------------------------------

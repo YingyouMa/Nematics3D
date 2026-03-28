@@ -288,7 +288,7 @@ def cover_value(
 
         try:
             setattr(obj, key, value)
-        except Exception:
+        except (TypeError, ValueError, KeyError, AttributeError):
             logger.exception("Check input.")
             logger.recovery("Automatically ignore this modification")
 
@@ -334,7 +334,7 @@ def load_json_into_opts(
     unknown_keys = []
 
     with opts._helper_internal_update():
-        for key in cls.__attrs__.keys():
+        for key in cls.__attrs__:
             setattr(opts, key, UNSET)
 
         for key, value in data.items():
@@ -348,7 +348,7 @@ def load_json_into_opts(
             f"Skip unknown opts fields while loading {path.name}: {unknown_keys}."
         )
 
-    if is_finalize and not getattr(opts, "_state_is_functioning", False):
+    if is_finalize and not getattr(opts, "impl_state_is_functioning", False):
         opts.act_finalize()
 
     logger.info(f"Loaded opts JSON into {cls.__name__} from {path}.")

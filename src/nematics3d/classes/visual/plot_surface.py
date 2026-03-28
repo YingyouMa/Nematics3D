@@ -128,8 +128,8 @@ class OptsSurface(OptsGlyph):
         k: v for k, v in OptsGlyph._validators.items() if k not in ("radius", "sides")
     }
 
-    _DEFAULTS_FROZEN: ClassVar[Mapping[str, Any]] = MappingProxyType(
-        {**(OptsGlyph._DEFAULTS_FROZEN), "ambient": 0.5}
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {**(OptsGlyph.impl_defaults_frozen), "ambient": 0.5}
     )
 
 
@@ -166,7 +166,7 @@ class PlotSurface(PlotGlyph):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable surface attributes.
+    - `show_readable_attrs()`: show the main readable surface attributes.
     - `show_modifiable_attrs()`: show which surface or opts attributes can be changed.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations inherited from PlotGlyph.

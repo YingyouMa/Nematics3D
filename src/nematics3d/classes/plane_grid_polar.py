@@ -82,9 +82,9 @@ class OptsPlaneGridPolar(OptsBase):
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
     }
 
-    _DEFAULTS_FROZEN = MappingProxyType(
+    impl_defaults_frozen = MappingProxyType(
         {
-            **(OptsBase._DEFAULTS_FROZEN),
+            **(OptsBase.impl_defaults_frozen),
             "tag": "polar plane grid options",
             "theta0_axis": None,
             "R_min": None,
@@ -169,7 +169,7 @@ class PlaneGridPolar(HostBase):
                     f"Missing required variable {key!r} to generate polar plane grid"
                 )
 
-        self.opts.act_finalize(defaults=self._opts_defaults)
+        self.opts.act_finalize(defaults=self.opts_defaults)
         self.act_bind_bounds(bounds, is_apply=False)
         self._helper_commit_apply_opts(is_reapply_opts=True)
 

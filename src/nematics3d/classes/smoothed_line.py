@@ -73,8 +73,8 @@ class OptsSmooth(OptsBase):
         "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
     }
     
-    _DEFAULTS_FROZEN = MappingProxyType({
-        **(OptsBase._DEFAULTS_FROZEN),
+    impl_defaults_frozen = MappingProxyType({
+        **(OptsBase.impl_defaults_frozen),
         "tag":                  "smooth options",
         "window_ratio":         None,
         "window_length":        None,
@@ -132,7 +132,7 @@ class SmoothedLine(HostBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable line attributes.
+    - `show_readable_attrs()`: show the main readable line attributes.
     - `show_modifiable_attrs()`: show which line or opts attributes can be changed.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations inherited from HostBase/ClassBase.
@@ -510,7 +510,7 @@ class SmoothedLineFunc(ClassBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable stored fields.
+    - `show_readable_attrs()`: show the main readable stored fields.
     - `show_attr_desc(name)`: describe a specific readable attribute.
     - `show_relations()`: show object relations such as the bound owner.
 

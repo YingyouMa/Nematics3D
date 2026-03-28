@@ -90,9 +90,9 @@ class OptsFigure(OptsBase):
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
     }
 
-    _DEFAULTS_FROZEN = MappingProxyType(
+    impl_defaults_frozen = MappingProxyType(
         {
-            **(OptsBase._DEFAULTS_FROZEN),
+            **(OptsBase.impl_defaults_frozen),
             "tag":          "figure options",
             "size":         (1900, 1000),
             "bg_color":     (1, 1, 1),
@@ -135,7 +135,7 @@ class PlotFigure(HostBase, RegistryBase):
 
     Common inspection helpers:
 
-    - `show_getattrs()`: show the main readable figure attributes.
+    - `show_readable_attrs()`: show the main readable figure attributes.
     - `show_modifiable_attrs()`: show which figure or opts attributes can be
       changed through the public interface.
     - `show_attr_desc(name)`: describe a specific readable attribute.
