@@ -1,3 +1,20 @@
+"""
+Base object model for structured Nematics3D classes.
+
+This module defines ``ClassBase``, the shared foundation for repository objects
+that expose:
+
+- a stable readable identity through ``raw_name`` / ``name``
+- per-instance attribute metadata in ``impl_attrs``
+- semantic object relations such as ``owner`` and ``registry``
+- inspection helpers for readable, modifiable, and relational surfaces
+
+In the current implementation, class-level ``__attr_defs__`` acts as a template.
+Each instance copies that template into ``impl_attrs`` during initialization,
+then keeps all later definition and runtime updates in that single per-instance
+dictionary.
+"""
+
 from copy import deepcopy
 import weakref
 
@@ -6,65 +23,85 @@ from ..logging_decorator import logging_and_warning_decorator
 
 
 class ClassBase:
+    """
+    Minimal structured base class for Nematics3D domain objects.
+
+    ``ClassBase`` provides a lightweight object protocol centered around a small
+    set of core ideas:
+
+    - ``raw_name`` stores the underlying object identity
+    - ``name`` remains the public readable alias of ``raw_name``
+    - ``impl_attrs`` stores the live attribute metadata for this instance
+
+    Each entry in ``impl_attrs`` combines both relatively stable definition data
+    such as ``kind``, ``doc``, and ``validator``, and runtime state such as
+    protection flags or current relation bindings.
+
+    This class supports ordinary raw/public attribute access, runtime protection
+    of registered attributes, dynamic registration of extra attributes, semantic
+    relation binding for object links such as ``owner`` and ``registry``, and
+    inspection helpers such as ``show_attr_desc()``, ``show_getattrs()``,
+    ``show_modifiable_attrs()``, ``show_relations()``, and
+    ``show_relation_tree()``.
+    """
+
     __attr_defs__ = {
         "raw_name": {
             "doc": "The underlying string identifier for this instance.",
             "kind": "raw",
             "validator": as_str,
             "is_public_settable": True,
+            "is_protected": False,
         },
         "owner": {
             "doc": "The object that owns this instance.",
             "kind": "relation",
             "validator": None,
             "is_public_settable": False,
+            "is_protected": False,
             "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
         },
         "registry": {
             "doc": "The Registry object where this instance is registered.",
             "kind": "relation",
             "validator": None,
             "is_public_settable": False,
+            "is_protected": False,
             "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
         },
-        "impl_attr_defs": {
-            "doc": "Runtime attribute-definition metadata copied from the class template.",
+        "impl_attrs": {
+            "doc": "Runtime attribute metadata copied from the class template.",
             "kind": "impl",
             "validator": None,
             "is_public_settable": False,
-        },
-        "impl_attr_state": {
-            "doc": "Runtime state metadata for each registered attribute.",
-            "kind": "impl",
-            "validator": None,
-            "is_public_settable": False,
+            "is_protected": False,
         },
     }
 
-    __slots__ = ("raw_name", "impl_attr_defs", "impl_attr_state", "__weakref__")
+    __slots__ = ("raw_name", "impl_attrs", "__weakref__")
 
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
 
     def __init__(self, *, name: str | None, name_replace: str):
-        impl_attr_defs = deepcopy(type(self).__attr_defs__)
-        object.__setattr__(self, "impl_attr_defs", impl_attr_defs)
+        # Each instance starts from a private copy of the class-level attribute template.
+        impl_attrs = deepcopy(type(self).__attr_defs__)
+        object.__setattr__(self, "impl_attrs", impl_attrs)
 
-        impl_attr_state = {
-            attr_name: {
-                "is_protected": False,
-            }
-            for attr_name in self.impl_attr_defs
-        }
-        object.__setattr__(self, "impl_attr_state", impl_attr_state)
-
+        # Normalize the initial name before routing it through the shared name assignment path.
         if name is None:
             name_final = name_replace
         else:
-            name_final = self.impl_attr_defs["raw_name"]["validator"](
+            name_final = self.impl_attrs["raw_name"]["validator"](
                 name,
-                name=self.impl_attr_defs["raw_name"]["doc"],
+                name=self.impl_attrs["raw_name"]["doc"],
                 replace=name_replace,
             )
             if not name_final:
@@ -103,33 +140,28 @@ class ClassBase:
         is_overwrite: bool = False,
         **extra_def,
     ):
-        """Register or update one runtime attribute definition and its base state."""
+        """Register or update one runtime attribute metadata entry."""
         name = as_str(name, name="Attribute name")
         if not name.isidentifier():
             raise ValueError(
                 f"Invalid attribute name {name!r}: must be a valid Python identifier."
             )
 
-        if (name in self.impl_attr_defs) and (not is_overwrite):
+        if (name in self.impl_attrs) and (not is_overwrite):
             raise KeyError(
-                f"Attribute {name!r} is already registered in {type(self).__name__}.impl_attr_defs."
+                f"Attribute {name!r} is already registered in {type(self).__name__}.impl_attrs."
             )
 
-        attr_def = {
+        attr_info = {
             "doc": as_str(doc, name=f"Definition doc for {name!r}"),
             "kind": as_str(kind, name=f"Definition kind for {name!r}"),
             "validator": validator,
             "is_public_settable": bool(is_public_settable),
+            "is_protected": False,
         }
-        attr_def.update(extra_def)
-        self.impl_attr_defs[name] = attr_def
-
-        if name not in self.impl_attr_state:
-            self.impl_attr_state[name] = {
-                "is_protected": False,
-            }
-
-        return attr_def
+        attr_info.update(extra_def)
+        self.impl_attrs[name] = attr_info
+        return attr_info
 
     # ------------------------------------------------------------------
     # Protection
@@ -139,16 +171,16 @@ class ClassBase:
         """Set the protected flag for one or more registered attributes."""
         for attr_name in as_list(attrs, name="attrs"):
             target_key = attr_name
-            if target_key not in self.impl_attr_defs:
+            if target_key not in self.impl_attrs:
                 raw_key = f"raw_{attr_name}"
-                if raw_key in self.impl_attr_defs:
+                if raw_key in self.impl_attrs:
                     target_key = raw_key
                 else:
                     raise AttributeError(
                         f"Cannot update protection for {attr_name!r}: it is not registered in "
-                        f"{type(self).__name__}.impl_attr_defs."
+                        f"{type(self).__name__}.impl_attrs."
                     )
-            self.impl_attr_state[target_key]["is_protected"] = is_protected
+            self.impl_attrs[target_key]["is_protected"] = is_protected
         return None
 
     def act_register_protected_attr(self, attrs):
@@ -167,17 +199,17 @@ class ClassBase:
 
     def _helper_resolve_relation_value(self, name: str):
         """Return the current relation target, resolving weak references when needed."""
-        relation_value = self.impl_attr_state[name].get("relation_value", None)
+        relation_value = self.impl_attrs[name].get("relation_value", None)
         if isinstance(relation_value, weakref.ReferenceType):
             return relation_value()
         return relation_value
 
     def _helper_get_relation_doc(self, name: str) -> str:
         """Return the runtime doc override for a relation, or its declared doc."""
-        doc_runtime = self.impl_attr_state[name].get("doc_runtime", None)
+        doc_runtime = self.impl_attrs[name].get("doc_runtime", None)
         if doc_runtime is not None:
             return doc_runtime
-        return self.impl_attr_defs[name]["doc"]
+        return self.impl_attrs[name]["doc"]
 
     def _helper_relation_tree_node_label(self):
         """Return the display label used for this node in relation trees."""
@@ -206,8 +238,8 @@ class ClassBase:
             return lines
 
         entries = []
-        for attr_name, attr_def in self.impl_attr_defs.items():
-            if attr_def["kind"] != "relation":
+        for attr_name, attr_info in self.impl_attrs.items():
+            if attr_info["kind"] != "relation":
                 continue
             target = self._helper_resolve_relation_value(attr_name)
             if target is None and (not is_include_none):
@@ -256,7 +288,7 @@ class ClassBase:
         """Bind or update a named relation on this instance."""
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
 
-        if name not in self.impl_attr_defs:
+        if name not in self.impl_attrs:
             self._helper_register_attr_def(
                 name,
                 doc="Newly added relation." if doc is None else doc,
@@ -265,16 +297,19 @@ class ClassBase:
                 is_public_settable=False,
                 is_overwrite=False,
                 is_weak_by_default=True,
+                is_weak=None,
+                relation_value=None,
+                doc_runtime=None,
             )
 
-        attr_def = self.impl_attr_defs[name]
-        if attr_def["kind"] != "relation":
+        attr_info = self.impl_attrs[name]
+        if attr_info["kind"] != "relation":
             raise AttributeError(
-                f"Cannot bind relation {name!r}: it is registered as kind {attr_def['kind']!r}, not 'relation'."
+                f"Cannot bind relation {name!r}: it is registered as kind {attr_info['kind']!r}, not 'relation'."
             )
 
         if doc is not None:
-            self.impl_attr_state[name]["doc_runtime"] = as_str(
+            self.impl_attrs[name]["doc_runtime"] = as_str(
                 doc, name=f"Relation doc for instance {self.raw_name!r}"
             )
 
@@ -285,10 +320,10 @@ class ClassBase:
             )
 
         if is_weak is None:
-            is_weak = bool(attr_def.get("is_weak_by_default", True))
+            is_weak = bool(attr_info.get("is_weak_by_default", True))
 
-        self.impl_attr_state[name]["is_weak"] = bool(is_weak)
-        self.impl_attr_state[name]["relation_value"] = (
+        self.impl_attrs[name]["is_weak"] = bool(is_weak)
+        self.impl_attrs[name]["relation_value"] = (
             weakref.ref(target) if (is_weak and target is not None) else target
         )
         return target
@@ -296,141 +331,19 @@ class ClassBase:
     def act_unbind_relation_base(self, name: str):
         """Clear the current target of a named relation."""
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
-        if name not in self.impl_attr_defs:
+        if name not in self.impl_attrs:
             raise AttributeError(
                 f"Cannot unbind relation {name!r}: it is not registered in "
-                f"{type(self).__name__}.impl_attr_defs."
+                f"{type(self).__name__}.impl_attrs."
             )
-        if self.impl_attr_defs[name]["kind"] != "relation":
+        if self.impl_attrs[name]["kind"] != "relation":
             raise AttributeError(
                 f"Cannot unbind relation {name!r}: it is registered as kind "
-                f"{self.impl_attr_defs[name]['kind']!r}, not 'relation'."
+                f"{self.impl_attrs[name]['kind']!r}, not 'relation'."
             )
 
-        self.impl_attr_state[name]["relation_value"] = None
-        self.impl_attr_state[name]["is_weak"] = bool(
-            self.impl_attr_defs[name].get("is_weak_by_default", True)
-        )
-        return None
-
-    # ------------------------------------------------------------------
-    # Extra attributes
-    # ------------------------------------------------------------------
-
-    def act_add_attr(
-        self,
-        name: str,
-        doc: str,
-        default=None,
-        is_overwrite: bool = False,
-    ):
-        """Register a dynamic extra attribute with documentation and a default value."""
-        self._helper_register_attr_def(
-            name,
-            doc=doc,
-            kind="extra",
-            validator=None,
-            is_public_settable=True,
-            is_overwrite=is_overwrite,
-        )
-
-        if is_overwrite or (not hasattr(self, name)):
-            object.__setattr__(self, name, default)
-        return None
-
-    # ------------------------------------------------------------------
-    # Attribute inspection
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _helper_is_writable_property(cls, name: str) -> bool:
-        """Return whether a declared property is marked as writable."""
-        attr_def = cls.__attr_defs__.get(name, {})
-        return attr_def.get("kind") == "property" and attr_def.get(
-            "is_public_settable", False
-        )
-
-    def show_attr_desc(self, attr_name: str) -> str:
-        """Return the description of a registered attribute or its public alias."""
-        if attr_name in self.impl_attr_defs:
-            if self.impl_attr_defs[attr_name]["kind"] == "relation":
-                return f"{attr_name!r}: {self._helper_get_relation_doc(attr_name)}"
-            return f"{attr_name!r}: {self.impl_attr_defs[attr_name]['doc']}"
-
-        raw_attr_name = f"raw_{attr_name}"
-        if raw_attr_name in self.impl_attr_defs:
-            return (
-                f"{attr_name!r}: Alias of {raw_attr_name!r}. "
-                f"{self.impl_attr_defs[raw_attr_name]['doc']}"
-            )
-
-        raise KeyError(
-            f"Attribute {attr_name!r} was not found in "
-            f"{type(self).__name__}.impl_attr_defs."
-        )
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def show_getattrs(self, is_return=False, logger=None):
-        """Show readable attributes, aliases, and declared properties."""
-        lines = [
-            "When reading or assigning, the 'raw_' prefix may be omitted where a public alias exists."
-        ]
-
-        for attr_name in self.impl_attr_defs:
-            lines.append(self.show_attr_desc(attr_name))
-            if attr_name.startswith("raw_"):
-                lines.append(self.show_attr_desc(attr_name[4:]))
-
-        output = "\n".join(lines)
-        logger.info(output)
-        if is_return:
-            return output
-        return None
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def show_modifiable_attrs(self, is_return=False, logger=None):
-        """Show public attributes and properties intended for assignment."""
-        lines = [
-            "When assigning, the 'raw_' prefix may be omitted.",
-        ]
-
-        attr_names = []
-        property_names = []
-        for attr_name, attr_def in self.impl_attr_defs.items():
-            if attr_def["kind"] == "property":
-                if attr_def.get("is_public_settable", False):
-                    property_names.append(attr_name)
-                continue
-
-            if not attr_def["is_public_settable"]:
-                continue
-            if self.impl_attr_state[attr_name]["is_protected"]:
-                continue
-
-            attr_names.append(attr_name)
-            if attr_name.startswith("raw_"):
-                attr_names.append(attr_name[4:])
-
-        if attr_names:
-            lines.append("[Attributes]")
-            for attr_name in sorted(attr_names):
-                lines.append(f"  - {attr_name}")
-        else:
-            lines.append("[Attributes]")
-            lines.append("  - <none>")
-
-        if property_names:
-            lines.append("[Writable properties]")
-            for prop_name in sorted(property_names):
-                lines.append(f"  - {prop_name}")
-        else:
-            lines.append("[Writable properties]")
-            lines.append("  - <none>")
-
-        output = "\n".join(lines)
-        logger.info(output)
-        if is_return:
-            return output
+        self.impl_attrs[name]["relation_value"] = None
+        self.impl_attrs[name]["is_weak"] = None
         return None
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -438,8 +351,8 @@ class ClassBase:
         """Show currently bound relations and their descriptions."""
         lines = []
 
-        for attr_name, attr_def in self.impl_attr_defs.items():
-            if attr_def["kind"] != "relation":
+        for attr_name, attr_info in self.impl_attrs.items():
+            if attr_info["kind"] != "relation":
                 continue
 
             target = self._helper_resolve_relation_value(attr_name)
@@ -483,18 +396,127 @@ class ClassBase:
         return None
 
     # ------------------------------------------------------------------
+    # Extra attributes
+    # ------------------------------------------------------------------
+
+    def act_add_attr(
+        self,
+        name: str,
+        doc: str,
+        default=None,
+        is_overwrite: bool = False,
+    ):
+        """Register a dynamic extra attribute with documentation and a default value."""
+        self._helper_register_attr_def(
+            name,
+            doc=doc,
+            kind="extra",
+            validator=None,
+            is_public_settable=True,
+            is_overwrite=is_overwrite,
+        )
+
+        if is_overwrite or (not hasattr(self, name)):
+            object.__setattr__(self, name, default)
+        return None
+
+    # ------------------------------------------------------------------
+    # Attribute inspection
+    # ------------------------------------------------------------------
+
+    def show_attr_desc(self, attr_name: str) -> str:
+        """Return the description of a registered attribute or its public alias."""
+        if attr_name in self.impl_attrs:
+            if self.impl_attrs[attr_name]["kind"] == "relation":
+                return f"{attr_name!r}: {self._helper_get_relation_doc(attr_name)}"
+            return f"{attr_name!r}: {self.impl_attrs[attr_name]['doc']}"
+
+        raw_attr_name = f"raw_{attr_name}"
+        if raw_attr_name in self.impl_attrs:
+            return (
+                f"{attr_name!r}: Alias of {raw_attr_name!r}. "
+                f"{self.impl_attrs[raw_attr_name]['doc']}"
+            )
+
+        raise KeyError(
+            f"Attribute {attr_name!r} was not found in "
+            f"{type(self).__name__}.impl_attrs."
+        )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_getattrs(self, is_return=False, logger=None):
+        """Show readable attributes, aliases, and declared properties."""
+        lines = [
+            "When reading or assigning, the 'raw_' prefix may be omitted where a public alias exists."
+        ]
+
+        for attr_name in self.impl_attrs:
+            lines.append(self.show_attr_desc(attr_name))
+            if attr_name.startswith("raw_"):
+                lines.append(self.show_attr_desc(attr_name[4:]))
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_modifiable_attrs(self, is_return=False, logger=None):
+        """Show public attributes and properties intended for assignment."""
+        lines = [
+            "When assigning, the 'raw_' prefix may be omitted.",
+        ]
+
+        attr_names = []
+        property_names = []
+        for attr_name, attr_info in self.impl_attrs.items():
+            if attr_info["kind"] == "property":
+                if attr_info.get("is_public_settable", False):
+                    property_names.append(attr_name)
+                continue
+
+            if not attr_info["is_public_settable"]:
+                continue
+            if attr_info["is_protected"]:
+                continue
+
+            attr_names.append(attr_name)
+            if attr_name.startswith("raw_"):
+                attr_names.append(attr_name[4:])
+
+        if attr_names:
+            lines.append("[Attributes]")
+            for attr_name in sorted(attr_names):
+                lines.append(f"  - {attr_name}")
+        else:
+            lines.append("[Attributes]")
+            lines.append("  - <none>")
+
+        if property_names:
+            lines.append("[Writable properties]")
+            for prop_name in sorted(property_names):
+                lines.append(f"  - {prop_name}")
+        else:
+            lines.append("[Writable properties]")
+            lines.append("  - <none>")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    # ------------------------------------------------------------------
     # Attribute access / assignment
     # ------------------------------------------------------------------
 
     def __getattr__(self, key):
         raw_key = f"raw_{key}"
-        if raw_key in self.impl_attr_defs:
+        if raw_key in self.impl_attrs:
             return object.__getattribute__(self, raw_key)
 
-        if (
-            key in self.impl_attr_defs
-            and self.impl_attr_defs[key]["kind"] == "relation"
-        ):
+        if key in self.impl_attrs and self.impl_attrs[key]["kind"] == "relation":
             return self._helper_resolve_relation_value(key)
 
         cls_name = type(self).__name__
@@ -510,12 +532,12 @@ class ClassBase:
 
     def _helper_setattr_basic(self, key, value):
         """Resolve a public assignment target and apply validation/protection rules."""
-        attr_defs = self.impl_attr_defs
+        attr_info_map = self.impl_attrs
         target_key = key
 
-        if target_key not in attr_defs:
+        if target_key not in attr_info_map:
             raw_key = f"raw_{key}"
-            if raw_key in attr_defs:
+            if raw_key in attr_info_map:
                 target_key = raw_key
             else:
                 cls_name = type(self).__name__
@@ -525,8 +547,8 @@ class ClassBase:
                     f"{key!r} is not a valid or registered attribute."
                 )
 
-        attr_def = attr_defs[target_key]
-        if not attr_def["is_public_settable"]:
+        attr_info = attr_info_map[target_key]
+        if not attr_info["is_public_settable"]:
             cls_name = type(self).__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
@@ -535,7 +557,7 @@ class ClassBase:
                 "which cannot be assigned through the public setattr path."
             )
 
-        if self.impl_attr_state[target_key]["is_protected"]:
+        if attr_info["is_protected"]:
             cls_name = type(self).__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
@@ -544,7 +566,7 @@ class ClassBase:
             )
 
         if target_key == "raw_name":
-            value = attr_def["validator"](value, name=attr_def["doc"])
+            value = attr_info["validator"](value, name=attr_info["doc"])
             self._helper_assign_name(value)
             return None
 
