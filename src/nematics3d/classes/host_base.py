@@ -96,8 +96,9 @@ class OptsBase:
 
     ``OptsBase`` is the light-weight configuration companion that sits beside a
     concrete ``HostBase`` object. Public option fields such as ``tag`` are
-    stored directly on the instance, while host wiring and lifecycle
-    bookkeeping live in ``impl_*`` storage fields.
+    stored directly on the instance, must all be registered in ``__attrs__``,
+    while host wiring and lifecycle bookkeeping live in ``impl_*`` storage
+    fields.
 
     The lifecycle is intentionally explicit:
 
@@ -155,6 +156,22 @@ class OptsBase:
     )
 
     # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+
+    def __post_init__(self) -> None:
+        """Validate dataclass field naming against the OptsBase declaration convention."""
+        for field_name in type(self).__dataclass_fields__:
+            if field_name in type(self).__attrs__:
+                continue
+            if not field_name.startswith("impl_"):
+                raise ValueError(
+                    "OptsBase dataclass fields that are not declared in __attrs__ "
+                    "must use the impl_ prefix. "
+                    f"Got invalid internal field name: {field_name!r}."
+                )
+
+    # ------------------------------------------------------------------
     # Readable properties
     # ------------------------------------------------------------------
 
@@ -202,6 +219,9 @@ class OptsBase:
             object.__setattr__(self, key, value)
             return
 
+        # If a validator exists, validate first and then let the later branches
+        # decide whether this should remain a local assignment or be forwarded
+        # through the host pipeline.
         if key in type(self).impl_validators:
             desc = f"{key!r}: {type(self).__attrs__[key]}"
             try:
@@ -215,6 +235,14 @@ class OptsBase:
                 logger.recovery("Reset this assignment to UNSET.")
                 object.__setattr__(self, key, UNSET)
                 return
+        # If no validator exists, there are two intended cases:
+        # 1. internal `impl_` fields: these are implementation storage, so they
+        #    can be assigned directly.
+        # 2. non-internal public fields without a local validator: before opts
+        #    is functioning, store the draft value locally; after opts becomes
+        #    functioning and is attached to a host, let the host own the update
+        #    path because that host may perform more complex validation and
+        #    application than OptsBase can know about locally.
         elif is_internal_key or (not is_functioning):
             object.__setattr__(self, key, value)
             return
@@ -235,16 +263,13 @@ class OptsBase:
         if self.host is not None:
             self.host.act_commit(**{key: value})
 
-    @logging_and_warning_decorator(start_finish_level=5)
     def _helper_finalize_basic(
         self,
         defaults: Mapping[str, Any] | None = None,
         is_allow_unset: bool = False,
         *,
-        logger=None,
     ) -> None:
         """Fill ``UNSET`` values by defaults, then enter the functioning state."""
-        del logger
 
         if getattr(self, "impl_is_functioning", False):
             raise RuntimeError("This Opts has already been finalized.")
@@ -319,16 +344,13 @@ class OptsBase:
         logger.info(f"Saved opts JSON to {path}.")
         return path
 
-    @logging_and_warning_decorator(start_finish_level=5)
     def act_load_json(
         self,
         path: str | Path,
         *,
         is_finalize: bool = False,
-        logger=None,
     ):
         """Load saved JSON data back into this opts instance."""
-        del logger
         return load_json_into_opts(
             self,
             path,
