@@ -348,7 +348,7 @@ def load_json_into_opts(
             f"Skip unknown opts fields while loading {path.name}: {unknown_keys}."
         )
 
-    if is_finalize and not getattr(opts, "impl_state_is_functioning", False):
+    if is_finalize and not getattr(opts, "impl_is_functioning", False):
         opts.act_finalize()
 
     logger.info(f"Loaded opts JSON into {cls.__name__} from {path}.")

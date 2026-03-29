@@ -1,4 +1,4 @@
-import numpy as np
+﻿import numpy as np
 from dataclasses import dataclass, field, asdict
 from typing import Any, Mapping, ClassVar, Callable
 import weakref
@@ -1116,8 +1116,6 @@ class DefectSectionGrid(HostBase):
     - `repr(obj)` returns a compact summary including `u_percent` and the current
       `state_normal`.
     """
-
-    _impl_attrs_reapply_opts_after_raw = {"state_normal"}
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **HostBase.__attrs__,

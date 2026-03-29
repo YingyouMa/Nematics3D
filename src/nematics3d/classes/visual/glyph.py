@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -359,17 +359,12 @@ class PlotGlyph(HostBase):
         "radius", "opacity", "color", "scalars"
         ]
     
-    _impl_validators = {
-        **(HostBase._impl_validators),
+    _validators_local = {
         "coords":       lambda v, d: as_points(v, name=d),
         "category":     lambda v, d: as_str(v, name=d),
         "state_clip_mode":       lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
         "state_is_clip_inside":  lambda v, d: as_bool(v, name=d),
         }
-    
-    _impl_attrs_reapply_opts_after_raw = (
-        HostBase._impl_attrs_reapply_opts_after_raw | {"coords", "state_clip_mode", "state_is_clip_inside"}
-    )
     # fmt: on
 
     # ==================== OVERRIDE ====================
@@ -398,23 +393,23 @@ class PlotGlyph(HostBase):
         **kwargs,
     ):
 
-        coords = self.__class__._impl_validators["coords"](
+        coords = self.__class__._validators_local["coords"](
             coords,
             self.show_attr_desc("raw_coords"),
         )
         object.__setattr__(self, "raw_coords", coords)
-        clip_mode = self.__class__._impl_validators["state_clip_mode"](
+        clip_mode = self.__class__._validators_local["state_clip_mode"](
             clip_mode,
             self.show_attr_desc("state_clip_mode"),
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
-        is_clip_inside = self.__class__._impl_validators["state_is_clip_inside"](
+        is_clip_inside = self.__class__._validators_local["state_is_clip_inside"](
             is_clip_inside,
             self.show_attr_desc("state_is_clip_inside"),
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "_calc_coords", coords.copy())
-        category = self.__class__._impl_validators["category"](
+        category = self.__class__._validators_local["category"](
             category,
             self.show_attr_desc("raw_category"),
         )

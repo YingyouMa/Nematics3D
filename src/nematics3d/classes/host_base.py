@@ -12,8 +12,8 @@ This module provides two closely related bases:
 The design intentionally stays close to the original Nematics3D host model.
 Public opts fields remain explicit dataclass slots, host-side runtime
 containers keep ``impl_*`` names, and user-facing convenience access is
-provided through readable properties such as ``host``, ``is_functioning``,
-``defaults_frozen``, ``opts``, and ``attrs_forbidden``.
+provided through readable properties such as ``host``, ``defaults_frozen``,
+``opts``, and ``attrs_forbidden``.
 
 At a high level the workflow is:
 
@@ -58,6 +58,37 @@ from .opts import (
 )
 
 
+# HostBase declaration conventions for subclasses:
+# - host-side managed fields should normally use only these prefixes:
+#   `raw_`, `state_`, `calc_`, `entity_`, and `impl_`.
+# - `raw_` fields are canonical stored public host data fields and may expose
+#   a shortened public alias without the prefix.
+# - `state_` fields represent writable host runtime state inputs that remain
+#   part of the managed host schema and affect later computation.
+# - `calc_` fields represent derived host-side calculated data. They must be
+#   read-only from the public surface. When a calculated view should behave as
+#   a property, prefer registering it as `kind="property"` instead of exposing
+#   the storage field itself as modifiable state.
+# - `entity_` fields represent attached external/runtime entities such as
+#   cached engine objects or UI/render handles. They must be treated as
+#   read-only from the public surface.
+# - if an `entity_` field is really a semantic one-to-one object link, prefer
+#   expressing it as a relation instead of as an `entity_` field.
+# - `impl_` fields represent internal host-side implementation storage and
+#   should not be treated as the normal user-facing surface.
+# - host-side default-value semantics should normally live in the paired opts
+#   system (`opts`, `opts_defaults`, `opts_backup`) rather than in separate
+#   `default_` fields on the host itself.
+# - direct public names on HostBase should usually be reserved for relations,
+#   properties, and the host/opts bridge fields such as `opts`.
+# - relations in the current HostBase protocol are one-to-one links only;
+#   do not use relations to represent one-to-many or collection-style data.
+# - if a new managed host field is not a relation, property, or opts bridge
+#   field, it should normally be expressed as `raw_...`, `state_...`,
+#   `calc_...`, `entity_...`, or `impl_...` rather than inventing another
+#   public field category.
+
+
 @dataclass(slots=True, repr=False)
 class OptsBase:
     """
@@ -79,10 +110,10 @@ class OptsBase:
        forwarded through ``host.act_commit(...)`` rather than being treated as
        a purely local mutation.
 
-    Important readable properties on ``OptsBase`` are:
+    Important readable interfaces on ``OptsBase`` are:
 
     - ``host`` for the currently attached host object, if the weakref is alive
-    - ``is_functioning`` for the finalized runtime lifecycle state
+    - ``impl_is_functioning`` for the finalized runtime lifecycle state
     - ``defaults_frozen`` for the class-level frozen defaults mapping
 
     Common user-facing actions are:
@@ -105,7 +136,7 @@ class OptsBase:
         init=False,
         repr=False,
     )
-    impl_state_is_functioning: bool = field(
+    impl_is_functioning: bool = field(
         default=False,
         init=False,
         repr=False,
@@ -130,13 +161,9 @@ class OptsBase:
     @property
     def host(self):
         """Return the attached host object, if the stored weakref is alive."""
-        host_ref = self.impl_host_ref
+        host_ref = getattr(self, "impl_host_ref", None)
         return host_ref() if host_ref is not None else None
 
-    @property
-    def is_functioning(self) -> bool:
-        """Return whether this opts instance has already been finalized."""
-        return bool(self.impl_state_is_functioning)
 
     @property
     def defaults_frozen(self) -> Mapping[str, Any]:
@@ -150,7 +177,7 @@ class OptsBase:
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> None:
         """Validate one assignment and forward live option updates to the host."""
-        is_functioning = self.is_functioning
+        is_functioning = bool(getattr(self, "impl_is_functioning", False))
         is_has_host = self.host is not None
         is_internal_key = key.startswith("impl_")
 
@@ -219,7 +246,7 @@ class OptsBase:
         """Fill ``UNSET`` values by defaults, then enter the functioning state."""
         del logger
 
-        if self.impl_state_is_functioning:
+        if getattr(self, "impl_is_functioning", False):
             raise RuntimeError("This Opts has already been finalized.")
 
         defaults_dict = {} if defaults is None else dict(defaults)
@@ -231,7 +258,7 @@ class OptsBase:
                     raise KeyError(f"Missing default for field {key!r}.")
                 setattr(self, key, value)
 
-        object.__setattr__(self, "impl_state_is_functioning", True)
+        object.__setattr__(self, "impl_is_functioning", True)
 
     def _helper_asdict_basic(self, *, is_include_unset: bool = False) -> dict[str, Any]:
         """Return the current public option payload as a plain dictionary."""
@@ -246,14 +273,14 @@ class OptsBase:
     @contextmanager
     def _helper_internal_update(self):
         """Temporarily suspend the functioning lifecycle state."""
-        is_functioning_current = self.impl_state_is_functioning
-        object.__setattr__(self, "impl_state_is_functioning", False)
+        is_functioning_current = getattr(self, "impl_is_functioning", False)
+        object.__setattr__(self, "impl_is_functioning", False)
         try:
             yield
         finally:
             object.__setattr__(
                 self,
-                "impl_state_is_functioning",
+                "impl_is_functioning",
                 is_functioning_current,
             )
 
@@ -512,9 +539,6 @@ class HostBase(ClassBase):
         "impl_enrich_kwargs_sync_func",
     )
 
-    impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {}
-    impl_attrs_reapply_opts_after_raw: ClassVar[set[str]] = set()
-
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -759,22 +783,16 @@ class HostBase(ClassBase):
             host_attr_name = attr_name_origin
             public_attr_name = attr_name_origin[4:]
             found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
-            validator_key = public_attr_name
-            reapply_key = public_attr_name
             attr_name_return = public_attr_name
         elif is_state_attr:
             host_attr_name = attr_name_origin
             found = host_attr_name in kwargs
             attr_value = kwargs.pop(host_attr_name) if found else None
-            validator_key = host_attr_name
-            reapply_key = host_attr_name
             attr_name_return = host_attr_name
         else:
             host_attr_name = f"raw_{attr_name_origin}"
             public_attr_name = attr_name_origin
             found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
-            validator_key = public_attr_name
-            reapply_key = public_attr_name
             attr_name_return = public_attr_name
 
         if not found:
@@ -788,8 +806,8 @@ class HostBase(ClassBase):
         if recovery_msg is None:
             recovery_msg = f"Ignore this modification of {attr_name_return!r}."
 
-        if validator is None and validator_key in type(self).impl_validators:
-            validator = type(self).impl_validators[validator_key]
+        if validator is None:
+            validator = self.impl_attrs[host_attr_name].get("validator")
 
         try:
             if validator is not None:
@@ -806,8 +824,8 @@ class HostBase(ClassBase):
             logger.recovery(recovery_msg)
             return {}, False
 
-        return {attr_name_return: attr_value}, (
-            reapply_key in type(self).impl_attrs_reapply_opts_after_raw
+        return {attr_name_return: attr_value}, bool(
+            self.impl_attrs[host_attr_name].get("is_reapply_opts_after_raw", False)
         )
 
     def _helper_commit_self(
@@ -1377,3 +1395,6 @@ class HostBase(ClassBase):
             return
 
         super().__setattr__(key, value)
+
+
+

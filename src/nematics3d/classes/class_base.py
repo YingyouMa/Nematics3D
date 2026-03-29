@@ -6,7 +6,7 @@ that expose:
 
 - a stable readable identity through ``raw_name`` / ``name``
 - per-instance attribute metadata in ``impl_attrs``
-- semantic object relations such as ``owner`` and ``registry``
+- semantic one-to-one object relations such as ``owner`` and ``registry``
 - inspection helpers for readable, modifiable, and relational surfaces
 
 In the current implementation, class-level ``__attr_defs__`` acts as a template.
@@ -22,6 +22,35 @@ from ..datatypes import as_list, as_str
 from ..logging_decorator import logging_and_warning_decorator
 
 
+# ClassBase declaration conventions for subclasses:
+# - every managed field must be declared in `__attr_defs__`; do not rely on
+#   ad hoc instance attributes for normal public fields, relations, or
+#   properties.
+# - `raw_` fields are the canonical stored public data fields. A `raw_xxx`
+#   field automatically exposes the readable public alias `xxx`.
+# - `state_` fields represent writable runtime state inputs that are part of
+#   the managed attribute system and may affect later computation. They do not
+#   create a shortened public alias.
+# - `default_` fields represent default-parameter style managed fields. The
+#   current `ClassBase` does not declare one itself, but subclasses may use
+#   this prefix when they need default-layer state in the managed schema.
+# - `calc_` fields represent read-only values derived by computation.
+# - `impl_` fields represent internal implementation metadata or runtime
+#   containers and should not be treated as a user-facing readable surface.
+# - relation names use their direct public names, such as `owner` or
+#   `registry`.
+# - relations in the current ClassBase protocol are one-to-one links only;
+#   do not use relations to represent one-to-many or collection-style data.
+# - property metadata should also be registered in `__attr_defs__` with
+#   `kind="property"`, while the actual getter/setter behavior remains a
+#   normal Python `@property` on the class.
+# - extra attrs are runtime-registered public fields and should still enter the
+#   managed schema through the provided registration helpers.
+# - for semantic clarity, do not introduce other non-underscore public field
+#   categories beyond these conventions: `raw_`, `state_`, `default_`, `calc_`,
+#   `impl_`, direct-named relations, direct-named properties, and extra attrs.
+# - when registering new fields into `impl_attrs`, choose names that respect
+#   these categories and do not collide with an existing readable surface.
 class ClassBase:
     """
     Minimal structured base class for Nematics3D domain objects.
@@ -298,8 +327,8 @@ class ClassBase:
         last_index = len(entries) - 1
         for index, (attr_name, target) in enumerate(entries):
             is_last = index == last_index
-            branch = "└─ " if is_last else "├─ "
-            child_prefix = _prefix + ("   " if is_last else "│  ")
+            branch = "â””â”€ " if is_last else "â”œâ”€ "
+            child_prefix = _prefix + ("   " if is_last else "â”‚  ")
 
             if target is None:
                 lines.append(f"{_prefix}{branch}{attr_name}: <none>")
@@ -631,3 +660,8 @@ class ClassBase:
         cls_name = type(self).__name__
         msg = f"{cls_name}({self.name!r})"
         return msg
+
+
+
+
+

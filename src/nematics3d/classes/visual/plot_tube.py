@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence, Any, Mapping, ClassVar
 import numpy as np
@@ -374,9 +374,6 @@ class PlotTube(PlotGlyph):
         k
         for k, v in __attrs__.items()
         if not v.startswith("Property:") and k not in PlotGlyph.__slots__
-    )
-    _impl_attrs_reapply_opts_after_raw = (
-        PlotGlyph._impl_attrs_reapply_opts_after_raw | {"line_index"}
     )
 
     # -------------------------------

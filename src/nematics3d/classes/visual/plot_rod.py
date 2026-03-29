@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence, Any, Mapping, ClassVar
 import numpy as np
@@ -378,11 +378,7 @@ class PlotRod(PlotGlyph):
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
         "length"
     ]
-    _impl_attrs_reapply_opts_after_raw = (
-        PlotGlyph._impl_attrs_reapply_opts_after_raw | {"orient"}
-    )
-    _impl_validators = {
-        **PlotGlyph._impl_validators,
+    _validators_local = {
         "orient": lambda v, d: as_points(v, name=d),
     }
 
@@ -413,7 +409,7 @@ class PlotRod(PlotGlyph):
         **kwargs,
     ):
 
-        orient = self.__class__._impl_validators["orient"](
+        orient = self.__class__._validators_local["orient"](
             orient,
             self.show_attr_desc("raw_orient"),
         )
