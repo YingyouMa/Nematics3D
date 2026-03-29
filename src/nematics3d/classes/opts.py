@@ -12,7 +12,7 @@ def merge_opts(opts, kwargs, prefix="", logger=None):
     Merge prefixed keyword arguments into a dataclass-based option object.
 
     This function extracts entries from ``kwargs`` whose keys start with the
-    specified ``prefix``, strips the prefix, and applies the resulting key–value
+    specified ``prefix``, strips the prefix, and applies the resulting keyâ€“value
     pairs to a dataclass instance ``opts``.  All successfully matched keys are
     consumed (removed) from ``kwargs``.
 
@@ -106,11 +106,11 @@ def merge_opts_all(prefix_to_opts: dict, kwargs: dict, name: str, logger=None):
     This mechanism makes it possible to cleanly support large, modular
     configuration schemas such as:
 
-    - ``opts_*``   → simulation options
-    - ``vis_*``    → visualization options
-    - ``io_*``     → import/export settings
-    - ``smooth_*`` → smoothing and filtering parameters
-    - ``""`` (empty prefix) → default or “main” configuration block
+    - ``opts_*``   â†’ simulation options
+    - ``vis_*``    â†’ visualization options
+    - ``io_*``     â†’ import/export settings
+    - ``smooth_*`` â†’ smoothing and filtering parameters
+    - ``""`` (empty prefix) â†’ default or â€œmainâ€ configuration block
 
     The function is also compatible with the simple case where only a single
     dataclass is used.  In that case the caller may pass ``{"": obj}`` so that
@@ -333,7 +333,7 @@ def load_json_into_opts(
 
     unknown_keys = []
 
-    with opts._helper_internal_update():
+    with opts.act_internal_update():
         for key in cls.__attrs__:
             setattr(opts, key, UNSET)
 

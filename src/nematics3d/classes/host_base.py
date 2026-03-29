@@ -38,7 +38,7 @@ applied to actual host state.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 import datetime
 from pathlib import Path
 from types import MappingProxyType
@@ -166,9 +166,14 @@ class OptsBase:
     # ------------------------------------------------------------------
 
     def __post_init__(self) -> None:
-        """Validate dataclass field naming against the OptsBase declaration convention."""
-        for field_name in type(self).__dataclass_fields__:
-            if field_name in type(self).__attrs__:
+        """Initialize and validate OptsBase internal dataclass storage."""
+        object.__setattr__(self, "impl_host_ref", None)
+        object.__setattr__(self, "impl_is_functioning", False)
+
+        attrs = type(self).__attrs__
+        for field_info in fields(self):
+            field_name = field_info.name
+            if field_name in attrs:
                 continue
             if not field_name.startswith("impl_"):
                 raise ValueError(
@@ -184,9 +189,15 @@ class OptsBase:
     @property
     def host(self):
         """Return the attached host object, if the stored weakref is alive."""
-        host_ref = getattr(self, "impl_host_ref", None)
-        return host_ref() if host_ref is not None else None
-
+        host_ref = self.impl_host_ref
+        if host_ref is None:
+            return None
+        if not isinstance(host_ref, weakref.ReferenceType):
+            raise TypeError(
+                "OptsBase.impl_host_ref must be a weakref.ReferenceType when it "
+                "is not None."
+            )
+        return host_ref()
 
     @property
     def defaults_frozen(self) -> Mapping[str, Any]:
@@ -201,7 +212,8 @@ class OptsBase:
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> None:
         """Validate one assignment and forward live option updates to the host."""
         is_functioning = bool(getattr(self, "impl_is_functioning", False))
-        is_has_host = self.host is not None
+        is_has_host = getattr(self, "impl_host_ref", None) is not None
+        # is_has_host = self.host is not None
         is_internal_key = key.startswith("impl_")
 
         if (not is_internal_key) and (key not in type(self).__attrs__):
@@ -301,7 +313,7 @@ class OptsBase:
         return result
 
     @contextmanager
-    def _helper_internal_update(self):
+    def act_internal_update(self):
         """Temporarily suspend the functioning lifecycle state."""
         is_functioning_current = getattr(self, "impl_is_functioning", False)
         object.__setattr__(self, "impl_is_functioning", False)
@@ -1422,6 +1434,3 @@ class HostBase(ClassBase):
             return
 
         super().__setattr__(key, value)
-
-
-

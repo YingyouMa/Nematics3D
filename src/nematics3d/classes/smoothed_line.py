@@ -1,16 +1,16 @@
-import numpy as np
-from typing import Literal
-from scipy.signal import savgol_filter
-from scipy.interpolate import splprep, splev, interp1d
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, Any
+from typing import Any, Literal, Mapping
 
+import numpy as np
+from scipy.interpolate import interp1d, splev, splprep
+from scipy.signal import savgol_filter
+
+from ..datatypes import Number, UNSET, Unset, as_Number, as_bool, as_points, as_str
 from ..logging_decorator import logging_and_warning_decorator
-from .host_base import OptsBase, HostBase
 from .class_base import ClassBase
+from .host_base import HostBase, OptsBase
 from .opts import cover_value, diff_dict_values
-from ..datatypes import Number, as_Number, as_str, as_bool, UNSET, Unset, as_points
 
 # fmt: off
 @dataclass(slots=True, repr=False)
@@ -28,7 +28,7 @@ class OptsSmooth(OptsBase):
     - `window_ratio`, `window_length`: two coupled ways of setting the smoothing
       window size.
     - `order`: polynomial order used by the Savitzky-Golay filter.
-    - `N_out_ratio`: output resampling density relative to the processed input.
+    - `num_out_ratio`: output resampling density relative to the processed input.
     - `mode`: smoothing/interpolation mode, either `"interp"` or `"wrap"`.
     - `min_line_length`: minimum processed line length required before smoothing
       is allowed.
@@ -49,7 +49,7 @@ class OptsSmooth(OptsBase):
     window_ratio:               Number | None | Unset               = UNSET
     window_length:              int | None | Unset                  = UNSET
     order:                      int | Unset                         = UNSET
-    N_out_ratio:                Number | Unset                      = UNSET
+    num_out_ratio:                Number | Unset                      = UNSET
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
     min_line_length:            int | Unset                         = UNSET
 
@@ -58,7 +58,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         "window ratio for smoothing: line_length / window_length",
         "window_length":        "explicit window length for smoothing",
         "order":                "smoothing polynomial order",
-        "N_out_ratio":          "ratio between output and input #points in smoothing",
+        "num_out_ratio":          "ratio between output and input #points in smoothing",
         "mode":                 "smoothing mode (interp or wrap)",
         "min_line_length":      "minimum line length to be smoothed",
     }
@@ -68,18 +68,18 @@ class OptsSmooth(OptsBase):
         "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
         "window_length":        lambda v, d: None if v is None else as_Number(v, name=d, is_int=True),
         "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
-        "N_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "num_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
         "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
     }
-    
+
     impl_defaults_frozen = MappingProxyType({
         **(OptsBase.impl_defaults_frozen),
         "tag":                  "smooth options",
         "window_ratio":         None,
         "window_length":        None,
         "order":                3,
-        "N_out_ratio":          1,
+        "num_out_ratio":          1,
         "mode":                 "interp",
         "min_line_length":      50,
     })
@@ -95,7 +95,6 @@ class SmoothingConfigError(ValueError):
     is intended to be caught locally and converted to RECOVERY + fallback.
     """
 
-    pass
 
 
 # SmoothedLine keeps the HostBase commit pipeline but specializes it for
@@ -120,8 +119,8 @@ class SmoothedLine(HostBase):
     - `opts`: the paired OptsSmooth controlling the smoothing pipeline.
     - `raw_coords`: the original input polyline coordinates.
     - `calc_coords`: the processed coordinates currently entering the smoother.
-    - `calc_N_init`: the number of processed input points currently used.
-    - `calc_N_out`: the number of output points requested after smoothing.
+    - `calc_num_init`: the number of processed input points currently used.
+    - `calc_num_out`: the number of output points requested after smoothing.
     - `result`: the final output coordinates, either smoothed or fallback raw
       coordinates.
     - `entity_tck`: the spline cache used for tangent evaluation, or None when
@@ -174,16 +173,23 @@ class SmoothedLine(HostBase):
             "is_public_settable": False,
             "is_protected": False,
         },
-        "calc_N_init": {
+        "calc_num_init": {
             "doc": "Read-only: Number of processed input points currently entering the smoothing pipeline.",
             "kind": "property",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
-        "calc_N_out": {
-            "doc": "Number of output points (after smoothing)",
-            "kind": "calc",
+        "calc_num_out": {
+            "doc": "Read-only: Number of output points requested after smoothing.",
+            "kind": "property",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "impl_calc_num_out": {
+            "doc": "Internal storage for the requested output point count.",
+            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
@@ -279,6 +285,7 @@ class SmoothedLine(HostBase):
 
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "calc_coords", self.raw_coords)
+        object.__setattr__(self, "impl_calc_num_out", len(self.raw_coords))
 
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "state_is_window_warning", is_window_warning)
@@ -304,7 +311,7 @@ class SmoothedLine(HostBase):
         object.__setattr__(self, "calc_coords", self.raw_coords)
 
     @property
-    def calc_N_init(self):
+    def calc_num_init(self):
         coords = getattr(self, "calc_coords", None)
         if coords is None:
             coords = getattr(self, "raw_coords", None)
@@ -313,7 +320,7 @@ class SmoothedLine(HostBase):
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "calc_result", self.calc_coords)
-        object.__setattr__(self, "calc_N_out", self.calc_N_init)
+        object.__setattr__(self, "impl_calc_num_out", self.calc_num_init)
         object.__setattr__(self, "entity_tck", None)
         object.__setattr__(
             self,
@@ -344,7 +351,7 @@ class SmoothedLine(HostBase):
             if "window_ratio" not in kwargs and "window_length" in kwargs:
                 object.__setattr__(self.opts, "window_ratio", None)
 
-        with self.opts._helper_internal_update():
+        with self.opts.act_internal_update():
             cover_value(
                 self.opts,
                 is_allow_cover_target_set=True,
@@ -354,7 +361,7 @@ class SmoothedLine(HostBase):
 
         self._helper_resolve_coords()
 
-        msg = f"Start to smooth line {self.name!r} with {self.calc_N_init} points.\n"
+        msg = f"Start to smooth line {self.name!r} with {self.calc_num_init} points.\n"
         msg += f"window length = {self.opts.window_length}\n"
         msg += f"window ratio = {self.opts.window_ratio}\n"
         msg += f"minimum smoothed line length = {self.opts.min_line_length}"
@@ -368,12 +375,12 @@ class SmoothedLine(HostBase):
                 object.__setattr__(
                     self.opts,
                     "window_length",
-                    int(self.calc_N_init / self.opts.window_ratio / 2) * 2 + 1,
+                    int(self.calc_num_init / self.opts.window_ratio / 2) * 2 + 1,
                 )
                 object.__setattr__(
                     self.opts,
                     "window_ratio",
-                    self.calc_N_init / self.opts.window_length,
+                    self.calc_num_init / self.opts.window_length,
                 )
             else:
                 if self.opts.window_ratio is not None and self.state_is_window_warning:
@@ -388,21 +395,21 @@ class SmoothedLine(HostBase):
                 object.__setattr__(
                     self.opts,
                     "window_ratio",
-                    self.calc_N_init / self.opts.window_length,
+                    self.calc_num_init / self.opts.window_length,
                 )
 
-            if self.calc_N_init < self.opts.min_line_length:
+            if self.calc_num_init < self.opts.min_line_length:
                 reason = (
                     f"the minimum length of line smoothing is set to be {self.opts.min_line_length} "
-                    f"points, while the current line has {self.calc_N_init} points"
+                    f"points, while the current line has {self.calc_num_init} points"
                 )
                 self._helper_fallback_no_smooth(reason)
                 raise SmoothingConfigError(reason)
 
-            if self.opts.window_length >= self.calc_N_init:
+            if self.opts.window_length >= self.calc_num_init:
                 reason = (
                     f"Filter window length {self.opts.window_length} should not be larger than "
-                    f"line length {self.calc_N_init}"
+                    f"line length {self.calc_num_init}"
                 )
                 raise SmoothingConfigError(reason)
 
@@ -415,10 +422,6 @@ class SmoothedLine(HostBase):
 
             logger.debug(
                 f"Smoothing window length is finally chosen as {self.opts.window_length}"
-            )
-
-            object.__setattr__(
-                self, "calc_N_out", int(self.calc_N_init * self.opts.N_out_ratio)
             )
 
             line_points = savgol_filter(
@@ -436,11 +439,21 @@ class SmoothedLine(HostBase):
                 # endpoint sample is overwritten in-place by `splprep(per=1)`.
                 line_points_spline = np.concatenate((line_points, [line_points[0]]))
                 uspline = np.linspace(0.0, 1.0, len(line_points_spline))
-                u_out = np.linspace(0.0, 1.0, self.calc_N_out, endpoint=False)
+                object.__setattr__(
+                    self,
+                    "impl_calc_num_out",
+                    int(self.calc_num_init * self.opts.num_out_ratio),
+                )
+                u_out = np.linspace(0.0, 1.0, self.calc_num_out, endpoint=False)
             else:
                 line_points_spline = line_points
-                uspline = np.linspace(0.0, 1.0, self.calc_N_init)
-                u_out = np.linspace(0.0, 1.0, self.calc_N_out)
+                uspline = np.linspace(0.0, 1.0, self.calc_num_init)
+                object.__setattr__(
+                    self,
+                    "impl_calc_num_out",
+                    int(self.calc_num_init * self.opts.num_out_ratio),
+                )
+                u_out = np.linspace(0.0, 1.0, self.calc_num_out)
 
             tck = splprep(
                 line_points_spline.T.copy(),
@@ -498,11 +511,30 @@ class SmoothedLine(HostBase):
             )
 
         t_hat = dr_dx / length
+        if not is_return_coord:
+            return t_hat
 
-        if is_return_coord:
-            coord = np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
+        coord = np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
+        return t_hat, coord
 
-        return (t_hat, coord) if is_return_coord else t_hat
+    def act_calc_pos(self, u_percent):
+        tck = getattr(self, "entity_tck", None)
+        if tck is None:
+            raise RuntimeError(
+                "Spline cache `entity_tck` is missing."
+                "Probably the line is not properly initialized or successfully smoothed."
+            )
+
+        u_percent = as_Number(
+            u_percent,
+            value_range=(0, 100),
+            name="Continuous spline parameter along the curve",
+        )
+        u_percent /= 100
+        if self.opts.mode == "wrap":
+            u_percent = np.mod(u_percent, 1.0)
+
+        return np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
 
     # -------------------------------
     # Array-style access
@@ -519,11 +551,23 @@ class SmoothedLine(HostBase):
         return iter(self.calc_result)
 
     def __len__(self) -> int:
-        return self.calc_N_out
+        return self.calc_num_out
 
     # -------------------------------
     # Readable properties
     # -------------------------------
+
+    @property
+    def calc_num_out(self):
+        num_out = getattr(self, "impl_calc_num_out", None)
+        if num_out is not None:
+            return num_out
+
+        result = getattr(self, "calc_result", None)
+        if result is not None:
+            return len(result)
+
+        return self.calc_num_init
 
     @property
     def result(self):
@@ -548,14 +592,14 @@ class SmoothedLine(HostBase):
 #     """
 #     SmoothedLineFunc represents a sampled function of `u_percent` along a
 #     smoothed line.
-# 
+#
 #     Users provide a numerical sampling function and a set of `u_percent`
 #     sampling points. The class evaluates the function at those points, stores
 #     the sampled values and metrics, and builds an interpolator for later
 #     evaluation.
-# 
+#
 #     Important readable attributes:
-# 
+#
 #     - `owner`: the SmoothedLine currently associated with this sampled function.
 #     - `_raw_func`: the numerical sampling function.
 #     - `_raw_u_samples`: the normalized sample locations in `u_percent`.
@@ -565,25 +609,25 @@ class SmoothedLine(HostBase):
 #     - `_calc_values`: sampled values returned by the numerical function.
 #     - `_calc_metrics`: optional per-sample metrics returned by the function.
 #     - `_entity_interpolator`: the interpolator built from the sampled values.
-# 
+#
 #     Common inspection helpers:
-# 
+#
 #     - `show_readable_attrs()`: show the main readable stored fields.
 #     - `show_attr_desc(name)`: describe a specific readable attribute.
 #     - `show_relations()`: show object relations such as the bound owner.
-# 
+#
 #     Common user actions:
-# 
+#
 #     - `act_refresh(...)`: rebuild the sampled values and interpolator.
 #     - `interpolate(u_percent)`: evaluate the interpolated function.
 #     - `__call__(u_percent)`: shorthand for `interpolate(...)`.
-# 
+#
 #     Representation:
-# 
+#
 #     - `str(obj)` returns the short ClassBase-style identity.
 #     - `repr(obj)` returns a compact summary including sample count and mode.
 #     """
-# 
+#
 #     __attrs__ = {
 #         **(ClassBase.__attrs__),
 #         "raw_name": "The name identifier of this smoothed-line function.",
@@ -595,18 +639,18 @@ class SmoothedLine(HostBase):
 #         "_calc_metrics": "Per-sample metrics returned by the numerical function, or None if unavailable.",
 #         "_entity_interpolator": "Interpolator object built from the sampled values.",
 #     }
-# 
+#
 #     __relations__ = {
 #         **(ClassBase.__relations__),
 #         "owner": "The SmoothedLine instance that this function is associated with.",
 #     }
-# 
+#
 #     __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
-# 
+#
 #     # -------------------------------
 #     # Validation and owner-state helpers
 #     # -------------------------------
-# 
+#
 #     @staticmethod
 #     def _helper_validate_u_samples(u_samples):
 #         u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
@@ -622,7 +666,7 @@ class SmoothedLine(HostBase):
 #                 "`u_samples` must remain non-empty after sorting and deduplication."
 #             )
 #         return u_samples
-# 
+#
 #     def _helper_get_owner_mode_from(self, opts_dict):
 #         owner_mode = None if opts_dict is None else opts_dict.get("mode", None)
 #         return (
@@ -632,11 +676,11 @@ class SmoothedLine(HostBase):
 #                 owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
 #             )
 #         )
-# 
+#
 #     # -------------------------------
 #     # Initialization
 #     # -------------------------------
-# 
+#
 #     @logging_and_warning_decorator(start_finish_level=5)
 #     def __init__(
 #         self,
@@ -648,14 +692,14 @@ class SmoothedLine(HostBase):
 #         logger=None,
 #     ):
 #         super().__init__(name=name, name_replace="smoothed line function")
-# 
+#
 #         if not isinstance(owner, SmoothedLine):
 #             raise TypeError("`owner` for SmoothedLineFunc must be a SmoothedLine.")
 #         if not callable(func):
 #             raise TypeError("`func` for SmoothedLineFunc must be callable.")
-# 
+#
 #         u_samples = self._helper_validate_u_samples(u_samples)
-# 
+#
 #         object.__setattr__(self, "_raw_func", func)
 #         object.__setattr__(self, "_raw_u_samples", u_samples)
 #         object.__setattr__(
@@ -668,32 +712,32 @@ class SmoothedLine(HostBase):
 #         object.__setattr__(self, "_calc_metrics", None)
 #         object.__setattr__(self, "_entity_interpolator", None)
 #         self.act_bind_relation_base("owner", owner, is_weak=True)
-# 
+#
 #         self.act_refresh(u_samples=u_samples)
-# 
+#
 #     # -------------------------------
 #     # Sampling and refresh helpers
 #     # -------------------------------
-# 
+#
 #     @logging_and_warning_decorator(start_finish_level=5)
 #     def _helper_warn_if_owner_opts_changed(self, logger=None):
 #         owner = self.owner
 #         if owner is None:
 #             return
-# 
+#
 #         opts_now = owner.opts.act_asdict()
 #         opts_then = self._raw_owner_opts_snapshot
 #         diff_then, diff_now = diff_dict_values(opts_then, opts_now)
 #         if not diff_then and not diff_now:
 #             return
-# 
+#
 #         logger.warning(
 #             f"Smoothed line function {self.name!r} was sampled with stale owner opts.\n"
 #             f"Recorded opts diff: {diff_then}\n"
 #             f"Current owner opts diff: {diff_now}\n"
 #             "Consider calling `act_refresh(...)` to rebuild the sampled interpolator."
 #         )
-# 
+#
 #     @logging_and_warning_decorator(start_finish_level=5)
 #     def act_refresh(self, u_samples=None, logger=None):
 #         owner = self.owner
@@ -701,14 +745,14 @@ class SmoothedLine(HostBase):
 #             raise RuntimeError(
 #                 "Cannot refresh a SmoothedLineFunc without a live owner."
 #             )
-# 
+#
 #         if u_samples is not None:
 #             object.__setattr__(
 #                 self,
 #                 "_raw_u_samples",
 #                 self._helper_validate_u_samples(u_samples),
 #             )
-# 
+#
 #         values = []
 #         metrics = []
 #         has_metric = False
@@ -721,13 +765,13 @@ class SmoothedLine(HostBase):
 #             values.append(np.asarray(value))
 #             metrics.append(metric)
 #             has_metric = has_metric or (metric is not None)
-# 
+#
 #         values = np.stack(values, axis=0)
 #         metrics = metrics if has_metric else None
-# 
+#
 #         opts_snapshot = owner.opts.act_asdict()
 #         mode = self._helper_get_owner_mode_from(opts_snapshot)
-# 
+#
 #         if mode == "wrap":
 #             u_interp = np.concatenate(
 #                 [
@@ -740,7 +784,7 @@ class SmoothedLine(HostBase):
 #         else:
 #             u_interp = self._raw_u_samples
 #             values_interp = values
-# 
+#
 #         interpolator = interp1d(
 #             u_interp,
 #             values_interp,
@@ -750,16 +794,16 @@ class SmoothedLine(HostBase):
 #             fill_value="extrapolate",
 #             assume_sorted=True,
 #         )
-# 
+#
 #         object.__setattr__(self, "_raw_owner_opts_snapshot", dict(opts_snapshot))
 #         object.__setattr__(self, "_calc_values", values)
 #         object.__setattr__(self, "_calc_metrics", metrics)
 #         object.__setattr__(self, "_entity_interpolator", interpolator)
-# 
+#
 #     # -------------------------------
 #     # Public evaluation actions
 #     # -------------------------------
-# 
+#
 #     def interpolate(self, u_percent):
 #         self._helper_warn_if_owner_opts_changed()
 #         u_percent = np.asarray(u_percent, dtype=float)
@@ -767,14 +811,14 @@ class SmoothedLine(HostBase):
 #         if mode == "wrap":
 #             u_percent = np.mod(u_percent, 100.0)
 #         return self._entity_interpolator(u_percent)
-# 
+#
 #     def __call__(self, u_percent):
 #         return self.interpolate(u_percent)
-# 
+#
 #     # -------------------------------
 #     # Representation
 #     # -------------------------------
-# 
+#
 #     def __repr__(self) -> str:
 #         cls_name = self.__class__.__name__
 #         mode = self._helper_get_owner_mode_from(self._raw_owner_opts_snapshot)
@@ -782,12 +826,12 @@ class SmoothedLine(HostBase):
 #             f"{cls_name}({self.name!r}), num_samples={len(self._raw_u_samples)}, "
 #             f"mode={mode!r}"
 #         )
-# 
+#
 #     # ==================== OVERRIDE ====================
 #     # SmoothedLineFunc overrides the default string form to keep the short
 #     # ClassBase-style identity view for compact display.
 #     # ==================================================
-# 
+#
 #     def __str__(self) -> str:
 #         return ClassBase.__str__(self)
-# 
+#
