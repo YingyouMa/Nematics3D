@@ -59,12 +59,18 @@ from .opts import (
 
 
 # HostBase declaration conventions for subclasses:
-# - host-side managed fields should normally use only these prefixes:
-#   `raw_`, `state_`, `calc_`, `entity_`, and `impl_`.
+# - The strong rule is that host-side independent/input variables may only live
+#   in `raw_...`, `state_...`, or the paired opts system (`opts`,
+#   `opts_defaults`, `opts_backup`).
 # - `raw_` fields are canonical stored public host data fields and may expose
 #   a shortened public alias without the prefix.
 # - `state_` fields represent writable host runtime state inputs that remain
 #   part of the managed host schema and affect later computation.
+# - Changing a `raw_`, `state_`, or opts field is not merely local assignment;
+#   it may trigger validation, opts reapplication, recomputation, wrapped-host
+#   forwarding, or sync behavior through the host commit pipeline.
+# - Other host-side fields should normally be treated as dependent/derived or
+#   internal values rather than as user-controlled inputs.
 # - `calc_` fields represent derived host-side calculated data. They must be
 #   read-only from the public surface. When a calculated view should behave as
 #   a property, prefer registering it as `kind="property"` instead of exposing
