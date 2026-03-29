@@ -267,7 +267,6 @@ class OptsBase:
         self,
         defaults: Mapping[str, Any] | None = None,
         is_allow_unset: bool = False,
-        *,
     ) -> None:
         """Fill ``UNSET`` values by defaults, then enter the functioning state."""
 
