@@ -73,7 +73,7 @@ from .opts import (
 #   internal values rather than as user-controlled inputs.
 # - `calc_` fields represent derived host-side calculated data. They must be
 #   read-only from the public surface. When a calculated view should behave as
-#   a property, prefer registering it as `kind="property"` instead of exposing
+#   a property, prefer a direct-named Python `@property` instead of exposing
 #   the storage field itself as modifiable state.
 # - `entity_` fields represent attached external/runtime entities such as
 #   cached engine objects or UI/render handles. They must be treated as
@@ -477,14 +477,12 @@ class HostBase(ClassBase):
         **ClassBase.__attr_defs__,
         "opts": {
             "doc": "The Opts instance controlling options.",
-            "kind": "opts",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "opts_defaults": {
             "doc": "The default option settings.",
-            "kind": "opts",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
@@ -494,42 +492,36 @@ class HostBase(ClassBase):
                 "A dictionary storing potentially useful options, indexed by "
                 "timestamp or a manual key."
             ),
-            "kind": "opts",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "impl_sync_func": {
             "doc": "A dictionary of callback functions for post-commit synchronization.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "impl_attrs_wrapped": {
             "doc": "Protected attributes under wrapping.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "impl_attrs_protected": {
             "doc": "Additional protected attributes declared directly by this host.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "impl_enrich_kwargs_wrapped_func": {
             "doc": "Callback functions that enrich forwarded kwargs for wrapped hosts.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
         },
         "impl_enrich_kwargs_sync_func": {
             "doc": "Callback functions that enrich sync kwargs before sync execution.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
@@ -560,7 +552,6 @@ class HostBase(ClassBase):
             "doc": (
                 "Read-only union of wrapped attrs and host-declared " "protected attrs."
             ),
-            "kind": "property",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
@@ -582,6 +573,45 @@ class HostBase(ClassBase):
     # Initialization
     # ------------------------------------------------------------------
 
+    def _helper_check_attr_naming(self) -> None:
+        """Validate HostBase managed-field naming against the host conventions."""
+        bridge_names = {"opts", "opts_defaults", "opts_backup"}
+        managed_prefixes = ("raw_", "state_", "calc_", "entity_", "impl_")
+
+        for attr_name, attr_info in self.impl_attrs.items():
+            is_public_settable = bool(attr_info.get("is_public_settable", False))
+
+            if attr_name in bridge_names:
+                continue
+
+            if attr_name.startswith(("raw_", "state_")):
+                continue
+
+            if attr_name.startswith(("calc_", "entity_", "impl_")):
+                if is_public_settable:
+                    raise ValueError(
+                        f"HostBase field {attr_name!r} must not be public settable."
+                    )
+                continue
+
+            if (
+                self._helper_is_relation_attr(attr_name)
+                or self._helper_is_property_attr(attr_name)
+                or self._helper_is_extra_attr(attr_name)
+            ):
+                if attr_name.startswith(managed_prefixes):
+                    raise ValueError(
+                        f"HostBase field {attr_name!r} should use a direct public "
+                        "name instead of a managed-field prefix."
+                    )
+                continue
+
+            raise ValueError(
+                f"HostBase managed field {attr_name!r} must be declared as raw_, "
+                f"state_, calc_, entity_, impl_, a relation/property/extra direct "
+                "name, or an opts bridge field."
+            )
+
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.__init__ because a host must bind a paired
     # OptsBase instance and initialize host-side runtime stores in addition to
@@ -598,6 +628,7 @@ class HostBase(ClassBase):
     ):
         # Initialize the ClassBase identity and base relation skeleton first.
         super().__init__(name=name, name_replace=name_replace)
+        self._helper_check_attr_naming()
 
         # Split out host-side initialization kwargs so opt kwargs can be
         # merged into the paired opts object separately.
@@ -793,7 +824,7 @@ class HostBase(ClassBase):
         for key in list(kwargs):
             is_host_attr = (
                 (key in self.impl_attrs)
-                and (self.impl_attrs[key]["kind"] in {"raw", "state"})
+                and (key.startswith("raw_") or key.startswith("state_"))
             ) or (f"raw_{key}" in self.impl_attrs)
             if is_host_attr:
                 kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(
@@ -1158,12 +1189,16 @@ class HostBase(ClassBase):
         attrs_properties = []
 
         for attr_name, attr_info in self.impl_attrs.items():
-            if attr_info["kind"] == "property":
+            if self._helper_is_property_attr(attr_name):
                 if attr_info.get("is_public_settable", False):
                     attrs_properties.append(attr_name)
                 continue
 
-            if attr_info["kind"] not in {"raw", "state", "extra"}:
+            if not (
+                attr_name.startswith("raw_")
+                or attr_name.startswith("state_")
+                or self._helper_is_extra_attr(attr_name)
+            ):
                 continue
             if not attr_info["is_public_settable"]:
                 continue
@@ -1172,7 +1207,7 @@ class HostBase(ClassBase):
             if attr_name in attrs_forbidden:
                 continue
 
-            if attr_info["kind"] == "extra":
+            if self._helper_is_extra_attr(attr_name):
                 attrs_extra.append(attr_name)
                 continue
 
@@ -1279,20 +1314,14 @@ class HostBase(ClassBase):
             try:
                 attr = as_str(attr, name=attr_name)
                 if attr.startswith("raw_"):
-                    if (
-                        attr in self.impl_attrs
-                        and self.impl_attrs[attr]["kind"] == "raw"
-                    ):
+                    if attr in self.impl_attrs:
                         target_set.update([attr, attr[4:]])
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public host attr."
                         )
                 elif attr.startswith("state_"):
-                    if (
-                        attr in self.impl_attrs
-                        and self.impl_attrs[attr]["kind"] == "state"
-                    ):
+                    if attr in self.impl_attrs:
                         target_set.add(attr)
                     else:
                         raise AttributeError(

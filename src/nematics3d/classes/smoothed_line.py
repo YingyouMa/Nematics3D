@@ -96,7 +96,6 @@ class SmoothingConfigError(ValueError):
     """
 
 
-
 # SmoothedLine keeps the HostBase commit pipeline but specializes it for
 # one-dimensional line smoothing and spline-based tangent evaluation.
 #
@@ -159,68 +158,64 @@ class SmoothedLine(HostBase):
             "doc": "The name identifier of the original line",
         },
         "raw_coords": {
-            "doc": "Raw input line coordinates (shape: N x D)",
-            "kind": "raw",
-            "validator": lambda v, d: as_points(v, name=d, dim=None),
-            "is_public_settable": True,
-            "is_protected": False,
-            "is_reapply_opts_after_raw": True,
+            "doc":                        "Raw input line coordinates (shape: N x D)",
+            "validator":                  lambda v, d: as_points(v, name=d, dim=None),
+            "is_public_settable":         True,
+            "is_protected":               False,
+            "is_reapply_opts_after_raw":  True,
         },
         "calc_coords": {
-            "doc": "The processed coordinates actually sent into the smoothing pipeline",
-            "kind": "calc",
-            "validator": None,
+            "doc":                "The processed coordinates actually sent into the smoothing pipeline",
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "calc_num_init": {
-            "doc": "Read-only: Number of processed input points currently entering the smoothing pipeline.",
-            "kind": "property",
-            "validator": None,
+            "doc":                "Read-only: Number of processed input points currently entering the smoothing pipeline.",
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "calc_num_out": {
-            "doc": "Read-only: Number of output points requested after smoothing.",
-            "kind": "property",
-            "validator": None,
+            "doc":                "Read-only: Number of output points requested after smoothing.",
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "impl_calc_num_out": {
-            "doc": "Internal storage for the requested output point count.",
-            "kind": "impl",
-            "validator": None,
+            "doc":                "Internal storage for the requested output point count.",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "calc_result": {
-            "doc": "The smoothed output coordinates (shape: M x D)",
-            "kind": "calc",
-            "validator": None,
+            "doc":                "The smoothed output coordinates (shape: M x D)",
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "entity_tck": {
-            "doc": "B-spline representation (tck) used for evaluating curve derivatives",
-            "kind": "entity",
-            "validator": None,
+            "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "calc_is_smoothed": {
-            "doc": "Boolean flag indicating whether smoothing was applied",
-            "kind": "state",
-            "validator": None,
+            "doc":                "Boolean flag indicating whether smoothing was applied",
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "state_is_window_warning": {
-            "doc": "Whether to present the warning when both window_length and window_ratio are provided.",
-            "kind": "state",
-            "validator": lambda v, d: as_bool(v, name=d),
+            "doc":                "Whether to present the warning when both window_length and window_ratio are provided.",
+            "validator":          lambda v, d: as_bool(v, name=d),
             "is_public_settable": True,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "calc_status": {
             "doc": (
@@ -231,27 +226,30 @@ class SmoothedLine(HostBase):
                 "or numerical failures), this field stores a human-readable "
                 "string describing the specific reason."
             ),
-            "kind": "state",
-            "validator": None,
+            "kind":               "calc",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
         "result": {
-            "doc": "Read-only: Final output coordinates produced by the smoothing pipeline.",
-            "kind": "property",
-            "validator": None,
+            "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
+            "validator":          None,
             "is_public_settable": False,
-            "is_protected": False,
+            "is_protected":       False,
         },
     }
     # fmt: on
 
-    __slots__ = tuple(
-        key
-        for key, attr_info in __attr_defs__.items()
-        if attr_info["kind"] != "property" and key not in HostBase.__slots__
+    __slots__ = (
+        "raw_coords",
+        "calc_coords",
+        "impl_calc_num_out",
+        "calc_result",
+        "entity_tck",
+        "calc_is_smoothed",
+        "state_is_window_warning",
+        "calc_status",
     )
-
     # -------------------------------
     # Initialization
     # -------------------------------
@@ -645,7 +643,16 @@ class SmoothedLine(HostBase):
 #         "owner": "The SmoothedLine instance that this function is associated with.",
 #     }
 #
-#     __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
+#     __slots__ = (
+#         "raw_coords",
+#         "calc_coords",
+#         "impl_calc_num_out",
+#         "calc_result",
+#         "entity_tck",
+#         "calc_is_smoothed",
+#         "state_is_window_warning",
+#         "calc_status",
+#     )
 #
 #     # -------------------------------
 #     # Validation and owner-state helpers

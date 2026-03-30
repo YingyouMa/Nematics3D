@@ -41,9 +41,9 @@ from ..logging_decorator import logging_and_warning_decorator
 #   `registry`.
 # - relations in the current ClassBase protocol are one-to-one links only;
 #   do not use relations to represent one-to-many or collection-style data.
-# - property metadata should also be registered in `__attr_defs__` with
-#   `kind="property"`, while the actual getter/setter behavior remains a
-#   normal Python `@property` on the class.
+# - property metadata should also be registered in `__attr_defs__`, while the
+#   actual getter/setter behavior remains a normal Python `@property` on the
+#   class.
 # - extra attrs are runtime-registered public fields and should still enter the
 #   managed schema through the provided registration helpers.
 # - for semantic clarity, do not introduce other non-underscore public field
@@ -62,9 +62,9 @@ class ClassBase:
     - ``name`` remains the public readable alias of ``raw_name``
     - ``impl_attrs`` stores the live attribute metadata for this instance
 
-    Each entry in ``impl_attrs`` combines both relatively stable definition data
-    such as ``kind``, ``doc``, and ``validator``, and runtime state such as
-    protection flags or current relation bindings.
+    Each entry in ``impl_attrs`` combines relatively stable definition data
+    such as ``doc`` and ``validator`` with runtime state such as protection
+    flags or current relation bindings.
 
     This class supports ordinary raw/public attribute access, runtime protection
     of registered attributes, dynamic registration of extra attributes, semantic
@@ -77,7 +77,6 @@ class ClassBase:
     __attr_defs__ = {
         "raw_name": {
             "doc": "The underlying string identifier for this instance.",
-            "kind": "raw",
             "validator": as_str,
             "is_public_settable": True,
             "is_protected": False,
@@ -106,7 +105,6 @@ class ClassBase:
         },
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
-            "kind": "impl",
             "validator": None,
             "is_public_settable": False,
             "is_protected": False,
@@ -155,6 +153,22 @@ class ClassBase:
         object.__setattr__(self, "raw_name", name)
         return name
 
+    def _helper_is_impl_attr(self, attr_name: str) -> bool:
+        """Return whether one managed attribute belongs to impl_* storage."""
+        return attr_name.startswith("impl_")
+
+    def _helper_is_relation_attr(self, attr_name: str) -> bool:
+        """Return whether one managed attribute is a relation."""
+        return self.impl_attrs[attr_name].get("kind") == "relation"
+
+    def _helper_is_property_attr(self, attr_name: str) -> bool:
+        """Return whether one managed attribute is backed by a Python property."""
+        return isinstance(getattr(type(self), attr_name, None), property)
+
+    def _helper_is_extra_attr(self, attr_name: str) -> bool:
+        """Return whether one managed attribute was registered as an extra attr."""
+        return bool(self.impl_attrs[attr_name].get("is_extra", False))
+
     # ------------------------------------------------------------------
     # Attribute definition / registration
     # ------------------------------------------------------------------
@@ -171,7 +185,7 @@ class ClassBase:
         for attr_name, attr_info in self.impl_attrs.items():
             if attr_name == is_exclude_name:
                 continue
-            if is_exclude_impl and attr_info["kind"] == "impl":
+            if is_exclude_impl and self._helper_is_impl_attr(attr_name):
                 continue
 
             readable_names.add(attr_name)
@@ -207,7 +221,7 @@ class ClassBase:
         name: str,
         *,
         doc: str,
-        kind: str,
+        kind: str | None = None,
         validator=None,
         is_public_settable: bool,
         is_overwrite: bool = False,
@@ -230,11 +244,12 @@ class ClassBase:
 
         attr_info = {
             "doc": as_str(doc, name=f"Definition doc for {name!r}"),
-            "kind": as_str(kind, name=f"Definition kind for {name!r}"),
             "validator": validator,
             "is_public_settable": bool(is_public_settable),
             "is_protected": False,
         }
+        if kind is not None:
+            attr_info["kind"] = as_str(kind, name=f"Definition kind for {name!r}")
         attr_info.update(extra_def)
         self.impl_attrs[name] = attr_info
         return attr_info
@@ -312,8 +327,8 @@ class ClassBase:
             return lines
 
         entries = []
-        for attr_name, attr_info in self.impl_attrs.items():
-            if attr_info["kind"] != "relation":
+        for attr_name in self.impl_attrs:
+            if not self._helper_is_relation_attr(attr_name):
                 continue
             target = self._helper_resolve_relation_value(attr_name)
             if target is None and (not is_include_none):
@@ -327,8 +342,8 @@ class ClassBase:
         last_index = len(entries) - 1
         for index, (attr_name, target) in enumerate(entries):
             is_last = index == last_index
-            branch = "â””â”€ " if is_last else "â”œâ”€ "
-            child_prefix = _prefix + ("   " if is_last else "â”‚  ")
+            branch = "`- " if is_last else "|- "
+            child_prefix = _prefix + ("   " if is_last else "|  ")
 
             if target is None:
                 lines.append(f"{_prefix}{branch}{attr_name}: <none>")
@@ -377,10 +392,9 @@ class ClassBase:
             )
 
         attr_info = self.impl_attrs[name]
-        if attr_info["kind"] != "relation":
+        if not self._helper_is_relation_attr(name):
             raise AttributeError(
-                f"Cannot bind relation {name!r}: it is registered as kind "
-                f"{attr_info['kind']!r}, not 'relation'."
+                f"Cannot bind relation {name!r}: it is not registered as a relation."
             )
 
         if doc is not None:
@@ -411,10 +425,9 @@ class ClassBase:
                 f"Cannot unbind relation {name!r}: it is not registered in "
                 f"{type(self).__name__}.impl_attrs."
             )
-        if self.impl_attrs[name]["kind"] != "relation":
+        if not self._helper_is_relation_attr(name):
             raise AttributeError(
-                f"Cannot unbind relation {name!r}: it is registered as kind "
-                f"{self.impl_attrs[name]['kind']!r}, not 'relation'."
+                f"Cannot unbind relation {name!r}: it is not registered as a relation."
             )
 
         self.impl_attrs[name]["relation_value"] = None
@@ -426,7 +439,7 @@ class ClassBase:
         lines = []
 
         for attr_name, attr_info in self.impl_attrs.items():
-            if attr_info["kind"] != "relation":
+            if not self._helper_is_relation_attr(attr_name):
                 continue
 
             target = self._helper_resolve_relation_value(attr_name)
@@ -484,12 +497,11 @@ class ClassBase:
         self._helper_register_attr_def(
             name,
             doc=doc,
-            kind="extra",
             validator=None,
             is_public_settable=True,
             is_overwrite=is_overwrite,
+            is_extra=True,
         )
-
         if is_overwrite or (not hasattr(self, name)):
             object.__setattr__(self, name, default)
 
@@ -500,7 +512,7 @@ class ClassBase:
     def show_attr_desc(self, attr_name: str) -> str:
         """Return the description of a registered attribute or its public alias."""
         if attr_name in self.impl_attrs:
-            if self.impl_attrs[attr_name]["kind"] == "relation":
+            if self._helper_is_relation_attr(attr_name):
                 return f"{attr_name!r}: {self._helper_get_relation_doc(attr_name)}"
             return f"{attr_name!r}: {self.impl_attrs[attr_name]['doc']}"
 
@@ -545,7 +557,7 @@ class ClassBase:
         attr_names = []
         property_names = []
         for attr_name, attr_info in self.impl_attrs.items():
-            if attr_info["kind"] == "property":
+            if self._helper_is_property_attr(attr_name):
                 if attr_info.get("is_public_settable", False):
                     property_names.append(attr_name)
                 continue
@@ -590,7 +602,7 @@ class ClassBase:
         if raw_key in self.impl_attrs:
             return object.__getattribute__(self, raw_key)
 
-        if key in self.impl_attrs and self.impl_attrs[key]["kind"] == "relation":
+        if key in self.impl_attrs and self._helper_is_relation_attr(key):
             return self._helper_resolve_relation_value(key)
 
         cls_name = type(self).__name__
@@ -660,8 +672,3 @@ class ClassBase:
         cls_name = type(self).__name__
         msg = f"{cls_name}({self.name!r})"
         return msg
-
-
-
-
-
