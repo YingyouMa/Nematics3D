@@ -167,41 +167,35 @@ class SmoothedLine(HostBase):
         "calc_coords": {
             "doc":                "The processed coordinates actually sent into the smoothing pipeline",
             "kind":               "calc",
-
             "is_public_settable": False,
 
         },
         "calc_num_init": {
             "doc":                "Read-only: Number of processed input points currently entering the smoothing pipeline.",
             "kind":               "property",
-
             "is_public_settable": False,
 
         },
         "calc_num_out": {
             "doc":                "Read-only: Number of output points requested after smoothing.",
             "kind":               "property",
-
             "is_public_settable": False,
 
         },
         "calc_result": {
             "doc":                "The smoothed output coordinates (shape: M x D)",
             "kind":               "calc",
-
             "is_public_settable": False,
 
         },
         "entity_tck": {
             "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
-
             "is_public_settable": False,
 
         },
         "calc_is_smoothed": {
             "doc":                "Boolean flag indicating whether smoothing was applied",
             "kind":               "calc",
-
             "is_public_settable": False,
 
         },
@@ -221,14 +215,12 @@ class SmoothedLine(HostBase):
                 "string describing the specific reason."
             ),
             "kind":               "calc",
-
             "is_public_settable": False,
 
         },
         "result": {
             "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
             "kind":               "property",
-
             "is_public_settable": False,
 
         },

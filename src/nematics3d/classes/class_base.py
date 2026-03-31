@@ -46,8 +46,10 @@ from ..logging_decorator import logging_and_warning_decorator
 #   class.
 # - only public assignment surfaces need assignment-related flags in
 #   `__attr_defs__`: `raw_...`, `state_...` when subclasses use them, and
-#   writable properties / extra attrs. These fields may carry `validator` and
-#   runtime `is_protected` state.
+#   properties / extra attrs. For properties and extra attrs, register
+#   `is_public_settable` explicitly to declare whether the public surface is
+#   writable. These fields may carry `validator` and runtime `is_protected`
+#   state.
 # - read-only outputs such as `calc_...`, internal storage such as `impl_...`,
 #   and non-public relations should not register no-op `validator` or
 #   `is_protected` entries in the static schema.
@@ -88,13 +90,11 @@ class ClassBase:
         "raw_name": {
             "doc": "The underlying string identifier for this instance.",
             "validator": as_str,
-            "is_public_settable": True,
             "is_protected": False,
         },
         "owner": {
             "doc": "The object that owns this instance.",
             "kind": "relation",
-            "is_public_settable": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -103,7 +103,6 @@ class ClassBase:
         "registry": {
             "doc": "The Registry object where this instance is registered.",
             "kind": "relation",
-            "is_public_settable": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -111,7 +110,6 @@ class ClassBase:
         },
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
-            "is_public_settable": False,
         },
     }
 
@@ -179,6 +177,16 @@ class ClassBase:
         """Return whether one managed attribute was registered as an extra attr."""
         return bool(self.impl_attrs[attr_name].get("is_extra", False))
 
+    def _helper_is_public_settable_attr(self, attr_name: str) -> bool:
+        """Return whether one managed attribute is writable from the public surface."""
+        if attr_name == "raw_name" or attr_name.startswith(("raw_", "state_")):
+            return True
+        if self._helper_is_property_attr(attr_name) or self._helper_is_extra_attr(
+            attr_name
+        ):
+            return bool(self.impl_attrs[attr_name].get("is_public_settable", False))
+        return False
+
     # ------------------------------------------------------------------
     # Attribute definition / registration
     # ------------------------------------------------------------------
@@ -233,7 +241,7 @@ class ClassBase:
         doc: str,
         kind: str | None = None,
         validator=None,
-        is_public_settable: bool,
+        is_public_settable: bool | None = None,
         is_overwrite: bool = False,
         **extra_def,
     ):
@@ -254,10 +262,18 @@ class ClassBase:
 
         attr_info = {
             "doc": as_str(doc, name=f"Definition doc for {name!r}"),
-            "validator": validator,
-            "is_public_settable": bool(is_public_settable),
         }
-        if attr_info["is_public_settable"]:
+        if validator is not None:
+            attr_info["validator"] = validator
+        if is_public_settable is not None:
+            attr_info["is_public_settable"] = bool(is_public_settable)
+
+        is_public_assignable = (
+            name == "raw_name"
+            or name.startswith(("raw_", "state_"))
+            or bool(attr_info.get("is_public_settable", False))
+        )
+        if is_public_assignable:
             attr_info["is_protected"] = False
         if kind is not None:
             attr_info["kind"] = as_str(kind, name=f"Definition kind for {name!r}")
@@ -283,6 +299,11 @@ class ClassBase:
                         "it is not registered in "
                         f"{type(self).__name__}.impl_attrs."
                     )
+            if not self._helper_is_public_settable_attr(target_key):
+                raise AttributeError(
+                    f"Cannot update protection for {attr_name!r}: "
+                    f"{target_key!r} is not a public assignment surface."
+                )
             self.impl_attrs[target_key]["is_protected"] = is_protected
 
     def act_register_protected_attr(self, attrs):
@@ -393,7 +414,6 @@ class ClassBase:
                 name,
                 doc="Newly added relation." if doc is None else doc,
                 kind="relation",
-                is_public_settable=False,
                 is_overwrite=False,
                 is_weak_by_default=True,
                 is_weak=None,
@@ -571,9 +591,9 @@ class ClassBase:
                     property_names.append(attr_name)
                 continue
 
-            if not attr_info["is_public_settable"]:
+            if not self._helper_is_public_settable_attr(attr_name):
                 continue
-            if attr_info["is_protected"]:
+            if attr_info.get("is_protected", False):
                 continue
 
             attr_names.append(attr_name)
@@ -642,7 +662,7 @@ class ClassBase:
                 )
 
         attr_info = attr_info_map[target_key]
-        if not attr_info["is_public_settable"]:
+        if not self._helper_is_public_settable_attr(target_key):
             cls_name = type(self).__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(
@@ -651,7 +671,7 @@ class ClassBase:
                 "which cannot be assigned through the public setattr path."
             )
 
-        if attr_info["is_protected"]:
+        if attr_info.get("is_protected", False):
             cls_name = type(self).__name__
             obj_name = getattr(self, "raw_name", "Uninitialized")
             raise AttributeError(

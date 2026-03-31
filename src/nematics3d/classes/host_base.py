@@ -58,56 +58,25 @@ from .opts import (
 )
 
 
-# HostBase declaration conventions for subclasses:
-# - The strong rule is that host-side independent/input variables may only live
-#   in `raw_...`, `state_...`, or the paired opts system (`opts`,
-#   `opts_defaults`, `opts_backup`).
-# - `raw_` fields are canonical stored public host data fields and may expose
-#   a shortened public alias without the prefix.
-# - `state_` fields represent writable host runtime state inputs that remain
-#   part of the managed host schema and affect later computation.
-# - Changing a `raw_`, `state_`, or opts field is not merely local assignment;
-#   it may trigger validation, opts reapplication, recomputation, wrapped-host
-#   forwarding, or sync behavior through the host commit pipeline.
-# - Other host-side fields should normally be treated as dependent/derived or
-#   internal values rather than as user-controlled inputs.
-# - `calc_` fields represent derived host-side calculated data. They must be
-#   read-only from the public surface. When a calculated view should behave as
-#   a property, prefer a direct-named Python `@property` instead of exposing
-#   the storage field itself as modifiable state.
-# - `entity_` fields represent attached external/runtime entities such as
-#   cached engine objects or UI/render handles. They must be treated as
-#   read-only from the public surface.
-# - if an `entity_` field is really a semantic one-to-one object link, prefer
-#   expressing it as a relation instead of as an `entity_` field.
-# - `impl_` fields represent internal host-side implementation storage and
-#   should not be treated as the normal user-facing surface.
-# - host-side default-value semantics should normally live in the paired opts
-#   system (`opts`, `opts_defaults`, `opts_backup`) rather than in separate
-#   `default_` fields on the host itself.
-# - direct public names on HostBase should usually be reserved for relations,
-#   properties, and the host/opts bridge fields such as `opts`.
-# - Register validators in `__attr_defs__` only for `raw_...`, `state_...`,
-#   and writable properties that intentionally participate in validation.
-# - For `raw_...` and `state_...`, HostBase will call the registered validator
-#   automatically through the normal commit/setattr paths.
-# - For writable properties, HostBase does not automatically call the
-#   property entry's validator from `__attr_defs__`; if you register one for
-#   documentation or reuse, call it explicitly inside the property setter.
-# - Other managed host fields such as `calc_...`, `entity_...`, `impl_...`,
-#   relations, and read-only properties normally do not need validators in
-#   `__attr_defs__`, because the base host assignment pipeline does not
-#   automatically consume them there.
-# - Likewise, `is_protected` in `__attr_defs__` is mainly meaningful for
-#   `raw_...`, `state_...`, and writable properties. For read-only fields,
-#   relations, and other non-public-assignment surfaces, protection should
-#   normally be enforced structurally rather than by setting `is_protected`.
-# - relations in the current HostBase protocol are one-to-one links only;
-#   do not use relations to represent one-to-many or collection-style data.
-# - if a new managed host field is not a relation, property, or opts bridge
-#   field, it should normally be expressed as `raw_...`, `state_...`,
-#   `calc_...`, `entity_...`, or `impl_...` rather than inventing another
-#   public field category.
+# OptsBase developer conventions:
+# - `OptsBase` is the opts-side container for independent user inputs that live
+#   outside the host itself. Its public fields are declared in `__attrs__`.
+# - Public opts fields are inputs, not derived outputs. They may be edited by
+#   users, may carry validators in `impl_validators`, and after finalization
+#   are forwarded back into `host.act_commit(...)`.
+# - Internal opts runtime storage must use the `impl_` prefix. These fields are
+#   implementation details and are not part of the normal public assignment
+#   surface.
+# - Put validation for public opts fields in `impl_validators`. If a public opts
+#   field has no validator, assignment is still allowed; it simply skips local
+#   validation and relies on later host-side logic when functioning.
+# - `impl_attr_flags` stores runtime protection/wrapping flags for public opts
+#   attrs. These flags are runtime state, not class-level schema.
+# - `act_finalize()` freezes the opts lifecycle: remaining `UNSET` values are
+#   filled from defaults, then later public assignment becomes a host commit
+#   request rather than a purely local mutation.
+# - In short: `OptsBase` is where opts-side self-variables live, validate, and
+#   wait to be applied by the owning host.
 
 
 @dataclass(slots=True, repr=False)
@@ -243,8 +212,8 @@ class OptsBase:
     def _helper_setattr_basic(self, key: str, value: Any, *, logger=None) -> None:
         """Validate one assignment and forward live option updates to the host."""
         is_functioning = bool(getattr(self, "impl_is_functioning", False))
-        is_has_host = getattr(self, "impl_host_ref", None) is not None
-        # is_has_host = self.host is not None
+        host = self.host
+        is_has_host = host is not None
         is_internal_key = key.startswith("impl_")
 
         if (not is_internal_key) and (key not in type(self).__attrs__):
@@ -302,15 +271,16 @@ class OptsBase:
             and is_has_host
             and (key in type(self).__attrs__)
         ):
-            self._helper_host_apply(key, value)
+            self._helper_host_apply(key, value, host=host)
             return
 
         object.__setattr__(self, key, value)
 
-    def _helper_host_apply(self, key: str, value: Any) -> None:
+    def _helper_host_apply(self, key: str, value: Any, *, host=None) -> None:
         """Forward one option update through the attached host commit pipeline."""
-        if self.host is not None:
-            self.host.act_commit(**{key: value})
+        host = self.host if host is None else host
+        if host is not None:
+            host.act_commit(**{key: value})
 
     def _helper_finalize_basic(
         self,
@@ -451,6 +421,49 @@ class OptsBase:
         return "\n".join(lines)
 
 
+# HostBase developer conventions:
+# - Think in terms of independent variables and dependent variables.
+# - Independent variables are the public inputs that users are allowed to feed
+#   into the host. In this design they should live in `raw_...`, `state_...`,
+#   or the paired opts object.
+# - `raw_...` stores canonical host-side user inputs and may expose a shortened
+#   public alias without the prefix. `state_...` stores writable runtime input
+#   state that also belongs to the host's managed input surface.
+# - When a `raw_...` or `state_...` field is registered in `__attr_defs__`, it
+#   may carry a `validator`, and it may carry runtime protection flags such as
+#   `is_protected` / `is_wrapped` in `impl_attrs`. These are the host-side
+#   fields that participate directly in the commit pipeline.
+# - Changing a host independent variable is not just local assignment. Through
+#   `act_commit()` it may trigger validation, host storage update, opts
+#   reapplication, sync payload generation, and wrapped-host forwarding.
+# - Writable properties are a special input surface. They use direct public
+#   names rather than prefixes. If a property is intended to accept user input,
+#   register it as `kind="property"` and set `is_public_settable=True`.
+# - A writable property may also register a `validator`, but HostBase will not
+#   call that validator automatically; its setter must do so explicitly.
+# - Dependent variables are values produced by the host from those inputs.
+#   These normally live in `calc_...` or `entity_...`.
+# - `calc_...` means derived/calculated host state. `entity_...` means attached
+#   runtime entities such as caches, render handles, or external engine objects.
+#   Both are output-side storage and should be read-only from the public write
+#   surface.
+# - Because dependent variables are outputs rather than inputs, they normally do
+#   not register `validator`, `is_protected`, or `is_wrapped` in the static
+#   schema.
+# - `impl_...` fields are not domain inputs or outputs; they are internal
+#   execution helpers. Users generally do not need to read them, and they must
+#   never be writable through the public commit/setattr path.
+# - Extra attrs are their own category. They are writable user storage fields,
+#   registered dynamically via the ClassBase helper path, and should not be
+#   treated as part of the host's semantic compute pipeline.
+# - Relations and read-only properties use direct public names, but they are
+#   not input surfaces and therefore should not be modeled like `raw_...` /
+#   `state_...`.
+# - In short: inputs belong in `raw_...`, `state_...`, writable properties, or
+#   opts; outputs belong in `calc_...` / `entity_...`; execution plumbing lives
+#   in `impl_...`; user-attached side storage belongs in extra attrs.
+
+
 class HostBase(ClassBase):
     """
     Shared host controller for objects driven by an associated ``OptsBase``.
@@ -508,35 +521,28 @@ class HostBase(ClassBase):
         **ClassBase.__attr_defs__,
         "opts": {
             "doc": "The Opts instance controlling options.",
-            "is_public_settable": False,
         },
         "opts_defaults": {
             "doc": "The default option settings.",
-            "is_public_settable": False,
         },
         "opts_backup": {
             "doc": (
                 "A dictionary storing potentially useful options, indexed by "
                 "timestamp or a manual key."
             ),
-            "is_public_settable": False,
         },
         "impl_sync_func": {
             "doc": "A dictionary of callback functions for post-commit synchronization.",
-            "is_public_settable": False,
         },
         "impl_enrich_kwargs_wrapped_func": {
             "doc": "Callback functions that enrich forwarded kwargs for wrapped hosts.",
-            "is_public_settable": False,
         },
         "impl_enrich_kwargs_sync_func": {
             "doc": "Callback functions that enrich sync kwargs before sync execution.",
-            "is_public_settable": False,
         },
         "wrapper": {
             "doc": "The wrapper host that controls this host.",
             "kind": "relation",
-            "is_public_settable": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -545,7 +551,6 @@ class HostBase(ClassBase):
         "wrapped": {
             "doc": "The wrapped host controlled by this host as a wrapper.",
             "kind": "relation",
-            "is_public_settable": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -593,7 +598,7 @@ class HostBase(ClassBase):
         managed_prefixes = ("raw_", "state_", "calc_", "entity_", "impl_")
 
         for attr_name, attr_info in self.impl_attrs.items():
-            is_public_settable = bool(attr_info.get("is_public_settable", False))
+            is_public_settable = self._helper_is_public_settable_attr(attr_name)
 
             if attr_name in bridge_names:
                 continue
@@ -783,6 +788,36 @@ class HostBase(ClassBase):
         **kwargs,
     ) -> None:
         """Apply host and opts updates through the managed commit pipeline."""
+        # _helper_pop_private_key:
+        #       remove keys starting with '_' or 'impl_' from ``kwargs``.
+        #       These keys are treated as non-public commit inputs and are ignored.
+        #
+        # _helper_commit_pre_opts:
+        #       preprocess kwargs for this host before opts-level application.
+        #       _helper_check_protected_attr: remove attrs protected by wrapper or by host declaration.
+        #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
+        #       _helper_commit_raw: consume host-side raw/state attrs, validate if configured,
+        #                           then write directly to host storage.
+        #
+        # _helper_commit_self:
+        #       handle updates that belong to this host's opts domain.
+        #       _helper_merge_opts_kwargs: merge explicit ``opts`` + opts-like kwargs,
+        #                                  normalize to one opts payload.
+        #       _helper_commit_apply_opts: perform protected-attr check + apply opts updates.
+        #       _helper_commit_apply_opts_main: subclass-defined real apply logic;
+        #                                       should write resolved values back to ``self.opts``.
+        #
+        # sync stage:
+        #       merge pre-opts sync kwargs and opts-applied kwargs,
+        #       then run _helper_commit_enrich_kwargs_sync(...) to enrich the sync payload.
+        #       Each enrich callback may add/override keys on the current payload.
+        #       If the final payload is non-empty, call _helper_trigger_sync_batch(**kwargs_sync).
+        #
+        # forwarding stage:
+        #       call _helper_kwargs_to_wrapped(kwargs, opts_wrapped=opts_wrapped).
+        #       _helper_commit_enrich_kwargs_wrapped(...) may enrich forwarded kwargs first.
+        #       If wrapped exists, forward via self.wrapped.act_commit(...);
+        #       otherwise warn about unhandled remaining kwargs/opts_wrapped.
         self._helper_pop_private_key(kwargs)
         kwargs_sync, is_reapply_opts_from_raw = self._helper_commit_pre_opts(kwargs)
         is_reapply_opts = is_reapply_opts or is_reapply_opts_from_raw
@@ -1249,9 +1284,9 @@ class HostBase(ClassBase):
                 or self._helper_is_extra_attr(attr_name)
             ):
                 continue
-            if not attr_info["is_public_settable"]:
+            if not self._helper_is_public_settable_attr(attr_name):
                 continue
-            if attr_info["is_protected"]:
+            if attr_info.get("is_protected", False):
                 continue
             if attr_name in attrs_forbidden:
                 continue
