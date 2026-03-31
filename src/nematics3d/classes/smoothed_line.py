@@ -167,49 +167,43 @@ class SmoothedLine(HostBase):
         "calc_coords": {
             "doc":                "The processed coordinates actually sent into the smoothing pipeline",
             "kind":               "calc",
-            "validator":          None,
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "calc_num_init": {
             "doc":                "Read-only: Number of processed input points currently entering the smoothing pipeline.",
-            "kind":               "calc",
-            "validator":          None,
+            "kind":               "property",
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "calc_num_out": {
             "doc":                "Read-only: Number of output points requested after smoothing.",
-            "kind":               "calc",
-            "validator":          None,
+            "kind":               "property",
+
             "is_public_settable": False,
-            "is_protected":       False,
-        },
-        "impl_calc_num_out": {
-            "doc":                "Internal storage for the requested output point count.",
-            "validator":          None,
-            "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "calc_result": {
             "doc":                "The smoothed output coordinates (shape: M x D)",
             "kind":               "calc",
-            "validator":          None,
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "entity_tck": {
             "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
-            "validator":          None,
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "calc_is_smoothed": {
             "doc":                "Boolean flag indicating whether smoothing was applied",
             "kind":               "calc",
-            "validator":          None,
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "state_is_window_warning": {
             "doc":                "Whether to present the warning when both window_length and window_ratio are provided.",
@@ -227,15 +221,16 @@ class SmoothedLine(HostBase):
                 "string describing the specific reason."
             ),
             "kind":               "calc",
-            "validator":          None,
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
         "result": {
             "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
-            "validator":          None,
+            "kind":               "property",
+
             "is_public_settable": False,
-            "is_protected":       False,
+
         },
     }
     # fmt: on
@@ -243,7 +238,6 @@ class SmoothedLine(HostBase):
     __slots__ = (
         "raw_coords",
         "calc_coords",
-        "impl_calc_num_out",
         "calc_result",
         "entity_tck",
         "calc_is_smoothed",
@@ -280,11 +274,8 @@ class SmoothedLine(HostBase):
             is_window_warning,
             type(self).__attr_defs__["state_is_window_warning"]["doc"],
         )
-
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "calc_coords", self.raw_coords)
-        object.__setattr__(self, "impl_calc_num_out", len(self.raw_coords))
-
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "state_is_window_warning", is_window_warning)
         object.__setattr__(self, "calc_status", "Failure, reason unknown.")
@@ -318,7 +309,6 @@ class SmoothedLine(HostBase):
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "calc_result", self.calc_coords)
-        object.__setattr__(self, "impl_calc_num_out", self.calc_num_init)
         object.__setattr__(self, "entity_tck", None)
         object.__setattr__(
             self,
@@ -437,20 +427,10 @@ class SmoothedLine(HostBase):
                 # endpoint sample is overwritten in-place by `splprep(per=1)`.
                 line_points_spline = np.concatenate((line_points, [line_points[0]]))
                 uspline = np.linspace(0.0, 1.0, len(line_points_spline))
-                object.__setattr__(
-                    self,
-                    "impl_calc_num_out",
-                    int(self.calc_num_init * self.opts.num_out_ratio),
-                )
                 u_out = np.linspace(0.0, 1.0, self.calc_num_out, endpoint=False)
             else:
                 line_points_spline = line_points
                 uspline = np.linspace(0.0, 1.0, self.calc_num_init)
-                object.__setattr__(
-                    self,
-                    "impl_calc_num_out",
-                    int(self.calc_num_init * self.opts.num_out_ratio),
-                )
                 u_out = np.linspace(0.0, 1.0, self.calc_num_out)
 
             tck = splprep(
@@ -557,15 +537,7 @@ class SmoothedLine(HostBase):
 
     @property
     def calc_num_out(self):
-        num_out = getattr(self, "impl_calc_num_out", None)
-        if num_out is not None:
-            return num_out
-
-        result = getattr(self, "calc_result", None)
-        if result is not None:
-            return len(result)
-
-        return self.calc_num_init
+        return max(1, int(self.calc_num_init * self.opts.num_out_ratio))
 
     @property
     def result(self):
@@ -573,8 +545,6 @@ class SmoothedLine(HostBase):
 
 
 # SmoothedLineFunc samples a numerical function along the normalized parameter
-# of a smoothed line and turns the sampled values into an interpolated
-# one-dimensional function representation.
 #
 # Subclasses should treat this class as a staged sampling pipeline. Override
 # the smallest helper that matches the customization you need: resolve owner-

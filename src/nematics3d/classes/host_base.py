@@ -13,7 +13,7 @@ The design intentionally stays close to the original Nematics3D host model.
 Public opts fields remain explicit dataclass slots, host-side runtime
 containers keep ``impl_*`` names, and user-facing convenience access is
 provided through readable properties such as ``host``, ``defaults_frozen``,
-``opts``, and ``attrs_forbidden``.
+``opts``, ``attrs_protected``, ``attrs_wrapped``, and ``attrs_forbidden``.
 
 At a high level the workflow is:
 
@@ -87,6 +87,21 @@ from .opts import (
 #   `default_` fields on the host itself.
 # - direct public names on HostBase should usually be reserved for relations,
 #   properties, and the host/opts bridge fields such as `opts`.
+# - Register validators in `__attr_defs__` only for `raw_...`, `state_...`,
+#   and writable properties that intentionally participate in validation.
+# - For `raw_...` and `state_...`, HostBase will call the registered validator
+#   automatically through the normal commit/setattr paths.
+# - For writable properties, HostBase does not automatically call the
+#   property entry's validator from `__attr_defs__`; if you register one for
+#   documentation or reuse, call it explicitly inside the property setter.
+# - Other managed host fields such as `calc_...`, `entity_...`, `impl_...`,
+#   relations, and read-only properties normally do not need validators in
+#   `__attr_defs__`, because the base host assignment pipeline does not
+#   automatically consume them there.
+# - Likewise, `is_protected` in `__attr_defs__` is mainly meaningful for
+#   `raw_...`, `state_...`, and writable properties. For read-only fields,
+#   relations, and other non-public-assignment surfaces, protection should
+#   normally be enforced structurally rather than by setting `is_protected`.
 # - relations in the current HostBase protocol are one-to-one links only;
 #   do not use relations to represent one-to-many or collection-style data.
 # - if a new managed host field is not a relation, property, or opts bridge
@@ -148,6 +163,11 @@ class OptsBase:
         init=False,
         repr=False,
     )
+    impl_attr_flags: dict[str, dict[str, bool]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         "tag": "name identifier of the option settings",
@@ -169,6 +189,17 @@ class OptsBase:
         """Initialize and validate OptsBase internal dataclass storage."""
         object.__setattr__(self, "impl_host_ref", None)
         object.__setattr__(self, "impl_is_functioning", False)
+        object.__setattr__(
+            self,
+            "impl_attr_flags",
+            {
+                key: {
+                    "is_protected": False,
+                    "is_wrapped": False,
+                }
+                for key in type(self).__attrs__
+            },
+        )
 
         attrs = type(self).__attrs__
         for field_info in fields(self):
@@ -477,61 +508,35 @@ class HostBase(ClassBase):
         **ClassBase.__attr_defs__,
         "opts": {
             "doc": "The Opts instance controlling options.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
         "opts_defaults": {
             "doc": "The default option settings.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
         "opts_backup": {
             "doc": (
                 "A dictionary storing potentially useful options, indexed by "
                 "timestamp or a manual key."
             ),
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
         "impl_sync_func": {
             "doc": "A dictionary of callback functions for post-commit synchronization.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
-        },
-        "impl_attrs_wrapped": {
-            "doc": "Protected attributes under wrapping.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
-        },
-        "impl_attrs_protected": {
-            "doc": "Additional protected attributes declared directly by this host.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "impl_enrich_kwargs_wrapped_func": {
             "doc": "Callback functions that enrich forwarded kwargs for wrapped hosts.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
         "impl_enrich_kwargs_sync_func": {
             "doc": "Callback functions that enrich sync kwargs before sync execution.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
         "wrapper": {
             "doc": "The wrapper host that controls this host.",
             "kind": "relation",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -540,21 +545,32 @@ class HostBase(ClassBase):
         "wrapped": {
             "doc": "The wrapped host controlled by this host as a wrapper.",
             "kind": "relation",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
             "doc_runtime": None,
         },
+        "attrs_protected": {
+            "doc": (
+                "Read-only: Public attrs currently marked as directly protected on this host."
+            ),
+            "kind": "property",
+            "is_public_settable": False,
+        },
+        "attrs_wrapped": {
+            "doc": (
+                "Read-only: Public attrs currently blocked because they are wrapped."
+            ),
+            "kind": "property",
+            "is_public_settable": False,
+        },
         "attrs_forbidden": {
             "doc": (
-                "Read-only union of wrapped attrs and host-declared " "protected attrs."
+                "Read-only union of wrapped attrs and host-declared protected attrs."
             ),
-            "validator": None,
+            "kind": "property",
             "is_public_settable": False,
-            "is_protected": False,
         },
     }
 
@@ -563,8 +579,6 @@ class HostBase(ClassBase):
         "opts_defaults",
         "opts_backup",
         "impl_sync_func",
-        "impl_attrs_wrapped",
-        "impl_attrs_protected",
         "impl_enrich_kwargs_wrapped_func",
         "impl_enrich_kwargs_sync_func",
     )
@@ -665,10 +679,8 @@ class HostBase(ClassBase):
         object.__setattr__(self, "opts_defaults", opts_defaults)
         object.__setattr__(self, "opts_backup", {})
         object.__setattr__(self, "impl_sync_func", {})
-        object.__setattr__(self, "impl_attrs_protected", set())
         object.__setattr__(self, "impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_sync_func", {})
-        object.__setattr__(self, "impl_attrs_wrapped", set())
 
         # Apply any host-side raw/state initialization values that were
         # separated from the opts kwargs above.
@@ -683,10 +695,52 @@ class HostBase(ClassBase):
     # Readable properties / basic helpers
     # ------------------------------------------------------------------
 
+    def _helper_collect_host_flagged_names(self, flag_name: str) -> set[str]:
+        """Collect public host names whose runtime flag is currently true."""
+        names: set[str] = set()
+        for attr_name, attr_info in self.impl_attrs.items():
+            if not attr_info.get(flag_name, False):
+                continue
+            if attr_name.startswith("raw_"):
+                names.update([attr_name, attr_name[4:]])
+            elif attr_name.startswith("state_"):
+                names.add(attr_name)
+            elif self._helper_is_property_attr(attr_name) and attr_info.get(
+                "is_public_settable", False
+            ):
+                names.add(attr_name)
+        return names
+
+    def _helper_collect_opts_flagged_names(self, flag_name: str) -> set[str]:
+        """Collect public opts names whose runtime flag is currently true."""
+        if getattr(self, "opts", None) is None:
+            return set()
+        return {
+            attr_name
+            for attr_name, flag_info in self.opts.impl_attr_flags.items()
+            if flag_info.get(flag_name, False)
+        }
+
+    def _helper_collect_flagged_names(self, flag_name: str) -> set[str]:
+        """Collect all public host/opts names whose runtime flag is currently true."""
+        return self._helper_collect_host_flagged_names(
+            flag_name
+        ) | self._helper_collect_opts_flagged_names(flag_name)
+
+    @property
+    def attrs_protected(self) -> set[str]:
+        """Return the public attrs currently marked as directly protected."""
+        return self._helper_collect_flagged_names("is_protected")
+
+    @property
+    def attrs_wrapped(self) -> set[str]:
+        """Return the public attrs currently blocked by wrapping."""
+        return self._helper_collect_flagged_names("is_wrapped")
+
     @property
     def attrs_forbidden(self) -> set[str]:
-        """Return the union of wrapped attrs and host-declared protected attrs."""
-        return set(self.impl_attrs_wrapped) | set(self.impl_attrs_protected)
+        """Return the union of wrapped attrs and directly protected attrs."""
+        return self.attrs_wrapped | self.attrs_protected
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(
@@ -803,12 +857,7 @@ class HostBase(ClassBase):
         if not found:
             return {}
 
-        attr_info = self.impl_attrs["raw_name"]
-        name = attr_info["validator"](
-            name,
-            name=attr_info["doc"],
-        )
-        self._helper_assign_name(name)
+        self.act_set_name(name)
         return {"name": self.name}
 
     def _helper_commit_raw(
@@ -886,7 +935,7 @@ class HostBase(ClassBase):
                 )
 
             if host_attr_name == "raw_name":
-                self._helper_assign_name(attr_value)
+                self.act_set_name(attr_value)
             else:
                 object.__setattr__(self, host_attr_name, attr_value)
         except (TypeError, ValueError, KeyError, AttributeError):
@@ -1232,7 +1281,7 @@ class HostBase(ClassBase):
 
         if attrs_opts:
             lines.append("[Opts attributes]")
-            for attr_name in sorted(attrs_opts):
+            for attr_name in attrs_opts:
                 lines.append(f"  - {self.show_attr_desc(attr_name)}")
         else:
             lines.append("[Opts attributes]")
@@ -1301,49 +1350,85 @@ class HostBase(ClassBase):
     # ------------------------------------------------------------------
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_register_protected_attr(
+    def _helper_set_protection_flag(
         self,
         attrs: Sequence[str] | str,
         *,
-        target_set: set[str],
+        flag_name: str,
+        is_enabled: bool,
         attr_name: str,
         logger=None,
     ) -> None:
-        """Register host/opts public names into one protection target set."""
+        """Set one runtime protection flag across host and opts public attrs."""
         for attr in as_list(attrs, name="attrs"):
             try:
                 attr = as_str(attr, name=attr_name)
                 if attr.startswith("raw_"):
                     if attr in self.impl_attrs:
-                        target_set.update([attr, attr[4:]])
+                        self.impl_attrs[attr][flag_name] = is_enabled
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public host attr."
                         )
                 elif attr.startswith("state_"):
                     if attr in self.impl_attrs:
-                        target_set.add(attr)
+                        self.impl_attrs[attr][flag_name] = is_enabled
                     else:
                         raise AttributeError(
                             f"Attribute {attr!r} is not a valid public host state attr."
                         )
                 elif attr in type(self.opts).__attrs__:
-                    target_set.add(attr)
+                    self.opts.impl_attr_flags[attr][flag_name] = is_enabled
+                elif (
+                    attr in self.impl_attrs
+                    and self._helper_is_property_attr(attr)
+                    and self.impl_attrs[attr].get("is_public_settable", False)
+                ):
+                    self.impl_attrs[attr][flag_name] = is_enabled
                 elif f"raw_{attr}" in self.impl_attrs:
-                    target_set.update([attr, f"raw_{attr}"])
+                    self.impl_attrs[f"raw_{attr}"][flag_name] = is_enabled
                 else:
                     raise AttributeError(
-                        f"Attribute {attr!r} is not a valid public host or opts attr."
+                        f"Attribute {attr!r} is not a valid protectable host or opts attr. "
+                        "Host-side protection is limited to raw aliases, raw_ attrs, "
+                        "state_ attrs, writable properties, and opts attrs."
                     )
             except (TypeError, ValueError, KeyError, AttributeError):
                 logger.exception("Invalid attr name.")
                 logger.recovery("Automatically ignore this attr.")
 
+    def _helper_clear_protection_flag(self, flag_name: str) -> None:
+        """Clear one runtime protection flag everywhere on this host and its opts."""
+        for attr_info in self.impl_attrs.values():
+            if attr_info.get(flag_name, False):
+                attr_info[flag_name] = False
+        for flag_info in self.opts.impl_attr_flags.values():
+            if flag_info.get(flag_name, False):
+                flag_info[flag_name] = False
+
+    def _helper_collect_true_flag_targets(
+        self,
+        flag_name: str,
+    ) -> tuple[set[str], set[str]]:
+        """Collect host and opts attr names whose runtime flag is true."""
+        host_names = {
+            attr_name
+            for attr_name, attr_info in self.impl_attrs.items()
+            if attr_info.get(flag_name, False)
+        }
+        opts_names = {
+            attr_name
+            for attr_name, flag_info in self.opts.impl_attr_flags.items()
+            if flag_info.get(flag_name, False)
+        }
+        return host_names, opts_names
+
     def act_register_wrapped_attr(self, attrs: Sequence[str] | str) -> None:
         """Register a group of public attributes as protected under wrapping."""
-        self._helper_register_protected_attr(
+        self._helper_set_protection_flag(
             attrs,
-            target_set=self.impl_attrs_wrapped,
+            flag_name="is_wrapped",
+            is_enabled=True,
             attr_name="The name of attr to be wrapped",
         )
 
@@ -1353,19 +1438,15 @@ class HostBase(ClassBase):
     ) -> None:
         """Remove wrapped protection from one or more public attributes."""
         if attrs is None:
-            self.impl_attrs_wrapped.clear()
+            self._helper_clear_protection_flag("is_wrapped")
             return
 
-        for attr in as_list(attrs, name="attrs"):
-            attr = as_str(attr, name="The name of attr to be unwrapped")
-            if attr.startswith("raw_"):
-                self.impl_attrs_wrapped.discard(attr)
-                self.impl_attrs_wrapped.discard(attr[4:])
-            elif attr.startswith("state_"):
-                self.impl_attrs_wrapped.discard(attr)
-            else:
-                self.impl_attrs_wrapped.discard(attr)
-                self.impl_attrs_wrapped.discard(f"raw_{attr}")
+        self._helper_set_protection_flag(
+            attrs,
+            flag_name="is_wrapped",
+            is_enabled=False,
+            attr_name="The name of attr to be unwrapped",
+        )
 
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.act_register_protected_attr because
@@ -1374,9 +1455,10 @@ class HostBase(ClassBase):
     # ==================================================
     def act_register_protected_attr(self, attrs: Sequence[str] | str) -> None:
         """Register a group of public attributes as directly protected."""
-        self._helper_register_protected_attr(
+        self._helper_set_protection_flag(
             attrs,
-            target_set=self.impl_attrs_protected,
+            flag_name="is_protected",
+            is_enabled=True,
             attr_name="The name of attr to be protected",
         )
 
@@ -1386,26 +1468,25 @@ class HostBase(ClassBase):
     # ==================================================
     def act_unregister_protected_attr(self, attrs: Sequence[str] | str) -> None:
         """Remove direct protection from one or more host/opts public names."""
-        for attr in as_list(attrs, name="attrs"):
-            attr = as_str(attr, name="The name of attr to be unprotected")
-            if attr.startswith("raw_"):
-                self.impl_attrs_protected.discard(attr)
-                self.impl_attrs_protected.discard(attr[4:])
-            elif attr.startswith("state_"):
-                self.impl_attrs_protected.discard(attr)
-            else:
-                self.impl_attrs_protected.discard(attr)
-                self.impl_attrs_protected.discard(f"raw_{attr}")
+        self._helper_set_protection_flag(
+            attrs,
+            flag_name="is_protected",
+            is_enabled=False,
+            attr_name="The name of attr to be unprotected",
+        )
 
     @contextmanager
     def act_wrapped_update(self):
         """Temporarily disable wrapped protection within a managed context."""
-        protected_backup = set(self.impl_attrs_wrapped)
-        self.impl_attrs_wrapped.clear()
+        host_backup, opts_backup = self._helper_collect_true_flag_targets("is_wrapped")
+        self._helper_clear_protection_flag("is_wrapped")
         try:
             yield
         finally:
-            self.impl_attrs_wrapped.update(protected_backup)
+            for attr_name in host_backup:
+                self.impl_attrs[attr_name]["is_wrapped"] = True
+            for attr_name in opts_backup:
+                self.opts.impl_attr_flags[attr_name]["is_wrapped"] = True
 
     def act_bind_wrapper(
         self,

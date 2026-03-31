@@ -44,6 +44,16 @@ from ..logging_decorator import logging_and_warning_decorator
 # - property metadata should also be registered in `__attr_defs__`, while the
 #   actual getter/setter behavior remains a normal Python `@property` on the
 #   class.
+# - only public assignment surfaces need assignment-related flags in
+#   `__attr_defs__`: `raw_...`, `state_...` when subclasses use them, and
+#   writable properties / extra attrs. These fields may carry `validator` and
+#   runtime `is_protected` state.
+# - read-only outputs such as `calc_...`, internal storage such as `impl_...`,
+#   and non-public relations should not register no-op `validator` or
+#   `is_protected` entries in the static schema.
+# - writable property validators are not auto-called by `ClassBase`; if a
+#   subclass registers one, its property setter should call that validator
+#   explicitly.
 # - extra attrs are runtime-registered public fields and should still enter the
 #   managed schema through the provided registration helpers.
 # - for semantic clarity, do not introduce other non-underscore public field
@@ -84,9 +94,7 @@ class ClassBase:
         "owner": {
             "doc": "The object that owns this instance.",
             "kind": "relation",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -95,9 +103,7 @@ class ClassBase:
         "registry": {
             "doc": "The Registry object where this instance is registered.",
             "kind": "relation",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
             "is_weak_by_default": True,
             "is_weak": None,
             "relation_value": None,
@@ -105,9 +111,7 @@ class ClassBase:
         },
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
-            "validator": None,
             "is_public_settable": False,
-            "is_protected": False,
         },
     }
 
@@ -136,14 +140,20 @@ class ClassBase:
             if not name_final:
                 name_final = name_replace
 
-        self._helper_assign_name(name_final)
+        self.act_set_name(name_final)
 
     # ------------------------------------------------------------------
     # Name handling
     # ------------------------------------------------------------------
 
+    def act_set_name(self, name):
+        """Validate and assign one public name for this instance."""
+        attr_info = self.impl_attrs["raw_name"]
+        name = attr_info["validator"](name, name=attr_info["doc"])
+        return self._helper_assign_name(name)
+
     def _helper_assign_name(self, name):
-        """Validate registry-level naming constraints and store ``raw_name``."""
+        """Store one normalized name after registry-level uniqueness checks."""
         check_name = getattr(
             getattr(self, "registry", None), "_helper_check_name", None
         )
@@ -246,8 +256,9 @@ class ClassBase:
             "doc": as_str(doc, name=f"Definition doc for {name!r}"),
             "validator": validator,
             "is_public_settable": bool(is_public_settable),
-            "is_protected": False,
         }
+        if attr_info["is_public_settable"]:
+            attr_info["is_protected"] = False
         if kind is not None:
             attr_info["kind"] = as_str(kind, name=f"Definition kind for {name!r}")
         attr_info.update(extra_def)
@@ -382,7 +393,6 @@ class ClassBase:
                 name,
                 doc="Newly added relation." if doc is None else doc,
                 kind="relation",
-                validator=None,
                 is_public_settable=False,
                 is_overwrite=False,
                 is_weak_by_default=True,
@@ -497,7 +507,6 @@ class ClassBase:
         self._helper_register_attr_def(
             name,
             doc=doc,
-            validator=None,
             is_public_settable=True,
             is_overwrite=is_overwrite,
             is_extra=True,
@@ -659,7 +668,7 @@ class ClassBase:
         """Apply one validated public assignment to final storage."""
         target_key = key if target_key is None else target_key
         if target_key == "raw_name":
-            self._helper_assign_name(value)
+            self.act_set_name(value)
             return
 
         object.__setattr__(self, target_key, value)

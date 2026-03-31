@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import numpy as np
 import pyvista as pv
 import vtk
@@ -17,6 +17,7 @@ from nematics3d.datatypes import (
     Unset,
 )
 from ..host_base import OptsBase, HostBase
+from ..general import pop_exclusive
 from ..opts import cover_value
 from ..registry_base import RegistryBase
 from .pick_manager import PickManager
@@ -79,8 +80,8 @@ class OptsFigure(OptsBase):
         "bg_color":         "The background color of figure",
     }
 
-    _validators = {
-        **(OptsBase._validators),
+    impl_validators = {
+        **(OptsBase.impl_validators),
         "azimuth":          lambda v, d: as_Number(v, name=d, value_range=(0, 360)),
         "elevation":        lambda v, d: as_Number(v, name=d, value_range=(-90, 90)),
         "roll":             lambda v, d: as_Number(v, name=d, value_range=(-180, 180)),
@@ -105,8 +106,8 @@ class OptsFigure(OptsBase):
 # - PlotFigure combines HostBase and RegistryBase. Subclasses must preserve both
 #   contracts: host-style commit/update behavior and registry-style management
 #   of attached visual entities.
-# - Keep `_entity_plotter` as the single source of truth for the backend plotter
-#   object, and keep `_entity`, `_entity_scalar_bars`, and other attached
+# - Keep `entity_plotter` as the single source of truth for the backend plotter
+#   object, and keep `_entity`, `entity_scalar_bars`, and other attached
 #   entities synchronized with that plotter state.
 # - If a subclass changes figure initialization, preserve the distinction
 #   between creating a new plotter and wrapping an existing one.
@@ -165,76 +166,142 @@ class PlotFigure(HostBase, RegistryBase):
 
     _DEFAULT_NAME = "unnamed figure"
 
-    __attrs__ = {
-        **(HostBase.__attrs__),
+    __attr_defs__ = {
+        **(HostBase.__attr_defs__),
         # -----------------
         # Public identity
         # -----------------
-        "raw_name": (
-            "Human-readable identifier of the figure. "
-            "Used as the window title for BackgroundPlotter."
-        ),
+        "raw_name": {
+            "doc": (
+                "Human-readable identifier of the figure. "
+                "Used as the window title for BackgroundPlotter."
+            ),
+            "validator": HostBase.__attr_defs__["raw_name"]["validator"],
+            "is_public_settable": True,
+            "is_protected": False,
+        },
         # -----------------
         # Core plot backend
         # -----------------
-        "_entity_plotter": (
-            "The underlying plotting backend. "
-            "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance. "
-        ),
+        "entity_plotter": {
+            "doc": (
+                "The underlying plotting backend. "
+                "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
         # -----------------
         # Attached entities
         # -----------------
-        "_entity": ("Internal registry of objects attached to this figure."),
-        "_entity_pick_manager": (
-            "The PickManager instance associated with this figure. "
-            "Available only in interactive (on-screen) sessions."
-        ),
-        "_entity_console": (
-            "The ScopedConsoleDock attached to the Qt main window. "
-            "Available only in interactive (on-screen) sessions."
-        ),
-        "_entity_scalar_bars": (
-            "RegistryBase instance managing scalar bars attached to this figure."
-        ),
-        "_entity_interacts": (
-            "RegistryBase instance managing live interact panels attached to this figure."
-        ),
-        "_impl_interact_count": (
-            "Monotonic counter used to assign interact panel ids for this figure."
-        ),
+        "entity_pick_manager": {
+            "doc": (
+                "The PickManager instance associated with this figure. "
+                "Available only in interactive (on-screen) sessions."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "entity_console": {
+            "doc": (
+                "The ScopedConsoleDock attached to the Qt main window. "
+                "Available only in interactive (on-screen) sessions."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "entity_scalar_bars": {
+            "doc": "RegistryBase instance managing scalar bars attached to this figure.",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "entity_interacts": {
+            "doc": (
+                "RegistryBase instance managing live interact panels attached to this figure."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "impl_interact_count": {
+            "doc": "Monotonic counter used to assign interact panel ids for this figure.",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
         # -----------------
         # VTK overlay layer
         # -----------------
-        "_entity_overlay": (
-            "Foreground vtkRenderer (layer=1) that shares the main camera "
-            "with the base renderer. "
-            "Actors added to this renderer are drawn on top of the main scene "
-            "and are not occluded by 3D geometry."
-        ),
-    }
-    __properties__ = {
-        **(HostBase.__properties__),
-        "pl": "Read-only: Alias of `_entity_plotter`.",
-        "pl_type": (
-            "Read-only: Short identifier of the plotter type. "
-            "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
-        ),
-        "pick_manager": (
-            "Read-only: Alias of `_entity_pick_manager` "
-            "(or None if not initialized)."
-        ),
-        "console": (
-            "Read-only: Alias of `_entity_console` " "(or None if not initialized)."
-        ),
-        "interacts": (
-            "Read-only: Alias of `_entity_interacts` (or None if not initialized)."
-        ),
-        "is_alive": (
-            "Read-only: Whether the wrapped plotter/window backend is still alive."
-        ),
+        "entity_overlay": {
+            "doc": (
+                "Foreground vtkRenderer (layer=1) that shares the main camera "
+                "with the base renderer. Actors added to this renderer are drawn "
+                "on top of the main scene and are not occluded by 3D geometry."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "pl": {
+            "doc": "Read-only: Alias of `entity_plotter`.",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "pl_type": {
+            "doc": (
+                "Read-only: Short identifier of the plotter type. "
+                "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "pick_manager": {
+            "doc": (
+                "Read-only: Alias of `entity_pick_manager` "
+                "(or None if not initialized)."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "console": {
+            "doc": "Read-only: Alias of `entity_console` (or None if not initialized).",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "interacts": {
+            "doc": (
+                "Read-only: Alias of `entity_interacts` (or None if not initialized)."
+            ),
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
+        "is_alive": {
+            "doc": "Read-only: Whether the wrapped plotter/window backend is still alive.",
+            "validator": None,
+            "is_public_settable": False,
+            "is_protected": False,
+        },
     }
 
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
+    __slots__ = (
+        "entity_plotter",
+        "entity_pick_manager",
+        "entity_console",
+        "entity_scalar_bars",
+        "entity_interacts",
+        "impl_interact_count",
+        "entity_overlay",
+        "_entity",
+    )
 
     # ==================== OVERRIDE ====================
     # PlotFigure overrides HostBase.__init__ because it must construct or wrap
@@ -282,9 +349,9 @@ class PlotFigure(HostBase, RegistryBase):
             else:
                 plotter = BackgroundPlotter()
 
-        object.__setattr__(self, "_entity_plotter", plotter)
+        object.__setattr__(self, "entity_plotter", plotter)
         object.__setattr__(self, "_entity", [])
-        object.__setattr__(self, "_impl_interact_count", 0)
+        object.__setattr__(self, "impl_interact_count", 0)
 
         if name is None:
             name = self._DEFAULT_NAME
@@ -297,7 +364,7 @@ class PlotFigure(HostBase, RegistryBase):
             name_replace=self._DEFAULT_NAME,
             **kwargs,
         )
-        self.opts.act_finalize(is_allow_UNSET=True)
+        self.opts.act_finalize(is_allow_unset=True)
         plotter.window_size = tuple(int(x) for x in self.opts.size)
 
         self._helper_sync_from_plotter(
@@ -307,27 +374,27 @@ class PlotFigure(HostBase, RegistryBase):
 
         scalar_bars = RegistryBase("scalar bars manager")
         scalar_bars.act_bind_relation_base("owner", self, is_weak=True)
-        object.__setattr__(self, "_entity_scalar_bars", scalar_bars)
+        object.__setattr__(self, "entity_scalar_bars", scalar_bars)
 
         interacts = RegistryBase("interact panel manager")
         interacts.act_bind_relation_base("owner", self, is_weak=True)
-        object.__setattr__(self, "_entity_interacts", interacts)
+        object.__setattr__(self, "entity_interacts", interacts)
 
         # --- Create overlay renderer (layer=1) at initialization ---
         overlay = self._helper_init_overlay_renderer()
-        object.__setattr__(self, "_entity_overlay", overlay)
+        object.__setattr__(self, "entity_overlay", overlay)
 
         if not is_off_screen:
 
             def _on_interaction_start(obj, event):
-                pm = getattr(self, "_entity_pick_manager", None)
+                pm = getattr(self, "entity_pick_manager", None)
                 if pm is not None:
                     pm._helper_hide_marker_label_during_interaction()
                 self.pl.render()
 
             def _on_interaction_end(obj, event):
                 self._helper_sync_from_plotter()
-                pm = getattr(self, "_entity_pick_manager", None)
+                pm = getattr(self, "entity_pick_manager", None)
                 if pm is not None:
                     pm._helper_show_marker_label_after_interaction()
                 self.pl.render()
@@ -336,7 +403,7 @@ class PlotFigure(HostBase, RegistryBase):
             self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
 
             pm = PickManager(self)
-            object.__setattr__(self, "_entity_pick_manager", pm)
+            object.__setattr__(self, "entity_pick_manager", pm)
             self.pl.enable_point_picking(
                 callback=self.pick_manager._helper_callback,
                 left_clicking=True,
@@ -352,7 +419,7 @@ class PlotFigure(HostBase, RegistryBase):
             console = ScopedConsoleDock(parent=main_window)
             main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
 
-            object.__setattr__(self, "_entity_console", console)
+            object.__setattr__(self, "entity_console", console)
 
             original_close_event = main_window.closeEvent
 
@@ -368,18 +435,18 @@ class PlotFigure(HostBase, RegistryBase):
 
     @property
     def console(self):
-        return getattr(self, "_entity_console", None)
+        return getattr(self, "entity_console", None)
 
     @property
     def interacts(self):
-        return getattr(self, "_entity_interacts", None)
+        return getattr(self, "entity_interacts", None)
 
     def act_register_interact(self, panel):
         interacts = self.interacts
         if interacts is None:
             return None
-        count = self._impl_interact_count + 1
-        object.__setattr__(self, "_impl_interact_count", count)
+        count = self.impl_interact_count + 1
+        object.__setattr__(self, "impl_interact_count", count)
         panel.name = f"panel{count}"
         interacts.act_register(
             panel,
@@ -434,7 +501,7 @@ class PlotFigure(HostBase, RegistryBase):
         if not is_reapply_opts and not kwargs:
             return
 
-        with self.opts._helper_internal_update():
+        with self.opts.act_internal_update():
             cover_value(
                 self.opts,
                 is_allow_cover_target_set=True,
@@ -450,11 +517,11 @@ class PlotFigure(HostBase, RegistryBase):
 
     @property
     def pl(self):
-        return self._entity_plotter
+        return self.entity_plotter
 
     @property
     def pick_manager(self):
-        return getattr(self, "_entity_pick_manager", None)
+        return getattr(self, "entity_pick_manager", None)
 
     @property
     def pl_type(self):
@@ -552,7 +619,7 @@ class PlotFigure(HostBase, RegistryBase):
                 "size": self.pl.window_size,
             }
 
-        with self.opts._helper_internal_update():
+        with self.opts.act_internal_update():
             cover_value(
                 self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter
             )
