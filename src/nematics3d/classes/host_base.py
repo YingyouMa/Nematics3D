@@ -182,7 +182,7 @@ class OptsBase:
     )
 
     # ------------------------------------------------------------------
-    # Initialization
+    # Initialization + self-checks
     # ------------------------------------------------------------------
 
     def __post_init__(self) -> None:
@@ -584,7 +584,7 @@ class HostBase(ClassBase):
     )
 
     # ------------------------------------------------------------------
-    # Initialization
+    # Initialization + self-checks
     # ------------------------------------------------------------------
 
     def _helper_check_attr_naming(self) -> None:
@@ -625,6 +625,35 @@ class HostBase(ClassBase):
                 f"state_, calc_, entity_, impl_, a relation/property/extra direct "
                 "name, or an opts bridge field."
             )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_check_opts(
+        self,
+        opts: OptsBase | None,
+        opts_type: Type[OptsBase] | None = None,
+        logger=None,
+    ) -> OptsBase:
+        """Normalize one opts input against the required opts class."""
+        if opts_type is None:
+            opts_type = type(self.opts)
+
+        if opts is None:
+            return opts_type()
+
+        if not isinstance(opts, opts_type):
+            try:
+                raise TypeError(
+                    f"opts must be an instance of {opts_type.__name__}, "
+                    f"got {type(opts).__name__}."
+                )
+            except TypeError:
+                logger.exception("Check input.")
+                logger.recovery(
+                    f"Create a default instance of {opts_type.__name__} instead."
+                )
+            return opts_type()
+
+        return opts
 
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.__init__ because a host must bind a paired
@@ -741,35 +770,6 @@ class HostBase(ClassBase):
     def attrs_forbidden(self) -> set[str]:
         """Return the union of wrapped attrs and directly protected attrs."""
         return self.attrs_wrapped | self.attrs_protected
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_check_opts(
-        self,
-        opts: OptsBase | None,
-        opts_type: Type[OptsBase] | None = None,
-        logger=None,
-    ) -> OptsBase:
-        """Normalize one opts input against the required opts class."""
-        if opts_type is None:
-            opts_type = type(self.opts)
-
-        if opts is None:
-            return opts_type()
-
-        if not isinstance(opts, opts_type):
-            try:
-                raise TypeError(
-                    f"opts must be an instance of {opts_type.__name__}, "
-                    f"got {type(opts).__name__}."
-                )
-            except TypeError:
-                logger.exception("Check input.")
-                logger.recovery(
-                    f"Create a default instance of {opts_type.__name__} instead."
-                )
-            return opts_type()
-
-        return opts
 
     # ------------------------------------------------------------------
     # Commit pipeline
@@ -1052,7 +1052,7 @@ class HostBase(ClassBase):
             try:
                 output = func(host=self, kwargs_sync=kwargs_sync_out)
                 if output is not None:
-                    kwargs_sync_out = output
+                    kwargs_sync_out |= output
             except (
                 TypeError,
                 ValueError,
