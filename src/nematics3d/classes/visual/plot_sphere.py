@@ -145,7 +145,7 @@ class PlotSphere(PlotGlyph):
     - `fig` to access the containing `PlotFigure`
     - `bounds` to inspect the currently bound clipping `Bounds` object
     - `raw_coords` to inspect the original sphere-center coordinates
-    - `_calc_keep_index` to inspect which raw points remain after center-based
+    - `calc_keep_index` to inspect which raw points remain after center-based
       clipping
 
     Parameters
@@ -281,20 +281,15 @@ class PlotSphere(PlotGlyph):
     """
 
     # fmt: off
-    __attrs__ = {
-        **dict(PlotGlyph.__attrs__),
-        "_calc_keep_index": "Indices of raw points kept after center-based point filtering.",
-    }
-
     __attr_defs__ = {
         **dict(PlotGlyph.__attr_defs__),
-        "_calc_keep_index": {
-            "doc": __attrs__["_calc_keep_index"],
+        "calc_keep_index": {
+            "doc": "Indices of raw points kept after center-based point filtering.",
         },
     }
 
     __slots__ = (
-        "_calc_keep_index",
+        "calc_keep_index",
     )
     # fmt: on
     # ==================== OVERRIDE ====================
@@ -334,7 +329,7 @@ class PlotSphere(PlotGlyph):
             **kwargs,
         )
 
-        object.__setattr__(self, "_calc_keep_index", None)
+        object.__setattr__(self, "calc_keep_index", None)
         self._helper_init_end()
         self.act_set_interact_func(lambda: InteractSphere(self, self.fig).show())
 
@@ -346,12 +341,12 @@ class PlotSphere(PlotGlyph):
         bounds = self.bounds
         if bounds is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "_calc_keep_index", keep_index)
+            object.__setattr__(self, "calc_keep_index", keep_index)
             return self.raw_coords.copy()
 
         axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds._calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds._calc_axis3, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
         length1 = float(bounds.opts.length1)
         length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
         length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
@@ -373,7 +368,7 @@ class PlotSphere(PlotGlyph):
         )
         mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
-        object.__setattr__(self, "_calc_keep_index", keep_index)
+        object.__setattr__(self, "calc_keep_index", keep_index)
         return self.raw_coords[keep_index]
 
     # ==================== OVERRIDE ====================
@@ -387,14 +382,14 @@ class PlotSphere(PlotGlyph):
         if poly.n_points == 0:
             return
 
-        keep_index = getattr(self, "_calc_keep_index", None)
+        keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        radius = self._calc_radius[keep_index]
-        opacity = self._calc_opacity[keep_index]
-        scalars = self._calc_scalars[keep_index]
-        color = self._calc_color[keep_index]
+        radius = self.calc_radius[keep_index]
+        opacity = self.calc_opacity[keep_index]
+        scalars = self.calc_scalars[keep_index]
+        color = self.calc_color[keep_index]
 
         if len(radius) > 0:
             poly.point_data["radius"] = radius
@@ -411,7 +406,7 @@ class PlotSphere(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_mesh(self, logger=None):
 
-        poly = self._calc_poly
+        poly = self.calc_poly
         if poly.n_points == 0 or "radius" not in poly.point_data:
             return pv.PolyData()
 
