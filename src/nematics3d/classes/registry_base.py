@@ -1,7 +1,6 @@
-import weakref
-
 from nematics3d.datatypes import as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
+from .class_base import ClassBase
 
 
 # RegistryBase developer conventions:
@@ -17,7 +16,7 @@ from nematics3d.logging_decorator import logging_and_warning_decorator
 #   the compact identity-style display used in relation trees and short logs.
 
 
-class RegistryBase:
+class RegistryBase(ClassBase):
     """
     Lightweight registry for storing and looking up named objects.
 
@@ -37,18 +36,16 @@ class RegistryBase:
 
     # fmt: off
     __attr_defs__ = {
+        **dict(ClassBase.__attr_defs__),
         "raw_name": {
             "doc": "The name of the Registry.",
             "validator": as_str,
+            "is_protected": False,
         },
         "raw_info": {
             "doc":       "The extra introduction for this instance for clarity.",
             "validator": lambda v, d: None if v is None else as_str(v, name=d, replace=None),
-        },
-        "owner": {
-            "doc": "The owner object associated with this registry.",
-            "kind": "relation",
-            "is_weak_by_default": True,
+            "is_protected": False,
         },
         "_entity": {
             "doc": "Internal container storing the registered objects.",
@@ -56,90 +53,34 @@ class RegistryBase:
     }
     # fmt: on
 
+    __slots__ = ("raw_info", "_entity")
+
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
 
     def __init__(self, name, info=None):
-        name = type(self).__attr_defs__["raw_name"]["validator"](
-            name,
-            name=type(self).__attr_defs__["raw_name"]["doc"],
-        )
-        info = type(self).__attr_defs__["raw_info"]["validator"](
+        super().__init__(name=name, name_replace="registry")
+        info = self.impl_attrs["raw_info"]["validator"](
             info,
-            type(self).__attr_defs__["raw_info"]["doc"],
+            self.impl_attrs["raw_info"]["doc"],
         )
-        object.__setattr__(self, "raw_name", name)
         object.__setattr__(self, "raw_info", info)
-        object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
-
-    # ------------------------------------------------------------------
-    # Lightweight relation helpers
-    # ------------------------------------------------------------------
-
-    def act_bind_relation_base(
-        self,
-        name: str,
-        target,
-        *,
-        is_weak: bool = True,
-        is_replace: bool = True,
-    ):
-        name = as_str(name, name="Relation name for RegistryBase")
-        if name != "owner":
-            raise AttributeError(
-                f"RegistryBase only supports relation {name!r} through its lightweight relation interface."
-            )
-
-        current_owner = self.owner
-        if (
-            current_owner is not None
-            and current_owner is not target
-            and (not is_replace)
-        ):
-            raise RuntimeError(f"Relation {name!r} of RegistryBase is already bound.")
-
-        if target is None:
-            value = None
-        elif is_weak:
-            value = weakref.ref(target)
-        else:
-            value = target
-
-        object.__setattr__(self, "_impl_owner_ref", value)
-        return target
-
-    def act_unbind_relation_base(self, name: str):
-        name = as_str(name, name="Relation name for RegistryBase")
-        if name == "owner":
-            object.__setattr__(self, "_impl_owner_ref", None)
 
     # ------------------------------------------------------------------
     # Readable properties / compatibility helpers
     # ------------------------------------------------------------------
 
     @property
-    def name(self):
-        return self.raw_name
-
-    @name.setter
-    def name(self, value):
-        name = type(self).__attr_defs__["raw_name"]["validator"](
-            value,
-            name=type(self).__attr_defs__["raw_name"]["doc"],
-        )
-        object.__setattr__(self, "raw_name", name)
-
-    @property
-    def owner(self):
-        ref = getattr(self, "_impl_owner_ref", None)
-        return ref() if callable(ref) else ref
-
-    @property
     def _impl_owner(self):
         """Compatibility alias for older code that expects `_impl_owner`."""
         return self.owner
+
+    @property
+    def entities(self):
+        """Return the registered objects as a tuple in current registry order."""
+        return tuple(self._entity)
 
     def act_set_name(self, value):
         self.name = value

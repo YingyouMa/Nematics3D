@@ -1,3 +1,5 @@
+"""Figure host and camera helpers for PyVista-based Nematics3D scenes."""
+
 from dataclasses import dataclass
 import numpy as np
 import pyvista as pv
@@ -15,6 +17,7 @@ from nematics3d.datatypes import (
     as_Vect,
     UNSET,
     Unset,
+    as_str,
 )
 from ..host_base import OptsBase, HostBase
 from ..opts import cover_value
@@ -102,7 +105,7 @@ class OptsFigure(OptsBase):
 #   contracts: host-style commit/update behavior and registry-style management
 #   of attached visual entities.
 # - Keep `entity_plotter` as the single source of truth for the backend plotter
-#   object, and keep `_entity`, `entity_scalar_bars`, and other attached
+#   object, and keep `entity_glyphs`, `entity_scalar_bars`, and other attached
 #   entities synchronized with that plotter state.
 # - If a subclass changes figure initialization, preserve the distinction
 #   between creating a new plotter and wrapping an existing one.
@@ -113,7 +116,7 @@ class OptsFigure(OptsBase):
 #   change both.
 
 
-class PlotFigure(HostBase, RegistryBase):
+class PlotFigure(HostBase):
     """
     Figure object for interactive or off-screen 3D visualization.
 
@@ -207,6 +210,11 @@ class PlotFigure(HostBase, RegistryBase):
                 "RegistryBase instance managing live interact panels attached to this figure."
             ),
         },
+        "entity_glyphs": {
+            "doc": (
+                "RegistryBase instance managing glyph visual objects attached to this figure."
+            ),
+        },
         "impl_interact_count": {
             "doc": "Monotonic counter used to assign interact panel ids for this figure.",
         },
@@ -248,6 +256,18 @@ class PlotFigure(HostBase, RegistryBase):
             ),
             "kind": "property",
         },
+        "scalar_bars": {
+            "doc": "Read-only: Alias of `entity_scalar_bars`.",
+            "kind": "property",
+        },
+        "glyphs": {
+            "doc": "Read-only: Alias of `entity_glyphs`.",
+            "kind": "property",
+        },
+        "overlay": {
+            "doc": "Read-only: Alias of `entity_overlay`.",
+            "kind": "property",
+        },
         "is_alive": {
             "doc": "Read-only: Whether the wrapped plotter/window backend is still alive.",
             "kind": "property",
@@ -260,9 +280,9 @@ class PlotFigure(HostBase, RegistryBase):
         "entity_console",
         "entity_scalar_bars",
         "entity_interacts",
+        "entity_glyphs",
         "impl_interact_count",
         "entity_overlay",
-        "_entity",
     )
 
     # ==================== OVERRIDE ====================
@@ -312,7 +332,6 @@ class PlotFigure(HostBase, RegistryBase):
                 plotter = BackgroundPlotter()
 
         object.__setattr__(self, "entity_plotter", plotter)
-        object.__setattr__(self, "_entity", [])
         object.__setattr__(self, "impl_interact_count", 0)
 
         if name is None:
@@ -334,6 +353,10 @@ class PlotFigure(HostBase, RegistryBase):
         )
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
+        glyphs = RegistryBase("figure glyph registry")
+        glyphs.act_bind_relation_base("owner", self, is_weak=True)
+        object.__setattr__(self, "entity_glyphs", glyphs)
+
         scalar_bars = RegistryBase("scalar bars manager")
         scalar_bars.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "entity_scalar_bars", scalar_bars)
@@ -348,13 +371,13 @@ class PlotFigure(HostBase, RegistryBase):
 
         if not is_off_screen:
 
-            def _on_interaction_start(obj, event):
+            def _on_interaction_start(_obj, _event):
                 pm = getattr(self, "entity_pick_manager", None)
                 if pm is not None:
                     pm._helper_hide_marker_label_during_interaction()
                 self.pl.render()
 
-            def _on_interaction_end(obj, event):
+            def _on_interaction_end(_obj, _event):
                 self._helper_sync_from_plotter()
                 pm = getattr(self, "entity_pick_manager", None)
                 if pm is not None:
@@ -402,6 +425,21 @@ class PlotFigure(HostBase, RegistryBase):
     @property
     def interacts(self):
         return getattr(self, "entity_interacts", None)
+
+    @property
+    def scalar_bars(self):
+        """Return the scalar-bar registry managed by this figure."""
+        return self.entity_scalar_bars
+
+    @property
+    def glyphs(self):
+        """Return the registry managing glyph objects attached to this figure."""
+        return self.entity_glyphs
+
+    @property
+    def overlay(self):
+        """Return the overlay renderer used for always-on-top VTK actors."""
+        return self.entity_overlay
 
     def act_register_interact(self, panel):
         interacts = self.interacts
@@ -696,8 +734,13 @@ class PlotFigure(HostBase, RegistryBase):
     # refreshed after registering objects that request a camera reset.
     # ==================================================
 
-    def act_register(self, term, is_contain_ok=False):
-        super().act_register(term, is_contain_ok=is_contain_ok)
+    def act_register(self, term, is_contain_ok=False, is_bind_registry_relation=True):
+        """Register a drawable term and refresh camera state if it resets camera."""
+        self.glyphs.act_register(
+            term,
+            is_contain_ok=is_contain_ok,
+            is_bind_registry_relation=is_bind_registry_relation,
+        )
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
 
@@ -719,6 +762,30 @@ class PlotFigure(HostBase, RegistryBase):
                 self.act_unregister(term, is_missing_ok=True)
             removed.append(term)
         return removed
+
+    def act_unregister(self, term, is_missing_ok=False):
+        """Unregister a drawable term from this figure glyph registry."""
+        self.glyphs.act_unregister(term, is_missing_ok=is_missing_ok)
+
+    def __call__(self):
+        """Return the registered glyph objects as a tuple."""
+        return self.glyphs()
+
+    def __len__(self) -> int:
+        """Return the number of glyph objects registered in this figure."""
+        return len(self.glyphs)
+
+    def __iter__(self):
+        """Iterate over glyph objects registered in this figure."""
+        return iter(self.glyphs)
+
+    def __contains__(self, item):
+        """Return whether one glyph object is registered in this figure."""
+        return item in self.glyphs
+
+    def __getitem__(self, key):
+        """Lookup a registered glyph object by index or name."""
+        return self.glyphs[key]
 
     def act_savefig(
         self, filename, scale=1, is_transparent_background=False, window_size=None
@@ -744,7 +811,7 @@ class PlotFigure(HostBase, RegistryBase):
 
     def __repr__(self):
         msg = HostBase.__repr__(self) + "\n"
-        msg += RegistryBase._helper_repr_by_category(self)
+        msg += repr(self.glyphs)
         return msg
 
     # ==================== OVERRIDE ====================
@@ -760,7 +827,7 @@ FigureData = PlotFigure | BackgroundPlotter | pv.Plotter
 
 
 @logging_and_warning_decorator()
-def as_PlotFigure(figure, opts_figure=None, logger=None):
+def as_plotfigure(figure, opts_figure=None, logger=None):
 
     if opts_figure is not None and not isinstance(opts_figure, OptsFigure):
         try:
@@ -793,3 +860,7 @@ def as_PlotFigure(figure, opts_figure=None, logger=None):
         figure = PlotFigure(opts=opts_figure)
 
     return figure
+
+
+# Backward-compatible alias; prefer `as_plotfigure`.
+as_PlotFigure = as_plotfigure

@@ -23,7 +23,7 @@ from nematics3d.datatypes import (
 )
 from ..host_base import OptsBase, HostBase
 from ..bounds import Bounds, BoundsData, as_bounds
-from .plot_figure import FigureData, PlotFigure, as_PlotFigure
+from .plot_figure import FigureData, PlotFigure, as_plotfigure
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import find_nearest_point, fmt_value
 from nematics3d.format import save_opts_json
@@ -55,7 +55,7 @@ class OptsGlyph(OptsBase):
     - ``act_finalize()`` to fill defaults and enter the functioning state
     - ``act_asdict()`` to export the current glyph opts payload
     - ``act_save_json()`` to serialize glyph opts, replacing callable visual
-      resolvers with the current resolved ``_calc_*`` arrays when available
+      resolvers with the current resolved ``calc_*`` arrays when available
     - ``act_load_json()`` to load a saved JSON payload back into this instance
 
     Representation behavior is split intentionally:
@@ -231,7 +231,7 @@ class OptsGlyph(OptsBase):
 
     # ==================== OVERRIDE ====================
     # OptsGlyph overrides OptsBase.act_save_json so callable visual resolvers
-    # are saved as the current resolved `_calc_*` arrays when the owning glyph
+    # are saved as the current resolved `calc_*` arrays when the owning glyph
     # is available.
     # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
@@ -248,7 +248,7 @@ class OptsGlyph(OptsBase):
         if host is not None:
             for key, value in list(opts_dict.items()):
                 if callable(value):
-                    calc_name = f"_calc_{key}"
+                    calc_name = f"calc_{key}"
                     calc_value = getattr(host, calc_name, None)
                     if isinstance(calc_value, np.ndarray):
                         opts_dict[key] = calc_value.copy()
@@ -274,7 +274,7 @@ class OptsGlyph(OptsBase):
 # - Keep figure registration, bounds binding, and pick registration aligned so
 #   actor lifecycle stays synchronized with PlotFigure lifecycle.
 # - Preserve the distinction between raw inputs (`raw_*`), resolved arrays
-#   (`_calc_*`), and live plotter entities (`_entity*`).
+#   (`calc_*`), and live plotter entities (`entity_*`).
 
 
 class PlotGlyph(HostBase):
@@ -288,7 +288,7 @@ class PlotGlyph(HostBase):
     glyph-specific render pipeline:
 
     - raw geometric inputs such as ``raw_coords``
-    - resolved visual arrays such as ``_calc_color`` and ``_calc_radius``
+    - resolved visual arrays such as ``calc_color`` and ``calc_radius``
     - live plotter entities such as the actor and optional silhouette
 
     Important readable attributes on ``PlotGlyph`` include:
@@ -323,78 +323,90 @@ class PlotGlyph(HostBase):
     """
 
     # fmt: off
-    __attrs__: ClassVar[Mapping[str, str]] = {
-        "raw_name":               "The name identifier of the glyph.",
-        "raw_category":           "The category of the glyph, used in the classification of PlotFigure.",
-        "raw_coords":             "The N x 3 input coordinates of each glyph.",
-        "state_clip_mode":        "Clip strategy for bounds application. 'mesh' clips the built mesh while 'center' clips the center representation before meshing.",
-        "state_is_clip_inside":   "Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
-        "_calc_coords":           "The effective coordinates used for the current glyph build after clip-mode preprocessing.",
-        "_calc_poly":             "The generated PyVista PolyData.",
-        "_calc_color":            "The resolved per-point RGB color array of the glyph.",
-        "_calc_opacity":          "The resolved per-point opacity array of the glyph.",
-        "_calc_radius":           "The resolved per-point radius array used for glyph thickness.",
-        "_calc_scalars":          "The resolved per-point scalar array used for scalar coloring.",
-        "_entity":                "The PyVista Actor corresponding to this object in the plotter.",
-        "_entity_silhouette":     "The PyVista Actor as the silhouette of this object to highlight.",
-        "_impl_name_pv":          "The unique identifier of this glyph stored in the PyVista plotter.",
-        "_impl_interact_func":    "The function to trigger control window when the instance is double right-clicked.",
-        "_state_is_silhouette":   "Whether silhouette actors should be rebuilt during glyph updates.",
-        "_state_is_empty":        "Whether the glyph currently has no drawable geometry and should skip render-side updates.",
-        "_state_is_interactable": "Whether to create a control window when the instance is double right-clicked.",
-    }
-
-    __relations__: ClassVar[Mapping[str, str]] = {
-        "fig":    "The PlotFigure instance containing this glyph.",
-        "bounds": "The Bounds instance clipping this glyph.",
-    }
-
     __attr_defs__ = {
         **dict(HostBase.__attr_defs__),
         "raw_name": {
             **dict(HostBase.__attr_defs__["raw_name"]),
-            "doc": __attrs__["raw_name"],
+            "doc": "The name identifier of the glyph.",
         },
         "raw_category": {
-            "doc":                __attrs__["raw_category"],
-            "validator":          lambda v, d: as_str(v, name=d),
-            "is_public_settable": True,
-            "is_protected":       False,
+            "doc": "The category of the glyph, used in the classification of PlotFigure.",
+            "validator": lambda v, d: as_str(v, name=d),
         },
         "raw_coords": {
-            "doc":                        __attrs__["raw_coords"],
-            "validator":                  lambda v, d: as_points(v, name=d),
-            "is_public_settable":         True,
-            "is_protected":               False,
-            "is_reapply_opts_after_raw":  True,
+            "doc": "The N x 3 input coordinates of each glyph.",
+            "validator": lambda v, d: as_points(v, name=d),
+            "is_reapply_opts_after_raw": True,
         },
         "state_clip_mode": {
-            "doc":                __attrs__["state_clip_mode"],
-            "validator":          lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
-            "is_public_settable": True,
-            "is_protected":       False,
+            "doc": (
+                "Clip strategy for bounds application. 'mesh' clips the built "
+                "mesh while 'center' clips the center representation before meshing."
+            ),
+            "validator": lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
+            "is_reapply_opts_after_raw": True,
         },
         "state_is_clip_inside": {
-            "doc":                __attrs__["state_is_clip_inside"],
-            "validator":          lambda v, d: as_bool(v, name=d),
-            "is_public_settable": True,
-            "is_protected":       False,
+            "doc": "Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
+            "validator": lambda v, d: as_bool(v, name=d),
+            "is_reapply_opts_after_raw": True,
+        },
+        "state_is_silhouette": {
+            "doc": "Whether silhouette actors should be rebuilt during glyph updates.",
+            "validator": lambda v, d: as_bool(v, name=d),
+        },
+        "state_is_interactable": {
+            "doc": "Whether to create a control window when the instance is double right-clicked.",
+            "validator": lambda v, d: as_bool(v, name=d),
+        },
+        "calc_coords": {
+            "doc": "The effective coordinates used for the current glyph build after clip-mode preprocessing.",
+        },
+        "calc_poly": {
+            "doc": "The generated PyVista PolyData.",
+        },
+        "calc_color": {
+            "doc": "The resolved per-point RGB color array of the glyph.",
+        },
+        "calc_opacity": {
+            "doc": "The resolved per-point opacity array of the glyph.",
+        },
+        "calc_radius": {
+            "doc": "The resolved per-point radius array used for glyph thickness.",
+        },
+        "calc_scalars": {
+            "doc": "The resolved per-point scalar array used for scalar coloring.",
+        },
+        "calc_is_empty": {
+            "doc": "Whether the glyph currently has no drawable geometry and should skip render-side updates.",
+        },
+        "entity_actor": {
+            "doc": "The PyVista Actor corresponding to this object in the plotter.",
+        },
+        "entity_silhouette": {
+            "doc": "The PyVista Actor used as the silhouette highlight for this object.",
         },
         "fig": {
-            "doc":              __relations__["fig"],
-            "kind":             "relation",
+            "doc": "The PlotFigure instance containing this glyph.",
+            "kind": "relation",
             "is_weak_by_default": True,
-            "is_weak":          None,
-            "relation_value":   None,
-            "doc_runtime":      None,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
         },
         "bounds": {
-            "doc":              __relations__["bounds"],
-            "kind":             "relation",
+            "doc": "The Bounds instance clipping this glyph.",
+            "kind": "relation",
             "is_weak_by_default": True,
-            "is_weak":          None,
-            "relation_value":   None,
-            "doc_runtime":      None,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "impl_name_pv": {
+            "doc": "The unique identifier of this glyph stored in the PyVista plotter.",
+        },
+        "impl_interact_func": {
+            "doc": "The function to trigger the control window when the instance is double right-clicked.",
         },
     }
 
@@ -403,31 +415,27 @@ class PlotGlyph(HostBase):
         "raw_coords",
         "state_clip_mode",
         "state_is_clip_inside",
-        "_calc_coords",
-        "_calc_poly",
-        "_calc_color",
-        "_calc_opacity",
-        "_calc_radius",
-        "_calc_scalars",
-        "_entity",
-        "_entity_silhouette",
-        "_impl_name_pv",
-        "_impl_interact_func",
-        "_state_is_silhouette",
-        "_state_is_empty",
-        "_state_is_interactable",
+        "state_is_silhouette",
+        "state_is_interactable",
+        "calc_coords",
+        "calc_poly",
+        "calc_color",
+        "calc_opacity",
+        "calc_radius",
+        "calc_scalars",
+        "calc_is_empty",
+        "entity_actor",
+        "entity_silhouette",
+        "impl_name_pv",
+        "impl_interact_func",
     )
 
     _pending_resolution_attrs: List[str] = [
         "radius", "opacity", "color", "scalars"
     ]
+    # fmt: on
 
-    _validators_local = {
-        "coords":                lambda v, d: as_points(v, name=d),
-        "category":              lambda v, d: as_str(v, name=d),
-        "state_clip_mode":       lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
-        "state_is_clip_inside":  lambda v, d: as_bool(v, name=d),
-    }
+    _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
     # fmt: on
 
     # ==================== OVERRIDE ====================
@@ -456,23 +464,23 @@ class PlotGlyph(HostBase):
         **kwargs,
     ):
 
-        coords = self.__class__._validators_local["coords"](
+        coords = type(self).__attr_defs__["raw_coords"]["validator"](
             coords,
             type(self).__attr_defs__["raw_coords"]["doc"],
         )
         object.__setattr__(self, "raw_coords", coords)
-        clip_mode = self.__class__._validators_local["state_clip_mode"](
+        clip_mode = type(self).__attr_defs__["state_clip_mode"]["validator"](
             clip_mode,
             type(self).__attr_defs__["state_clip_mode"]["doc"],
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
-        is_clip_inside = self.__class__._validators_local["state_is_clip_inside"](
+        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"]["validator"](
             is_clip_inside,
             type(self).__attr_defs__["state_is_clip_inside"]["doc"],
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
-        object.__setattr__(self, "_calc_coords", coords.copy())
-        category = self.__class__._validators_local["category"](
+        object.__setattr__(self, "calc_coords", coords.copy())
+        category = type(self).__attr_defs__["raw_category"]["validator"](
             category,
             type(self).__attr_defs__["raw_category"]["doc"],
         )
@@ -486,9 +494,9 @@ class PlotGlyph(HostBase):
                 replace=name_replace,
             )
         object.__setattr__(self, "opts_backup", {})
-        object.__setattr__(self, "_state_is_silhouette", True)
-        object.__setattr__(self, "_state_is_empty", False)
-        object.__setattr__(self, "_state_is_interactable", True)
+        object.__setattr__(self, "state_is_silhouette", True)
+        object.__setattr__(self, "calc_is_empty", False)
+        object.__setattr__(self, "state_is_interactable", True)
 
         super().__init__(
             opts_type,
@@ -510,15 +518,15 @@ class PlotGlyph(HostBase):
                     "The default paint_by strategy will be applied."
                 )
 
-        figure = as_PlotFigure(figure)
+        figure = as_plotfigure(figure)
         self.act_bind_relation_base("fig", figure, is_weak=True)
 
         self.opts.act_finalize(self.opts_defaults)
         str_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         unique_id = self.name + str_now
-        object.__setattr__(self, "_impl_name_pv", unique_id)
+        object.__setattr__(self, "impl_name_pv", unique_id)
 
-        object.__setattr__(self, "_impl_interact_func", None)
+        object.__setattr__(self, "impl_interact_func", None)
         self.act_bind_bounds(
             bounds,
             is_apply=False,
@@ -531,9 +539,9 @@ class PlotGlyph(HostBase):
         for attr in self._pending_resolution_attrs:
             self._helper_resolver_spec(attr)
         if self.state_clip_mode == "center":
-            object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+            object.__setattr__(self, "calc_coords", self._helper_bound_coords())
         else:
-            object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
+            object.__setattr__(self, "calc_coords", self.raw_coords.copy())
         self._helper_make_figure()
 
         figure = self.fig
@@ -545,7 +553,7 @@ class PlotGlyph(HostBase):
         bounds_old = self.bounds
         if bounds_old is None:
             return
-        bounds_old.act_unregister_subscriber(sync_name=self._impl_name_pv, host=self)
+        bounds_old.act_unregister_subscriber(sync_name=self.impl_name_pv, host=self)
         self.act_unbind_relation_base("bounds")
         if is_apply:
             self.act_commit(is_reapply_opts=True)
@@ -588,12 +596,12 @@ class PlotGlyph(HostBase):
         if is_subscribe:
             if not is_passive_sync:
                 bounds.act_attach_sync_task(
-                    self._impl_name_pv,
+                    self.impl_name_pv,
                     lambda **kwargs: self.act_commit(is_reapply_opts=True),
                 )
             bounds.act_register_subscriber(
                 self,
-                sync_name=self._impl_name_pv,
+                sync_name=self.impl_name_pv,
                 kind="glyph",
             )
         if is_apply:
@@ -665,7 +673,7 @@ class PlotGlyph(HostBase):
                     resolved, name="The pairwise color data of glyph"
                 )
 
-            object.__setattr__(self, "_calc_" + attr_name, resolved)
+            object.__setattr__(self, "calc_" + attr_name, resolved)
             object.__setattr__(self.opts, attr_name, attr_input)
 
         except Exception:
@@ -673,7 +681,7 @@ class PlotGlyph(HostBase):
                 raise ValueError(f"The default value is not valid for {attr_name!r}!")
             else:
                 logger.exception(f"Failed to resolve {attr_name!r}")
-                if getattr(self, "_entity", None):
+                if getattr(self, "entity_actor", None):
                     logger.recovery("Automatically ignore this modification.")
                 else:
                     logger.recovery(
@@ -699,16 +707,16 @@ class PlotGlyph(HostBase):
     # ----------------------------------------------------------------------------------------------------
 
     def _helper_build_poly(self):
-        poly = pv.PolyData(self._calc_coords)
-        object.__setattr__(self, "_calc_poly", poly)
+        poly = pv.PolyData(self.calc_coords)
+        object.__setattr__(self, "calc_poly", poly)
         self._helper_set_poly(poly)
 
     def _helper_set_poly(self, poly):
-        if hasattr(self, "_calc_radius"):
-            poly.point_data["radius"] = self._calc_radius
-        poly.point_data["opacity"] = self._calc_opacity
-        poly.point_data["scalars"] = self._calc_scalars
-        rgba_values = np.hstack([self._calc_color, self._calc_opacity.reshape(-1, 1)])
+        if hasattr(self, "calc_radius"):
+            poly.point_data["radius"] = self.calc_radius
+        poly.point_data["opacity"] = self.calc_opacity
+        poly.point_data["scalars"] = self.calc_scalars
+        rgba_values = np.hstack([self.calc_color, self.calc_opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
 
     def _helper_build_mesh(self):
@@ -726,12 +734,12 @@ class PlotGlyph(HostBase):
     def _helper_clear_live_actor(self):
         fig = self.fig
         if fig is None:
-            object.__setattr__(self, "_entity", None)
+            object.__setattr__(self, "entity_actor", None)
             self._helper_clear_silhouette()
             return
 
         plotter = fig.pl
-        actor = getattr(self, "_entity", None)
+        actor = getattr(self, "entity_actor", None)
 
         def _safe_remove_actor(target):
             try:
@@ -750,9 +758,9 @@ class PlotGlyph(HostBase):
                 except Exception:
                     pm._impl_registry.pop(actor, None)
             _safe_remove_actor(actor)
-        _safe_remove_actor(self._impl_name_pv)
+        _safe_remove_actor(self.impl_name_pv)
         self._helper_clear_silhouette()
-        object.__setattr__(self, "_entity", None)
+        object.__setattr__(self, "entity_actor", None)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_make_figure(self, logger=None):
@@ -761,7 +769,7 @@ class PlotGlyph(HostBase):
         """
 
         is_scalars = self.opts.paint_by == "scalars"
-        unique_id = self._impl_name_pv
+        unique_id = self.impl_name_pv
 
         input_dir = {
             "name": unique_id,
@@ -778,22 +786,22 @@ class PlotGlyph(HostBase):
             input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
 
         if self.state_clip_mode == "center":
-            object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+            object.__setattr__(self, "calc_coords", self._helper_bound_coords())
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
         else:
-            object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
+            object.__setattr__(self, "calc_coords", self.raw_coords.copy())
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
             mesh = self._helper_apply_bounds_mesh(mesh)
 
         if self._helper_is_empty_mesh(mesh):
-            object.__setattr__(self, "_state_is_empty", True)
+            object.__setattr__(self, "calc_is_empty", True)
             self._helper_clear_live_actor()
             self.fig.pl.render()
             return
 
-        object.__setattr__(self, "_state_is_empty", False)
+        object.__setattr__(self, "calc_is_empty", False)
         self._helper_clear_live_actor()
         plotter = self.fig.pl
         actor = plotter.add_mesh(mesh, **input_dir)
@@ -824,10 +832,10 @@ class PlotGlyph(HostBase):
         actor.visibility = self.opts.is_visible
         actor.pickable = self.opts.is_pickable
 
-        object.__setattr__(self, "_entity", actor)
+        object.__setattr__(self, "entity_actor", actor)
         self._helper_register_pick(actor)
 
-        if self._state_is_silhouette:
+        if self.state_is_silhouette:
             self._helper_add_silhouette()
         else:
             self._helper_clear_silhouette()
@@ -838,7 +846,7 @@ class PlotGlyph(HostBase):
 
         self._helper_clear_silhouette()
 
-        mesh = self._entity.mapper.dataset
+        mesh = self.entity_actor.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
 
         actor_silhouette = plotter.add_silhouette(
@@ -851,24 +859,24 @@ class PlotGlyph(HostBase):
         actor_silhouette.visibility = False
         actor_silhouette.pickable = False
 
-        object.__setattr__(self, "_entity_silhouette", actor_silhouette)
+        object.__setattr__(self, "entity_silhouette", actor_silhouette)
 
     def _helper_clear_silhouette(self):
         fig = self.fig
-        actor_silhouette = getattr(self, "_entity_silhouette", None)
+        actor_silhouette = getattr(self, "entity_silhouette", None)
         if fig is None or actor_silhouette is None:
-            object.__setattr__(self, "_entity_silhouette", None)
+            object.__setattr__(self, "entity_silhouette", None)
             return
 
         fig.pl.remove_actor(actor_silhouette)
-        object.__setattr__(self, "_entity_silhouette", None)
+        object.__setattr__(self, "entity_silhouette", None)
 
     # ----------------------------------------------------------------------------------------------------
     # The functios to update the given point-wise data values
     # ----------------------------------------------------------------------------------------------------
 
     def _helper_update_rgba(self):
-        mapper = self._entity.mapper
+        mapper = self.entity_actor.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = "direct"
         mapper.lookup_table = None
@@ -880,7 +888,7 @@ class PlotGlyph(HostBase):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_update_scalars(self, logger=None, **kwargs):
 
-        mapper = self._entity.mapper
+        mapper = self.entity_actor.mapper
         mesh_data = mapper.dataset.point_data
 
         if "__custom_rgba" in mesh_data.keys():
@@ -980,25 +988,25 @@ class PlotGlyph(HostBase):
 
         if is_needs_remesh:
             if self.state_clip_mode == "center":
-                object.__setattr__(self, "_calc_coords", self._helper_bound_coords())
+                object.__setattr__(self, "calc_coords", self._helper_bound_coords())
                 self._helper_build_poly()
                 mesh = self._helper_build_mesh()
             else:
-                object.__setattr__(self, "_calc_coords", self.raw_coords.copy())
+                object.__setattr__(self, "calc_coords", self.raw_coords.copy())
                 self._helper_build_poly()
                 mesh = self._helper_build_mesh()
                 mesh = self._helper_apply_bounds_mesh(mesh)
             if self._helper_is_empty_mesh(mesh):
-                object.__setattr__(self, "_state_is_empty", True)
+                object.__setattr__(self, "calc_is_empty", True)
                 self._helper_clear_live_actor()
             else:
-                object.__setattr__(self, "_state_is_empty", False)
-                if getattr(self, "_entity", None) is None:
+                object.__setattr__(self, "calc_is_empty", False)
+                if getattr(self, "entity_actor", None) is None:
                     self._helper_make_figure()
                 else:
-                    self._entity.mapper.SetInputData(mesh)
-                    self._entity.mapper.Update()
-                    if self._state_is_silhouette:
+                    self.entity_actor.mapper.SetInputData(mesh)
+                    self.entity_actor.mapper.Update()
+                    if self.state_is_silhouette:
                         self._helper_add_silhouette()
                     else:
                         self._helper_clear_silhouette()
@@ -1006,9 +1014,9 @@ class PlotGlyph(HostBase):
         for key, value in kwargs.items():
             try:
                 attr_path_actor = self.opts._actor_attr.get(key, None)
-                if attr_path_actor and getattr(self, "_entity", None) is not None:
+                if attr_path_actor and getattr(self, "entity_actor", None) is not None:
                     parts = attr_path_actor.split(".")
-                    obj = self._entity
+                    obj = self.entity_actor
                     for part in parts[:-1]:
                         obj = getattr(obj, part)
                     setattr(obj, parts[-1], value)
@@ -1018,7 +1026,7 @@ class PlotGlyph(HostBase):
                 logger.exception(f"Failed to reset value of {key!r}")
                 logger.recovery("Ignore this modification")
 
-        if getattr(self, "_entity", None) is not None and not self._state_is_empty:
+        if getattr(self, "entity_actor", None) is not None and not self.calc_is_empty:
             if paint_method == "color":
                 self._helper_update_rgba()
             else:
@@ -1033,71 +1041,71 @@ class PlotGlyph(HostBase):
         width: float | None = None,
     ):
 
-        silhouette = getattr(self, "_entity_silhouette", None)
+        silhouette = getattr(self, "entity_silhouette", None)
+        if not silhouette:
+            return
 
-        if silhouette:
+        silhouette.visibility = True
 
-            self._entity_silhouette.visibility = True
-
-            color = (
-                as_ColorRGB(color, name="The color of silhouette", replace=None)
-                if color is not None
-                else None
+        color = (
+            as_ColorRGB(color, name="The color of silhouette", replace=None)
+            if color is not None
+            else None
+        )
+        opacity = (
+            as_Number(
+                opacity,
+                name="The opacity of silhouette",
+                value_range=(0, 1),
+                replace=None,
             )
-            opacity = (
-                as_Number(
-                    opacity,
-                    name="The opacity of silhouette",
-                    value_range=(0, 1),
-                    replace=None,
-                )
-                if opacity is not None
-                else None
+            if opacity is not None
+            else None
+        )
+        width = (
+            as_Number(
+                width,
+                name="The line width of silhouette",
+                value_range=(0, np.inf),
+                replace=None,
             )
-            width = (
-                as_Number(
-                    width,
-                    name="The line width of silhouette",
-                    value_range=(0, np.inf),
-                    replace=None,
-                )
-                if width is not None
-                else None
-            )
+            if width is not None
+            else None
+        )
 
-            sil_prop = self._entity_silhouette.prop
-            if color is not None:
-                sil_prop.color = color
-            if opacity is not None:
-                sil_prop.opacity = opacity
-            if width is not None:
-                sil_prop.line_width = width
+        sil_prop = silhouette.prop
+        if color is not None:
+            sil_prop.color = color
+        if opacity is not None:
+            sil_prop.opacity = opacity
+        if width is not None:
+            sil_prop.line_width = width
 
     def act_dehighlight(self):
-        silhouette = getattr(self, "_entity_silhouette", None)
+        silhouette = getattr(self, "entity_silhouette", None)
         if silhouette:
-            self._entity_silhouette.visibility = False
+            silhouette.visibility = False
 
     def _helper_resolve_pick(self, picked_point):
         pos, idx = find_nearest_point(picked_point, self.raw_coords, is_return_idx=True)
         with np.printoptions(precision=2, suppress=True):
             if self.opts.paint_by == "color":
-                msg = f"Local color: {fmt_value(self._calc_color[idx])} \n"
+                msg = f"Local color: {fmt_value(self.calc_color[idx])} \n"
             else:
-                msg = f"Local scalar: {fmt_value(self._calc_scalars[idx])} \n"
+                msg = f"Local scalar: {fmt_value(self.calc_scalars[idx])} \n"
             for attr in self._pending_resolution_attrs:
                 if attr in ("color", "scalars"):
                     pass
                 else:
-                    attr_name = "_calc_" + attr
+                    attr_name = "calc_" + attr
                     value = object.__getattribute__(self, attr_name)[idx]
                     value = fmt_value(value)
                     msg += f"Local {attr}: {value} \n"
         return pos, msg, idx
 
     def act_interact(self):
-        if getattr(self, "_state_is_interactable", False):
-            func = getattr(self, "_impl_interact_func", None)
+        if getattr(self, "state_is_interactable", False):
+            func = getattr(self, "impl_interact_func", None)
             if func is None:
                 raise RuntimeError(
                     f"{type(self).__name__} is interactable but no interact function has been set."
@@ -1105,15 +1113,15 @@ class PlotGlyph(HostBase):
             if callable(func):
                 func()
             else:
-                raise RuntimeError("_impl_interact_func is not callable.")
+                raise RuntimeError("impl_interact_func is not callable.")
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_interact_func(self, func, logger=None):
         if callable(func):
-            object.__setattr__(self, "_impl_interact_func", func)
+            object.__setattr__(self, "impl_interact_func", func)
         else:
             try:
-                raise RuntimeError("_impl_interact_func is not callable.")
+                raise RuntimeError("impl_interact_func is not callable.")
             except RuntimeError:
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification")

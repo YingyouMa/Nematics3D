@@ -1,15 +1,16 @@
+"""Axis-aligned and oriented bounding-box host utilities."""
+
 from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 import weakref
-from typing import Any, ClassVar, Literal, Mapping, Sequence, TypeAlias
+from typing import Any, ClassVar, Literal, Mapping, TypeAlias
 
 import numpy as np
 import pyvista as pv
 
 from nematics3d.datatypes import (
     Number,
-    Tensor,
     UNSET,
     Unset,
     Vect,
@@ -243,7 +244,7 @@ class Bounds(HostBase):
         if not is_reapply_opts and not kwargs:
             return
 
-        with self.opts._helper_internal_update():
+        with self.opts.act_internal_update():
             for key, value in kwargs.items():
                 setattr(self.opts, key, value)
 
@@ -445,7 +446,7 @@ class Bounds(HostBase):
             figure is not None
             and tube is not None
             and figure.is_alive
-            and tube in figure._entity
+            and tube in figure.glyphs
         )
 
     def _helper_find_visual_entry(
@@ -726,10 +727,10 @@ def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> 
         dist = np.linalg.norm(others - origin, axis=1)
         order = np.argsort(dist)
 
-        for idx1 in range(len(order)):
-            for idx2 in range(idx1 + 1, len(order)):
-                edge1 = others[order[idx1]] - origin
-                edge2 = others[order[idx2]] - origin
+        for idx1, order_idx1 in enumerate(order):
+            for order_idx2 in order[idx1 + 1 :]:
+                edge1 = others[order_idx1] - origin
+                edge2 = others[order_idx2] - origin
 
                 try:
                     axis1, _ = _normalize_box_edge(edge1, name="edge1")
