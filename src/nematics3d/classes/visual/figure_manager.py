@@ -116,5 +116,5 @@ class FigureManager(RegistryBase):
     def __repr__(self):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
-        return msg + self._helper_repr_by_order()
+        return msg + self.act_repr_by_order()
 

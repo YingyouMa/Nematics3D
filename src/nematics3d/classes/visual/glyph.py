@@ -478,7 +478,6 @@ class PlotGlyph(HostBase):
                 name=type(self).__attr_defs__["raw_name"]["doc"],
                 replace=name_replace,
             )
-        object.__setattr__(self, "opts_backup", {})
         object.__setattr__(self, "state_is_silhouette", True)
         object.__setattr__(self, "calc_is_empty", False)
         object.__setattr__(self, "state_is_interactable", True)
@@ -532,7 +531,6 @@ class PlotGlyph(HostBase):
         figure = self.fig
         figure.pl.render()
         figure.act_register(self)
-
 
     def act_unbind_bounds(self, is_apply=True):
         """Detach the current bounds object and optionally reapply the glyph state."""
@@ -640,15 +638,22 @@ class PlotGlyph(HostBase):
         try:
             if attr_input is None:
                 raise TypeError(f"Require input for {attr_name!r}. Got None instead.")
-            elif callable(attr_input):
+            if callable(attr_input):
                 resolved = np.asarray(attr_input(source), dtype=np.float32)
-            else:
+            elif np.isscalar(attr_input) or isinstance(
+                attr_input, (Sequence, np.ndarray)
+            ):
                 arr = np.asarray(attr_input, dtype=float)
                 if arr.shape == () and attr_name == "color":
                     raise TypeError(
                         f"To provide a single value for color, the input should be expressed by (R, G, B). Got {attr_input} instead."
                     )
                 resolved = np.full(target_shape, arr, dtype=np.float32)
+            else:
+                raise TypeError(
+                    f"Unsupported resolver input for {attr_name!r}: "
+                    f"got {type(attr_input).__name__}."
+                )
 
             if resolved.shape != target_shape:
                 raise ValueError(
@@ -678,7 +683,6 @@ class PlotGlyph(HostBase):
                     self._helper_resolver_generic(
                         attr_name, default_val, default_val, is_recover=True
                     )
-
 
     def _helper_resolver_spec(self, attr_name, attr_value=None):
 
@@ -738,7 +742,7 @@ class PlotGlyph(HostBase):
                 return
 
         if actor is not None:
-            pm = getattr(fig, "_entity_pick_manager", None)
+            pm = fig.pick_manager
             if pm is not None:
                 try:
                     pm.act_unregister(actor)
@@ -872,7 +876,6 @@ class PlotGlyph(HostBase):
         if self.opts.scalar_bar_title in self.fig.pl.scalar_bars.keys():
             self.fig.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
 
-
     def _helper_update_scalars(self):
 
         mapper = self.entity_actor.mapper
@@ -912,7 +915,7 @@ class PlotGlyph(HostBase):
         fig = self.fig
         if fig is None:
             return
-        pm = getattr(fig, "_entity_pick_manager", None)
+        pm = fig.pick_manager
         if pm is None:
             return
         pm.act_register(actor=actor, owner=self)

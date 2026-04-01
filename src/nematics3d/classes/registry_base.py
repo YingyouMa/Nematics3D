@@ -11,9 +11,12 @@ from .class_base import ClassBase
 #   HostBase-style commit pipeline container.
 # - `__attr_defs__` here should stay small: normal public inputs such as
 #   `raw_name` / `raw_info`, inherited direct-named relations, and only the
-#   internal runtime storage that RegistryBase itself actually owns.
-# - Internal registry storage that is not a public readable surface may remain
-#   private implementation state; it does not need extra public aliasing.
+#   runtime storage that RegistryBase itself actually owns.
+# - Do not register no-op schema metadata such as static `is_protected` flags
+#   when they add no real behavior.
+# - Unless there is a strong readability or compatibility reason, internal
+#   runtime variables should also follow the normal naming scheme instead of
+#   defaulting to a leading underscore.
 # - Registered objects should still be renamed through the registry when needed
 #   and should be bound/unbound through `act_bind_relation_base()` /
 #   `act_unbind_relation_base()` when available.
@@ -43,22 +46,24 @@ class RegistryBase(ClassBase):
     __attr_defs__ = {
         **dict(ClassBase.__attr_defs__),
         "raw_name": {
-            "doc": "The name of the Registry.",
+            "doc":       "The name of the Registry.",
             "validator": as_str,
-            "is_protected": False,
         },
         "raw_info": {
             "doc":       "The extra introduction for this instance for clarity.",
             "validator": lambda v, d: None if v is None else as_str(v, name=d, replace=None),
-            "is_protected": False,
         },
-        "_entity": {
-            "doc": "Internal container storing the registered objects.",
+        "impl_entity": {
+            "doc": "Internal mutable storage for registered objects in insertion order.",
+        },
+        "entity": {
+            "doc":  "Read-only: Registered objects in insertion order.",
+            "kind": "property",
         },
     }
     # fmt: on
 
-    __slots__ = ("raw_info", "_entity")
+    __slots__ = ("raw_info", "impl_entity")
 
     # ------------------------------------------------------------------
     # Initialization
@@ -71,21 +76,16 @@ class RegistryBase(ClassBase):
             self.impl_attrs["raw_info"]["doc"],
         )
         object.__setattr__(self, "raw_info", info)
-        object.__setattr__(self, "_entity", [])
+        object.__setattr__(self, "impl_entity", [])
 
     # ------------------------------------------------------------------
-    # Readable properties / compatibility helpers
+    # Readable properties
     # ------------------------------------------------------------------
 
     @property
-    def _impl_owner(self):
-        """Compatibility alias for older code that expects `_impl_owner`."""
-        return self.owner
-
-    @property
-    def entities(self):
-        """Return the registered objects as a tuple in current registry order."""
-        return tuple(self._entity)
+    def entity(self):
+        """Return the registered objects as an immutable tuple view."""
+        return tuple(self.impl_entity)
 
     # ------------------------------------------------------------------
     # Naming / display helpers
@@ -99,7 +99,7 @@ class RegistryBase(ClassBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_name(self, name: str, logger=None):
-        name_set = {item.name for item in self._entity}
+        name_set = {item.name for item in self.impl_entity}
         name = as_str(name, name="The name of the term to register")
         name_input = name
         if name_input in name_set:
@@ -129,7 +129,7 @@ class RegistryBase(ClassBase):
         logger=None,
     ):
         """Register one object and keep its name unique inside this registry."""
-        if term in self._entity:
+        if term in self.impl_entity:
             if not is_contain_ok:
                 try:
                     raise ValueError(
@@ -158,7 +158,7 @@ class RegistryBase(ClassBase):
             set_name(name)
         else:
             term.name = name
-        self._entity.append(term)
+        self.impl_entity.append(term)
 
         if not is_bind_registry_relation:
             return
@@ -176,7 +176,7 @@ class RegistryBase(ClassBase):
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unregister(self, term, is_missing_ok=False, logger=None):
         """Unregister one object and unbind its registry relation when possible."""
-        if term not in self._entity:
+        if term not in self.impl_entity:
             if not is_missing_ok:
                 try:
                     raise KeyError(
@@ -187,7 +187,7 @@ class RegistryBase(ClassBase):
                     logger.recovery("Ignore this process.")
             return
 
-        self._entity.remove(term)
+        self.impl_entity.remove(term)
 
         registry = getattr(term, "registry", None)
         if registry is self:
@@ -201,28 +201,28 @@ class RegistryBase(ClassBase):
 
     def __call__(self):
         """Return the registered objects as a tuple in current registry order."""
-        return tuple(self._entity)
+        return tuple(self.entity)
 
     def __len__(self) -> int:
         """Return the number of registered objects."""
-        return len(self._entity)
+        return len(self.impl_entity)
 
     def __iter__(self):
         """Iterate over the registered objects in insertion order."""
-        return iter(self._entity)
+        return iter(self.impl_entity)
 
     def __contains__(self, item):
         """Return whether one object is currently registered."""
-        return item in self._entity
+        return item in self.impl_entity
 
     def __getitem__(self, key: str | int | None):
         """Lookup one registered object by index, name, or None passthrough."""
         if key is None:
             return None
         if isinstance(key, int):
-            return self._entity[key]
+            return self.impl_entity[key]
         if isinstance(key, str):
-            for obj in self._entity:
+            for obj in self.impl_entity:
                 if obj.name == key:
                     return obj
             raise KeyError(
@@ -237,14 +237,15 @@ class RegistryBase(ClassBase):
     # Representation helpers
     # ------------------------------------------------------------------
 
-    def _helper_repr_by_order(self, is_name=True) -> str:
-        if not self._entity:
+    def act_repr_by_order(self, is_name=True) -> str:
+        """Return an order-preserving multi-line summary of registered objects."""
+        if not self.impl_entity:
             return "<empty registry>"
 
         if is_name:
-            names = [obj.name for obj in self._entity]
+            names = [obj.name for obj in self.impl_entity]
         else:
-            names = [str(obj) for obj in self._entity]
+            names = [str(obj) for obj in self.impl_entity]
 
         idx_width = len(str(len(names) - 1))
         name_width = max(len(name) for name in names)
@@ -255,12 +256,13 @@ class RegistryBase(ClassBase):
 
         return "\n".join(lines)
 
-    def _helper_repr_by_category(self, is_name=False) -> str:
-        if not self._entity:
+    def act_repr_by_category(self, is_name=False) -> str:
+        """Return a category-grouped multi-line summary of registered objects."""
+        if not self.impl_entity:
             return "<empty registry>"
 
         records = []
-        for obj in self._entity:
+        for obj in self.impl_entity:
             name = obj.name if is_name else str(obj)
             category = getattr(obj, "raw_category", type(obj).__name__)
             records.append((category, name))
@@ -286,4 +288,4 @@ class RegistryBase(ClassBase):
         """Return the detailed registry summary with registered object order."""
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
-        return msg + self._helper_repr_by_order()
+        return msg + self.act_repr_by_order()
