@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
@@ -224,9 +224,10 @@ class OptsGlyph(OptsBase):
     # forwarded through the owning glyph commit pipeline.
     # ==================================================
 
-    def _helper_host_apply(self, key, value):
-        if self.host:
-            self.host.act_commit(**{key: value})
+    def _helper_host_apply(self, key, value, *, host=None):
+        host = self.host if host is None else host
+        if host:
+            host.act_commit(**{key: value})
             return value
 
     # ==================== OVERRIDE ====================
@@ -410,30 +411,11 @@ class PlotGlyph(HostBase):
         },
     }
 
-    __slots__ = (
-        "raw_category",
-        "raw_coords",
-        "state_clip_mode",
-        "state_is_clip_inside",
-        "state_is_silhouette",
-        "state_is_interactable",
-        "calc_coords",
-        "calc_poly",
-        "calc_color",
-        "calc_opacity",
-        "calc_radius",
-        "calc_scalars",
-        "calc_is_empty",
-        "entity_actor",
-        "entity_silhouette",
-        "impl_name_pv",
-        "impl_interact_func",
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
-
-    _pending_resolution_attrs: List[str] = [
-        "radius", "opacity", "color", "scalars"
-    ]
-    # fmt: on
 
     _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
     # fmt: on

@@ -1,4 +1,4 @@
-from nematics3d.datatypes import as_str
+﻿from nematics3d.datatypes import as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from .class_base import ClassBase
 
@@ -82,9 +82,13 @@ class RegistryBase(ClassBase):
         """Return the registered objects as a tuple in current registry order."""
         return tuple(self._entity)
 
+    # ==================== OVERRIDE ====================
+    # RegistryBase overrides ClassBase.act_set_name only to keep the
+    # registry-facing API explicit while still using the shared
+    # ClassBase validation and assignment path.
+    # ==================================================
     def act_set_name(self, value):
-        self.name = value
-        return self.name
+        return super().act_set_name(value)
 
     # ------------------------------------------------------------------
     # Naming / display helpers
@@ -272,3 +276,4 @@ class RegistryBase(ClassBase):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
         return msg + self._helper_repr_by_order()
+

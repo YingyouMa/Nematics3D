@@ -188,8 +188,8 @@ class PlotTube(PlotGlyph):
     - `bounds`: the currently bound clipping object, if any.
     - `raw_coords`: the raw centerline coordinates.
     - `raw_line_index`: the optional raw segmentation array for multiple paths.
-    - `_calc_line_index`: the effective segmentation after center-based clipping.
-    - `_calc_keep_index`: the raw point indices kept after center-based clipping.
+    - `calc_line_index`: the effective segmentation after center-based clipping.
+    - `calc_keep_index`: the raw point indices kept after center-based clipping.
 
     Common inspection helpers:
 
@@ -363,39 +363,31 @@ class PlotTube(PlotGlyph):
     """
 
     # fmt: off
-    __attrs__ = {
-        **dict(PlotGlyph.__attrs__),
-        "raw_name":         "The name identifier of the PlotTube instance",
-        "raw_line_index":   "Optional polyline membership indices.",
-        "_calc_line_index": "The effective polyline membership indices used for the current glyph build after clip-mode preprocessing.",
-        "_calc_keep_index": "Indices of raw centerline points kept after center-based point filtering.",
-    }
-
     __attr_defs__ = {
         **dict(PlotGlyph.__attr_defs__),
         "raw_name": {
             **dict(PlotGlyph.__attr_defs__["raw_name"]),
-            "doc": __attrs__["raw_name"],
+            "doc": "The name identifier of the PlotTube instance",
         },
         "raw_line_index": {
-            "doc":                        __attrs__["raw_line_index"],
+            "doc":                        "Optional polyline membership indices.",
             "validator":                  None,
             "is_public_settable":         True,
             "is_protected":               False,
             "is_reapply_opts_after_raw":  True,
         },
-        "_calc_line_index": {
-            "doc": __attrs__["_calc_line_index"],
+        "calc_line_index": {
+            "doc": "The effective polyline membership indices used for the current glyph build after clip-mode preprocessing.",
         },
-        "_calc_keep_index": {
-            "doc": __attrs__["_calc_keep_index"],
+        "calc_keep_index": {
+            "doc": "Indices of raw centerline points kept after center-based point filtering.",
         },
     }
 
     __slots__ = (
         "raw_line_index",
-        "_calc_line_index",
-        "_calc_keep_index",
+        "calc_line_index",
+        "calc_keep_index",
     )
     # fmt: on
 
@@ -441,8 +433,8 @@ class PlotTube(PlotGlyph):
         )
 
         object.__setattr__(self, "raw_line_index", None)
-        object.__setattr__(self, "_calc_line_index", None)
-        object.__setattr__(self, "_calc_keep_index", None)
+        object.__setattr__(self, "calc_line_index", None)
+        object.__setattr__(self, "calc_keep_index", None)
         self._helper_commit_line_index({"line_index": line_index})
 
         self._helper_init_end()
@@ -480,11 +472,11 @@ class PlotTube(PlotGlyph):
     def _helper_sync_calc_line_index(self):
         idx = self.raw_line_index
         if idx is None:
-            object.__setattr__(self, "_calc_line_index", None)
+            object.__setattr__(self, "calc_line_index", None)
         else:
             object.__setattr__(
                 self,
-                "_calc_line_index",
+                "calc_line_index",
                 np.asarray(idx, dtype=int).copy(),
             )
 
@@ -511,7 +503,7 @@ class PlotTube(PlotGlyph):
         if bounds is None:
             self._helper_sync_calc_line_index()
             keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "_calc_keep_index", keep_index)
+            object.__setattr__(self, "calc_keep_index", keep_index)
             return self.raw_coords.copy()
 
         axis1 = np.asarray(bounds.opts.axis1, dtype=float)
@@ -556,13 +548,13 @@ class PlotTube(PlotGlyph):
                 coords_segments.append(self.raw_coords[raw_idx])
 
         if len(coords_segments) == 0:
-            object.__setattr__(self, "_calc_line_index", None)
-            object.__setattr__(self, "_calc_keep_index", np.empty((0,), dtype=int))
+            object.__setattr__(self, "calc_line_index", None)
+            object.__setattr__(self, "calc_keep_index", np.empty((0,), dtype=int))
             return np.empty((0, 3), dtype=float)
 
         if len(coords_segments) == 1:
-            object.__setattr__(self, "_calc_line_index", None)
-            object.__setattr__(self, "_calc_keep_index", keep_segments[0])
+            object.__setattr__(self, "calc_line_index", None)
+            object.__setattr__(self, "calc_keep_index", keep_segments[0])
             return np.asarray(coords_segments[0], dtype=float)
 
         coords_all = np.vstack(coords_segments).astype(float, copy=False)
@@ -570,8 +562,8 @@ class PlotTube(PlotGlyph):
         line_index = np.concatenate(
             [np.full(len(seg), i, dtype=int) for i, seg in enumerate(coords_segments)]
         )
-        object.__setattr__(self, "_calc_line_index", line_index)
-        object.__setattr__(self, "_calc_keep_index", keep_index)
+        object.__setattr__(self, "calc_line_index", line_index)
+        object.__setattr__(self, "calc_keep_index", keep_index)
         return coords_all
 
     # ==================== OVERRIDE ====================
@@ -582,21 +574,21 @@ class PlotTube(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None):
 
-        points = self._calc_coords
+        points = self.calc_coords
         if self.state_clip_mode == "center":
-            idx = self._calc_line_index
+            idx = self.calc_line_index
         else:
             self._helper_sync_calc_line_index()
             object.__setattr__(
                 self,
-                "_calc_keep_index",
+                "calc_keep_index",
                 np.arange(len(self.raw_coords), dtype=int),
             )
-            idx = self._calc_line_index
+            idx = self.calc_line_index
 
         if len(points) < 2:
             poly = pv.PolyData(np.asarray(points, dtype=float))
-            object.__setattr__(self, "_calc_poly", poly)
+            object.__setattr__(self, "calc_poly", poly)
             self._helper_set_poly(poly)
             return
 
@@ -626,7 +618,7 @@ class PlotTube(PlotGlyph):
                 lines = np.concatenate(chunks).astype(np.int64)
                 poly = pv.PolyData(points, lines=lines)
 
-        object.__setattr__(self, "_calc_poly", poly)
+        object.__setattr__(self, "calc_poly", poly)
         self._helper_set_poly(poly)
 
     # ==================== OVERRIDE ====================
@@ -640,14 +632,14 @@ class PlotTube(PlotGlyph):
         if poly.n_points == 0:
             return
 
-        keep_index = getattr(self, "_calc_keep_index", None)
+        keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        radius = self._calc_radius[keep_index]
-        opacity = self._calc_opacity[keep_index]
-        scalars = self._calc_scalars[keep_index]
-        color = self._calc_color[keep_index]
+        radius = self.calc_radius[keep_index]
+        opacity = self.calc_opacity[keep_index]
+        scalars = self.calc_scalars[keep_index]
+        color = self.calc_color[keep_index]
 
         if len(radius) > 0:
             poly.point_data["radius"] = radius
@@ -666,7 +658,7 @@ class PlotTube(PlotGlyph):
         Internal: generate tube geometry from the prepared polyline dataset.
         """
 
-        poly = self._calc_poly
+        poly = self.calc_poly
         if poly.n_points < 2 or "radius" not in poly.point_data:
             return pv.PolyData()
 
