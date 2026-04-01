@@ -1,12 +1,14 @@
-﻿from __future__ import annotations
+"""Glyph visuals, opts resolution, bounds binding, and live figure updates."""
+
+from __future__ import annotations
+import datetime
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, ClassVar, Literal, Mapping, Sequence, Type, List
-import pyvista as pv
+from typing import Any, Callable, ClassVar, List, Literal, Mapping, Sequence, Type
+
 import numpy as np
-import datetime
-from contextlib import contextmanager
+import pyvista as pv
 
 from nematics3d.datatypes import (
     UNSET,
@@ -21,12 +23,13 @@ from nematics3d.datatypes import (
     as_Vect,
     as_points,
 )
-from ..host_base import OptsBase, HostBase
-from ..bounds import Bounds, BoundsData, as_bounds
-from .plot_figure import FigureData, PlotFigure, as_plotfigure
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.general import find_nearest_point, fmt_value
 from nematics3d.format import save_opts_json
+from nematics3d.general import find_nearest_point, fmt_value
+from nematics3d.logging_decorator import logging_and_warning_decorator
+
+from ..bounds import BoundsData, as_bounds
+from ..host_base import OptsBase, HostBase
+from .plot_figure import FigureData, as_plotfigure
 
 #!!! colorbar name args manager
 #!!! is_reset_camera commit
@@ -228,7 +231,6 @@ class OptsGlyph(OptsBase):
         host = self.host if host is None else host
         if host:
             host.act_commit(**{key: value})
-            return value
 
     # ==================== OVERRIDE ====================
     # OptsGlyph overrides OptsBase.act_save_json so callable visual resolvers
@@ -244,6 +246,7 @@ class OptsGlyph(OptsBase):
         is_include_unset: bool = False,
         logger=None,
     ) -> Path:
+        """Save glyph opts to JSON, materializing callable fields as current calc arrays."""
         opts_dict = self.act_asdict(is_include_unset=is_include_unset)
         host = self.host
         if host is not None:
@@ -530,8 +533,9 @@ class PlotGlyph(HostBase):
         figure.pl.render()
         figure.act_register(self)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_unbind_bounds(self, is_apply=True, logger=None):
+
+    def act_unbind_bounds(self, is_apply=True):
+        """Detach the current bounds object and optionally reapply the glyph state."""
         bounds_old = self.bounds
         if bounds_old is None:
             return
@@ -550,13 +554,14 @@ class PlotGlyph(HostBase):
         is_passive_sync=False,
         logger=None,
     ):
+        """Bind one bounds object to this glyph and optionally subscribe for sync updates."""
         if bounds is None:
             self.act_unbind_bounds(is_apply=is_apply)
             return
 
         try:
             bounds = as_bounds(bounds, name="The bounds controlling this glyph")
-        except Exception:
+        except (TypeError, ValueError, AttributeError, KeyError):
             logger.exception("Check input.")
             logger.recovery(
                 "Ignore this bounds input and continue without modifying the current binding."
@@ -658,7 +663,7 @@ class PlotGlyph(HostBase):
             object.__setattr__(self, "calc_" + attr_name, resolved)
             object.__setattr__(self.opts, attr_name, attr_input)
 
-        except Exception:
+        except (TypeError, ValueError, AttributeError, KeyError, RuntimeError):
             if is_recover:
                 raise ValueError(f"The default value is not valid for {attr_name!r}!")
             else:
@@ -674,8 +679,8 @@ class PlotGlyph(HostBase):
                         attr_name, default_val, default_val, is_recover=True
                     )
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_resolver_spec(self, attr_name, attr_value=None, logger=None):
+
+    def _helper_resolver_spec(self, attr_name, attr_value=None):
 
         if attr_value is None:
             attr_value = getattr(self.opts, attr_name)
@@ -737,7 +742,7 @@ class PlotGlyph(HostBase):
             if pm is not None:
                 try:
                     pm.act_unregister(actor)
-                except Exception:
+                except (KeyError, AttributeError, RuntimeError):
                     pm._impl_registry.pop(actor, None)
             _safe_remove_actor(actor)
         _safe_remove_actor(self.impl_name_pv)
@@ -867,8 +872,8 @@ class PlotGlyph(HostBase):
         if self.opts.scalar_bar_title in self.fig.pl.scalar_bars.keys():
             self.fig.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_update_scalars(self, logger=None, **kwargs):
+
+    def _helper_update_scalars(self):
 
         mapper = self.entity_actor.mapper
         mesh_data = mapper.dataset.point_data
@@ -913,6 +918,7 @@ class PlotGlyph(HostBase):
         pm.act_register(actor=actor, owner=self)
 
     def act_remove(self):
+        """Remove this glyph from its figure, bounds subscriptions, and live actors."""
         bounds_visual_source = getattr(self, "_impl_bounds_visual_source", None)
         bounds_visual_sync_name = getattr(self, "_impl_bounds_visual_sync_name", None)
         if bounds_visual_source is not None:
@@ -1004,7 +1010,7 @@ class PlotGlyph(HostBase):
                     setattr(obj, parts[-1], value)
 
                 object.__setattr__(self.opts, key, value)
-            except Exception:
+            except (AttributeError, TypeError, ValueError, KeyError):
                 logger.exception(f"Failed to reset value of {key!r}")
                 logger.recovery("Ignore this modification")
 
@@ -1022,6 +1028,7 @@ class PlotGlyph(HostBase):
         opacity: float | None = None,
         width: float | None = None,
     ):
+        """Show the silhouette highlight and optionally update its visual style."""
 
         silhouette = getattr(self, "entity_silhouette", None)
         if not silhouette:
@@ -1064,6 +1071,7 @@ class PlotGlyph(HostBase):
             sil_prop.line_width = width
 
     def act_dehighlight(self):
+        """Hide the current silhouette highlight if one exists."""
         silhouette = getattr(self, "entity_silhouette", None)
         if silhouette:
             silhouette.visibility = False
@@ -1086,6 +1094,7 @@ class PlotGlyph(HostBase):
         return pos, msg, idx
 
     def act_interact(self):
+        """Open or trigger the configured interaction callback for this glyph."""
         if getattr(self, "state_is_interactable", False):
             func = getattr(self, "impl_interact_func", None)
             if func is None:
@@ -1099,6 +1108,7 @@ class PlotGlyph(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_interact_func(self, func, logger=None):
+        """Register the callable used when this glyph enters its interaction flow."""
         if callable(func):
             object.__setattr__(self, "impl_interact_func", func)
         else:

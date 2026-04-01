@@ -26,17 +26,18 @@ from ..logging_decorator import logging_and_warning_decorator
 # - every managed field must be declared in `__attr_defs__`; do not rely on
 #   ad hoc instance attributes for normal public fields, relations, or
 #   properties.
-# - `raw_` fields are the canonical stored public data fields. A `raw_xxx`
+# - `raw_` fields are the canonical stored public input fields. A `raw_xxx`
 #   field automatically exposes the readable public alias `xxx`.
-# - `state_` fields represent writable runtime state inputs that are part of
-#   the managed attribute system and may affect later computation. They do not
+# - `state_` fields are writable runtime state inputs that are part of the
+#   managed attribute system and may affect later computation. They do not
 #   create a shortened public alias.
-# - `default_` fields represent default-parameter style managed fields. The
-#   current `ClassBase` does not declare one itself, but subclasses may use
-#   this prefix when they need default-layer state in the managed schema.
-# - `calc_` fields represent read-only values derived by computation.
-# - `impl_` fields represent internal implementation metadata or runtime
-#   containers and should not be treated as a user-facing readable surface.
+# - `default_` fields are optional managed default-layer inputs for subclasses
+#   that need them.
+# - `calc_` fields are computed readable outputs.
+# - `entity_` fields are computed object outputs such as created runtime
+#   entities, actors, meshes, or other attached result objects.
+# - `impl_` fields are internal implementation metadata or runtime containers
+#   and should not be treated as a user-facing readable surface.
 # - relation names use their direct public names, such as `owner` or
 #   `registry`.
 # - relations in the current ClassBase protocol are one-to-one links only;
@@ -45,14 +46,12 @@ from ..logging_decorator import logging_and_warning_decorator
 #   actual getter/setter behavior remains a normal Python `@property` on the
 #   class.
 # - only public assignment surfaces need assignment-related flags in
-#   `__attr_defs__`: `raw_...`, `state_...` when subclasses use them, and
-#   properties / extra attrs. For properties and extra attrs, register
-#   `is_public_settable` explicitly to declare whether the public surface is
-#   writable. These fields may carry `validator` and runtime `is_protected`
-#   state.
-# - read-only outputs such as `calc_...`, internal storage such as `impl_...`,
-#   and non-public relations should not register no-op `validator` or
-#   `is_protected` entries in the static schema.
+#   `__attr_defs__`: `raw_...`, `state_...`, writable properties, and extra
+#   attrs. For properties and extra attrs, register `is_public_settable`
+#   explicitly to declare whether the public surface is writable.
+# - read-only outputs such as `calc_...` / `entity_...`, internal storage such
+#   as `impl_...`, and non-public relations should not register no-op
+#   `validator` or `is_protected` entries in the static schema.
 # - writable property validators are not auto-called by `ClassBase`; if a
 #   subclass registers one, its property setter should call that validator
 #   explicitly.
@@ -60,7 +59,8 @@ from ..logging_decorator import logging_and_warning_decorator
 #   managed schema through the provided registration helpers.
 # - for semantic clarity, do not introduce other non-underscore public field
 #   categories beyond these conventions: `raw_`, `state_`, `default_`, `calc_`,
-#   `impl_`, direct-named relations, direct-named properties, and extra attrs.
+#   `entity_`, `impl_`, direct-named relations, direct-named properties, and
+#   extra attrs.
 # - when registering new fields into `impl_attrs`, choose names that respect
 #   these categories and do not collide with an existing readable surface.
 class ClassBase:

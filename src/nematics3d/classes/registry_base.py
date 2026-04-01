@@ -1,14 +1,19 @@
-﻿from nematics3d.datatypes import as_str
+"""Lightweight registry helpers for named repository objects."""
+
+from nematics3d.datatypes import as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from .class_base import ClassBase
 
 
 # RegistryBase developer conventions:
-# - RegistryBase is intentionally a lightweight registry helper, not a
-#   ClassBase-style entity base. Keep it ordinary enough that HostBase classes
-#   can safely inherit from it without multiple-layout conflicts.
-# - `__attr_defs__` is kept as lightweight metadata so nearby code can still use
-#   ClassBase-like docs and declarations when helpful.
+# - RegistryBase is a lightweight `ClassBase` subclass for ordered named-object
+#   registration. Keep the managed schema minimal and avoid turning it into a
+#   HostBase-style commit pipeline container.
+# - `__attr_defs__` here should stay small: normal public inputs such as
+#   `raw_name` / `raw_info`, inherited direct-named relations, and only the
+#   internal runtime storage that RegistryBase itself actually owns.
+# - Internal registry storage that is not a public readable surface may remain
+#   private implementation state; it does not need extra public aliasing.
 # - Registered objects should still be renamed through the registry when needed
 #   and should be bound/unbound through `act_bind_relation_base()` /
 #   `act_unbind_relation_base()` when available.
@@ -82,14 +87,6 @@ class RegistryBase(ClassBase):
         """Return the registered objects as a tuple in current registry order."""
         return tuple(self._entity)
 
-    # ==================== OVERRIDE ====================
-    # RegistryBase overrides ClassBase.act_set_name only to keep the
-    # registry-facing API explicit while still using the shared
-    # ClassBase validation and assignment path.
-    # ==================================================
-    def act_set_name(self, value):
-        return super().act_set_name(value)
-
     # ------------------------------------------------------------------
     # Naming / display helpers
     # ------------------------------------------------------------------
@@ -112,7 +109,9 @@ class RegistryBase(ClassBase):
                 new_name = f"{name_input}_{index}"
                 index += 1
             logger.warning(
-                f"{name_input!r} already exists in {self._helper_show_name_info()}! Renamed to {new_name!r}."
+                f"{name_input!r} already exists in "
+                f"{self._helper_show_name_info()}! "
+                f"Renamed to {new_name!r}."
             )
             name = new_name
         return name
@@ -129,6 +128,7 @@ class RegistryBase(ClassBase):
         is_bind_registry_relation=True,
         logger=None,
     ):
+        """Register one object and keep its name unique inside this registry."""
         if term in self._entity:
             if not is_contain_ok:
                 try:
@@ -146,7 +146,9 @@ class RegistryBase(ClassBase):
         old_registry = getattr(term, "registry", None)
         if old_registry is not None and old_registry is not self:
             logger.warning(
-                f"{term!r} already has a registry {old_registry!r}. Move it to {self._helper_show_name_info()}."
+                f"{term!r} already has a registry "
+                f"{old_registry!r}. Move it to "
+                f"{self._helper_show_name_info()}."
             )
             old_registry.act_unregister(term, is_missing_ok=True)
 
@@ -167,11 +169,13 @@ class RegistryBase(ClassBase):
         else:
             logger.warning(
                 f"Failed to assign registry relation for {term!r}. "
-                "This registration is one-way only because the object does not expose act_bind_relation_base()."
+                "This registration is one-way only because the object "
+                "does not expose act_bind_relation_base()."
             )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unregister(self, term, is_missing_ok=False, logger=None):
+        """Unregister one object and unbind its registry relation when possible."""
         if term not in self._entity:
             if not is_missing_ok:
                 try:
@@ -196,18 +200,23 @@ class RegistryBase(ClassBase):
     # ------------------------------------------------------------------
 
     def __call__(self):
+        """Return the registered objects as a tuple in current registry order."""
         return tuple(self._entity)
 
     def __len__(self) -> int:
+        """Return the number of registered objects."""
         return len(self._entity)
 
     def __iter__(self):
+        """Iterate over the registered objects in insertion order."""
         return iter(self._entity)
 
     def __contains__(self, item):
+        """Return whether one object is currently registered."""
         return item in self._entity
 
     def __getitem__(self, key: str | int | None):
+        """Lookup one registered object by index, name, or None passthrough."""
         if key is None:
             return None
         if isinstance(key, int):
@@ -260,7 +269,7 @@ class RegistryBase(ClassBase):
         for category, name in records:
             grouped.setdefault(category, []).append(name)
 
-        cat_width = max(len(cat) for cat in grouped.keys())
+        cat_width = max(len(cat) for cat in grouped)
 
         lines: list[str] = []
         for category, names in grouped.items():
@@ -270,10 +279,11 @@ class RegistryBase(ClassBase):
         return "\n".join(lines)
 
     def __str__(self):
+        """Return the compact identity-style string form of this registry."""
         return f"{type(self).__name__}({self.name!r})"
 
     def __repr__(self):
+        """Return the detailed registry summary with registered object order."""
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
         return msg + self._helper_repr_by_order()
-
