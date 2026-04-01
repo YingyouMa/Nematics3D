@@ -49,7 +49,7 @@ class OptsSmooth(OptsBase):
     window_ratio:               Number | None | Unset               = UNSET
     window_length:              int | None | Unset                  = UNSET
     order:                      int | Unset                         = UNSET
-    num_out_ratio:                Number | Unset                      = UNSET
+    num_out_ratio:              Number | Unset                      = UNSET
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
     min_line_length:            int | Unset                         = UNSET
 
@@ -58,7 +58,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         "window ratio for smoothing: line_length / window_length",
         "window_length":        "explicit window length for smoothing",
         "order":                "smoothing polynomial order",
-        "num_out_ratio":          "ratio between output and input #points in smoothing",
+        "num_out_ratio":        "ratio between output and input #points in smoothing",
         "mode":                 "smoothing mode (interp or wrap)",
         "min_line_length":      "minimum line length to be smoothed",
     }
@@ -68,7 +68,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
         "window_length":        lambda v, d: None if v is None else as_Number(v, name=d, is_int=True),
         "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
-        "num_out_ratio":          lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "num_out_ratio":        lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
         "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
     }
@@ -79,7 +79,7 @@ class OptsSmooth(OptsBase):
         "window_ratio":         None,
         "window_length":        None,
         "order":                3,
-        "num_out_ratio":          1,
+        "num_out_ratio":        1,
         "mode":                 "interp",
         "min_line_length":      50,
     })
@@ -167,36 +167,31 @@ class SmoothedLine(HostBase):
         "calc_coords": {
             "doc":                "The processed coordinates actually sent into the smoothing pipeline",
             "kind":               "calc",
-            "is_public_settable": False,
 
         },
         "calc_num_init": {
             "doc":                "Read-only: Number of processed input points currently entering the smoothing pipeline.",
             "kind":               "property",
-            "is_public_settable": False,
 
         },
         "calc_num_out": {
             "doc":                "Read-only: Number of output points requested after smoothing.",
             "kind":               "property",
-            "is_public_settable": False,
 
         },
         "calc_result": {
             "doc":                "The smoothed output coordinates (shape: M x D)",
             "kind":               "calc",
-            "is_public_settable": False,
 
         },
         "entity_tck": {
             "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
-            "is_public_settable": False,
+            "kind":               "entity",
 
         },
         "calc_is_smoothed": {
             "doc":                "Boolean flag indicating whether smoothing was applied",
             "kind":               "calc",
-            "is_public_settable": False,
 
         },
         "state_is_window_warning": {
@@ -215,13 +210,11 @@ class SmoothedLine(HostBase):
                 "string describing the specific reason."
             ),
             "kind":               "calc",
-            "is_public_settable": False,
 
         },
         "result": {
             "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
             "kind":               "property",
-            "is_public_settable": False,
 
         },
     }
@@ -521,7 +514,8 @@ class SmoothedLine(HostBase):
         return iter(self.calc_result)
 
     def __len__(self) -> int:
-        return self.calc_num_out
+        result = getattr(self, "calc_result", None)
+        return 0 if result is None else len(result)
 
     # -------------------------------
     # Readable properties

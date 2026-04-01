@@ -1,19 +1,20 @@
 import weakref
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.datatypes import as_str
+from nematics3d.logging_decorator import logging_and_warning_decorator
 
 
-# Subclassing rules:
-# - Keep the registry lightweight. It intentionally manages a small storage and
-#   relation surface instead of reproducing the full ClassBase machinery.
-# - Extend `__attrs__` and `__relations__` deliberately so metadata, display,
-#   and registration behavior stay consistent.
-# - Preserve the registration contract: registered objects should be renamed
-#   through the registry when needed and should be bound/unbound through
-#   `act_bind_relation_base()` / `act_unbind_relation_base()` when available.
-# - Keep `__repr__` as the detailed registry view. `__str__` should remain the
-#   short identity-style view used in compact displays and relation output.
+# RegistryBase developer conventions:
+# - RegistryBase is intentionally a lightweight registry helper, not a
+#   ClassBase-style entity base. Keep it ordinary enough that HostBase classes
+#   can safely inherit from it without multiple-layout conflicts.
+# - `__attr_defs__` is kept as lightweight metadata so nearby code can still use
+#   ClassBase-like docs and declarations when helpful.
+# - Registered objects should still be renamed through the registry when needed
+#   and should be bound/unbound through `act_bind_relation_base()` /
+#   `act_unbind_relation_base()` when available.
+# - Keep `__repr__` as the detailed registry view. `str(registry)` should remain
+#   the compact identity-style display used in relation trees and short logs.
 
 
 class RegistryBase:
@@ -35,35 +36,47 @@ class RegistryBase:
     """
 
     # fmt: off
-    __attrs__ = {
-        "raw_name":         "The name of the Registry.",
-        "raw_info":        "The extra introduction for this instance for clarity",
-        "_entity":          "The container storing the objects.",
-    }
-    __relations__ = {
-        "owner": (
-            "The owner object associated with this registry. "
-            "To access it, use .owner or ._impl_owner."
-        ),
+    __attr_defs__ = {
+        "raw_name": {
+            "doc": "The name of the Registry.",
+            "validator": as_str,
+        },
+        "raw_info": {
+            "doc":       "The extra introduction for this instance for clarity.",
+            "validator": lambda v, d: None if v is None else as_str(v, name=d, replace=None),
+        },
+        "owner": {
+            "doc": "The owner object associated with this registry.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+        },
+        "_entity": {
+            "doc": "Internal container storing the registered objects.",
+        },
     }
     # fmt: on
 
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+
     def __init__(self, name, info=None):
-        name = as_str(name, name="The name of the Registry")
+        name = type(self).__attr_defs__["raw_name"]["validator"](
+            name,
+            name=type(self).__attr_defs__["raw_name"]["doc"],
+        )
+        info = type(self).__attr_defs__["raw_info"]["validator"](
+            info,
+            type(self).__attr_defs__["raw_info"]["doc"],
+        )
         object.__setattr__(self, "raw_name", name)
+        object.__setattr__(self, "raw_info", info)
         object.__setattr__(self, "_impl_owner_ref", None)
         object.__setattr__(self, "_entity", [])
 
-        info = (
-            None
-            if info is None
-            else as_str(
-                info,
-                name="extra information of the RegistryBase instance",
-                replace=None,
-            )
-        )
-        object.__setattr__(self, "raw_info", info)
+    # ------------------------------------------------------------------
+    # Lightweight relation helpers
+    # ------------------------------------------------------------------
 
     def act_bind_relation_base(
         self,
@@ -87,17 +100,54 @@ class RegistryBase:
         ):
             raise RuntimeError(f"Relation {name!r} of RegistryBase is already bound.")
 
-        object.__setattr__(
-            self,
-            "_impl_owner_ref",
-            weakref.ref(target) if (is_weak and target is not None) else target,
-        )
+        if target is None:
+            value = None
+        elif is_weak:
+            value = weakref.ref(target)
+        else:
+            value = target
+
+        object.__setattr__(self, "_impl_owner_ref", value)
         return target
 
     def act_unbind_relation_base(self, name: str):
         name = as_str(name, name="Relation name for RegistryBase")
         if name == "owner":
             object.__setattr__(self, "_impl_owner_ref", None)
+
+    # ------------------------------------------------------------------
+    # Readable properties / compatibility helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def name(self):
+        return self.raw_name
+
+    @name.setter
+    def name(self, value):
+        name = type(self).__attr_defs__["raw_name"]["validator"](
+            value,
+            name=type(self).__attr_defs__["raw_name"]["doc"],
+        )
+        object.__setattr__(self, "raw_name", name)
+
+    @property
+    def owner(self):
+        ref = getattr(self, "_impl_owner_ref", None)
+        return ref() if callable(ref) else ref
+
+    @property
+    def _impl_owner(self):
+        """Compatibility alias for older code that expects `_impl_owner`."""
+        return self.owner
+
+    def act_set_name(self, value):
+        self.name = value
+        return self.name
+
+    # ------------------------------------------------------------------
+    # Naming / display helpers
+    # ------------------------------------------------------------------
 
     def _helper_show_name_info(self) -> str:
         info = getattr(self, "raw_info", None)
@@ -107,8 +157,7 @@ class RegistryBase:
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_name(self, name: str, logger=None):
-
-        name_set = set([item.name for item in self._entity])
+        name_set = {item.name for item in self._entity}
         name = as_str(name, name="The name of the term to register")
         name_input = name
         if name_input in name_set:
@@ -122,6 +171,10 @@ class RegistryBase:
             )
             name = new_name
         return name
+
+    # ------------------------------------------------------------------
+    # Registration actions
+    # ------------------------------------------------------------------
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_register(
@@ -193,23 +246,9 @@ class RegistryBase:
             if callable(unbind_relation):
                 unbind_relation("registry")
 
-    @property
-    def name(self):
-        return self.raw_name
-
-    @name.setter
-    def name(self, value):
-        name = as_str(value, name="The name of the Registry")
-        object.__setattr__(self, "raw_name", name)
-
-    @property
-    def owner(self):
-        ref = self._impl_owner_ref
-        return ref() if callable(ref) else ref
-
-    @property
-    def _impl_owner(self):
-        return self.owner
+    # ------------------------------------------------------------------
+    # Collection protocol
+    # ------------------------------------------------------------------
 
     def __call__(self):
         return tuple(self._entity)
@@ -226,23 +265,25 @@ class RegistryBase:
     def __getitem__(self, key: str | int | None):
         if key is None:
             return None
-        elif isinstance(key, int):
+        if isinstance(key, int):
             return self._entity[key]
-        elif isinstance(key, str):
+        if isinstance(key, str):
             for obj in self._entity:
                 if obj.name == key:
                     return obj
             raise KeyError(
                 f"No object with name '{key}' found in {self._helper_show_name_info()}."
             )
-        else:
-            raise TypeError(
-                f"`key` must be str or int for {self._helper_show_name_info()} indexing, "
-                f"got {type(key).__name__} instead."
-            )
+        raise TypeError(
+            f"`key` must be str or int for {self._helper_show_name_info()} indexing, "
+            f"got {type(key).__name__} instead."
+        )
+
+    # ------------------------------------------------------------------
+    # Representation helpers
+    # ------------------------------------------------------------------
 
     def _helper_repr_by_order(self, is_name=True) -> str:
-
         if not self._entity:
             return "<empty registry>"
 
@@ -251,9 +292,8 @@ class RegistryBase:
         else:
             names = [str(obj) for obj in self._entity]
 
-        # Width control
         idx_width = len(str(len(names) - 1))
-        name_width = max(len(n) for n in names)
+        name_width = max(len(name) for name in names)
 
         lines = []
         for i, name in enumerate(names):
@@ -262,35 +302,25 @@ class RegistryBase:
         return "\n".join(lines)
 
     def _helper_repr_by_category(self, is_name=False) -> str:
-
         if not self._entity:
             return "<empty registry>"
 
-        # --- collect (category, name) pairs, preserving order ---
         records = []
         for obj in self._entity:
-            if is_name:
-                name = obj.name
-            else:
-                name = str(obj)
+            name = obj.name if is_name else str(obj)
             category = getattr(obj, "raw_category", type(obj).__name__)
             records.append((category, name))
 
-        # --- group while preserving category order ---
         grouped: dict[str, list[str]] = {}
         for category, name in records:
             grouped.setdefault(category, []).append(name)
 
-        # --- width control ---
         cat_width = max(len(cat) for cat in grouped.keys())
 
         lines: list[str] = []
         for category, names in grouped.items():
-            for i, name in enumerate(names):
-                if i == 0:
-                    lines.append(f"{category:<{cat_width}}:    {name}")
-                else:
-                    lines.append(f"{'':<{cat_width}}     {name}")
+            joined_names = ", ".join(names)
+            lines.append(f"{category:<{cat_width}} : {joined_names}")
 
         return "\n".join(lines)
 
@@ -300,4 +330,4 @@ class RegistryBase:
     def __repr__(self):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
-        return msg + self._helper_repr_by_category()
+        return msg + self._helper_repr_by_order()

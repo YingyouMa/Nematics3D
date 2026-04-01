@@ -189,7 +189,7 @@ class OptsBase:
     @property
     def host(self):
         """Return the attached host object, if the stored weakref is alive."""
-        host_ref = self.impl_host_ref
+        host_ref = getattr(self, "impl_host_ref", None)
         if host_ref is None:
             return None
         if not isinstance(host_ref, weakref.ReferenceType):
@@ -197,7 +197,7 @@ class OptsBase:
                 "OptsBase.impl_host_ref must be a weakref.ReferenceType when it "
                 "is not None."
             )
-        return host_ref()
+        return host_ref()  # pylint: disable=not-callable
 
     @property
     def defaults_frozen(self) -> Mapping[str, Any]:
@@ -597,7 +597,7 @@ class HostBase(ClassBase):
         bridge_names = {"opts", "opts_defaults", "opts_backup"}
         managed_prefixes = ("raw_", "state_", "calc_", "entity_", "impl_")
 
-        for attr_name, attr_info in self.impl_attrs.items():
+        for attr_name in self.impl_attrs:
             is_public_settable = self._helper_is_public_settable_attr(attr_name)
 
             if attr_name in bridge_names:
@@ -794,7 +794,8 @@ class HostBase(ClassBase):
         #
         # _helper_commit_pre_opts:
         #       preprocess kwargs for this host before opts-level application.
-        #       _helper_check_protected_attr: remove attrs protected by wrapper or by host declaration.
+        #       _helper_check_protected_attr: remove attrs protected by wrapper or
+        #                                     by host declaration.
         #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
         #       _helper_commit_raw: consume host-side raw/state attrs, validate if configured,
         #                           then write directly to host storage.

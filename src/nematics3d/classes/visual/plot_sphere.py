@@ -280,17 +280,23 @@ class PlotSphere(PlotGlyph):
         Figure container that manages plotted objects.
     """
 
+    # fmt: off
     __attrs__ = {
         **dict(PlotGlyph.__attrs__),
         "_calc_keep_index": "Indices of raw points kept after center-based point filtering.",
     }
 
-    __slots__ = tuple(
-        k
-        for k, v in __attrs__.items()
-        if not v.startswith("Property:") and k not in PlotGlyph.__slots__
-    )
+    __attr_defs__ = {
+        **dict(PlotGlyph.__attr_defs__),
+        "_calc_keep_index": {
+            "doc": __attrs__["_calc_keep_index"],
+        },
+    }
 
+    __slots__ = (
+        "_calc_keep_index",
+    )
+    # fmt: on
     # ==================== OVERRIDE ====================
     # PlotSphere overrides PlotGlyph.__init__ because it fixes the glyph family
     # to sphere rendering and installs the sphere-specific interaction panel.

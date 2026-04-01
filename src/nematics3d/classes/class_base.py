@@ -200,7 +200,7 @@ class ClassBase:
         """Collect the currently occupied readable attribute surface names."""
         readable_names: set[str] = set()
 
-        for attr_name, attr_info in self.impl_attrs.items():
+        for attr_name in self.impl_attrs:
             if attr_name == is_exclude_name:
                 continue
             if is_exclude_impl and self._helper_is_impl_attr(attr_name):
@@ -468,7 +468,7 @@ class ClassBase:
         """Show currently bound relations and their descriptions."""
         lines = []
 
-        for attr_name, attr_info in self.impl_attrs.items():
+        for attr_name in self.impl_attrs:
             if not self._helper_is_relation_attr(attr_name):
                 continue
 

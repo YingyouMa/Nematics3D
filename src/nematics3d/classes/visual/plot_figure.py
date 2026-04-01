@@ -17,15 +17,10 @@ from nematics3d.datatypes import (
     Unset,
 )
 from ..host_base import OptsBase, HostBase
-from ..general import pop_exclusive
 from ..opts import cover_value
 from ..registry_base import RegistryBase
 from .pick_manager import PickManager
 from .qt.console import ScopedConsoleDock
-
-
-#!!! property act_view
-#!!! load save
 
 
 @dataclass(slots=True, repr=False)
@@ -188,9 +183,6 @@ class PlotFigure(HostBase, RegistryBase):
                 "The underlying plotting backend. "
                 "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         # -----------------
         # Attached entities
@@ -200,38 +192,23 @@ class PlotFigure(HostBase, RegistryBase):
                 "The PickManager instance associated with this figure. "
                 "Available only in interactive (on-screen) sessions."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "entity_console": {
             "doc": (
                 "The ScopedConsoleDock attached to the Qt main window. "
                 "Available only in interactive (on-screen) sessions."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "entity_scalar_bars": {
             "doc": "RegistryBase instance managing scalar bars attached to this figure.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "entity_interacts": {
             "doc": (
                 "RegistryBase instance managing live interact panels attached to this figure."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "impl_interact_count": {
             "doc": "Monotonic counter used to assign interact panel ids for this figure.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         # -----------------
         # VTK overlay layer
@@ -242,53 +219,38 @@ class PlotFigure(HostBase, RegistryBase):
                 "with the base renderer. Actors added to this renderer are drawn "
                 "on top of the main scene and are not occluded by 3D geometry."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
         },
         "pl": {
             "doc": "Read-only: Alias of `entity_plotter`.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
         "pl_type": {
             "doc": (
                 "Read-only: Short identifier of the plotter type. "
                 "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
         "pick_manager": {
             "doc": (
                 "Read-only: Alias of `entity_pick_manager` "
                 "(or None if not initialized)."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
         "console": {
             "doc": "Read-only: Alias of `entity_console` (or None if not initialized).",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
         "interacts": {
             "doc": (
                 "Read-only: Alias of `entity_interacts` (or None if not initialized)."
             ),
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
         "is_alive": {
             "doc": "Read-only: Whether the wrapped plotter/window backend is still alive.",
-            "validator": None,
-            "is_public_settable": False,
-            "is_protected": False,
+            "kind": "property",
         },
     }
 

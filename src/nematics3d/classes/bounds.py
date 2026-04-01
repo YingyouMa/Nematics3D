@@ -91,8 +91,8 @@ class OptsBounds(OptsBase):
         ),
     }
 
-    _validators: ClassVar[Mapping[str, Any]] = {
-        **OptsBase._validators,
+    impl_validators: ClassVar[Mapping[str, Any]] = {
+        **OptsBase.impl_validators,
         "origin": lambda v, d: as_Vect(v, name=d, dim=3),
         "axis1": lambda v, d: as_Vect(v, name=d, dim=3, is_norm=True),
         "axis2": lambda v, d: (
@@ -123,15 +123,50 @@ class OptsBounds(OptsBase):
 
 
 class Bounds(HostBase):
-    __attrs__ = {
-        **dict(HostBase.__attrs__),
-        "_entity_corners": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
-        "_entity_clip_geometry": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
-        "_entity_visuals": "Visual subscriptions of this bounds across figures.",
-        "_entity_subscribers": "Weak subscriber records for hosts driven by this bounds, excluding its own visualization frames.",
-        "_calc_axis2": "Resolved second axis used by the bounds box.",
-        "_calc_axis3": "Resolved third axis used by the bounds box.",
+    # fmt: off
+    __attr_defs__ = {
+        **dict(HostBase.__attr_defs__),
+        "entity_corners": {
+            "doc": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
+        },
+        "entity_clip_geometry": {
+            "doc": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
+        },
+        "entity_visuals": {
+            "doc": "Visual subscriptions of this bounds across figures.",
+        },
+        "entity_subscribers": {
+            "doc": "Weak subscriber records for hosts driven by this bounds, excluding its own visualization frames.",
+        },
+        "calc_axis2": {
+            "doc": "Resolved second axis used by the bounds box.",
+        },
+        "calc_axis3": {
+            "doc": "Resolved third axis used by the bounds box.",
+        },
+        "corners": {
+            "doc":  "Read-only: Alias of `entity_corners`.",
+            "kind": "property",
+        },
+        "clip_geometry": {
+            "doc":  "Read-only: Alias of `entity_clip_geometry`.",
+            "kind": "property",
+        },
+        "subscribers": {
+            "doc":  "Read-only: Live hosts currently subscribed to this bounds.",
+            "kind": "property",
+        },
+        "glyph_subscribers": {
+            "doc":  "Read-only: Live glyph hosts currently subscribed to this bounds.",
+            "kind": "property",
+        },
+        "plane_grid_subscribers": {
+            "doc":  "Read-only: Live plane-grid hosts currently subscribed to this bounds.",
+            "kind": "property",
+        },
     }
+    # fmt: on
+
     _VISUAL_EDGES = (
         (0, 1),
         (0, 2),
@@ -154,8 +189,19 @@ class Bounds(HostBase):
         }
     )
 
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in HostBase.__slots__)
+    __slots__ = (
+        "entity_corners",
+        "entity_clip_geometry",
+        "entity_visuals",
+        "entity_subscribers",
+        "calc_axis2",
+        "calc_axis3",
+    )
 
+    # ==================== OVERRIDE ====================
+    # Bounds overrides HostBase.__init__ because it must initialize its derived
+    # geometry stores and trigger the first geometry build immediately.
+    # ==================================================
     def __init__(
         self,
         name: str | None = None,
@@ -173,24 +219,23 @@ class Bounds(HostBase):
             **kwargs,
         )
 
-        object.__setattr__(self, "_entity_corners", None)
-        object.__setattr__(self, "_entity_clip_geometry", None)
-        object.__setattr__(self, "_entity_visuals", [])
-        object.__setattr__(self, "_entity_subscribers", [])
-        object.__setattr__(self, "_calc_axis2", None)
-        object.__setattr__(self, "_calc_axis3", None)
+        object.__setattr__(self, "entity_corners", None)
+        object.__setattr__(self, "entity_clip_geometry", None)
+        object.__setattr__(self, "entity_visuals", [])
+        object.__setattr__(self, "entity_subscribers", [])
+        object.__setattr__(self, "calc_axis2", None)
+        object.__setattr__(self, "calc_axis3", None)
 
-        for attr_name, value in {
-            "length1": self.opts.length1,
-        }.items():
-            if value is UNSET:
-                raise ValueError(
-                    f"Missing required variable {attr_name!r} to generate bounds"
-                )
+        if self.opts.length1 is UNSET:
+            raise ValueError("Missing required variable 'length1' to generate bounds")
 
         self.opts.act_finalize(defaults=self.opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
+    # ==================== OVERRIDE ====================
+    # Bounds overrides HostBase._helper_commit_apply_opts_main so finalized opts
+    # are translated into concrete box geometry and clipping entities.
+    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
@@ -271,18 +316,18 @@ class Bounds(HostBase):
             )
         )
 
-        object.__setattr__(self, "_calc_axis2", axis2)
-        object.__setattr__(self, "_calc_axis3", axis3)
-        object.__setattr__(self, "_entity_corners", corners)
-        object.__setattr__(self, "_entity_clip_geometry", clip_geometry)
+        object.__setattr__(self, "calc_axis2", axis2)
+        object.__setattr__(self, "calc_axis3", axis3)
+        object.__setattr__(self, "entity_corners", corners)
+        object.__setattr__(self, "entity_clip_geometry", clip_geometry)
 
     @property
     def corners(self):
-        return self._entity_corners
+        return self.entity_corners
 
     @property
     def clip_geometry(self):
-        return self._entity_clip_geometry
+        return self.entity_clip_geometry
 
     def act_copy(self, name: str | None = None):
         """
@@ -305,7 +350,7 @@ class Bounds(HostBase):
     def _helper_prune_subscribers(self):
         subscribers_alive = []
         sync_to_detach = []
-        for entry in self._entity_subscribers:
+        for entry in self.entity_subscribers:
             if self._helper_is_subscriber_alive(entry):
                 subscribers_alive.append(entry)
             else:
@@ -314,11 +359,11 @@ class Bounds(HostBase):
         for sync_name in sync_to_detach:
             self.act_detach_sync_task(sync_name)
 
-        if len(subscribers_alive) != len(self._entity_subscribers):
-            object.__setattr__(self, "_entity_subscribers", subscribers_alive)
+        if len(subscribers_alive) != len(self.entity_subscribers):
+            object.__setattr__(self, "entity_subscribers", subscribers_alive)
 
     def _helper_find_subscriber(self, *, host=None, sync_name: str | None = None):
-        for entry in self._entity_subscribers:
+        for entry in self.entity_subscribers:
             if sync_name is not None and entry.sync_name == sync_name:
                 return entry
             if host is not None and entry.host is host:
@@ -331,7 +376,7 @@ class Bounds(HostBase):
         if entry_old is not None:
             return entry_old
 
-        self._entity_subscribers.append(
+        self.entity_subscribers.append(
             _BoundsSubscriberEntry(
                 host_ref=weakref.ref(host),
                 sync_name=sync_name,
@@ -342,7 +387,7 @@ class Bounds(HostBase):
     def act_unregister_subscriber(self, *, host=None, sync_name: str | None = None):
         subscribers_alive = []
         sync_to_detach = []
-        for entry in self._entity_subscribers:
+        for entry in self.entity_subscribers:
             is_match = (sync_name is not None and entry.sync_name == sync_name) or (
                 host is not None and entry.host is host
             )
@@ -355,13 +400,13 @@ class Bounds(HostBase):
             self.act_detach_sync_task(name)
 
         if sync_to_detach:
-            object.__setattr__(self, "_entity_subscribers", subscribers_alive)
+            object.__setattr__(self, "entity_subscribers", subscribers_alive)
 
     @property
     def subscribers(self):
         self._helper_prune_subscribers()
         return tuple(
-            entry.host for entry in self._entity_subscribers if entry.host is not None
+            entry.host for entry in self.entity_subscribers if entry.host is not None
         )
 
     @property
@@ -369,7 +414,7 @@ class Bounds(HostBase):
         self._helper_prune_subscribers()
         return tuple(
             entry.host
-            for entry in self._entity_subscribers
+            for entry in self.entity_subscribers
             if entry.kind == "glyph" and entry.host is not None
         )
 
@@ -378,7 +423,7 @@ class Bounds(HostBase):
         self._helper_prune_subscribers()
         return tuple(
             entry.host
-            for entry in self._entity_subscribers
+            for entry in self.entity_subscribers
             if entry.kind == "plane_grid" and entry.host is not None
         )
 
@@ -410,7 +455,7 @@ class Bounds(HostBase):
         tube=None,
         sync_name: str | None = None,
     ) -> _BoundsVisualEntry | None:
-        for entry in self._entity_visuals:
+        for entry in self.entity_visuals:
             if sync_name is not None and entry.sync_name == sync_name:
                 return entry
             if figure is not None and entry.figure is figure:
@@ -422,7 +467,7 @@ class Bounds(HostBase):
     def _helper_prune_visuals(self):
         visuals_alive = []
         sync_to_detach = []
-        for entry in self._entity_visuals:
+        for entry in self.entity_visuals:
             if self._helper_is_visual_entry_alive(entry):
                 visuals_alive.append(entry)
             else:
@@ -431,15 +476,15 @@ class Bounds(HostBase):
         for sync_name in sync_to_detach:
             self.act_detach_sync_task(sync_name)
 
-        if len(visuals_alive) != len(self._entity_visuals):
-            object.__setattr__(self, "_entity_visuals", visuals_alive)
+        if len(visuals_alive) != len(self.entity_visuals):
+            object.__setattr__(self, "entity_visuals", visuals_alive)
 
     def _helper_unregister_visual_sync(
         self, sync_name: str | None = None, *, tube=None
     ):
         visuals_alive = []
         sync_to_detach = []
-        for entry in self._entity_visuals:
+        for entry in self.entity_visuals:
             is_match = (sync_name is not None and entry.sync_name == sync_name) or (
                 tube is not None and entry.tube is tube
             )
@@ -452,7 +497,7 @@ class Bounds(HostBase):
             self.act_detach_sync_task(name)
 
         if sync_to_detach:
-            object.__setattr__(self, "_entity_visuals", visuals_alive)
+            object.__setattr__(self, "entity_visuals", visuals_alive)
 
     def _helper_refresh_visual(self, sync_name: str):
         entry = self._helper_find_visual_entry(sync_name=sync_name)
@@ -548,7 +593,7 @@ class Bounds(HostBase):
             sync_name,
             lambda **kwargs_sync: self._helper_refresh_visual(sync_name),
         )
-        self._entity_visuals.append(
+        self.entity_visuals.append(
             _BoundsVisualEntry(
                 figure_ref=weakref.ref(figure),
                 tube_ref=weakref.ref(tube),

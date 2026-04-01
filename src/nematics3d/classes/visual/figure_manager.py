@@ -1,17 +1,16 @@
 from nematics3d.datatypes import as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
-from .plot_figure import PlotFigure
+
 from ..registry_base import RegistryBase
 
 
-# Subclassing rules:
-# - FigureManager extends RegistryBase with one extra state: the currently
-#   active figure name. Keep that state synchronized with the actual registry
-#   contents when changing registration or activation behavior.
+# FigureManager developer conventions:
+# - FigureManager extends RegistryBase with one extra managed state: the current
+#   active figure name.
+# - Keep that state synchronized with the actual registry contents when changing
+#   registration or activation behavior.
 # - Preserve the expectation that `active_fig` is a convenience view over the
-#   registry, not a separate storage slot for a figure object.
-# - If a subclass changes active-figure resolution, keep the fallback rules
-#   predictable when there are zero, one, or multiple figures in the manager.
+#   registry, not a second storage slot for a figure object.
 
 
 class FigureManager(RegistryBase):
@@ -33,41 +32,59 @@ class FigureManager(RegistryBase):
     `active_fig` will automatically fall back to that only figure.
     """
 
-    __attrs__ = {
-        **(RegistryBase.__attrs__),
-        "_state_active_name": "The name of current active figure",
+    # fmt: off
+    __attr_defs__ = {
+        **dict(RegistryBase.__attr_defs__),
+        "state_active_name": {
+            "doc":                "Current active figure name.",
+            "validator":          lambda v, d: None if v is None else as_str(v, name=d),
+            "is_public_settable": True,
+            "is_protected":       False,
+        },
+        "active_name": {
+            "doc":  "Read-only: The name of the current active figure.",
+            "kind": "property",
+        },
+        "active_fig": {
+            "doc":  "Read-only: The current active PlotFigure instance.",
+            "kind": "property",
+        },
     }
-    __properties__ = {
-        "active_name": "Read-only: The name of the current active figure.",
-        "active_fig": "Read-only: The current active PlotFigure instance.",
-    }
+    # fmt: on
 
-    __slots__ = tuple(__attrs__.keys())
+    __slots__ = ("state_active_name",)
 
-    # ==================== OVERRIDE ====================
-    # FigureManager overrides RegistryBase.__init__ because it must initialize
-    # the additional active-figure state after the registry core is created.
-    # ==================================================
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
 
     def __init__(self, name: str = "figures"):
         super().__init__(name)
-        object.__setattr__(self, "_state_active_name", None)
+        object.__setattr__(self, "state_active_name", None)
+
+    # ------------------------------------------------------------------
+    # Readable properties
+    # ------------------------------------------------------------------
 
     @property
     def active_name(self):
-        return self._state_active_name
+        return self.state_active_name
 
     @property
     def active_fig(self):
         return self._helper_get_active_fig()
 
+    # ------------------------------------------------------------------
+    # Active-figure helpers / actions
+    # ------------------------------------------------------------------
+
     @logging_and_warning_decorator()
     def _helper_get_active_fig(self, logger=None):
-        active_name = self._state_active_name
+        active_name = self.state_active_name
         if active_name is None:
             if len(self) == 1:
                 figure = self[0]
-                object.__setattr__(self, "_state_active_name", figure.name)
+                object.__setattr__(self, "state_active_name", figure.name)
                 active_name = figure.name
             elif len(self) == 0:
                 raise KeyError(
@@ -86,18 +103,18 @@ class FigureManager(RegistryBase):
     def act_set_active(self, id_fig: str):
         figure = self[id_fig]
         if figure.is_alive:
-            self._state_active_name = figure.name
+            self.state_active_name = figure.name
         else:
             raise KeyError(
                 "This figure is deleted and could not be set to active figure."
             )
 
-    # ==================== OVERRIDE ====================
-    # FigureManager overrides RegistryBase.__repr__ to present figures in
-    # display order rather than grouped by category.
-    # ==================================================
+    # ------------------------------------------------------------------
+    # Representation
+    # ------------------------------------------------------------------
 
     def __repr__(self):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
         return msg + self._helper_repr_by_order()
+

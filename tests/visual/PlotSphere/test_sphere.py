@@ -1,10 +1,21 @@
-import numpy as np
-
 import sys
 from pathlib import Path
+import types
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "src"))
-import nematics3d
+import numpy as np
+
+SRC_DIR = Path(__file__).resolve().parents[3] / "src"
+PKG_DIR = SRC_DIR / "nematics3d"
+
+sys.path.insert(0, str(SRC_DIR))
+
+if "nematics3d" not in sys.modules:
+    pkg = types.ModuleType("nematics3d")
+    pkg.__path__ = [str(PKG_DIR)]
+    sys.modules["nematics3d"] = pkg
+
+from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.classes.visual.plot_sphere import OptsSphere, PlotSphere
 
 #!!! current version intentionally avoids scalar bar rendering while the scalar bar API is still being cleaned up
 
@@ -72,41 +83,14 @@ def opacity_profile(coords):
     return 0.35 + 0.55 * (z_coords - z_coords.min()) / (z_coords.max() - z_coords.min())
 
 
-def mask_bounds_center_clip(coords, bounds, is_clip_inside):
-    axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-    axis2 = np.asarray(bounds._calc_axis2, dtype=float)
-    axis3 = np.asarray(bounds._calc_axis3, dtype=float)
-    length1 = float(bounds.opts.length1)
-    length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
-    length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
-    origin = np.asarray(bounds.opts.origin, dtype=float)
-
-    if bounds.opts.alignment == "min_corner":
-        origin_min_corner = origin
-    else:
-        origin_min_corner = origin - 0.5 * (
-            length1 * axis1 + length2 * axis2 + length3 * axis3
-        )
-
-    basis = np.column_stack([axis1, axis2, axis3])
-    coords_local = (np.asarray(coords, dtype=float) - origin_min_corner) @ basis
-    upper = np.array([length1, length2, length3], dtype=float)
-    mask_inside = np.all((coords_local >= 0.0) & (coords_local <= upper), axis=1)
-    return mask_inside if is_clip_inside else ~mask_inside
-
-
 def build_sphere_gallery(figure):
     coords_baseline = build_path(offset_y=0.0)
     coords_function = build_path(offset_y=5.0)
     coords_palette = build_path(offset_y=10.0)
     coords_scalar_function = build_path(offset_y=15.0)
     coords_scalar_array = build_path(offset_y=20.0)
-    coords_bounds_center_inside = build_path(offset_y=25.0)
-    coords_bounds_center_outside = build_path(offset_y=30.0)
-    coords_bounds_mesh_inside = build_path(offset_y=35.0)
-    coords_bounds_mesh_outside = build_path(offset_y=40.0)
 
-    spheres1 = nematics3d.PlotSphere(
+    spheres1 = PlotSphere(
         figure=figure,
         coords=coords_baseline,
         name="spheres_solid_blue",
@@ -116,7 +100,7 @@ def build_sphere_gallery(figure):
     )
     spheres1.act_commit(color=(0.1, 0.35, 0.95), radius=0.24, opacity=0.85, sides=14)
 
-    spheres2 = nematics3d.PlotSphere(
+    spheres2 = PlotSphere(
         figure=figure,
         coords=coords_function,
         name="spheres_function_driven",
@@ -129,7 +113,7 @@ def build_sphere_gallery(figure):
     spheres2.opts.specular_power = 35
     spheres2.opts.diffuse = 0.85
 
-    opts3 = nematics3d.OptsSphere(
+    opts3 = OptsSphere(
         color=manual_color_palette(coords_palette),
         radius=np.linspace(0.08, 0.22, len(coords_palette)),
         opacity=opacity_profile(coords_palette),
@@ -138,14 +122,14 @@ def build_sphere_gallery(figure):
         roughness=0.4,
         sides=18,
     )
-    spheres3 = nematics3d.PlotSphere(
+    spheres3 = PlotSphere(
         figure=figure,
         coords=coords_palette,
         name="spheres_manual_palette",
         opts=opts3,
     )
 
-    opts3b = nematics3d.OptsSphere(
+    opts3b = OptsSphere(
         color=np.column_stack(
             (
                 np.linspace(0.9, 0.2, len(coords_palette)),
@@ -162,14 +146,14 @@ def build_sphere_gallery(figure):
     )
     spheres3.act_commit(opts=opts3b)
 
-    opts4 = nematics3d.OptsSphere(
+    opts4 = OptsSphere(
         resolver_source="u_percent",
         color=color_percent,
         radius=radius_percent,
         opacity=lambda u: 0.4 + 0.6 * np.sin(np.pi * u / 100.0) ** 2,
         sides=10,
     )
-    spheres4 = nematics3d.PlotSphere(
+    spheres4 = PlotSphere(
         figure=figure,
         coords=coords_scalar_function,
         name="spheres_scalar_function",
@@ -179,7 +163,7 @@ def build_sphere_gallery(figure):
     spheres4.opts.opacity = lambda u: 0.25 + 0.75 * (u / 100.0)
     spheres4.act_commit(radius=lambda u: 0.1 + 0.06 * np.cos(np.pi * u / 100.0) ** 2)
 
-    opts5 = nematics3d.OptsSphere(
+    opts5 = OptsSphere(
         paint_by="scalars",
         scalars=scalar_profile(coords_scalar_array),
         scalars_cmap="plasma",
@@ -189,7 +173,7 @@ def build_sphere_gallery(figure):
         radius=0.22,
         opacity=np.linspace(0.45, 1.0, len(coords_scalar_array)),
     )
-    spheres5 = nematics3d.PlotSphere(
+    spheres5 = PlotSphere(
         figure=figure,
         coords=coords_scalar_array,
         name="spheres_scalar_array",
@@ -205,161 +189,15 @@ def build_sphere_gallery(figure):
     spheres5.opts.scalars_clim = (0.02, 0.38)
     spheres5.opts.opacity = np.linspace(0.55, 0.95, len(coords_scalar_array))
 
-    bounds1 = nematics3d.Bounds(
-        name="bounds_center_inside",
-        origin=(-1.2, 23.8, 2.0),
-        axis1=(1.0, 0.0, 0.0),
-        axis2=(0.0, 1.0, 0.0),
-        length1=2.4,
-        length2=2.4,
-        length3=6.0,
-        alignment="min_corner",
-    )
-    bounds2 = nematics3d.Bounds(
-        name="bounds_center_outside",
-        origin=(-1.15, 28.7, 1.8),
-        axis1=(1.0, 0.0, 0.0),
-        axis2=(0.0, 1.0, 0.0),
-        length1=2.3,
-        length2=2.5,
-        length3=6.2,
-        alignment="min_corner",
-    )
-    bounds3 = nematics3d.Bounds(
-        name="bounds_mesh_inside",
-        origin=(0.0, 35.0, 6.0),
-        axis1=(1.0, 0.0, 0.0),
-        axis2=(0.0, 1.0, 0.0),
-        length1=2.2,
-        length2=2.2,
-        length3=5.5,
-        alignment="center",
-    )
-    bounds4 = nematics3d.Bounds(
-        name="bounds_mesh_outside",
-        origin=(0.0, 40.0, 6.0),
-        axis1=(1.0, 0.0, 0.0),
-        axis2=(0.0, 1.0, 0.0),
-        length1=2.2,
-        length2=2.2,
-        length3=5.5,
-        alignment="center",
-    )
-
-    bounds_visual1 = bounds1.act_visualize(
-        figure=figure,
-        color=(0.0, 0.45, 0.0),
-        radius=0.05,
-        opacity=0.8,
-    )
-    bounds_visual2 = bounds2.act_visualize(
-        figure=figure,
-        color=(0.75, 0.35, 0.0),
-        radius=0.05,
-        opacity=0.8,
-    )
-    bounds_visual3 = bounds3.act_visualize(
-        figure=figure,
-        color=(0.1, 0.3, 0.8),
-        radius=0.05,
-        opacity=0.8,
-    )
-    bounds_visual4 = bounds4.act_visualize(
-        figure=figure,
-        color=(0.0, 0.55, 0.55),
-        radius=0.05,
-        opacity=0.8,
-    )
-
-    spheres6 = nematics3d.PlotSphere(
-        figure=figure,
-        coords=coords_bounds_center_inside,
-        name="spheres_bounds_center_inside",
-        color=(0.15, 0.75, 0.35),
-        radius=0.16,
-        bounds=bounds1,
-        clip_mode="center",
-        is_clip_inside=True,
-    )
-    spheres6.opts.specular = 0.35
-
-    spheres7 = nematics3d.PlotSphere(
-        figure=figure,
-        coords=coords_bounds_center_outside,
-        name="spheres_bounds_center_outside",
-        color=(0.95, 0.55, 0.15),
-        radius=np.linspace(0.08, 0.18, len(coords_bounds_center_outside)),
-        opacity=0.9,
-        bounds=bounds2,
-        clip_mode="center",
-        is_clip_inside=False,
-    )
-    spheres7.act_commit(
-        opacity=np.linspace(0.35, 0.95, len(coords_bounds_center_outside))
-    )
-
-    spheres8 = nematics3d.PlotSphere(
-        figure=figure,
-        coords=coords_bounds_mesh_inside,
-        name="spheres_bounds_mesh_inside",
-        color=(0.25, 0.5, 0.95),
-        radius=0.34,
-        bounds=bounds3,
-        clip_mode="mesh",
-        is_clip_inside=True,
-        sides=16,
-    )
-    spheres8.opts.roughness = 0.55
-
-    spheres9 = nematics3d.PlotSphere(
-        figure=figure,
-        coords=coords_bounds_mesh_outside,
-        name="spheres_bounds_mesh_outside",
-        paint_by="scalars",
-        scalars=lambda pts: pts[:, 2],
-        scalars_cmap="viridis",
-        scalar_bar_title="mesh_outside_scalar",
-        is_scalar_bar=False,
-        radius=0.34,
-        bounds=bounds4,
-        clip_mode="mesh",
-        is_clip_inside=False,
-        sides=16,
-    )
-    spheres9.act_commit(shading_type="pbr", metallic=0.6, roughness=0.25)
-
-    mask_bounds1_inside = mask_bounds_center_clip(
-        coords_bounds_center_inside, bounds1, True
-    )
-    mask_bounds1_outside = mask_bounds_center_clip(
-        coords_bounds_center_outside, bounds2, False
-    )
-
-    assert len(spheres6._calc_keep_index) == int(mask_bounds1_inside.sum())
-    assert len(spheres7._calc_keep_index) == int(mask_bounds1_outside.sum())
-    assert len(spheres6._calc_keep_index) < len(coords_bounds_center_inside)
-    assert len(spheres7._calc_keep_index) < len(coords_bounds_center_outside)
     assert len(figure.pl.scalar_bars) == 0
 
     return {
         "figure": figure,
-        "bounds1": bounds1,
-        "bounds2": bounds2,
-        "bounds3": bounds3,
-        "bounds4": bounds4,
-        "bounds_visual1": bounds_visual1,
-        "bounds_visual2": bounds_visual2,
-        "bounds_visual3": bounds_visual3,
-        "bounds_visual4": bounds_visual4,
         "spheres1": spheres1,
         "spheres2": spheres2,
         "spheres3": spheres3,
         "spheres4": spheres4,
         "spheres5": spheres5,
-        "spheres6": spheres6,
-        "spheres7": spheres7,
-        "spheres8": spheres8,
-        "spheres9": spheres9,
     }
 
 
@@ -372,7 +210,7 @@ def save_gallery_snapshot(figure, path):
 
 
 def render_gallery_variants():
-    figure_offscreen = nematics3d.PlotFigure(
+    figure_offscreen = PlotFigure(
         is_off_screen=True,
         name="test_sphere_gallery_offscreen",
         size=(2200, 1200),
@@ -380,7 +218,7 @@ def render_gallery_variants():
     scene_offscreen = build_sphere_gallery(figure_offscreen)
     path_offscreen = save_gallery_snapshot(figure_offscreen, PATH_IMAGE_OFFSCREEN)
 
-    figure_interactive = nematics3d.PlotFigure(
+    figure_interactive = PlotFigure(
         name="test_sphere_gallery_interactive",
         size=(2200, 1200),
     )

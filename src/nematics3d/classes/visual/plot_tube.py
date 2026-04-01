@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Sequence, Any, Mapping, ClassVar
 import numpy as np
@@ -146,8 +146,8 @@ class OptsTube(OptsGlyph):
         "is_capping": "Whether to close the ends of the tube.",
     }
 
-    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
-        **dict(OptsGlyph._validators),
+    impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
+        **dict(OptsGlyph.impl_validators),
         "is_capping": lambda v, d: as_bool(v, name=d),
     }
 
@@ -362,19 +362,42 @@ class PlotTube(PlotGlyph):
         Figure container that manages plotted objects.
     """
 
+    # fmt: off
     __attrs__ = {
         **dict(PlotGlyph.__attrs__),
-        "raw_name": "The name identifier of the PlotTube instance",
-        "raw_line_index": "Optional polyline membership indices.",
+        "raw_name":         "The name identifier of the PlotTube instance",
+        "raw_line_index":   "Optional polyline membership indices.",
         "_calc_line_index": "The effective polyline membership indices used for the current glyph build after clip-mode preprocessing.",
         "_calc_keep_index": "Indices of raw centerline points kept after center-based point filtering.",
     }
 
-    __slots__ = tuple(
-        k
-        for k, v in __attrs__.items()
-        if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+    __attr_defs__ = {
+        **dict(PlotGlyph.__attr_defs__),
+        "raw_name": {
+            **dict(PlotGlyph.__attr_defs__["raw_name"]),
+            "doc": __attrs__["raw_name"],
+        },
+        "raw_line_index": {
+            "doc":                        __attrs__["raw_line_index"],
+            "validator":                  None,
+            "is_public_settable":         True,
+            "is_protected":               False,
+            "is_reapply_opts_after_raw":  True,
+        },
+        "_calc_line_index": {
+            "doc": __attrs__["_calc_line_index"],
+        },
+        "_calc_keep_index": {
+            "doc": __attrs__["_calc_keep_index"],
+        },
+    }
+
+    __slots__ = (
+        "raw_line_index",
+        "_calc_line_index",
+        "_calc_keep_index",
     )
+    # fmt: on
 
     # -------------------------------
     # Initialization
@@ -492,8 +515,8 @@ class PlotTube(PlotGlyph):
             return self.raw_coords.copy()
 
         axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds._calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds._calc_axis3, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
         length1 = float(bounds.opts.length1)
         length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
         length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
