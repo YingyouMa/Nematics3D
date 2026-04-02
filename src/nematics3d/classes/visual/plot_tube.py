@@ -1,24 +1,24 @@
+"""Tube glyph visuals built on the shared PlotGlyph pipeline."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Sequence, Any, Mapping, ClassVar
+from types import MappingProxyType
+from typing import Any, Callable, ClassVar, Mapping, Sequence
+
 import numpy as np
 import pyvista as pv
-from types import MappingProxyType
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.datatypes import UNSET, Unset, as_bool
-from .plot_figure import FigureData, PlotFigure
-from .glyph import OptsGlyph, PlotGlyph
-from ..bounds import BoundsData
 from nematics3d.general import closest_point_on_polyline, fmt_value
+from nematics3d.logging_decorator import logging_and_warning_decorator
+
+from ..bounds import BoundsData
+from ..host_base import HostBase
+from .glyph import OptsGlyph, PlotGlyph
+from .plot_figure import FigureData
 from .qt.interact_tube import InteractTube
-from nematics3d.classes.host_base import HostBase
 
-#! light dark pbr
-
-#! info log extra attr
-# 1 del
-#! orphan figure
 
 #! test
 #! color invalid
@@ -79,7 +79,7 @@ class OptsTube(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw centerline point coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0
+    - `"upercent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering. For tubes this follows the raw point
       order, not true arc length, and does not restart for each `line_index`
       segment.
@@ -125,7 +125,7 @@ class OptsTube(OptsGlyph):
     Resolve values from position along the glyph order:
 
     >>> opts = OptsTube(
-    ...     resolver_source="u_percent",
+    ...     resolver_source="upercent",
     ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -278,7 +278,7 @@ class PlotTube(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw centerline coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0 to
+    - `"upercent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering. For `PlotTube`, this is based on the raw
       centerline point order rather than true arc length, and it does not
       restart separately for each disconnected `line_index` segment
@@ -340,7 +340,7 @@ class PlotTube(PlotGlyph):
     Resolve values from point-order percentage:
 
     >>> tube.act_commit(
-    ...     resolver_source="u_percent",
+    ...     resolver_source="upercent",
     ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -365,32 +365,26 @@ class PlotTube(PlotGlyph):
     # fmt: off
     __attr_defs__ = {
         **dict(PlotGlyph.__attr_defs__),
-        "raw_name": {
-            **dict(PlotGlyph.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of the PlotTube instance",
-        },
         "raw_line_index": {
-            "doc":                        "Optional polyline membership indices.",
-            "validator":                  None,
-            "is_public_settable":         True,
-            "is_protected":               False,
-            "is_reapply_opts_after_raw":  True,
+            "doc":                       "Optional polyline membership indices.",
+            "is_reapply_opts_after_raw": True,
         },
         "calc_line_index": {
-            "doc": "The effective polyline membership indices used for the current glyph build after clip-mode preprocessing.",
+            "doc": (
+                "The effective polyline membership indices used for the "
+                "current glyph build after clip-mode preprocessing."
+            ),
         },
         "calc_keep_index": {
             "doc": "Indices of raw centerline points kept after center-based point filtering.",
         },
     }
 
-    __slots__ = (
-        "raw_line_index",
-        "calc_line_index",
-        "calc_keep_index",
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
-    # fmt: on
-
     # -------------------------------
     # Initialization
     # -------------------------------
@@ -399,7 +393,6 @@ class PlotTube(PlotGlyph):
     # PlotTube overrides PlotGlyph.__init__ only to accept
     # and validate the tube-specific raw field `line_index`.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
@@ -413,7 +406,6 @@ class PlotTube(PlotGlyph):
         clip_mode: str = "center",
         is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
 
@@ -447,17 +439,14 @@ class PlotTube(PlotGlyph):
     def _helper_check_index(self, line_index, name):
         if line_index is None:
             return None
-        try:
-            line_index = np.asarray(line_index, dtype=int)
-            if line_index.ndim != 1 or len(line_index) != self.raw_coords.shape[0]:
-                raise ValueError(
-                    f"`line_index` is {name}. "
-                    f"It must be a ({self.raw_coords.shape[0]},) array. "
-                    f"Got shape {line_index.shape} instead."
-                )
-            return line_index
-        except (ValueError, TypeError):
-            raise
+        line_index = np.asarray(line_index, dtype=int)
+        if line_index.ndim != 1 or len(line_index) != self.raw_coords.shape[0]:
+            raise ValueError(
+                f"`line_index` is {name}. "
+                f"It must be a ({self.raw_coords.shape[0]},) array. "
+                f"Got shape {line_index.shape} instead."
+            )
+        return line_index
 
     def _helper_commit_line_index(self, kwargs):
         return HostBase._helper_commit_pop_raw(
@@ -627,7 +616,8 @@ class PlotTube(PlotGlyph):
     # ==================================================
     def _helper_set_poly(self, poly):
         if self.state_clip_mode != "center":
-            return super()._helper_set_poly(poly)
+            super()._helper_set_poly(poly)
+            return
 
         if poly.n_points == 0:
             return
@@ -652,8 +642,7 @@ class PlotTube(PlotGlyph):
     # Mesh generation and commit hooks
     # -------------------------------
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_build_mesh(self, logger=None):
+    def _helper_build_mesh(self):
         """
         Internal: generate tube geometry from the prepared polyline dataset.
         """
@@ -698,16 +687,16 @@ class PlotTube(PlotGlyph):
     def _helper_resolve_pick(self, picked_point):
 
         pos_close, msg, idx = super()._helper_resolve_pick(picked_point)
-        u_percent = idx / len(self.raw_coords) * 100
+        upercent = idx / len(self.raw_coords) * 100
         msg_head = (
             f"The closest point on the tube is {fmt_value(pos_close)}, where: \n"
-            f"The normalized position along the tube is {u_percent:.3f} \n"
+            f"The normalized position along the tube is {upercent:.3f} \n"
         )
         try:
             smooth = self.wrapper.owner
-            tgt = smooth.act_calc_tangent(u_percent)
+            tgt = smooth.act_calc_tangent(upercent)
             msg_head += f"Local tangent: {fmt_value(tgt)} \n"
-        except:
+        except (AttributeError, TypeError, ValueError, RuntimeError):
             pass
         msg = msg_head + msg
 

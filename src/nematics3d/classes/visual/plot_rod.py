@@ -1,18 +1,22 @@
-﻿from __future__ import annotations
+"""Rod glyph visuals built on the shared PlotGlyph pipeline."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Sequence, Any, Mapping, ClassVar
+from types import MappingProxyType
+from typing import Any, Callable, ClassVar, Mapping, Sequence
+
 import numpy as np
 import pyvista as pv
-from types import MappingProxyType
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.datatypes import UNSET, Unset, as_str
-from .plot_figure import FigureData, PlotFigure
-from .glyph import OptsGlyph, PlotGlyph
-from ..bounds import BoundsData
-from .qt.interact_rod import InteractRod
-from nematics3d.datatypes import as_points
+from nematics3d.datatypes import UNSET, Unset, as_Number, as_points, as_str
 from nematics3d.general import fmt_value
+from nematics3d.logging_decorator import logging_and_warning_decorator
+
+from ..bounds import BoundsData
+from .glyph import OptsGlyph, PlotGlyph
+from .plot_figure import FigureData
+from .qt.interact_rod import InteractRod
 
 LengthMode = float | Callable | Sequence
 
@@ -72,7 +76,7 @@ class OptsRod(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw rod-center coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0
+    - `"upercent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering
     - `"orient"`: the callable receives the raw orientation vectors. This is
       the default setting for rods.
@@ -142,12 +146,13 @@ class OptsRod(OptsGlyph):
         "length": "The length of rods",
     }
 
-    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
-        **dict(OptsGlyph._validators),
+    impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
+        **dict(OptsGlyph.impl_validators),
+        "length": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "resolver_source": lambda v, d: as_str(
             v,
             name=d,
-            pool=("coords", "u_percent", "orient"),
+            pool=("coords", "upercent", "orient"),
         ),
     }
 
@@ -194,8 +199,8 @@ class PlotRod(PlotGlyph):
     - `bounds`: the currently bound clipping object, if any.
     - `raw_coords`: the raw rod-center coordinates.
     - `raw_orient`: the raw rod orientation vectors.
-    - `_calc_length`: the resolved per-rod lengths used for geometry building.
-    - `_calc_keep_index`: the raw rod indices kept after center-based clipping.
+    - `calc_length`: the resolved per-rod lengths used for geometry building.
+    - `calc_keep_index`: the raw rod indices kept after center-based clipping.
 
     Common inspection helpers:
 
@@ -280,7 +285,7 @@ class PlotRod(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw rod-center coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0 to
+    - `"upercent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering
     - `"orient"`: the callable receives the raw orientation vectors. This is
       the default resolver source for rods.
@@ -362,25 +367,29 @@ class PlotRod(PlotGlyph):
         Figure container that manages plotted objects.
     """
 
-    __attrs__ = {
-        **dict(PlotGlyph.__attrs__),
-        "raw_name": "The name identifier of the PlotRod instance",
-        "raw_orient": "The orientation of rods",
-        "_calc_length": "The resolved per-point length array used for rods length.",
-        "_calc_keep_index": "Indices of raw rod centers kept after center-based point filtering.",
+    __attr_defs__ = {
+        **dict(PlotGlyph.__attr_defs__),
+        "raw_orient": {
+            "doc": "The orientation vectors of rods.",
+            "validator": lambda v, d: as_points(v, name=d),
+            "is_reapply_opts_after_raw": True,
+        },
+        "calc_length": {
+            "doc": "The resolved per-rod length array used for rod geometry building.",
+        },
+        "calc_keep_index": {
+            "doc": "Indices of raw rod centers kept after center-based point filtering.",
+        },
     }
     __slots__ = tuple(
-        k
-        for k, v in __attrs__.items()
-        if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
 
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
         "length"
     ]
-    _validators_local = {
-        "orient": lambda v, d: as_points(v, name=d),
-    }
 
     # -------------------------------
     # Initialization
@@ -391,7 +400,6 @@ class PlotRod(PlotGlyph):
     # rod-specific raw orientation data before the generic glyph
     # initialization and mesh setup are performed.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
@@ -405,13 +413,12 @@ class PlotRod(PlotGlyph):
         clip_mode: str = "center",
         is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
 
-        orient = self.__class__._validators_local["orient"](
+        orient = type(self).__attr_defs__["raw_orient"]["validator"](
             orient,
-            self.show_attr_desc("raw_orient"),
+            type(self).__attr_defs__["raw_orient"]["doc"],
         )
         object.__setattr__(self, "raw_orient", orient)
 
@@ -432,10 +439,11 @@ class PlotRod(PlotGlyph):
 
         if len(self.raw_orient) != len(self.raw_coords):
             raise ValueError(
-                f"There are {len(self.raw_orient)} points for orientation, while {len(self.raw_coords)} points for positions."
+                f"There are {len(self.raw_orient)} points for orientation, "
+                f"while {len(self.raw_coords)} points for positions."
             )
 
-        object.__setattr__(self, "_calc_keep_index", None)
+        object.__setattr__(self, "calc_keep_index", None)
 
         self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
 
@@ -453,7 +461,7 @@ class PlotRod(PlotGlyph):
         source_name = as_str(
             self.opts.resolver_source,
             name="glyph resolver source",
-            pool=("coords", "u_percent", "orient"),
+            pool=("coords", "upercent", "orient"),
         )
         if source_name == "orient":
             return self.raw_orient
@@ -478,12 +486,12 @@ class PlotRod(PlotGlyph):
         bounds = self.bounds
         if bounds is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "_calc_keep_index", keep_index)
+            object.__setattr__(self, "calc_keep_index", keep_index)
             return self.raw_coords.copy()
 
         axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds._calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds._calc_axis3, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
         length1 = float(bounds.opts.length1)
         length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
         length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
@@ -505,7 +513,7 @@ class PlotRod(PlotGlyph):
         )
         mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
-        object.__setattr__(self, "_calc_keep_index", keep_index)
+        object.__setattr__(self, "calc_keep_index", keep_index)
         return self.raw_coords[keep_index]
 
     # ==================== OVERRIDE ====================
@@ -516,18 +524,18 @@ class PlotRod(PlotGlyph):
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_build_poly(self, logger=None):
 
-        keep_index = getattr(self, "_calc_keep_index", None)
+        keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        points = self._calc_coords
+        points = self.calc_coords
         if len(points) == 0:
             poly = pv.PolyData(np.empty((0, 3), dtype=float))
-            object.__setattr__(self, "_calc_poly", poly)
+            object.__setattr__(self, "calc_poly", poly)
             self._helper_set_poly(poly)
             return
 
-        length = self._calc_length[keep_index].reshape(-1, 1)
+        length = self.calc_length[keep_index].reshape(-1, 1)
         orient = self.raw_orient[keep_index].copy()
 
         orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
@@ -536,7 +544,8 @@ class PlotRod(PlotGlyph):
             n_bad = np.count_nonzero(~mask)
             logger.warning(
                 f"{n_bad} rod(s) have near-zero orientation norm (<= 1e-5). "
-                "Their directions are left unnormalized, which may lead to degenerate or invisible rods."
+                "Their directions are left unnormalized, which may lead to "
+                "degenerate or invisible rods."
             )
         orient[mask] /= orient_norm[mask]
 
@@ -555,7 +564,7 @@ class PlotRod(PlotGlyph):
 
         poly = pv.PolyData(endpoints, lines=lines.ravel())
 
-        object.__setattr__(self, "_calc_poly", poly)
+        object.__setattr__(self, "calc_poly", poly)
         self._helper_set_poly(poly)
 
     # ==================== OVERRIDE ====================
@@ -566,14 +575,14 @@ class PlotRod(PlotGlyph):
         if poly.n_points == 0:
             return
 
-        keep_index = getattr(self, "_calc_keep_index", None)
+        keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        color_raw = object.__getattribute__(self, "_calc_color")
-        opacity_raw = object.__getattribute__(self, "_calc_opacity")
-        radius_raw = object.__getattribute__(self, "_calc_radius")
-        scalars_raw = object.__getattribute__(self, "_calc_scalars")
+        color_raw = self.calc_color
+        opacity_raw = self.calc_opacity
+        radius_raw = self.calc_radius
+        scalars_raw = self.calc_scalars
 
         color = self._helper_expand_endpoint_values(color_raw, keep_index)
         opacity = self._helper_expand_endpoint_values(opacity_raw, keep_index)
@@ -595,10 +604,9 @@ class PlotRod(PlotGlyph):
     # rod-specific endpoint polydata and rely on tube filtering without capping
     # or extra spline processing.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_build_mesh(self, logger=None):
+    def _helper_build_mesh(self):
 
-        poly = self._calc_poly
+        poly = self.calc_poly
         if poly.n_points < 2 or "radius" not in poly.point_data:
             return pv.PolyData()
 
@@ -608,7 +616,7 @@ class PlotRod(PlotGlyph):
             absolute=True,
         )
 
-        object.__setattr__(self, "_calc_poly", poly)
+        object.__setattr__(self, "calc_poly", poly)
         return mesh
 
     # -------------------------------

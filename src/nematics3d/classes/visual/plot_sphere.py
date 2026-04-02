@@ -1,12 +1,15 @@
+"""Sphere glyph visuals built on the shared PlotGlyph pipeline."""
+
 from dataclasses import dataclass
-from typing import Any, Mapping, ClassVar
+from types import MappingProxyType
+from typing import Any, ClassVar, Mapping
+
 import numpy as np
 import pyvista as pv
-from types import MappingProxyType
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from .plot_figure import FigureData, PlotFigure
+
 from .glyph import OptsGlyph, PlotGlyph
+from .plot_figure import FigureData
 from .qt.interact_sphere import InteractSphere
 
 
@@ -51,7 +54,7 @@ class OptsSphere(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw point coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0
+    - `"upercent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering
 
     A few useful relationships to keep in mind:
@@ -95,7 +98,7 @@ class OptsSphere(OptsGlyph):
     Resolve values from position along the glyph order:
 
     >>> opts = OptsSphere(
-    ...     resolver_source="u_percent",
+    ...     resolver_source="upercent",
     ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -203,7 +206,7 @@ class PlotSphere(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw sphere-center coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0 to
+    - `"upercent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering
 
     Interactive Behavior
@@ -258,7 +261,7 @@ class PlotSphere(PlotGlyph):
     Resolve values from point-order percentage:
 
     >>> spheres.act_commit(
-    ...     resolver_source="u_percent",
+    ...     resolver_source="upercent",
     ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -288,16 +291,16 @@ class PlotSphere(PlotGlyph):
         },
     }
 
-    __slots__ = (
-        "calc_keep_index",
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
-    # fmt: on
     # ==================== OVERRIDE ====================
     # PlotSphere overrides PlotGlyph.__init__ because it fixes the glyph family
     # to sphere rendering and installs the sphere-specific interaction panel.
     # ==================================================
 
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
@@ -310,7 +313,6 @@ class PlotSphere(PlotGlyph):
         clip_mode: str = "center",
         is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
 
@@ -377,7 +379,8 @@ class PlotSphere(PlotGlyph):
     # ==================================================
     def _helper_set_poly(self, poly):
         if self.state_clip_mode != "center":
-            return super()._helper_set_poly(poly)
+            super()._helper_set_poly(poly)
+            return
 
         if poly.n_points == 0:
             return
@@ -403,8 +406,7 @@ class PlotSphere(PlotGlyph):
     # geometry for each input point using the resolved radius values.
     # ==================================================
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_build_mesh(self, logger=None):
+    def _helper_build_mesh(self):
 
         poly = self.calc_poly
         if poly.n_points == 0 or "radius" not in poly.point_data:

@@ -160,8 +160,6 @@ class SmoothedLine(HostBase):
         "raw_coords": {
             "doc":                        "Raw input line coordinates (shape: N x D)",
             "validator":                  lambda v, d: as_points(v, name=d, dim=None),
-            "is_public_settable":         True,
-            "is_protected":               False,
             "is_reapply_opts_after_raw":  True,
         },
         "calc_coords": {
@@ -195,10 +193,8 @@ class SmoothedLine(HostBase):
 
         },
         "state_is_window_warning": {
-            "doc":                "Whether to present the warning when both window_length and window_ratio are provided.",
-            "validator":          lambda v, d: as_bool(v, name=d),
-            "is_public_settable": True,
-            "is_protected":       False,
+            "doc":       "Whether to present the warning when both window_length and window_ratio are provided.",
+            "validator": lambda v, d: as_bool(v, name=d),
         },
         "calc_status": {
             "doc": (
@@ -220,14 +216,10 @@ class SmoothedLine(HostBase):
     }
     # fmt: on
 
-    __slots__ = (
-        "raw_coords",
-        "calc_coords",
-        "calc_result",
-        "entity_tck",
-        "calc_is_smoothed",
-        "state_is_window_warning",
-        "calc_status",
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
     # -------------------------------
     # Initialization

@@ -29,32 +29,41 @@ BoundsData: TypeAlias = (
 
 @dataclass(slots=True)
 class _BoundsSubscriberEntry:
+    """Weak-reference record for one bounds-driven sync subscriber."""
+
     host_ref: weakref.ReferenceType
     sync_name: str
     kind: str
 
     @property
     def host(self):
+        """Return the live host object, or ``None`` if it was garbage-collected."""
         return self.host_ref()
 
 
 @dataclass(slots=True)
 class _BoundsVisualEntry:
+    """Weak-reference record for one bounds visualization frame inside a figure."""
+
     figure_ref: weakref.ReferenceType
     tube_ref: weakref.ReferenceType
     sync_name: str
 
     @property
     def figure(self):
+        """Return the live figure object, or ``None`` if it was garbage-collected."""
         return self.figure_ref()
 
     @property
     def tube(self):
+        """Return the live tube visual, or ``None`` if it was garbage-collected."""
         return self.tube_ref()
 
 
 @dataclass(slots=True, repr=False)
 class OptsBounds(OptsBase):
+    """Opts object controlling bounds geometry and origin/axis interpretation."""
+
     origin: Vect(3) | Unset = UNSET
     axis1: Vect(3) | Unset = UNSET
     axis2: Vect(3) | None | Unset = UNSET
@@ -124,6 +133,8 @@ class OptsBounds(OptsBase):
 
 
 class Bounds(HostBase):
+    """Host object representing one axis-aligned or oriented box bounds."""
+
     # fmt: off
     __attr_defs__ = {
         **dict(HostBase.__attr_defs__),
@@ -137,7 +148,10 @@ class Bounds(HostBase):
             "doc": "Visual subscriptions of this bounds across figures.",
         },
         "entity_subscribers": {
-            "doc": "Weak subscriber records for hosts driven by this bounds, excluding its own visualization frames.",
+            "doc": (
+                "Weak subscriber records for hosts driven by this bounds, "
+                "excluding its own visualization frames."
+            ),
         },
         "calc_axis2": {
             "doc": "Resolved second axis used by the bounds box.",
@@ -263,8 +277,9 @@ class Bounds(HostBase):
                 axis2 = axis2 - dot_product * axis1
                 axis2 /= np.linalg.norm(axis2)
                 logger.warning(
-                    f"Invalid geometry: axis2 is not perpendicular to axis1 (dot product: {dot_product:.4e}). "
-                    f"Projecting original axis2 {old_axis2} onto the plane normal to axis1 {axis1}. "
+                    f"Invalid geometry: axis2 is not perpendicular to axis1 "
+                    f"(dot product: {dot_product:.4e}). Projecting original "
+                    f"axis2 {old_axis2} onto the plane normal to axis1 {axis1}. "
                     f"New orthonormal axis2: {axis2}."
                 )
         else:
@@ -324,10 +339,12 @@ class Bounds(HostBase):
 
     @property
     def corners(self):
+        """Return the current box corners as an ``(8, 3)`` array."""
         return self.entity_corners
 
     @property
     def clip_geometry(self):
+        """Return the current clipping ``PolyData`` for this bounds."""
         return self.entity_clip_geometry
 
     def act_copy(self, name: str | None = None):
@@ -372,20 +389,22 @@ class Bounds(HostBase):
         return None
 
     def act_register_subscriber(self, host, *, sync_name: str, kind: str):
+        """Register one host as a sync subscriber of this bounds."""
         self._helper_prune_subscribers()
         entry_old = self._helper_find_subscriber(host=host, sync_name=sync_name)
         if entry_old is not None:
             return entry_old
 
-        self.entity_subscribers.append(
-            _BoundsSubscriberEntry(
-                host_ref=weakref.ref(host),
-                sync_name=sync_name,
-                kind=str(kind),
-            )
+        entry = _BoundsSubscriberEntry(
+            host_ref=weakref.ref(host),
+            sync_name=sync_name,
+            kind=str(kind),
         )
+        self.entity_subscribers.append(entry)
+        return entry
 
     def act_unregister_subscriber(self, *, host=None, sync_name: str | None = None):
+        """Unregister one subscriber by host object or sync-task name."""
         subscribers_alive = []
         sync_to_detach = []
         for entry in self.entity_subscribers:
@@ -405,6 +424,7 @@ class Bounds(HostBase):
 
     @property
     def subscribers(self):
+        """Return all live hosts currently subscribed to this bounds."""
         self._helper_prune_subscribers()
         return tuple(
             entry.host for entry in self.entity_subscribers if entry.host is not None
@@ -412,6 +432,7 @@ class Bounds(HostBase):
 
     @property
     def glyph_subscribers(self):
+        """Return the live glyph subscribers of this bounds."""
         self._helper_prune_subscribers()
         return tuple(
             entry.host
@@ -421,6 +442,7 @@ class Bounds(HostBase):
 
     @property
     def plane_grid_subscribers(self):
+        """Return the live plane-grid subscribers of this bounds."""
         self._helper_prune_subscribers()
         return tuple(
             entry.host
@@ -529,6 +551,7 @@ class Bounds(HostBase):
         is_replace: bool = False,
         **kwargs,
     ):
+        """Visualize this bounds as a tube frame inside one figure."""
         from .visual.plot_figure import PlotFigure
         from .visual.plot_tube import PlotTube
 
@@ -538,7 +561,7 @@ class Bounds(HostBase):
         elif not isinstance(figure, PlotFigure):
             try:
                 figure = PlotFigure(plotter=figure)
-            except Exception:
+            except (AttributeError, RuntimeError, TypeError, ValueError):
                 figure = PlotFigure()
 
         entry_old = self._helper_find_visual_entry(figure=figure)
@@ -573,18 +596,18 @@ class Bounds(HostBase):
             **kwargs,
         )
 
-        sync_name = f"{tube._impl_name_pv}__bounds_sync"
+        sync_name = f"{tube.impl_name_pv}__bounds_sync"
         tube.act_add_attr(
-            "_impl_bounds_visual_source",
+            "impl_bounds_visual_source",
             doc="Bounds source driving this visualized frame.",
             default=self,
-            overwrite=True,
+            is_overwrite=True,
         )
         tube.act_add_attr(
-            "_impl_bounds_visual_sync_name",
+            "impl_bounds_visual_sync_name",
             doc="Internal sync-task name used by the source Bounds.",
             default=sync_name,
-            overwrite=True,
+            is_overwrite=True,
         )
         tube.act_set_interact_func(
             lambda: self._helper_open_interact_panels(tube=tube, figure=figure)
@@ -661,8 +684,9 @@ def _build_bounds_from_corner_edges(
     if handedness < 0:
         if is_preserve_axis_order:
             raise ValueError(
-                "The input box edges form a left-handed frame under the given axis order. "
-                "Please reorder the input points, or convert this geometry to BoundsGeneral instead."
+                "The input box edges form a left-handed frame under the given "
+                "axis order. Please reorder the input points, or convert this "
+                "geometry to BoundsGeneral instead."
             )
         axis2, axis3 = axis3, axis2
         length2, length3 = length3, length2
@@ -799,6 +823,7 @@ def _polydata_to_box_points(polydata: pv.PolyData) -> np.ndarray:
 
 
 def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
+    """Convert supported box-like inputs to a ``Bounds`` instance."""
     if input_data is None:
         return None
 
@@ -809,8 +834,9 @@ def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
         unique_points = _polydata_to_box_points(input_data)
         if unique_points.shape != (8, 3):
             raise ValueError(
-                f"{name!r} PolyData does not look like a box: it has {len(unique_points)} unique points. "
-                "Please convert this geometry to BoundsGeneral instead."
+                f"{name!r} PolyData does not look like a box: it has "
+                f"{len(unique_points)} unique points. Please convert this "
+                "geometry to BoundsGeneral instead."
             )
         return _build_bounds_from_8_points(unique_points, name=name)
 

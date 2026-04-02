@@ -1,7 +1,10 @@
-import numpy as np
+"""Polar plane sampling grids embedded in 3D space with optional bounds filtering."""
+
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any, ClassVar, Mapping
+
+import numpy as np
 
 from nematics3d.datatypes import (
     Number,
@@ -47,21 +50,35 @@ class OptsPlaneGridPolar(OptsBase):
     grid_offset: Vect(3) | Unset = UNSET
     grid_transform: Tensor((3, 3)) | Unset = UNSET
 
-    __attrs__ = {
-        **(OptsBase.__attrs__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsBase.__attrs__),
         "origin": "center of the polar grid in index coordinates",
         "normal": "normal of the plane (unit vector)",
-        "theta0_axis": "in-plane reference axis defining theta=0; will be projected onto the plane and normalized (None uses the default axis)",
+        "theta0_axis": (
+            "in-plane reference axis defining theta=0; will be projected onto "
+            "the plane and normalized (None uses the default axis)"
+        ),
         "R_min": "minimum radius of the first ring (or 0 for center point)",
         "layers": "total number of rings/layers to generate",
         "dr": "radial spacing between rings; rings at r_i = R_min + i * dr",
-        "arc_dist": "target arc-length spacing between adjacent points along each ring",
-        "is_clip_inside": "Whether bounds filtering keeps the grid points inside the bounds (True) or outside (False).",
-        "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
-        "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
+        "arc_dist": (
+            "target arc-length spacing between adjacent points along each ring"
+        ),
+        "is_clip_inside": (
+            "Whether bounds filtering keeps the grid points inside the bounds "
+            "(True) or outside (False)."
+        ),
+        "grid_offset": (
+            "grid translation offset to map lattice indices to real-space coordinates"
+        ),
+        "grid_transform": (
+            "grid transform matrix to map lattice indices to real-space coordinates "
+            "(3x3 orthogonal matrix)"
+        ),
     }
-    _validators = {
-        **(OptsBase._validators),
+
+    impl_validators: ClassVar[Mapping[str, Any]] = {
+        **dict(OptsBase.impl_validators),
         "origin": lambda v, d: as_Vect(v, name=d),
         "normal": lambda v, d: as_Vect(v, name=d, is_norm=True),
         "theta0_axis": lambda v, d: (
@@ -82,9 +99,9 @@ class OptsPlaneGridPolar(OptsBase):
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
     }
 
-    impl_defaults_frozen = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **(OptsBase.impl_defaults_frozen),
+            **dict(OptsBase.impl_defaults_frozen),
             "tag": "polar plane grid options",
             "theta0_axis": None,
             "R_min": None,
@@ -104,8 +121,8 @@ class OptsPlaneGridPolar(OptsBase):
 #
 # Subclasses should preserve the coupling among the polar point caches, ring
 # offsets, and the theta reference axis. If the polar lattice generation is
-# overridden, keep `_entity_grid`, `_entity_grid_all`, `_entity_polar`, and
-# `_calc_ring_offsets` synchronized.
+# overridden, keep `entity_grid`, `entity_grid_all`, `entity_polar`, and
+# `calc_ring_offsets` synchronized.
 class PlaneGridPolar(HostBase):
     """
     PlaneGridPolar generates a polar sampling grid embedded in 3D space.
@@ -118,21 +135,56 @@ class PlaneGridPolar(HostBase):
     bindings.
     """
 
-    __attrs__ = {
-        **(HostBase.__attrs__),
-        "_entity_grid": "Selected 3D polar grid points after applying transforms and optional bounds filtering (array of shape N x 3)",
-        "_entity_grid_all": "Complete 3D polar grid points before filtering, stored as an array of shape (N, 3)",
-        "_entity_polar": "The polar coordinates (r, theta) of every point in the full grid",
-        "_calc_ring_offsets": "Cumulative offsets defining the start/end indices of each polar ring.",
-        "_calc_box_mask": "Boolean mask selecting the polar grid points kept after optional bounds filtering.",
-        "_impl_name_bounds_sync": "Internal sync-task name used to react to bounds geometry updates.",
+    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
+        **dict(HostBase.__attr_defs__),
+        "entity_grid": {
+            "doc": (
+                "Selected 3D polar grid points after applying transforms and optional "
+                "bounds filtering (array of shape N x 3)."
+            ),
+        },
+        "entity_grid_all": {
+            "doc": (
+                "Complete 3D polar grid points before filtering, stored as an "
+                "array of shape (N, 3)."
+            ),
+        },
+        "entity_polar": {
+            "doc": "The polar coordinates (r, theta) of every point in the full grid.",
+        },
+        "calc_ring_offsets": {
+            "doc": "Cumulative offsets defining the start/end indices of each polar ring.",
+        },
+        "calc_box_mask": {
+            "doc": "Boolean mask selecting the polar grid points kept after optional bounds filtering.",
+        },
+        "impl_name_bounds_sync": {
+            "doc": "Internal sync-task name used to react to bounds geometry updates.",
+        },
+        "field": {
+            "doc": "The interpolated field object attached to this polar plane grid.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "bounds": {
+            "doc": "The Bounds instance limiting this polar plane grid.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
     }
-    # Each polar plane grid binds to at most one field and one bounds object at a time.
-    __relations__ = {
-        **(HostBase.__relations__),
-        "field": "The interpolated field object attached to this polar plane grid.",
-        "bounds": "The Bounds instance limiting this polar plane grid.",
-    }
+
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
+        and name not in HostBase.__slots__
+    )
 
     # PlaneGridPolar overrides HostBase.__init__ because it must validate
     # required polar-plane parameters, install the bounds-sync helper state,
@@ -157,7 +209,7 @@ class PlaneGridPolar(HostBase):
         )
 
         object.__setattr__(
-            self, "_impl_name_bounds_sync", f"plane_grid_polar_bounds::{id(self)}"
+            self, "impl_name_bounds_sync", f"plane_grid_polar_bounds::{id(self)}"
         )
 
         for key, value in {
@@ -208,16 +260,17 @@ class PlaneGridPolar(HostBase):
                 theta0_axis = theta0_axis - dot_product * normal
                 theta0_axis /= np.linalg.norm(theta0_axis)
                 logger.warning(
-                    f"Invalid geometry: theta0_axis is not perpendicular to normal (dot product: {dot_product:.4e}). "
-                    f"Projecting original theta0_axis {old_theta0_axis} onto the plane defined by normal {normal}. "
-                    f"New orthonormal theta0_axis: {theta0_axis}."
+                    f"Invalid geometry: theta0_axis is not perpendicular to normal "
+                    f"(dot product: {dot_product:.4e}). Projecting original "
+                    f"theta0_axis {old_theta0_axis} onto the plane defined by "
+                    f"normal {normal}. New orthonormal theta0_axis: {theta0_axis}."
                 )
         else:
             rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
             theta0_axis = rotation_matrix @ np.array([1, 0, 0])
             logger.debug(
-                f"theta0_axis not provided. Automatically generated a reference theta0_axis {theta0_axis} "
-                f"perpendicular to normal {normal}."
+                f"theta0_axis not provided. Automatically generated a reference "
+                f"theta0_axis {theta0_axis} perpendicular to normal {normal}."
             )
 
         e1 = theta0_axis
@@ -277,80 +330,16 @@ class PlaneGridPolar(HostBase):
             mask = mask_inside if self.opts.is_clip_inside else ~mask_inside
             points_select = points[mask]
 
-        object.__setattr__(self, "_entity_grid", points_select)
-        object.__setattr__(self, "_entity_grid_all", points)
-        object.__setattr__(self, "_entity_polar", polar)
-        object.__setattr__(self, "_calc_ring_offsets", ring_offsets)
-        object.__setattr__(self, "_calc_box_mask", mask)
+        object.__setattr__(self, "entity_grid", points_select)
+        object.__setattr__(self, "entity_grid_all", points)
+        object.__setattr__(self, "entity_polar", polar)
+        object.__setattr__(self, "calc_ring_offsets", ring_offsets)
+        object.__setattr__(self, "calc_box_mask", mask)
         object.__setattr__(self.opts, "theta0_axis", theta0_axis)
 
         if self.field:
             self.field._helper_commit()
 
-    #     def act_debug_plot(
-    #         self,
-    #         opts_extent: OptsTube | None = None,
-    #         opts_points: OptsSphere | None = None,
-    #         opts_figure: OptsFigure | None = None,
-    #         opts_origin: OptsSphere | None = None,
-    #         **kwargs,
-    #     ):
-    #         if opts_extent is None:
-    #             opts_extent = OptsTube()
-    #         if opts_points is None:
-    #             opts_points = OptsSphere()
-    #         if opts_figure is None:
-    #             opts_figure = OptsFigure()
-    #         if opts_origin is None:
-    #             opts_origin = OptsSphere()
-    #
-    #         merge = merge_opts_all(
-    #             {
-    #                 "figure_": opts_figure,
-    #                 "point_": opts_points,
-    #                 "extent_": opts_extent,
-    #                 "origin_": opts_origin,
-    #             },
-    #             kwargs,
-    #             type(self).__name__,
-    #         )
-    #
-    #         opts_figure = merge["figure_"]
-    #         opts_points = merge["point_"]
-    #         opts_extent = merge["extent_"]
-    #         opts_origin = merge["origin_"]
-    #
-    #         figure = PlotFigure(
-    #             opts=opts_figure, name=f"Diagnostic plot of plane {self.name!r}"
-    #         )
-    #         bulk = PlotSphere(
-    #             coords=self._entity_grid,
-    #             opts=opts_points,
-    #             figure=figure,
-    #             category="plane_grid_test",
-    #             name="grid",
-    #         )
-    #         PlotSphere(
-    #             coords=self.opts.origin,
-    #             opts=opts_origin,
-    #             figure=figure,
-    #             opts_defaults_override={
-    #                 "color": (1, 0, 0),
-    #                 "radius": 1.2 * bulk._calc_radius[0],
-    #             },
-    #             category="plane_grid_test",
-    #             name="origin",
-    #         )
-    #         if self.bounds is not None:
-    #             self.bounds.act_visualize(
-    #                 opts=opts_extent,
-    #                 figure=figure,
-    #                 category="plane_grid_test",
-    #                 name="grid_extent",
-    #             )
-    #
-    #         return figure
-    #
     # ==================== OVERRIDE ====================
     # PlaneGridPolar overrides ClassBase.__repr__ because a polar grid is more
     # useful when represented by its plane orientation and radial settings than
@@ -363,10 +352,12 @@ class PlaneGridPolar(HostBase):
         )
 
     def __iter__(self):
-        return iter(self._entity_grid)
+        """Iterate over the currently selected polar grid points."""
+        return iter(self.entity_grid)
 
     def __getitem__(self, idx):
-        return self._entity_grid[idx]
+        """Return one selected polar grid point or slice."""
+        return self.entity_grid[idx]
 
     # ==================== OVERRIDE ====================
     # PlaneGridPolar overrides ClassBase.__str__ to keep the plain string form
@@ -376,17 +367,16 @@ class PlaneGridPolar(HostBase):
         return f"{type(self).__name__}({self.name!r})"
 
     def __array__(self, dtype=None):
-        arr = self._entity_grid
+        """Expose the selected polar grid points as a NumPy array."""
+        arr = self.entity_grid
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
 
     def __call__(self):
-        return self._entity_grid
-
-    @property
-    def _impl_field(self):
-        return getattr(self, "field", None)
+        """Return the currently selected polar grid points."""
+        return self.entity_grid
 
     def act_copy(self, name: str | None = None, is_bind_same_bounds: bool = True):
+        """Create one copied PlaneGridPolar with duplicated opts and optional shared bounds."""
         opts_new = type(self.opts)(**self.opts.act_asdict())
         bounds_new = self.bounds if is_bind_same_bounds else None
         name_new = self.name if name is None else name
@@ -394,11 +384,12 @@ class PlaneGridPolar(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unbind_bounds(self, is_apply=True, logger=None):
+        """Detach the current bounds object and optionally rebuild the polar grid."""
         bounds_old = self.bounds
         if bounds_old is None:
             return
         bounds_old.act_unregister_subscriber(
-            sync_name=self._impl_name_bounds_sync,
+            sync_name=self.impl_name_bounds_sync,
             host=self,
         )
         self.act_unbind_relation_base("bounds")
@@ -407,13 +398,14 @@ class PlaneGridPolar(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_bind_bounds(self, bounds, is_apply=True, is_replace=True, logger=None):
+        """Bind one bounds object to this polar plane grid and optionally rebuild it."""
         if bounds is None:
             self.act_unbind_bounds(is_apply=is_apply)
             return
 
         try:
             bounds = as_bounds(bounds, name="The bounds limiting this polar plane grid")
-        except Exception:
+        except (TypeError, ValueError, AttributeError, KeyError):
             logger.exception("Check input.")
             logger.recovery(
                 "Ignore this bounds input and continue without modifying the current binding."
@@ -435,12 +427,12 @@ class PlaneGridPolar(HostBase):
 
         self.act_bind_relation_base("bounds", bounds, is_weak=True)
         bounds.act_attach_sync_task(
-            self._impl_name_bounds_sync,
+            self.impl_name_bounds_sync,
             lambda **kwargs: self.act_commit(is_reapply_opts=True),
         )
         bounds.act_register_subscriber(
             self,
-            sync_name=self._impl_name_bounds_sync,
+            sync_name=self.impl_name_bounds_sync,
             kind="plane_grid",
         )
         if is_apply:

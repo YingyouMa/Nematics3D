@@ -29,7 +29,7 @@ class InteractBounds(PanelBase):
         super().__init__(host, figure, title=f"Controls of {host.name!r}")
 
     def _helper_get_host_visual_in_current_figure(self):
-        for entry in getattr(self.host, "_entity_visuals", []):
+        for entry in self.host.entity_visuals:
             if entry.figure is self.fig and entry.tube is not None:
                 return entry.tube
         return None
@@ -66,7 +66,7 @@ class InteractBounds(PanelBase):
     def _helper_build_axes_coords(self):
         origin = np.asarray(self.host.opts.origin, dtype=float)
         axis1 = np.asarray(self.host.opts.axis1, dtype=float)
-        axis2 = np.asarray(self.host._calc_axis2, dtype=float)
+        axis2 = np.asarray(self.host.calc_axis2, dtype=float)
         length1 = float(self.host.opts.length1)
         length2 = float(
             self.host.opts.length2
@@ -169,15 +169,15 @@ class InteractBounds(PanelBase):
 
     def _update_axis_info_labels(self):
         axis1 = np.asarray(self.host.opts.axis1, dtype=float)
-        axis2 = np.asarray(self.host._calc_axis2, dtype=float)
-        axis3 = np.asarray(self.host._calc_axis3, dtype=float)
+        axis2 = np.asarray(self.host.calc_axis2, dtype=float)
+        axis3 = np.asarray(self.host.calc_axis3, dtype=float)
         self.axis1_info.setText(self._helper_axis1_info_text(axis1))
         self.axis2_info.setText(self._vect_text(axis2, "axis2") + " (blue)")
         self.axis3_info.setText(self._vect_text(axis3, "axis3"))
 
     def build_ui(self):
         axis1 = np.asarray(self.host.opts.axis1, dtype=float)
-        axis2 = np.asarray(self.host._calc_axis2, dtype=float)
+        axis2 = np.asarray(self.host.calc_axis2, dtype=float)
         length1 = float(self.host.opts.length1)
         length2 = float(
             self.host.opts.length2 if self.host.opts.length2 is not None else length1
@@ -268,7 +268,7 @@ class InteractBounds(PanelBase):
         gl_orient.addWidget(self.axis2_info)
 
         self.axis3_info = QtWidgets.QLabel(
-            self._vect_text(self.host._calc_axis3, "axis3"),
+            self._vect_text(self.host.calc_axis3, "axis3"),
             self,
         )
         gl_orient.addWidget(self.axis3_info)
@@ -319,7 +319,7 @@ class InteractBounds(PanelBase):
     def _iter_silhouette_targets(self):
         targets = []
 
-        for entry in getattr(self.host, "_entity_visuals", []):
+        for entry in self.host.entity_visuals:
             figure = entry.figure
             tube = entry.tube
             if figure is self.fig and tube is not None:
@@ -483,8 +483,8 @@ class InteractBounds(PanelBase):
                 self._sync_from_host_slider("length3", value)
             if "axis1" in kwargs or "axis2" in kwargs:
                 axis1 = np.asarray(self.host.opts.axis1, dtype=float)
-                axis2 = np.asarray(self.host._calc_axis2, dtype=float)
-                axis3 = np.asarray(self.host._calc_axis3, dtype=float)
+                axis2 = np.asarray(self.host.calc_axis2, dtype=float)
+                axis3 = np.asarray(self.host.calc_axis3, dtype=float)
                 self._sync_from_host_slider("axis1_azimuth", self.get_azimuth(axis1))
                 self._sync_from_host_slider(
                     "axis1_polar_angle",

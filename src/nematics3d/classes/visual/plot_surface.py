@@ -1,14 +1,17 @@
+"""Surface glyph visuals built on the shared PlotGlyph pipeline."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Any, Mapping, ClassVar
+from types import MappingProxyType
+from typing import Any, ClassVar, Mapping
+
 import numpy as np
 import pyvista as pv
-from types import MappingProxyType
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from .plot_figure import FigureData, PlotFigure
-from .glyph import OptsGlyph, PlotGlyph
 from ..bounds import BoundsData
+from .glyph import OptsGlyph, PlotGlyph
+from .plot_figure import FigureData
 from .qt.interact_surface import InteractSurface
 
 
@@ -68,7 +71,7 @@ class OptsSurface(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw surface sample coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0
+    - `"upercent"`: the callable receives point-index percentages from 0
       to 100 along the raw point ordering
 
     A few useful relationships to keep in mind:
@@ -83,7 +86,7 @@ class OptsSurface(OptsGlyph):
     - lighting fields change appearance but not the reconstructed geometry
 
     If you want the full field list and their short descriptions, see
-    `OptsSurface.__attrs__`.
+    `OptsSurface.__attrs__`, plus the inherited `OptsGlyph` option fields.
     For the shared glyph option model and lower-level commit/update rules,
     see the docstrings of `OptsGlyph` and `OptsBase`.
 
@@ -110,35 +113,11 @@ class OptsSurface(OptsGlyph):
     ... )
     """
 
-    __attrs__: ClassVar[Mapping[str, str]] = {
-        **(OptsGlyph.__attrs__),
-        "radius": (
-            "Deprecated placeholder. "
-            "Currently has no effect in surface plots. "
-            "Kept temporarily to avoid refactoring overhead."
-        ),
-        "sides": (
-            "Deprecated placeholder. "
-            "Currently has no effect in surface plots. "
-            "Kept temporarily to avoid refactoring overhead."
-        ),
-    }
-
-    _validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
-        k: v for k, v in OptsGlyph._validators.items() if k not in ("radius", "sides")
-    }
-
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
-        {**(OptsGlyph.impl_defaults_frozen), "ambient": 0.5}
+        {**dict(OptsGlyph.impl_defaults_frozen), "ambient": 0.5}
     )
 
 
-# PlotSurface keeps the generic glyph host behavior but replaces the geometry
-# generation and silhouette handling with surface-specific logic.
-#
-# Subclasses should preserve the assumption that surfaces are resolved from
-# point clouds through a mesh-building stage, and keep silhouette updates in
-# sync with any actor or mesh replacement.
 class PlotSurface(PlotGlyph):
     """
     Reconstruct and render a surface mesh from input points.
@@ -162,7 +141,8 @@ class PlotSurface(PlotGlyph):
     - `fig`: the PlotFigure currently hosting this glyph, if any.
     - `bounds`: the currently bound clipping object, if any.
     - `raw_coords`: the raw surface sample coordinates.
-    - `_calc_keep_index`: the raw point indices kept after center-based clipping.
+    - `calc_keep_index`: the raw point indices kept after center-based
+      clipping.
 
     Common inspection helpers:
 
@@ -244,7 +224,7 @@ class PlotSurface(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw surface sample coordinates
-    - `"u_percent"`: the callable receives point-index percentages from 0 to
+    - `"upercent"`: the callable receives point-index percentages from 0 to
       100 along the raw point ordering
 
     Notes
@@ -309,26 +289,21 @@ class PlotSurface(PlotGlyph):
     ...     scalars=lambda pts: pts[:, 2],
     ...     scalars_cmap="viridis",
     ... )
-
-    See Also
-    --------
-    OptsSurface
-        Surface-specific options.
-    PlotGlyph
-        Base glyph pipeline shared by drawable plot objects.
-    PlotFigure
-        Figure container that manages plotted objects.
     """
 
-    __attrs__: ClassVar[Mapping[str, str]] = {
-        **{k: v for k, v in PlotGlyph.__attrs__.items() if k != "_calc_radius"},
-        "_calc_keep_index": "Indices of raw surface points kept after center-based point filtering.",
+    # fmt: off
+    __attr_defs__ = {
+        **dict(PlotGlyph.__attr_defs__),
+        "calc_keep_index": {
+            "doc": "Indices of raw surface points kept after center-based point filtering.",
+        },
     }
+    # fmt: on
 
     __slots__ = tuple(
-        k
-        for k, v in __attrs__.items()
-        if not v.startswith("Property:") and k not in PlotGlyph.__slots__
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
     )
 
     _pending_resolution_attrs = ["color", "scalars", "opacity"]
@@ -341,7 +316,6 @@ class PlotSurface(PlotGlyph):
     # PlotSurface overrides PlotGlyph.__init__ only to select the surface opts
     # type and install the surface-specific interaction entry point.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         coords: np.ndarray,
@@ -354,10 +328,8 @@ class PlotSurface(PlotGlyph):
         clip_mode: str = "center",
         is_clip_inside: bool = True,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
-
         super().__init__(
             coords=coords,
             opts_type=OptsSurface,
@@ -373,7 +345,7 @@ class PlotSurface(PlotGlyph):
             **kwargs,
         )
 
-        object.__setattr__(self, "_calc_keep_index", None)
+        object.__setattr__(self, "calc_keep_index", None)
         self.act_set_interact_func(lambda: InteractSurface(self, self.fig).show())
 
         self._helper_init_end()
@@ -390,12 +362,12 @@ class PlotSurface(PlotGlyph):
         bounds = self.bounds
         if bounds is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "_calc_keep_index", keep_index)
+            object.__setattr__(self, "calc_keep_index", keep_index)
             return self.raw_coords.copy()
 
         axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds._calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds._calc_axis3, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
         length1 = float(bounds.opts.length1)
         length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
         length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
@@ -417,7 +389,7 @@ class PlotSurface(PlotGlyph):
         )
         mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
         keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
-        object.__setattr__(self, "_calc_keep_index", keep_index)
+        object.__setattr__(self, "calc_keep_index", keep_index)
         return self.raw_coords[keep_index]
 
     # ==================== OVERRIDE ====================
@@ -426,18 +398,19 @@ class PlotSurface(PlotGlyph):
     # ==================================================
     def _helper_set_poly(self, poly):
         if self.state_clip_mode != "center":
-            return super()._helper_set_poly(poly)
+            super()._helper_set_poly(poly)
+            return
 
         if poly.n_points == 0:
             return
 
-        keep_index = getattr(self, "_calc_keep_index", None)
+        keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        opacity = self._calc_opacity[keep_index]
-        scalars = self._calc_scalars[keep_index]
-        color = self._calc_color[keep_index]
+        opacity = self.calc_opacity[keep_index]
+        scalars = self.calc_scalars[keep_index]
+        color = self.calc_color[keep_index]
 
         poly.point_data["opacity"] = opacity
         poly.point_data["scalars"] = scalars
@@ -453,10 +426,8 @@ class PlotSurface(PlotGlyph):
     # reconstructed from the prepared point cloud with a 2D Delaunay stage
     # instead of glyph or tube extrusion logic.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_build_mesh(self, logger=None):
-
-        poly = self._calc_poly
+    def _helper_build_mesh(self):
+        poly = self.calc_poly
         if poly.n_points < 3:
             return pv.PolyData()
         mesh = poly.delaunay_2d(alpha=0.0)
@@ -469,14 +440,13 @@ class PlotSurface(PlotGlyph):
     # rather than the generic glyph silhouette behavior.
     # ==================================================
     def _helper_add_silhouette(self):
-
         plotter = self.fig.pl
 
-        silhouette_id = f"{self._impl_name_pv}__silhouette"
+        silhouette_id = f"{self.impl_name_pv}__silhouette"
         if silhouette_id in plotter.actors:
             plotter.remove_actor(silhouette_id)
 
-        mesh = self._entity.mapper.dataset
+        mesh = self.entity_actor.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
         outline = surf.extract_feature_edges(
             boundary_edges=True,
@@ -494,4 +464,4 @@ class PlotSurface(PlotGlyph):
         actor_silhouette.visibility = False
         actor_silhouette.pickable = False
 
-        object.__setattr__(self, "_entity_silhouette", actor_silhouette)
+        object.__setattr__(self, "entity_silhouette", actor_silhouette)

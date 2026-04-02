@@ -1,26 +1,30 @@
-import numpy as np
-from typing import Literal, Any, Mapping
-from types import MappingProxyType
-from dataclasses import dataclass
+"""Plane sampling grids embedded in 3D space with optional bounds filtering."""
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.field import generate_fixed_step_grid, apply_linear_transform
-from nematics3d.general import rotation_matrix_from_vectors, select_grid_in_box
-from .host_base import OptsBase, HostBase
-from .bounds import Bounds, as_bounds
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, ClassVar, Literal, Mapping
+
+import numpy as np
+
 from nematics3d.datatypes import (
     Number,
     Tensor,
-    as_Number,
-    Vect,
-    as_Vect,
-    as_Tensor,
-    as_bool,
-    as_str,
     UNSET,
     Unset,
+    Vect,
+    as_Number,
+    as_Tensor,
+    as_Vect,
+    as_bool,
+    as_str,
 )
+from nematics3d.field import apply_linear_transform, generate_fixed_step_grid
+from nematics3d.logging_decorator import logging_and_warning_decorator
+
+from .bounds import Bounds, as_bounds
+from .host_base import HostBase, OptsBase
 from .opts import cover_value
+from ..general import rotation_matrix_from_vectors, select_grid_in_box
 
 
 #!!! grid unit
@@ -31,6 +35,8 @@ from .opts import cover_value
 # --- Plane Options ---
 @dataclass(slots=True, repr=False)
 class OptsPlaneGrid(OptsBase):
+    """Options object controlling the geometry and filtering of a PlaneGrid."""
+
     normal: Vect(3) | Unset = UNSET
     spacing: Number | Unset = UNSET
     spacing_extra: Number | Unset = UNSET
@@ -43,23 +49,34 @@ class OptsPlaneGrid(OptsBase):
     grid_offset: Vect(3) | Unset = UNSET
     grid_transform: Tensor((3, 3)) | Unset = UNSET
 
-    __attrs__ = {
-        **(OptsBase.__attrs__),
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsBase.__attrs__),
         "normal": "normal of plane",
         "spacing": "grid spacing along axis1",
         "spacing_extra": "grid spacing along axis2",
         "size": "size of plane",
         "size_extra": "size of plane along axis2",
         "origin": "origin of plane",
-        "alignment": "Grid reference point to be placed at 'origin' ('center' for geometric middle, 'bottom-left' for the first grid point [0,0])",
+        "alignment": (
+            "Grid reference point to be placed at 'origin' "
+            "('center' for geometric middle, 'bottom-left' for the first grid point [0,0])"
+        ),
         "axis1": "first in-plane axis",
-        "is_clip_inside": "Whether bounds filtering keeps the grid points inside the bounds (True) or outside (False).",
-        "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
-        "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3 orthogonal matrix)",
+        "is_clip_inside": (
+            "Whether bounds filtering keeps the grid points inside the bounds "
+            "(True) or outside (False)."
+        ),
+        "grid_offset": (
+            "grid translation offset to map lattice indices to real-space coordinates"
+        ),
+        "grid_transform": (
+            "grid transform matrix to map lattice indices to real-space coordinates "
+            "(3x3 orthogonal matrix)"
+        ),
     }
 
-    _validators = {
-        **(OptsBase._validators),
+    impl_validators: ClassVar[Mapping[str, Any]] = {
+        **dict(OptsBase.impl_validators),
         "normal": lambda v, d: as_Vect(v, name=d, is_norm=True),
         "spacing": lambda v, d: as_Number(v, name=d),
         "spacing_extra": lambda v, d: None if v is None else as_Number(v, name=d),
@@ -77,9 +94,9 @@ class OptsPlaneGrid(OptsBase):
         "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
     }
 
-    impl_defaults_frozen = MappingProxyType(
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
-            **(OptsBase.impl_defaults_frozen),
+            **dict(OptsBase.impl_defaults_frozen),
             "tag": "plane grid options",
             "spacing_extra": None,
             "size_extra": None,
@@ -98,8 +115,8 @@ class OptsPlaneGrid(OptsBase):
 #
 # Subclasses should preserve the relationship among `normal`, `axis1`,
 # the derived in-plane axis, and the generated grid caches. If grid
-# generation is overridden, keep `_entity_grid`, `_entity_grid_all`,
-# `_entity_grid_int`, and the derived size/offset fields synchronized.
+# generation is overridden, keep `entity_grid`, `entity_grid_all`,
+# `entity_grid_int`, and the derived size/offset fields synchronized.
 class PlaneGrid(HostBase):
     """
     PlaneGrid generates a 2D sampling grid embedded in 3D space.
@@ -112,28 +129,77 @@ class PlaneGrid(HostBase):
     bindings.
     """
 
-    __attrs__ = {
-        **(HostBase.__attrs__),
-        # ========== generated grids ==========
-        "_entity_grid": "Selected 3D grid points after applying transforms and optional bounding-box filtering (array of shape NÃ—3)",
-        "_entity_grid_all": "Complete 3D grid points before filtering, reshaped as (num1 Ã— num2 Ã— 3)",
-        "_entity_grid_int": "Integer lattice indices corresponding to 2D grid positions (num1 Ã— num2 Ã— 3)",
-        # ========== calc (derived quantities) ==========
-        "_calc_axis2": "The second in-plane axis which normal to both axis1 and normal.",
-        "_calc_offset_real": "Base 3D offset that maps 2D array indices [i, j] into plane coordinates via i*step1 + j*step2 + offset before the global grid transform.",
-        "_calc_box_mask": "Boolean mask selecting the grid points kept after optional bounds filtering.",
-        "_calc_size": "The actual size calculated based on opts.size",
-        "_calc_size_extra": "The actual size_extra calculated based on opts.size and opts.size_extra",
-        # ========== visualization / diagnostic ==========
-        "_entity_fig_demo": "Diagnostic plot showing the generated 2D grid points, axes, and normal vector for verification.",
-        "_impl_name_bounds_sync": "Internal sync-task name used to react to bounds geometry updates.",
+    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
+        **dict(HostBase.__attr_defs__),
+        "entity_grid": {
+            "doc": (
+                "Selected 3D grid points after applying transforms and optional "
+                "bounding-box filtering (array of shape N x 3)."
+            ),
+        },
+        "entity_grid_all": {
+            "doc": (
+                "Complete 3D grid points before filtering, reshaped as "
+                "(num1 x num2 x 3)."
+            ),
+        },
+        "entity_grid_int": {
+            "doc": (
+                "Integer lattice indices corresponding to 2D grid positions "
+                "(num1 x num2 x 3)."
+            ),
+        },
+        "calc_axis2": {
+            "doc": "The second in-plane axis perpendicular to both axis1 and normal.",
+        },
+        "calc_offset_real": {
+            "doc": (
+                "Base 3D offset that maps 2D array indices [i, j] into plane "
+                "coordinates before the global grid transform."
+            ),
+        },
+        "calc_box_mask": {
+            "doc": "Boolean mask selecting the grid points kept after optional bounds filtering.",
+        },
+        "calc_size": {
+            "doc": "The actual size calculated from opts.size.",
+        },
+        "calc_size_extra": {
+            "doc": "The actual secondary size calculated from opts.size and opts.size_extra.",
+        },
+        "entity_fig_demo": {
+            "doc": (
+                "Diagnostic plot showing the generated 2D grid points, axes, "
+                "and normal vector for verification."
+            ),
+        },
+        "impl_name_bounds_sync": {
+            "doc": "Internal sync-task name used to react to bounds geometry updates.",
+        },
+        "field": {
+            "doc": "The interpolated field object attached to this plane grid.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "bounds": {
+            "doc": "The Bounds instance limiting this plane grid.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
     }
-    # Each plane grid binds to at most one field and one bounds object at a time.
-    __relations__ = {
-        **(HostBase.__relations__),
-        "field": "The interpolated field object attached to this plane grid.",
-        "bounds": "The Bounds instance limiting this plane grid.",
-    }
+
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
+        and name not in HostBase.__slots__
+    )
 
     # ==================== OVERRIDE ====================
     # PlaneGrid overrides HostBase.__init__ because it must validate required
@@ -149,7 +215,6 @@ class PlaneGrid(HostBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
-
         super().__init__(
             OptsPlaneGrid,
             opts,
@@ -159,19 +224,19 @@ class PlaneGrid(HostBase):
             **kwargs,
         )
 
-        object.__setattr__(self, "_entity_fig_demo", None)
+        object.__setattr__(self, "entity_fig_demo", None)
         object.__setattr__(
-            self, "_impl_name_bounds_sync", f"plane_grid_bounds::{id(self)}"
+            self, "impl_name_bounds_sync", f"plane_grid_bounds::{id(self)}"
         )
 
-        for name, value in {
+        for attr_name, value in {
             "normal": self.opts.normal,
             "spacing": self.opts.spacing,
             "size": self.opts.size,
         }.items():
             if value is UNSET:
                 raise ValueError(
-                    f"Missing required variable {name!r} to generate plane_grid"
+                    f"Missing required variable {attr_name!r} to generate plane_grid"
                 )
         self.opts.act_finalize(defaults=self.opts_defaults)
         self.act_bind_bounds(bounds, is_apply=False)
@@ -219,20 +284,20 @@ class PlaneGrid(HostBase):
                 axis1 = axis1 - dot_product * normal
                 axis1 /= np.linalg.norm(axis1)
                 logger.warning(
-                    f"Invalid geometry: axis1 is not perpendicular to normal (dot product: {dot_product:.4e}). "
-                    f"Projecting original axis1 {old_axis1} onto the plane defined by normal {normal}. "
+                    f"Invalid geometry: axis1 is not perpendicular to normal "
+                    f"(dot product: {dot_product:.4e}). Projecting original "
+                    f"axis1 {old_axis1} onto the plane defined by normal {normal}. "
                     f"New orthonormal axis1: {axis1}."
                 )
         else:
-            _rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
-            axis1 = _rotation_matrix @ np.array([1, 0, 0])
+            rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
+            axis1 = rotation_matrix @ np.array([1, 0, 0])
             logger.debug(
-                f"axis1 not provided. Automatically generated a reference axis1 {axis1} "
-                f"perpendicular to normal {normal}."
+                f"axis1 not provided. Automatically generated a reference axis1 "
+                f"{axis1} perpendicular to normal {normal}."
             )
 
         axis2 = np.cross(normal, axis1)
-        axis_both = np.array([axis1, np.cross(normal, axis1)])
         logger.debug(f"axis2={axis2}")
 
         grid, grid_int, sizes = generate_fixed_step_grid(
@@ -269,16 +334,16 @@ class PlaneGrid(HostBase):
             mask = mask_inside if is_clip_inside else ~mask_inside
             grid_select = grid[mask]
 
-        object.__setattr__(self, "_entity_grid", grid_select)
+        object.__setattr__(self, "entity_grid", grid_select)
         object.__setattr__(
-            self, "_entity_grid_all", np.reshape(grid, (*target_shape, 3))
+            self, "entity_grid_all", np.reshape(grid, (*target_shape, 3))
         )
-        object.__setattr__(self, "_entity_grid_int", grid_int)
-        object.__setattr__(self, "_calc_offset_real", offset)
-        object.__setattr__(self, "_calc_axis2", axis2)
-        object.__setattr__(self, "_calc_box_mask", mask)
-        object.__setattr__(self, "_calc_size", size1)
-        object.__setattr__(self, "_calc_size_extra", size2)
+        object.__setattr__(self, "entity_grid_int", grid_int)
+        object.__setattr__(self, "calc_offset_real", offset)
+        object.__setattr__(self, "calc_axis2", axis2)
+        object.__setattr__(self, "calc_box_mask", mask)
+        object.__setattr__(self, "calc_size", size1)
+        object.__setattr__(self, "calc_size_extra", size2)
         object.__setattr__(self.opts, "axis1", axis1)
 
         if self.field:
@@ -291,7 +356,10 @@ class PlaneGrid(HostBase):
     # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, origin={self.opts.origin} at {self.opts.alignment}"
+        msg = (
+            f"{cls_name}, with normal={self.opts.normal}, axis1={self.opts.axis1}, "
+            f"origin={self.opts.origin} at {self.opts.alignment}"
+        )
         return msg
 
     # ==================== OVERRIDE ====================
@@ -302,23 +370,24 @@ class PlaneGrid(HostBase):
         return f"{type(self).__name__}({self.name!r})"
 
     def __iter__(self):
-        return iter(self._entity_grid)
+        """Iterate over the currently selected grid points."""
+        return iter(self.entity_grid)
 
     def __getitem__(self, idx):
-        return self._entity_grid[idx]
+        """Return one selected grid point or slice."""
+        return self.entity_grid[idx]
 
     def __array__(self, dtype=None):
-        arr = self._entity_grid
+        """Expose the selected grid points as a NumPy array."""
+        arr = self.entity_grid
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
 
     def __call__(self):
-        return self._entity_grid
-
-    @property
-    def _impl_field(self):
-        return getattr(self, "field", None)
+        """Return the currently selected grid points."""
+        return self.entity_grid
 
     def act_copy(self, name: str | None = None, is_bind_same_bounds: bool = True):
+        """Create one copied PlaneGrid with duplicated opts and optional shared bounds."""
         opts_new = type(self.opts)(**self.opts.act_asdict())
         bounds_new = self.bounds if is_bind_same_bounds else None
         name_new = self.name if name is None else name
@@ -326,11 +395,12 @@ class PlaneGrid(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unbind_bounds(self, is_apply=True, logger=None):
+        """Detach the current bounds object and optionally rebuild the grid."""
         bounds_old = self.bounds
         if bounds_old is None:
             return
         bounds_old.act_unregister_subscriber(
-            sync_name=self._impl_name_bounds_sync, host=self
+            sync_name=self.impl_name_bounds_sync, host=self
         )
         self.act_unbind_relation_base("bounds")
         if is_apply:
@@ -338,13 +408,14 @@ class PlaneGrid(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_bind_bounds(self, bounds, is_apply=True, is_replace=True, logger=None):
+        """Bind one bounds object to this plane grid and optionally rebuild it."""
         if bounds is None:
             self.act_unbind_bounds(is_apply=is_apply)
             return
 
         try:
             bounds = as_bounds(bounds, name="The bounds limiting this plane grid")
-        except Exception:
+        except (TypeError, ValueError, AttributeError, KeyError):
             logger.exception("Check input.")
             logger.recovery(
                 "Ignore this bounds input and continue without modifying the current binding."
@@ -366,12 +437,12 @@ class PlaneGrid(HostBase):
 
         self.act_bind_relation_base("bounds", bounds, is_weak=True)
         bounds.act_attach_sync_task(
-            self._impl_name_bounds_sync,
+            self.impl_name_bounds_sync,
             lambda **kwargs: self.act_commit(is_reapply_opts=True),
         )
         bounds.act_register_subscriber(
             self,
-            sync_name=self._impl_name_bounds_sync,
+            sync_name=self.impl_name_bounds_sync,
             kind="plane_grid",
         )
         if is_apply:
@@ -414,7 +485,7 @@ class PlaneGrid(HostBase):
 #             name=f"Diagnostic plot of plane {self.name!r}"
 #         )
 #         bulk = PlotSphere(
-#             coords=self._entity_grid,
+#             coords=self.entity_grid,
 #             opts=opts_points,
 #             figure=figure,
 #             category="plane_grid_test",
@@ -439,7 +510,7 @@ class PlaneGrid(HostBase):
 #                 name="grid_extent",
 #             )
 #
-#         object.__setattr__(self, "_entity_fig_demo", figure)
+#         object.__setattr__(self, "entity_fig_demo", figure)
 #
 #         return figure
 #
