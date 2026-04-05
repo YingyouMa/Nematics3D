@@ -27,7 +27,7 @@ class InteractPlane(PanelBase):
     # ==================================================
     def __init__(self, field, figure):
         self.field = field
-        object.__setattr__(self.field, "_state_is_interactable", False)
+        object.__setattr__(self.field, "state_is_interactable", False)
 
         origin = np.asarray(field.grid.opts.origin, dtype=float).reshape(1, 3)
         normal = np.asarray(field.grid.opts.normal, dtype=float).reshape(1, 3)
@@ -58,8 +58,8 @@ class InteractPlane(PanelBase):
             is_visible=False,
         )
 
-        object.__setattr__(self.visual_normal, "_state_is_interactable", False)
-        object.__setattr__(self.visual_origin, "_state_is_interactable", False)
+        object.__setattr__(self.visual_normal, "state_is_interactable", False)
+        object.__setattr__(self.visual_origin, "state_is_interactable", False)
         object.__setattr__(self, "_is_continuous_interacting", False)
         super().__init__(field.grid, figure, title=f"Controls of {field.grid.name!r}")
 
@@ -89,9 +89,9 @@ class InteractPlane(PanelBase):
             return
         object.__setattr__(self, "_is_continuous_interacting", True)
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
-            object.__setattr__(visual, "_state_is_silhouette", False)
+            object.__setattr__(visual, "state_is_silhouette", False)
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
 
@@ -100,10 +100,10 @@ class InteractPlane(PanelBase):
             return
         object.__setattr__(self, "_is_continuous_interacting", False)
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
-            object.__setattr__(visual, "_state_is_silhouette", True)
-            if getattr(visual, "_entity", None) is not None and hasattr(
+            object.__setattr__(visual, "state_is_silhouette", True)
+            if getattr(visual, "entity_actor", None) is not None and hasattr(
                 visual, "_helper_add_silhouette"
             ):
                 visual._helper_add_silhouette()
@@ -492,6 +492,6 @@ class InteractPlane(PanelBase):
     def on_close(self):
         self._helper_end_continuous_interaction()
         super().on_close()
-        object.__setattr__(self.field, "_state_is_interactable", True)
+        object.__setattr__(self.field, "state_is_interactable", True)
         self.visual_normal.act_remove()
         self.visual_origin.act_remove()

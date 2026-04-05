@@ -9,8 +9,8 @@ from .panel_base import (
 
 # NOTE: This panel is intentionally coupled to PlotGlyph-like hosts.
 # The host is expected to provide glyph internals such as:
-# `opts`, `_calc_color`, `_calc_opacity`, `_calc_radius`, `opts_backup`,
-# `_state_is_silhouette`, `_helper_clear_silhouette`, and `_helper_add_silhouette`.
+# `opts`, `calc_color`, `calc_opacity`, `calc_radius`, `opts_backup`,
+# `state_is_silhouette`, `_helper_clear_silhouette`, and `_helper_add_silhouette`.
 
 
 class InteractGlyphBase(PanelBase):
@@ -25,7 +25,7 @@ class InteractGlyphBase(PanelBase):
         pm = getattr(self.fig, "pick_manager", None) if self.fig is not None else None
         if pm is None:
             return
-        coords = getattr(self.host, "_calc_coords", None)
+        coords = getattr(self.host, "calc_coords", None)
         if coords is None or len(coords) == 0:
             pm.act_remove_helper_marker(self._helper_panel_marker_key())
             return
@@ -136,7 +136,7 @@ class InteractGlyphBase(PanelBase):
         # ----------------------------
         if self.config["is_color"]:
 
-            init_rgb = self.host._calc_color[0]
+            init_rgb = self.host.calc_color[0]
             self.state["color_r"] = init_rgb[0]
             self.state["color_g"] = init_rgb[1]
             self.state["color_b"] = init_rgb[2]
@@ -159,7 +159,7 @@ class InteractGlyphBase(PanelBase):
         # Opacity Group
         # ----------------------------
         if self.config["is_opacity"]:
-            self.state["opacity"] = self.host._calc_opacity[0]
+            self.state["opacity"] = self.host.calc_opacity[0]
             group_opacity = QtWidgets.QGroupBox("Opacity (0..1)", self)
             gl_opacity = QtWidgets.QVBoxLayout(group_opacity)
             self.layout.addWidget(group_opacity)
@@ -202,14 +202,14 @@ class InteractGlyphBase(PanelBase):
     # -------------------------------
 
     def _helper_get_first_used_point_radius(self):
-        if not hasattr(self.host, "_calc_radius"):
+        if not hasattr(self.host, "calc_radius"):
             return None, None
 
-        radius_all = np.asarray(self.host._calc_radius, dtype=float)
+        radius_all = np.asarray(self.host.calc_radius, dtype=float)
         if radius_all.size == 0:
             return None, None
 
-        keep_index = getattr(self.host, "_calc_keep_index", None)
+        keep_index = getattr(self.host, "calc_keep_index", None)
         if keep_index is not None:
             keep_index = np.asarray(keep_index, dtype=int)
             if keep_index.size == 0:
@@ -235,8 +235,8 @@ class InteractGlyphBase(PanelBase):
         self.lbl_radius.setText(f"Radius at the red helper marker: {radius:.2f}")
 
     def _set_host_silhouette_enabled(self, is_enabled):
-        if hasattr(self.host, "_state_is_silhouette"):
-            object.__setattr__(self.host, "_state_is_silhouette", bool(is_enabled))
+        if hasattr(self.host, "state_is_silhouette"):
+            object.__setattr__(self.host, "state_is_silhouette", bool(is_enabled))
 
     def _on_slider_pressed(self):
         self._set_host_silhouette_enabled(False)

@@ -54,7 +54,7 @@ class OptsSphere(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw point coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0
+    - `"u_percent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering
 
     A few useful relationships to keep in mind:
@@ -98,7 +98,7 @@ class OptsSphere(OptsGlyph):
     Resolve values from position along the glyph order:
 
     >>> opts = OptsSphere(
-    ...     resolver_source="upercent",
+    ...     resolver_source="u_percent",
     ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -206,7 +206,7 @@ class PlotSphere(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw sphere-center coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0 to
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering
 
     Interactive Behavior
@@ -261,7 +261,7 @@ class PlotSphere(PlotGlyph):
     Resolve values from point-order percentage:
 
     >>> spheres.act_commit(
-    ...     resolver_source="upercent",
+    ...     resolver_source="u_percent",
     ...     radius=lambda u: 0.08 + 0.04 * np.sin(u / 100 * np.pi),
     ... )
 

@@ -18,7 +18,7 @@ class InteractDisclinationLine(InteractGlyphBase):
         object.__setattr__(
             self,
             "_impl_silhouette_state_backup",
-            bool(getattr(host, "_state_is_silhouette", True)),
+            bool(getattr(host, "state_is_silhouette", True)),
         )
         object.__setattr__(
             self,
@@ -26,7 +26,7 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.smooth.opts.min_line_length,
         )
 
-        object.__setattr__(host, "_state_is_silhouette", False)
+        object.__setattr__(host, "state_is_silhouette", False)
 
         super().__init__(
             host=host,
@@ -78,7 +78,7 @@ class InteractDisclinationLine(InteractGlyphBase):
             name="window_length",
             state_key="window_length",
             value_min=5,
-            value_max=np.min([100, self.smooth.owner._calc_defect_num - 1]),
+            value_max=np.min([100, self.smooth.owner.calc_defect_num - 1]),
             value_init=self.state["window_length"],
             value_fmt="{:.0f}",
         )
@@ -154,18 +154,18 @@ class InteractDisclinationLine(InteractGlyphBase):
         owner = self.smooth.owner
         if is_wrap:
             boundary_flag = boundary_periodic_size_to_flag(
-                owner._raw_box_size_periodic_index
+                owner.raw_box_size_periodic_index
             )
             coords_index = np.where(
                 boundary_flag,
-                owner._raw_defect_indices % owner._raw_box_size_periodic_index,
-                owner._raw_defect_indices,
+                owner.raw_defect_indices % owner.raw_box_size_periodic_index,
+                owner.raw_defect_indices,
             )
-            coords = owner._raw_grid_offset + np.dot(
-                coords_index, owner._raw_grid_transform.T
+            coords = owner.raw_grid_offset + np.dot(
+                coords_index, owner.raw_grid_transform.T
             )
         else:
-            coords = owner._calc_defect_coords
+            coords = owner.calc_defect_coords
         return coords
 
     # ==================== OVERRIDE ====================
@@ -256,7 +256,7 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.smooth.act_detach_sync_task(self.str_now_live)
         object.__setattr__(
             self.host,
-            "_state_is_silhouette",
+            "state_is_silhouette",
             getattr(self, "_impl_silhouette_state_backup", True),
         )
         object.__setattr__(

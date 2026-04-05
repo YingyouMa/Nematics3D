@@ -130,9 +130,11 @@ class ClassBase:
         if name is None:
             name_final = name_replace
         else:
-            name_final = self.impl_attrs["raw_name"]["validator"](
+            attr_info = self.impl_attrs["raw_name"]
+            validator = self._helper_get_name_validator(attr_info)
+            name_final = validator(
                 name,
-                name=self.impl_attrs["raw_name"]["doc"],
+                name=attr_info["doc"],
                 replace=name_replace,
             )
             if not name_final:
@@ -144,10 +146,18 @@ class ClassBase:
     # Name handling
     # ------------------------------------------------------------------
 
+    def _helper_get_name_validator(self, attr_info):
+        """Return the name validator, defaulting to as_str when omitted."""
+        validator = attr_info.get("validator")
+        if validator is None:
+            return as_str
+        return validator
+
     def act_set_name(self, name):
         """Validate and assign one public name for this instance."""
         attr_info = self.impl_attrs["raw_name"]
-        name = attr_info["validator"](name, name=attr_info["doc"])
+        validator = self._helper_get_name_validator(attr_info)
+        name = validator(name, name=attr_info["doc"])
         return self._helper_assign_name(name)
 
     def _helper_assign_name(self, name):

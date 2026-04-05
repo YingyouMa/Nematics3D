@@ -42,14 +42,14 @@ class InteractRod(InteractGlyphBase):
         self._update_length_label()
 
     def _helper_get_first_used_point_length(self):
-        if not hasattr(self.host, "_calc_length"):
+        if not hasattr(self.host, "calc_length"):
             return None
 
-        length_all = np.asarray(self.host._calc_length, dtype=float)
+        length_all = np.asarray(self.host.calc_length, dtype=float)
         if length_all.size == 0:
             return None
 
-        keep_index = getattr(self.host, "_calc_keep_index", None)
+        keep_index = getattr(self.host, "calc_keep_index", None)
         if keep_index is not None:
             keep_index = np.asarray(keep_index, dtype=int)
             if keep_index.size == 0:

@@ -538,8 +538,8 @@ class PanelBase(QtWidgets.QWidget):
         self.host.act_save_opts(self.str_now)
         self.str_now_live = self.str_now + "_live"
         self.host.act_save_opts(self.str_now_live)
-        if hasattr(self.host, "_state_is_interactable"):
-            object.__setattr__(self.host, "_state_is_interactable", False)
+        if hasattr(self.host, "state_is_interactable"):
+            object.__setattr__(self.host, "state_is_interactable", False)
 
         self._is_block_chk_commit = False
 
@@ -741,8 +741,8 @@ class PanelBase(QtWidgets.QWidget):
 
     def on_close(self):
         self._slider_throttle.cancel()
-        if hasattr(self.host, "_state_is_interactable"):
-            object.__setattr__(self.host, "_state_is_interactable", True)
+        if hasattr(self.host, "state_is_interactable"):
+            object.__setattr__(self.host, "state_is_interactable", True)
         self.host.act_detach_sync_task(self.str_now_live)
         if self.fig is not None and hasattr(self.fig, "act_unregister_interact"):
             self.fig.act_unregister_interact(self)

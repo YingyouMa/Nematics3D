@@ -71,7 +71,7 @@ class OptsSurface(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw surface sample coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0
+    - `"u_percent"`: the callable receives point-index percentages from 0
       to 100 along the raw point ordering
 
     A few useful relationships to keep in mind:
@@ -224,7 +224,7 @@ class PlotSurface(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw surface sample coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0 to
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
       100 along the raw point ordering
 
     Notes

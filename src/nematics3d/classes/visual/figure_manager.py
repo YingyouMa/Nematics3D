@@ -81,24 +81,33 @@ class FigureManager(RegistryBase):
     @logging_and_warning_decorator()
     def _helper_get_active_fig(self, logger=None):
         active_name = self.state_active_name
-        if active_name is None:
-            if len(self) == 1:
-                figure = self[0]
-                object.__setattr__(self, "state_active_name", figure.name)
-                active_name = figure.name
-            elif len(self) == 0:
-                raise KeyError(
-                    "There is no figure in FigureManager, so no active figure can be returned."
+        if active_name is not None:
+            try:
+                figure = self[active_name]
+            except KeyError:
+                logger.warning(
+                    f"The stored active figure name {active_name!r} is no longer registered. Reset it."
                 )
+                object.__setattr__(self, "state_active_name", None)
+                active_name = None
             else:
-                raise KeyError(
-                    "There are multiple figures in FigureManager but no active figure has been set."
-                )
+                if not figure.is_alive:
+                    logger.warning(
+                        f"The active figure {figure.name!r} is not alive anymore."
+                    )
+                return figure
 
-        figure = self[active_name]
-        if not figure.is_alive:
-            logger.warning(f"The active figure {figure.name!r} is not alive anymore.")
-        return figure
+        if len(self) == 1:
+            figure = self[0]
+            object.__setattr__(self, "state_active_name", figure.name)
+            return figure
+        if len(self) == 0:
+            raise KeyError(
+                "There is no figure in FigureManager, so no active figure can be returned."
+            )
+        raise KeyError(
+            "There are multiple figures in FigureManager but no active figure has been set."
+        )
 
     def act_set_active(self, id_fig: str):
         figure = self[id_fig]
@@ -109,6 +118,25 @@ class FigureManager(RegistryBase):
                 "This figure is deleted and could not be set to active figure."
             )
 
+    # ==================== OVERRIDE ====================
+    # FigureManager overrides RegistryBase.act_unregister so the managed active
+    # figure name cannot dangle after the active figure is removed.
+    # ==================================================
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_unregister(self, term, is_missing_ok=False, logger=None):
+        was_active = getattr(term, "name", None) == self.state_active_name
+        super().act_unregister(term, is_missing_ok=is_missing_ok)
+        if not was_active:
+            return
+
+        object.__setattr__(self, "state_active_name", None)
+        if len(self) == 1:
+            object.__setattr__(self, "state_active_name", self[0].name)
+        elif len(self) > 1:
+            logger.warning(
+                "The active figure was removed. Active figure has been reset to None."
+            )
+
     # ------------------------------------------------------------------
     # Representation
     # ------------------------------------------------------------------
@@ -117,4 +145,3 @@ class FigureManager(RegistryBase):
         cls_name = self.__class__.__name__
         msg = f"{cls_name}({self.name!r})\n"
         return msg + self.act_repr_by_order()
-

@@ -37,6 +37,7 @@ class InterpolatePlane(ClassBase):
         },
         "calc_result": {
             "doc": "The interpolated physics values sampled on the current plane grid.",
+            "kind": "calc",
         },
         "grid": {
             "doc": "The plane grid associated with this interpolated field.",

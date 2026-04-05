@@ -79,7 +79,7 @@ class OptsTube(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw centerline point coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0
+    - `"u_percent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering. For tubes this follows the raw point
       order, not true arc length, and does not restart for each `line_index`
       segment.
@@ -125,7 +125,7 @@ class OptsTube(OptsGlyph):
     Resolve values from position along the glyph order:
 
     >>> opts = OptsTube(
-    ...     resolver_source="upercent",
+    ...     resolver_source="u_percent",
     ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -278,7 +278,7 @@ class PlotTube(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw centerline coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0 to
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering. For `PlotTube`, this is based on the raw
       centerline point order rather than true arc length, and it does not
       restart separately for each disconnected `line_index` segment
@@ -340,7 +340,7 @@ class PlotTube(PlotGlyph):
     Resolve values from point-order percentage:
 
     >>> tube.act_commit(
-    ...     resolver_source="upercent",
+    ...     resolver_source="u_percent",
     ...     radius=lambda u: 0.05 + 0.03 * np.sin(u / 100 * np.pi),
     ... )
 
@@ -687,14 +687,14 @@ class PlotTube(PlotGlyph):
     def _helper_resolve_pick(self, picked_point):
 
         pos_close, msg, idx = super()._helper_resolve_pick(picked_point)
-        upercent = idx / len(self.raw_coords) * 100
+        u_percent = idx / len(self.raw_coords) * 100
         msg_head = (
             f"The closest point on the tube is {fmt_value(pos_close)}, where: \n"
-            f"The normalized position along the tube is {upercent:.3f} \n"
+            f"The normalized position along the tube is {u_percent:.3f} \n"
         )
         try:
             smooth = self.wrapper.owner
-            tgt = smooth.act_calc_tangent(upercent)
+            tgt = smooth.act_calc_tangent(u_percent)
             msg_head += f"Local tangent: {fmt_value(tgt)} \n"
         except (AttributeError, TypeError, ValueError, RuntimeError):
             pass

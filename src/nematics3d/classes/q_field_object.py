@@ -1,6 +1,6 @@
 import numpy as np
 import time
-from typing import Union
+from typing import Any, ClassVar, Mapping, Union
 from dataclasses import replace, dataclass, field, fields
 from pyvistaqt import BackgroundPlotter
 import pyvista as pv
@@ -158,9 +158,9 @@ class QFieldObject(ClassBase):
     - `figures` / `figs`: FigureManager storing figures created from this Q field.
     - `objects` / `objs`: RegistryBase storing physical objects derived from this Q field.
     - `interpolator`: QInterpolator used for off-grid sampling.
-    - `_calc_grid`: full real-space lattice coordinates of the Q field.
-    - `_calc_corners`: Bounds object describing the Q-field box.
-    - `_calc_defect_indices` / `_calc_defect_grid`: detected defect positions in index and world coordinates.
+    - `calc_grid`: full real-space lattice coordinates of the Q field.
+    - `calc_corners`: Bounds object describing the Q-field box.
+    - `calc_defect_indices` / `calc_defect_grid`: detected defect positions in index and world coordinates.
 
     Common inspection helpers:
 
@@ -187,50 +187,131 @@ class QFieldObject(ClassBase):
     - `repr(obj)` returns the compact ClassBase summary.
     """
 
-    __attrs__ = {
-        # --- Identity ---
-        "raw_name": "Name identifier of this Q tensor object.",
-        # --- Raw inputs ---
-        "_raw_Q": "Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).",
-        "_raw_S": "Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
-        "_raw_n": "Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
-        "_raw_box_periodic_flag": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
-        "_raw_grid_offset": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
-        "_raw_grid_transform": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
-        # --- consts / thresholds ---
-        "default_miminum_line_length_smooth": "Default minimum line length (#points) required to apply smoothing.",
-        "default_smooth_window_length": "Default smoothing window length (#points) used when not specified.",
-        "default_miminum_line_length_visual": "Default minimum line length (#points) required for visualization.",
-        "default_cross_line_padding_num_": "Default number of points padded for smoothing cross-type disclination line.",
-        # --- Derived grids / geometry ---
-        "_calc_grid_index": "Lattice coordinate grid in index space (before applying transform/offset).",
-        "_calc_grid": "Coordinate grid in real space after applying grid_transform and grid_offset.",
-        "_calc_corners_index": "Box corners in lattice-index space.",
-        "_calc_corners": "Bounds object describing the Q-field box in real-space coordinates.",
-        "_calc_box_size_periodic_index": (
-            "Effective periodic box size in index units. "
-            "For periodic dims equals grid size, otherwise inf."
-        ),
-        "_calc_box_size_periodic_coord": "Effective periodic box size in real-space coordinates.",
-        # --- Defects / disclinations  ---
-        "_calc_defect_indices": "Indices (lattice coordinates) of detected defect points.",
-        "_calc_defect_grid": "Real-space coordinates of detected defect points.",
+    # fmt: off
+    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
+        **dict(ClassBase.__attr_defs__),
+        "raw_name": {
+            **dict(ClassBase.__attr_defs__["raw_name"]),
+            "doc": "Name identifier of this Q tensor object.",
+        },
+        "raw_Q": {
+            "doc": "Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).",
+        },
+        "raw_S": {
+            "doc": "Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
+        },
+        "raw_n": {
+            "doc": "Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
+        },
+        "raw_box_periodic_flag": {
+            "doc": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
+        },
+        "raw_grid_offset": {
+            "doc": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
+        },
+        "raw_grid_transform": {
+            "doc": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
+        },
+        "default_miminum_line_length_smooth": {
+            "doc": "Default minimum line length (#points) required to apply smoothing.",
+            "kind": "default",
+        },
+        "default_smooth_window_length": {
+            "doc": "Default smoothing window length (#points) used when not specified.",
+            "kind": "default",
+        },
+        "default_miminum_line_length_visual": {
+            "doc": "Default minimum line length (#points) required for visualization.",
+            "kind": "default",
+        },
+        "calc_grid_index": {
+            "doc": "Lattice coordinate grid in index space (before applying transform/offset).",
+            "kind": "calc",
+        },
+        "calc_grid": {
+            "doc": "Coordinate grid in real space after applying grid_transform and grid_offset.",
+            "kind": "calc",
+        },
+        "calc_corners_index": {
+            "doc": "Box corners in lattice-index space.",
+            "kind": "calc",
+        },
+        "calc_corners": {
+            "doc": "Bounds object describing the Q-field box in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_box_size_periodic_index": {
+            "doc": (
+                "Effective periodic box size in index units. "
+                "For periodic dims equals grid size, otherwise inf."
+            ),
+            "kind": "calc",
+        },
+        "calc_box_size_periodic_coord": {
+            "doc": "Effective periodic box size in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_defect_indices": {
+            "doc": "Indices (lattice coordinates) of detected defect points.",
+            "kind": "calc",
+        },
+        "calc_defect_grid": {
+            "doc": "Real-space coordinates of detected defect points.",
+            "kind": "calc",
+        },
+        "figures": {
+            "doc": "FigureManager object that manages PlotFigure objects created for this Q field.",
+            "kind": "relation",
+            "is_weak_by_default": False,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "objects": {
+            "doc": "RegistryBase object that manages physical objects related to this Q field.",
+            "kind": "relation",
+            "is_weak_by_default": False,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "interpolator": {
+            "doc": "The QInterpolator object associated with this Q field.",
+            "kind": "relation",
+            "is_weak_by_default": False,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "S": {
+            "doc": "Read-only: Scalar order parameter field. Alias of `raw_S`.",
+            "kind": "property",
+        },
+        "n": {
+            "doc": "Read-only: Director field. Alias of `raw_n`.",
+            "kind": "property",
+        },
+        "lines": {
+            "doc": "Read-only: Classified disclination lines.",
+            "kind": "property",
+        },
+        "figs": {
+            "doc": "Read-only: Visualization figures. Alias of `figures`.",
+            "kind": "property",
+        },
+        "objs": {
+            "doc": "Read-only: Physical objects. Alias of `objects`.",
+            "kind": "property",
+        },
     }
-    __relations__ = {
-        **(ClassBase.__relations__),
-        "figures": "FigureManager object that manages PlotFigure objects created for this Q field.",
-        "objects": "RegistryBase object that manages physical objects related to this Q field.",
-        "interpolator": "The QInterpolator object associated with this Q field.",
-    }
-    __properties__ = {
-        **(ClassBase.__properties__),
-        "S": "Read-only: Scalar order parameter field. Alias of `_raw_S`.",
-        "n": "Read-only: Director field. Alias of `_raw_n`.",
-        "lines": "Read-only: Classified disclination lines.",
-        "figs": "Read-only: Visualization figures. Alias of `figures`.",
-        "objs": "Read-only: Physical objects. Alias of `objects`.",
-    }
-    __slots__ = tuple(k for k in __attrs__.keys() if k not in ClassBase.__slots__)
+    # fmt: on
+
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
+        and name not in ClassBase.__slots__
+    )
 
     # -------------------------------
     # Initialization
@@ -263,7 +344,7 @@ class QFieldObject(ClassBase):
             if k.startswith("default"):
                 object.__setattr__(self, k, v)
             else:
-                object.__setattr__(self, f"_raw_{k}", v)
+                object.__setattr__(self, f"raw_{k}", v)
 
         objects = RegistryBase(
             "objects manager",
@@ -273,81 +354,81 @@ class QFieldObject(ClassBase):
         objects.act_bind_relation_base("owner", self, is_weak=True)
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
-        if self._raw_n is not UNSET:
+        if self.raw_n is not UNSET:
             logger.debug("Initialize Q field with S and n")
-            if self._raw_S is UNSET:
+            if self.raw_S is UNSET:
                 logger.warning("No S input. Set to 1 everywhere.")
                 object.__setattr__(
-                    self, "_raw_S", np.zeros(np.shape(self._raw_n)[:-1]) + 1.0
+                    self, "raw_S", np.zeros(np.shape(self.raw_n)[:-1]) + 1.0
                 )
-            if self._raw_Q is not UNSET:
+            if self.raw_Q is not UNSET:
                 logger.warning(
                     "Both Q and n are provided to initialize Q field. Q will be IGNORED."
                 )
-            if np.shape(self._raw_S) != np.shape(self._raw_n)[:3]:
+            if np.shape(self.raw_S) != np.shape(self.raw_n)[:3]:
                 raise ValueError(
                     "Shape mismatch between director field `n` and scalar field `S`: "
                     f"expected n.shape[:3] == S.shape, "
-                    f"but got n.shape = {self._raw_n.shape}, S.shape = {self._raw_S.shape}."
+                    f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
                 )
             object.__setattr__(
-                self, "_raw_Q", as_QField5(getQ(self._raw_n, S=self._raw_S))
+                self, "raw_Q", as_QField5(getQ(self.raw_n, S=self.raw_S))
             )
         else:
-            if self._raw_Q is not UNSET:
-                temp_S, temp_n = Q_diagonalize(self._raw_Q)
-                object.__setattr__(self, "_raw_S", temp_S)
-                object.__setattr__(self, "_raw_n", temp_n)
+            if self.raw_Q is not UNSET:
+                temp_S, temp_n = Q_diagonalize(self.raw_Q)
+                object.__setattr__(self, "raw_S", temp_S)
+                object.__setattr__(self, "raw_n", temp_n)
             else:
                 raise NameError("No data is input to initialize Q field.")
 
-        object.__setattr__(self, "_calc_box_size_periodic_index", np.zeros(3))
-        for i, flag in enumerate(self._raw_box_periodic_flag):
+        object.__setattr__(self, "calc_box_size_periodic_index", np.zeros(3))
+        for i, flag in enumerate(self.raw_box_periodic_flag):
             if flag:
-                self._calc_box_size_periodic_index[i] = np.shape(self._raw_Q)[i]
+                self.calc_box_size_periodic_index[i] = np.shape(self.raw_Q)[i]
             else:
-                self._calc_box_size_periodic_index[i] = np.inf
-        T = np.asarray(self._raw_grid_transform, dtype=float)
+                self.calc_box_size_periodic_index[i] = np.inf
+        T = np.asarray(self.raw_grid_transform, dtype=float)
         diag = np.diag(T).astype(float)
         object.__setattr__(
-            self, "_calc_box_size_periodic_coord", np.full(3, np.inf, dtype=float)
+            self, "calc_box_size_periodic_coord", np.full(3, np.inf, dtype=float)
         )
-        finite_mask = np.isfinite(self._calc_box_size_periodic_index)
-        self._calc_box_size_periodic_coord[finite_mask] = (
-            diag[finite_mask] * self._calc_box_size_periodic_index[finite_mask]
+        finite_mask = np.isfinite(self.calc_box_size_periodic_index)
+        self.calc_box_size_periodic_coord[finite_mask] = (
+            diag[finite_mask] * self.calc_box_size_periodic_index[finite_mask]
         )
-        grid_shape = np.shape(self._raw_Q)[:3]
+        grid_shape = np.shape(self.raw_Q)[:3]
         object.__setattr__(
             self,
-            "_calc_grid_index",
+            "calc_grid_index",
             generate_coordinate_grid(grid_shape, grid_shape)[0],
         )
         object.__setattr__(
             self,
-            "_calc_grid",
+            "calc_grid",
             apply_linear_transform(
-                self._calc_grid_index,
-                transform=self._raw_grid_transform,
-                offset=self._raw_grid_offset,
+                self.calc_grid_index,
+                transform=self.raw_grid_transform,
+                offset=self.raw_grid_offset,
             ),
         )
 
         logger.debug("Generating the coorners of Q.")
-        Lx, Ly, Lz = np.shape(self._raw_Q)[:3] - np.array([1, 1, 1])
+        Lx, Ly, Lz = np.shape(self.raw_Q)[:3] - np.array([1, 1, 1])
         corners_index = get_box_corners(Lx, Ly, Lz)
         corners_coord = apply_linear_transform(
             corners_index,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
         )
         bounds = as_bounds(corners_coord, name=f"Bounds of Q field {self.name!r}")
 
-        object.__setattr__(self, "_calc_corners_index", corners_index)
-        object.__setattr__(self, "_calc_corners", bounds)
+        object.__setattr__(self, "calc_corners_index", corners_index)
+        object.__setattr__(self, "calc_corners", bounds)
         self.objs.act_register(bounds, is_contain_ok=True)
         logger.debug(
-            f"Box corners in lattice-index units is {self._calc_corners_index}."
-            f"Box bounds in real-space coordinates is {self._calc_corners}."
+            f"Box corners in lattice-index units is {self.calc_corners_index}."
+            f"Box bounds in real-space coordinates is {self.calc_corners}."
         )
 
         if (not is_detect_defects) and is_classify_lines:
@@ -395,27 +476,27 @@ class QFieldObject(ClassBase):
         """
         Detect defect points from the current director field.
 
-        This updates both `_calc_defect_indices` in lattice-index coordinates
-        and `_calc_defect_grid` in real-space coordinates using the current
+        This updates both `calc_defect_indices` in lattice-index coordinates
+        and `calc_defect_grid` in real-space coordinates using the current
         grid transform and offset.
         """
         object.__setattr__(
             self,
-            "_calc_defect_indices",
+            "calc_defect_indices",
             defect_detect(
-                self._raw_n,
-                is_boundary_periodic=self._raw_box_periodic_flag,
+                self.raw_n,
+                is_boundary_periodic=self.raw_box_periodic_flag,
             ),
         )
-        logger.info(f"{len(self._calc_defect_indices)} defects are found.")
+        logger.info(f"{len(self.calc_defect_indices)} defects are found.")
 
         object.__setattr__(
             self,
-            "_calc_defect_grid",
+            "calc_defect_grid",
             apply_linear_transform(
-                self._calc_defect_indices,
-                transform=self._raw_grid_transform,
-                offset=self._raw_grid_offset,
+                self.calc_defect_indices,
+                transform=self.raw_grid_transform,
+                offset=self.raw_grid_offset,
             ),
         )
 
@@ -428,12 +509,12 @@ class QFieldObject(ClassBase):
         order, registered into `self.objects`, and returned as a list.
         """
         lines = defect_classify_into_lines(
-            self._calc_defect_indices,
-            box_size_periodic=self._calc_box_size_periodic_index,
-            grid_offset=self._raw_grid_offset,
-            grid_transform=self._raw_grid_transform,
+            self.calc_defect_indices,
+            box_size_periodic=self.calc_box_size_periodic_index,
+            grid_offset=self.raw_grid_offset,
+            grid_transform=self.raw_grid_transform,
         )
-        lines = sorted(lines, key=lambda line: line._calc_defect_num, reverse=True)
+        lines = sorted(lines, key=lambda line: line.calc_defect_num, reverse=True)
         for i, line in enumerate(lines):
             line.name = f"disclination line {i}"
             self.objects.act_register(line)
@@ -530,13 +611,13 @@ class QFieldObject(ClassBase):
         num_smooth = 0
         window_list = {}
         for line in self.lines:
-            if line._calc_defect_num >= opts.min_line_length:
+            if line.calc_defect_num >= opts.min_line_length:
                 line.act_smooth(opts=opts, is_window_warning=False)
                 num_smooth += 1
                 window_list[line.name] = line.smooth.opts.window_length
             else:
                 logger.debug(
-                    f"Line `{line.name}` is not smoothed because it is too short, with only {line._calc_defect_num} defects. "
+                    f"Line `{line.name}` is not smoothed because it is too short, with only {line.calc_defect_num} defects. "
                 )
 
         msg = f"There are {len(self.lines)} disclination lines in total, with {num_smooth} lines are smoothed.\n"
@@ -607,7 +688,7 @@ class QFieldObject(ClassBase):
                     figure = self.figs[figure]
                     figure.act_commit(opts_figure)
                 elif figure is None:
-                    active_name = getattr(self.figs, "_state_active_name", None)
+                    active_name = self.figs.active_name
                     if active_name is not None:
                         figure_active = self.figs[active_name]
                         if figure_active.is_alive:
@@ -648,14 +729,14 @@ class QFieldObject(ClassBase):
         self, bounds=None, *, label: str = "plot", logger=None
     ):
         if bounds is None:
-            return self._calc_corners
+            return self.calc_corners
 
         try:
             bounds_obj = as_bounds(bounds, name=f"{label} bounds")
         except Exception:
             logger.exception("Check input.")
             logger.recovery("Use the default Q bounds instead.")
-            return self._calc_corners
+            return self.calc_corners
 
         return bounds_obj
 
@@ -766,7 +847,7 @@ class QFieldObject(ClassBase):
         logger.debug(f"min_line_length = {min_line_length}")
 
         lines_plot = [
-            line for line in self.lines if line._calc_defect_num >= min_line_length
+            line for line in self.lines if line.calc_defect_num >= min_line_length
         ]
 
         if opts_line.color == "sample_far":
@@ -934,8 +1015,8 @@ class QFieldObject(ClassBase):
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "grid_offset": self._raw_grid_offset,
-                "grid_transform": self._raw_grid_transform,
+                "grid_offset": self.raw_grid_offset,
+                "grid_transform": self.raw_grid_transform,
             },
         )
         self.objs.act_register(n_plane)
@@ -1063,8 +1144,8 @@ class QFieldObject(ClassBase):
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "grid_offset": self._raw_grid_offset,
-                "grid_transform": self._raw_grid_transform,
+                "grid_offset": self.raw_grid_offset,
+                "grid_transform": self.raw_grid_transform,
             },
         )
         self.objs.act_register(S_plane)
@@ -1265,11 +1346,11 @@ class QFieldObject(ClassBase):
 
     @property
     def S(self):
-        return self._raw_S
+        return self.raw_S
 
     @property
     def n(self):
-        return self._raw_n
+        return self.raw_n
 
     def __call__(self) -> np.ndarray:
-        return self._raw_Q
+        return self.raw_Q

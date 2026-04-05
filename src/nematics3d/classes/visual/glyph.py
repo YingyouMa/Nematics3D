@@ -147,7 +147,7 @@ class OptsGlyph(OptsBase):
         ),
         "resolver_source": (
             "Defines the input passed to callable visual resolvers. "
-            + "Use 'coords' for raw coordinates or 'upercent' for the point-index "
+            + "Use 'coords' for raw coordinates or 'u_percent' for the point-index "
             + "percentage along the glyph."
         ),
 
@@ -177,7 +177,7 @@ class OptsGlyph(OptsBase):
         "metallic":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
-        "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "upercent")),
+        "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "u_percent")),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
         "scalars_clim":         lambda v, d: (v if v is None else as_Vect(v, name=d, dim=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
@@ -636,7 +636,7 @@ class PlotGlyph(HostBase):
         source_name = as_str(
             self.opts.resolver_source,
             name="glyph resolver source",
-            pool=("coords", "upercent"),
+            pool=("coords", "u_percent"),
         )
         if source_name == "coords":
             return self.raw_coords

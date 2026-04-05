@@ -58,17 +58,25 @@ class QPlane(InterpolatePlane):
             **dict(InterpolatePlane.__attr_defs__["raw_name"]),
             "doc": "The name identifier of this Q-plane object.",
         },
+        "calc_result": {
+            **dict(InterpolatePlane.__attr_defs__["calc_result"]),
+            "kind": "calc",
+        },
         "calc_n": {
             "doc": "Director field arrays derived from Q-diagonalization.",
+            "kind": "calc",
         },
         "calc_S": {
             "doc": "Scalar-order values derived from Q-diagonalization.",
+            "kind": "calc",
         },
         "calc_is_near_defect": {
             "doc": "Boolean mask indicating whether each sampled point is near a defect.",
+            "kind": "calc",
         },
         "calc_defect_pos": {
             "doc": "Detected defect positions on this Q plane.",
+            "kind": "calc",
         },
         "state_is_interactable": {
             "doc": "Whether to create a control window when the instance is double right-clicked.",
@@ -548,67 +556,17 @@ class QPlanePolar(QPlane):
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(InterpolatePlane.__attr_defs__),
+        **dict(QPlane.__attr_defs__),
         "raw_name": {
-            **dict(InterpolatePlane.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this Q-plane object.",
-        },
-        "calc_n": {
-            "doc": "Director field arrays derived from Q-diagonalization.",
-        },
-        "calc_S": {
-            "doc": "Scalar-order values derived from Q-diagonalization.",
-        },
-        "calc_is_near_defect": {
-            "doc": "Boolean mask indicating whether each sampled point is near a defect.",
-        },
-        "calc_defect_pos": {
-            "doc": "Detected defect positions on this Q plane.",
-        },
-        "state_is_interactable": {
-            "doc": "Whether to create a control window when the instance is double right-clicked.",
-        },
-        "default_visual_opts": {
-            "doc": "Default opts_defaults_override mappings used for derived visuals.",
-        },
-        "visual_nb": {
-            "doc": "The PlotRod visual showing directors in the bulk region of this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_nd": {
-            "doc": "The PlotRod visual showing directors near detected defects on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_defect": {
-            "doc": "The PlotSphere visual showing detected defect positions on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_S": {
-            "doc": "The PlotSurface visual showing scalar order on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
+            **dict(QPlane.__attr_defs__["raw_name"]),
+            "doc": "The name identifier of this polar Q-plane object.",
         },
     }
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
         if spec.get("kind") not in ("relation", "property")
-        and name not in InterpolatePlane.__slots__
+        and name not in QPlane.__slots__
     )
 
     _origin_default_visual_opts = {

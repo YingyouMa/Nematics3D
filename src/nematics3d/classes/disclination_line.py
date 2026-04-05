@@ -121,16 +121,16 @@ class DisclinationLine(ClassBase):
     Important readable attributes:
 
     - `raw_name`: the readable identity of this defect line.
-    - `_raw_defect_indices`: the ordered lattice indices of defect points.
-    - `_calc_defect_coords`: the corresponding real-space coordinates.
-    - `_calc_end2end_kind`: topology classification of the line, one of
+    - `raw_defect_indices`: the ordered lattice indices of defect points.
+    - `calc_defect_coords`: the corresponding real-space coordinates.
+    - `calc_end2end_kind`: topology classification of the line, one of
       `"loop"`, `"cross"`, or `"seg"`.
-    - `_calc_defect_num`: the number of defect points currently stored.
-    - `_calc_norm`, `_calc_norm_metric`: the latest estimated average plane
+    - `calc_defect_num`: the number of defect points currently stored.
+    - `calc_norm`, `calc_norm_metric`: the latest estimated average plane
       normal and its confidence metrics, if computed.
     - `smooths`: all generated `DisclinationLineSmooth` versions.
     - `smooth`: the latest generated smoothed version, if any.
-    - `kind`: shorthand property exposing `_calc_end2end_kind`.
+    - `kind`: shorthand property exposing `calc_end2end_kind`.
 
     Common inspection helpers:
 
@@ -149,7 +149,7 @@ class DisclinationLine(ClassBase):
 
     - `str(line)` returns the short ClassBase-style identity.
     - `repr(line)` returns a compact summary including topology kind and point count.
-    - iteration, indexing, and `np.asarray(line)` operate on `_raw_defect_indices`.
+    - iteration, indexing, and `np.asarray(line)` operate on `raw_defect_indices`.
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
@@ -158,49 +158,55 @@ class DisclinationLine(ClassBase):
             **dict(ClassBase.__attr_defs__["raw_name"]),
             "doc": "Name identifier of this disclination line.",
         },
-        "_raw_defect_indices": {
+        "raw_defect_indices": {
             "doc": "Lattice indices of defect points forming the line (array of shape Nx3).",
         },
-        "_raw_box_size_periodic_index": {
+        "raw_box_size_periodic_index": {
             "doc": (
                 "Box size along each dimension in index space "
                 "(finite for periodic boundaries, np.inf for non-periodic)."
             ),
         },
-        "_raw_grid_offset": {
+        "raw_grid_offset": {
             "doc": (
                 "Grid translation offset mapping lattice indices to "
                 "real-space coordinates (3-vector)."
             ),
         },
-        "_raw_grid_transform": {
+        "raw_grid_transform": {
             "doc": (
                 "Grid transformation matrix (3x3) mapping lattice indices "
                 "to real-space coordinates."
             ),
         },
-        "_calc_end2end_kind": {
+        "calc_end2end_kind": {
             "doc": (
                 "Kind of line ends: 'loop' (closed loop), "
                 "'cross' (wraps across boundary), or 'seg' (open segment)."
             ),
+            "kind": "calc",
         },
-        "_calc_defect_num": {
+        "calc_defect_num": {
             "doc": "Number of defect points forming this line (integer).",
+            "kind": "calc",
         },
-        "_calc_defect_coords": {
+        "calc_defect_coords": {
             "doc": "Real-space coordinates of the defect line (array of shape Nx3).",
+            "kind": "calc",
         },
-        "_calc_norm": {
+        "calc_norm": {
             "doc": "Estimated average plane normal vector of the disclination line.",
+            "kind": "calc",
         },
-        "_calc_norm_metric": {
+        "calc_norm_metric": {
             "doc": "Collection of confidence scores for the plane-fitting result.",
+            "kind": "calc",
         },
-        "_entity_smooth_objs": {
+        "entity_smooth_objs": {
             "doc": (
                 "Generated DisclinationLineSmooth objects produced by act_smooth()."
             ),
+            "kind": "entity",
         },
         "smooths": {
             "doc": (
@@ -256,69 +262,65 @@ class DisclinationLine(ClassBase):
         if inputValue.defect_indices is None:
             raise ValueError("No defects are input into disclination line")
         for k, v in asdict(inputValue).items():
-            object.__setattr__(self, f"_raw_{k}", v)
+            object.__setattr__(self, f"raw_{k}", v)
 
         if not is_sorted:
             object.__setattr__(
-                self, "_raw_defect_indices", sort_line_indices(self._raw_defect_indices)
+                self, "raw_defect_indices", sort_line_indices(self.raw_defect_indices)
             )
 
         object.__setattr__(
             self,
-            "_raw_box_size_periodic_index",
-            as_dimension_info(self._raw_box_size_periodic_index),
+            "raw_box_size_periodic_index",
+            as_dimension_info(self.raw_box_size_periodic_index),
         )
 
         logger.debug("Classifying line kind by the distance between head and tail.")
         if (
-            np.linalg.norm(self._raw_defect_indices[0] - self._raw_defect_indices[-1])
+            np.linalg.norm(self.raw_defect_indices[0] - self.raw_defect_indices[-1])
             == 0
         ):
-            object.__setattr__(self, "_calc_end2end_kind", "loop")
-            object.__setattr__(
-                self, "_raw_defect_indices", self._raw_defect_indices[:-1]
-            )
+            object.__setattr__(self, "calc_end2end_kind", "loop")
+            object.__setattr__(self, "raw_defect_indices", self.raw_defect_indices[:-1])
         else:
-            defect1 = self._raw_defect_indices[0].copy()
-            defect2 = self._raw_defect_indices[-1].copy()
+            defect1 = self.raw_defect_indices[0].copy()
+            defect2 = self.raw_defect_indices[-1].copy()
             defect1 = np.where(
-                self._raw_box_size_periodic_index == np.inf,
+                self.raw_box_size_periodic_index == np.inf,
                 defect1,
-                defect1 % self._raw_box_size_periodic_index,
+                defect1 % self.raw_box_size_periodic_index,
             )
             defect2 = np.where(
-                self._raw_box_size_periodic_index == np.inf,
+                self.raw_box_size_periodic_index == np.inf,
                 defect2,
-                defect2 % self._raw_box_size_periodic_index,
+                defect2 % self.raw_box_size_periodic_index,
             )
             if np.linalg.norm(defect1 - defect2) == 0:
-                object.__setattr__(self, "_calc_end2end_kind", "cross")
+                object.__setattr__(self, "calc_end2end_kind", "cross")
                 object.__setattr__(
-                    self, "_raw_defect_indices", self._raw_defect_indices[:-1]
+                    self, "raw_defect_indices", self.raw_defect_indices[:-1]
                 )
             else:
-                object.__setattr__(self, "_calc_end2end_kind", "seg")
-                object.__setattr__(
-                    self, "_raw_defect_indices", self._raw_defect_indices
-                )
+                object.__setattr__(self, "calc_end2end_kind", "seg")
+                object.__setattr__(self, "raw_defect_indices", self.raw_defect_indices)
         logger.debug(
-            f"Disclination line {self.name!r} is of kind {self._calc_end2end_kind!r}"
+            f"Disclination line {self.name!r} is of kind {self.calc_end2end_kind!r}"
         )
 
         object.__setattr__(
-            self, "_calc_defect_num", np.shape(self._raw_defect_indices)[0]
+            self, "calc_defect_num", np.shape(self.raw_defect_indices)[0]
         )
 
         defect_coords = apply_linear_transform(
-            self._raw_defect_indices,
-            transform=self._raw_grid_transform,
-            offset=self._raw_grid_offset,
+            self.raw_defect_indices,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
         )
-        object.__setattr__(self, "_calc_defect_coords", defect_coords)
-        object.__setattr__(self, "_calc_norm", None)
-        object.__setattr__(self, "_calc_norm_metric", None)
+        object.__setattr__(self, "calc_defect_coords", defect_coords)
+        object.__setattr__(self, "calc_norm", None)
+        object.__setattr__(self, "calc_norm_metric", None)
 
-        object.__setattr__(self, "_entity_smooth_objs", [])
+        object.__setattr__(self, "entity_smooth_objs", [])
 
     # -------------------------------
     # Geometry analysis
@@ -328,7 +330,7 @@ class DisclinationLine(ClassBase):
     def act_calc_norm(self, logger=None) -> np.ndarray:
         """Estimate and cache one average plane normal for this defect line."""
         normal, metric = find_plane_normal(
-            self._calc_defect_coords, is_return_metric=True
+            self.calc_defect_coords, is_return_metric=True
         )
 
         if metric["linearity_risk"] > 0.5:
@@ -346,8 +348,8 @@ class DisclinationLine(ClassBase):
                 f"The result is only an 'average' plane normal."
             )
 
-        object.__setattr__(self, "_calc_norm", normal)
-        object.__setattr__(self, "_calc_norm_metric", metric)
+        object.__setattr__(self, "calc_norm", normal)
+        object.__setattr__(self, "calc_norm_metric", metric)
 
         return normal
 
@@ -438,7 +440,7 @@ class DisclinationLine(ClassBase):
 
     def __len__(self) -> int:
         """Return the number of defect points currently stored in this line."""
-        return self._calc_defect_num
+        return self.calc_defect_num
 
     # ==================== OVERRIDE ====================
     # DisclinationLine overrides ClassBase.__repr__ because defect-line
@@ -448,8 +450,8 @@ class DisclinationLine(ClassBase):
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         msg = (
-            f"{cls_name}({self.name!r}), type {self._calc_end2end_kind}, "
-            f"{self._calc_defect_num} defect points"
+            f"{cls_name}({self.name!r}), type {self.calc_end2end_kind}, "
+            f"{self.calc_defect_num} defect points"
         )
         return msg
 
@@ -462,15 +464,15 @@ class DisclinationLine(ClassBase):
 
     def __iter__(self):
         """Iterate over the stored raw defect indices."""
-        return iter(self._raw_defect_indices)
+        return iter(self.raw_defect_indices)
 
     def __getitem__(self, idx):
         """Return one raw defect-index entry or slice."""
-        return self._raw_defect_indices[idx]
+        return self.raw_defect_indices[idx]
 
     def __array__(self, dtype=None):
         """Expose the raw defect indices as a NumPy array."""
-        arr = self._raw_defect_indices
+        arr = self.raw_defect_indices
         return np.asarray(arr, dtype=dtype) if dtype is not None else arr
 
     # -------------------------------
@@ -480,7 +482,7 @@ class DisclinationLine(ClassBase):
     @property
     def smooths(self):
         """Return all cached smoothed versions of this disclination line."""
-        return getattr(self, "_entity_smooth_objs", None)
+        return getattr(self, "entity_smooth_objs", None)
 
     @property
     def smooth(self):
@@ -493,7 +495,7 @@ class DisclinationLine(ClassBase):
     @property
     def kind(self):
         """Return the end-to-end topology classification of this line."""
-        return self._calc_end2end_kind
+        return self.calc_end2end_kind
 
 
 # DisclinationLineSmooth extends SmoothedLine with defect-line-specific
@@ -553,6 +555,10 @@ class DisclinationLineSmooth(SmoothedLine):
             "doc": "Temporary padding length used when smoothing a cross-boundary line.",
             "kind": "calc",
         },
+        "impl_owner_init_ref": {
+            "doc": "Temporary owner weakref used before the managed owner relation is bound.",
+            "kind": "impl",
+        },
         "owner": {
             "doc": "The raw disclination line that owns this smoothed version.",
             "kind": "relation",
@@ -601,22 +607,17 @@ class DisclinationLineSmooth(SmoothedLine):
         if name is None:
             name = line.name
 
-        relations = {
-            key: None
-            for key, spec in type(self).__attr_defs__.items()
-            if spec.get("kind") == "relation"
-        }
-        relations["owner"] = weakref.ref(line)
-        object.__setattr__(self, "_impl_relations", relations)
+        object.__setattr__(self, "impl_owner_init_ref", weakref.ref(line))
 
         super().__init__(
-            line._raw_defect_indices,
+            line.raw_defect_indices,
             name=name,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
             **kwargs,
         )
         self.act_bind_relation_base("owner", line, is_weak=True)
+        object.__setattr__(self, "impl_owner_init_ref", None)
         sections = RegistryBase(
             name="Planes",
             info=(
@@ -633,35 +634,52 @@ class DisclinationLineSmooth(SmoothedLine):
     # Defect-line coordinate preprocessing
     # -------------------------------
 
+    def _helper_get_owner_during_init(self) -> DisclinationLine:
+        """Resolve the owner during bootstrap before the relation is fully bound."""
+        owner = getattr(self, "owner", None)
+        if owner is not None:
+            return owner
+
+        owner_ref = getattr(self, "impl_owner_init_ref", None)
+        if isinstance(owner_ref, weakref.ReferenceType):
+            owner = owner_ref()
+
+        if owner is None:
+            raise RuntimeError(
+                "DisclinationLineSmooth could not resolve its owning line during initialization."
+            )
+        return owner
+
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine._helper_resolve_coords
     # because defect-line smoothing must handle loop and cross-boundary
     # trajectories before passing coordinates into the generic smooth pipeline.
     # ==================================================
     def _helper_resolve_coords(self):
-        indices = self.owner._raw_defect_indices.copy()
+        owner = self._helper_get_owner_during_init()
+        indices = owner.raw_defect_indices.copy()
         padding_num = 0
         smooth_mode = "interp"
 
-        if self.owner._calc_end2end_kind == "loop":
+        if owner.calc_end2end_kind == "loop":
             smooth_mode = "wrap"
 
-        elif self.owner._calc_end2end_kind == "cross":
-            box_size = self.owner._raw_box_size_periodic_index
+        elif owner.calc_end2end_kind == "cross":
+            box_size = owner.raw_box_size_periodic_index
 
             if self.opts.window_ratio is not None:
                 padding_num = int(len(indices) / self.opts.window_ratio / 2)
             else:
                 padding_num = int((self.opts.window_length or len(indices)) / 2)
 
-            indices_origin = self.owner._raw_defect_indices.copy()
+            indices_origin = owner.raw_defect_indices.copy()
             tail = indices_origin[:padding_num].copy()
             head = indices_origin[-padding_num:].copy()
             indices = np.concatenate([head, indices_origin, tail])
 
             indices = unwrap_trajectory(indices, box_size_periodic=box_size)
 
-            start_origin = self.owner._raw_defect_indices[0]
+            start_origin = owner.raw_defect_indices[0]
             start_now = indices[padding_num]
             mask = np.isfinite(box_size)
             shift = np.zeros(3, dtype=float)
@@ -687,6 +705,8 @@ class DisclinationLineSmooth(SmoothedLine):
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
     ):
+        owner = self._helper_get_owner_during_init()
+
         if "mode" in kwargs:
             kwargs.pop("mode")
             logger.warning(
@@ -717,13 +737,13 @@ class DisclinationLineSmooth(SmoothedLine):
             object.__setattr__(
                 self,
                 "calc_result",
-                self.owner._raw_defect_indices.copy(),
+                owner.raw_defect_indices.copy(),
             )
 
         result_coords = apply_linear_transform(
             self.calc_result,
-            transform=self.owner._raw_grid_transform,
-            offset=self.owner._raw_grid_offset,
+            transform=owner.raw_grid_transform,
+            offset=owner.raw_grid_offset,
         )
         object.__setattr__(self, "calc_result_coords", result_coords)
 
@@ -955,8 +975,8 @@ class DisclinationLineSmoothPlot(HostBase):
             opts_type=OptsDefectLinePlot,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
-            name=line.name,
-            name_replace="visualization of smoothed disclination line",
+            name=name,
+            name_replace=line.name,
             **self_kwargs,
         )
 
@@ -1006,7 +1026,7 @@ class DisclinationLineSmoothPlot(HostBase):
             line_coords = (
                 owner.calc_result_coords
                 if is_smooth
-                else owner.owner._calc_defect_coords
+                else owner.owner.calc_defect_coords
             )
             if owner.owner.kind == "loop":
                 line_coords = np.concatenate((line_coords, [line_coords[0]]))
@@ -1016,11 +1036,11 @@ class DisclinationLineSmoothPlot(HostBase):
             logger.debug("Start to deal with the periodic boundary condition")
 
             boundary_flag = boundary_periodic_size_to_flag(
-                owner.owner._raw_box_size_periodic_index
+                owner.owner.raw_box_size_periodic_index
             )
 
             line_coords_origin = (
-                owner.result if is_smooth else owner.owner._raw_defect_indices
+                owner.result if is_smooth else owner.owner.raw_defect_indices
             )
             if owner.owner.kind == "loop":
                 line_coords_origin = np.concatenate(
@@ -1029,7 +1049,7 @@ class DisclinationLineSmoothPlot(HostBase):
 
             line_coords_origin = np.where(
                 boundary_flag,
-                line_coords_origin % owner.owner._raw_box_size_periodic_index,
+                line_coords_origin % owner.owner.raw_box_size_periodic_index,
                 line_coords_origin,
             )
 
@@ -1044,8 +1064,8 @@ class DisclinationLineSmoothPlot(HostBase):
 
             line_coords = apply_linear_transform(
                 line_coords_origin,
-                transform=owner.owner._raw_grid_transform,
-                offset=owner.owner._raw_grid_offset,
+                transform=owner.owner.raw_grid_transform,
+                offset=owner.owner.raw_grid_offset,
             )
 
         return line_coords, line_index
@@ -1100,6 +1120,11 @@ class DisclinationLineSmoothPlot(HostBase):
                 is_allow_unset_source=False,
                 **kwargs,
             )
+        wrapped = self.wrapped
+        if wrapped is not None:
+            kwargs_wrapped = self._helper_commit_enrich_kwargs_wrapped({})
+            with wrapped.act_wrapped_update():
+                wrapped.act_commit(**kwargs_wrapped)
 
 
 @dataclass(slots=True, repr=False)
@@ -1311,6 +1336,7 @@ class DefectSectionGrid(HostBase):
         )
         object.__setattr__(self, "state_normal", state_normal)
 
+        self.impl_attrs["state_normal"]["validator"] = self._helper_check_state_normal
         pose = self._helper_resolve_pose()
 
         grid = PlaneGridPolar(
@@ -1371,7 +1397,7 @@ class DefectSectionGrid(HostBase):
         if self.opts.is_wrap:
             origin = wrap_points_to_box(
                 origin,
-                self.owner.owner._raw_box_size_periodic_index,
+                self.owner.owner.raw_box_size_periodic_index,
             )
         normal = self._helper_resolve_normal(tangent)
         return {"origin": origin, "normal": normal}

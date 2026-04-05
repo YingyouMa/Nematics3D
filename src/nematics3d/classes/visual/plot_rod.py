@@ -76,7 +76,7 @@ class OptsRod(OptsGlyph):
     `resolver_source` controls the input passed to callable visual resolvers:
 
     - `"coords"`: the callable receives the raw rod-center coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0
+    - `"u_percent"`: the callable receives point-index percentages from 0
       to 100 along the glyph ordering
     - `"orient"`: the callable receives the raw orientation vectors. This is
       the default setting for rods.
@@ -152,7 +152,7 @@ class OptsRod(OptsGlyph):
         "resolver_source": lambda v, d: as_str(
             v,
             name=d,
-            pool=("coords", "upercent", "orient"),
+            pool=("coords", "u_percent", "orient"),
         ),
     }
 
@@ -285,7 +285,7 @@ class PlotRod(PlotGlyph):
     chosen by `resolver_source`:
 
     - `"coords"`: the callable receives the raw rod-center coordinates
-    - `"upercent"`: the callable receives point-index percentages from 0 to
+    - `"u_percent"`: the callable receives point-index percentages from 0 to
       100 along the glyph ordering
     - `"orient"`: the callable receives the raw orientation vectors. This is
       the default resolver source for rods.
@@ -461,7 +461,7 @@ class PlotRod(PlotGlyph):
         source_name = as_str(
             self.opts.resolver_source,
             name="glyph resolver source",
-            pool=("coords", "upercent", "orient"),
+            pool=("coords", "u_percent", "orient"),
         )
         if source_name == "orient":
             return self.raw_orient

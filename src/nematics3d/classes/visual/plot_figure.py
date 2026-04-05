@@ -532,6 +532,7 @@ class PlotFigure(HostBase):
         """Return the attached PickManager when interactive picking is enabled."""
         return getattr(self, "entity_pick_manager", None)
 
+    @property
     def pl_type(self):
         """Return a short backend code: B for BackgroundPlotter, P for Plotter."""
         if isinstance(self.pl, BackgroundPlotter):

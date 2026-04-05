@@ -10,7 +10,7 @@ class InteractDefectSection(PanelBase):
     def __init__(self, field, figure):
         self.field = field
         self.defect_plane = field.grid.wrapper
-        object.__setattr__(self.field, "_state_is_interactable", False)
+        object.__setattr__(self.field, "state_is_interactable", False)
 
         self.visual_normal = PlotRod(
             coords=field.grid.opts.origin,
@@ -24,7 +24,7 @@ class InteractDefectSection(PanelBase):
             is_reset_camera=False,
             is_visible=False,
         )
-        object.__setattr__(self.visual_normal, "_state_is_interactable", False)
+        object.__setattr__(self.visual_normal, "state_is_interactable", False)
         object.__setattr__(self, "_is_continuous_interacting", False)
 
         super().__init__(field.grid, figure, title=f"Controls of {field.grid.name!r}")
@@ -59,9 +59,9 @@ class InteractDefectSection(PanelBase):
             return
         object.__setattr__(self, "_is_continuous_interacting", True)
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
-            object.__setattr__(visual, "_state_is_silhouette", False)
+            object.__setattr__(visual, "state_is_silhouette", False)
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
 
@@ -70,10 +70,10 @@ class InteractDefectSection(PanelBase):
             return
         object.__setattr__(self, "_is_continuous_interacting", False)
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
-            object.__setattr__(visual, "_state_is_silhouette", True)
-            if getattr(visual, "_entity", None) is not None and hasattr(
+            object.__setattr__(visual, "state_is_silhouette", True)
+            if getattr(visual, "entity_actor", None) is not None and hasattr(
                 visual, "_helper_add_silhouette"
             ):
                 visual._helper_add_silhouette()
@@ -409,5 +409,5 @@ class InteractDefectSection(PanelBase):
         self._helper_end_continuous_interaction()
         self.defect_plane.act_detach_sync_task(self._section_sync_name)
         super().on_close()
-        object.__setattr__(self.field, "_state_is_interactable", True)
+        object.__setattr__(self.field, "state_is_interactable", True)
         self.visual_normal.act_remove()

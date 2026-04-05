@@ -122,8 +122,8 @@ class InteractBounds(PanelBase):
         )
 
         for visual in (origin_visual, axis1_visual, axis2_visual):
-            object.__setattr__(visual, "_state_is_interactable", False)
-            object.__setattr__(visual, "_state_is_silhouette", False)
+            object.__setattr__(visual, "state_is_interactable", False)
+            object.__setattr__(visual, "state_is_silhouette", False)
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
 
@@ -343,10 +343,10 @@ class InteractBounds(PanelBase):
         object.__setattr__(self, "_is_continuous_interacting", True)
         backups = {}
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
-            backups[id(visual)] = bool(getattr(visual, "_state_is_silhouette", True))
-            object.__setattr__(visual, "_state_is_silhouette", False)
+            backups[id(visual)] = bool(getattr(visual, "state_is_silhouette", True))
+            object.__setattr__(visual, "state_is_silhouette", False)
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
         object.__setattr__(self, "_impl_silhouette_state_backup", backups)
@@ -357,13 +357,13 @@ class InteractBounds(PanelBase):
         object.__setattr__(self, "_is_continuous_interacting", False)
         backups = getattr(self, "_impl_silhouette_state_backup", {})
         for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "_state_is_silhouette"):
+            if not hasattr(visual, "state_is_silhouette"):
                 continue
             is_enabled = backups.get(id(visual), True)
-            object.__setattr__(visual, "_state_is_silhouette", bool(is_enabled))
+            object.__setattr__(visual, "state_is_silhouette", bool(is_enabled))
             if (
                 is_enabled
-                and getattr(visual, "_entity", None) is not None
+                and getattr(visual, "entity_actor", None) is not None
                 and hasattr(visual, "_helper_add_silhouette")
             ):
                 visual._helper_add_silhouette()
