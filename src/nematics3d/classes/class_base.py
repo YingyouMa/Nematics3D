@@ -1,4 +1,4 @@
-"""
+﻿"""
 Base object model for structured Nematics3D classes.
 
 This module defines ``ClassBase``, the shared foundation for repository objects
@@ -90,7 +90,6 @@ class ClassBase:
         "raw_name": {
             "doc": "The underlying string identifier for this instance.",
             "validator": as_str,
-            "is_protected": False,
         },
         "owner": {
             "doc": "The object that owns this instance.",
@@ -174,6 +173,10 @@ class ClassBase:
 
         object.__setattr__(self, "raw_name", name)
         return name
+
+    # ------------------------------------------------------------------
+    # Attribute classification
+    # ------------------------------------------------------------------
 
     def _helper_is_impl_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute belongs to impl_* storage."""
@@ -605,7 +608,9 @@ class ClassBase:
         property_names = []
         for attr_name, attr_info in self.impl_attrs.items():
             if self._helper_is_property_attr(attr_name):
-                if attr_info.get("is_public_settable", False):
+                if attr_info.get("is_public_settable", False) and (
+                    not attr_info.get("is_protected", False)
+                ):
                     property_names.append(attr_name)
                 continue
 
