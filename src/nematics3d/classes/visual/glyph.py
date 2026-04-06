@@ -946,13 +946,10 @@ class PlotGlyph(HostBase):
 
     def act_remove(self):
         """Remove this glyph from its figure, bounds subscriptions, and live actors."""
-        bounds_visual_source = getattr(self, "impl_bounds_visual_source", None)
-        bounds_visual_sync_name = getattr(self, "impl_bounds_visual_sync_name", None)
+        bounds_visual_source = getattr(self, "bounds_visual_source", None)
         if bounds_visual_source is not None:
-            bounds_visual_source._helper_unregister_visual_sync(
-                bounds_visual_sync_name,
-                tube=self,
-            )
+            bounds_visual_source._helper_unregister_visual_sync(tube=self)
+            self.act_unbind_relation_base("bounds_visual_source")
         figure = self.fig
         self.act_unbind_bounds(is_apply=False)
         self._helper_clear_live_actor()

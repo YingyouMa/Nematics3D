@@ -597,17 +597,11 @@ class Bounds(HostBase):
         )
 
         sync_name = f"{tube.impl_name_pv}__bounds_sync"
-        tube.act_add_attr(
-            "impl_bounds_visual_source",
+        tube.act_bind_relation_base(
+            "bounds_visual_source",
+            self,
             doc="Bounds source driving this visualized frame.",
-            default=self,
-            is_overwrite=True,
-        )
-        tube.act_add_attr(
-            "impl_bounds_visual_sync_name",
-            doc="Internal sync-task name used by the source Bounds.",
-            default=sync_name,
-            is_overwrite=True,
+            is_weak=True,
         )
         tube.act_set_interact_func(
             lambda: self._helper_open_interact_panels(tube=tube, figure=figure)

@@ -100,19 +100,19 @@ bounds_local.opts.origin = (150, 13, 64)
 bounds_polar = bounds_local.act_copy(name="small-loop polar bounds")
 figure_polar = nematics3d.PlotFigure(name="small-loop polar view")
 
-xmin, xmax, ymin, ymax, zmin, zmax = 145, 175, 13, 51, 64, 94
-target_line = min(
-    (
-        line
-        for line in Q.lines
-        if line.kind == "loop"
-        and xmin <= np.mean(line._calc_defect_coords[:, 0]) <= xmax
-        and ymin <= np.mean(line._calc_defect_coords[:, 1]) <= ymax
-        and zmin <= np.mean(line._calc_defect_coords[:, 2]) <= zmax
-    ),
-    key=lambda line: line._calc_defect_num,
-)
-smooth_target = target_line.smooths[0]
+# xmin, xmax, ymin, ymax, zmin, zmax = 145, 175, 13, 51, 64, 94
+# target_line = min(
+#     (
+#         line
+#         for line in Q.lines
+#         if line.kind == "loop"
+#         and xmin <= np.mean(line._calc_defect_coords[:, 0]) <= xmax
+#         and ymin <= np.mean(line._calc_defect_coords[:, 1]) <= ymax
+#         and zmin <= np.mean(line._calc_defect_coords[:, 2]) <= zmax
+#     ),
+#     key=lambda line: line._calc_defect_num,
+# )
+# smooth_target = target_line.smooths[0]
 
 Q.act_visualize_disclination_lines(
     figure=figure_polar,
@@ -124,12 +124,12 @@ Q.act_visualize_disclination_lines(
     extent_radius=0.08,
 )
 
-Q.act_visualize_n_near_defect(
-    u_percent=50,
-    smooth=smooth_target,
-    figure=figure_polar,
-    bounds=bounds_polar,
-    is_extent=True,
-)
+# Q.act_visualize_n_near_defect(
+#     u_percent=50,
+#     smooth=smooth_target,
+#     figure=figure_polar,
+#     bounds=bounds_polar,
+#     is_extent=True,
+# )
 
 # Later steps in the README will continue from this object.

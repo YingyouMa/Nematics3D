@@ -865,7 +865,11 @@ class HostBase(ClassBase):
         self._helper_check_protected_attr(kwargs)
         kwargs_applied_name = self._helper_commit_name(kwargs)
         kwargs_applied_raw, is_reapply_opts = self._helper_commit_raw(kwargs)
-        return kwargs_applied_raw | kwargs_applied_name, is_reapply_opts
+        kwargs_applied_extra = self._helper_commit_extra(kwargs)
+        return (
+            kwargs_applied_raw | kwargs_applied_name | kwargs_applied_extra,
+            is_reapply_opts,
+        )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_protected_attr(self, kwargs: dict[str, Any], logger=None) -> None:
@@ -920,6 +924,37 @@ class HostBase(ClassBase):
                 is_reapply_opts = is_reapply_opts or is_reapply_opts_here
 
         return kwargs_applied_raw, is_reapply_opts
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_commit_extra(
+        self,
+        kwargs: dict[str, Any],
+        logger=None,
+    ) -> dict[str, Any]:
+        """Consume public extra-attr updates and store them in extra runtime storage."""
+        if not kwargs:
+            return {}
+
+        kwargs_applied_extra: dict[str, Any] = {}
+        for key in list(kwargs):
+            if key not in self.impl_attrs or not self._helper_is_extra_attr(key):
+                continue
+
+            attr_info = self.impl_attrs[key]
+            attr_value = kwargs.pop(key)
+            validator = attr_info.get("validator")
+            try:
+                if validator is not None:
+                    attr_value = validator(attr_value, attr_info["doc"])
+                self._helper_store_extra_attr(key, attr_value)
+            except (TypeError, ValueError, KeyError, AttributeError):
+                logger.exception(f"Validation failed for extra attribute {key!r}.")
+                logger.recovery(f"Ignore this modification of extra attribute {key!r}.")
+                continue
+
+            kwargs_applied_extra[key] = attr_value
+
+        return kwargs_applied_extra
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_pop_raw(

@@ -111,9 +111,12 @@ class ClassBase:
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
         },
+        "impl_extra_attrs": {
+            "doc": "Runtime storage for dynamic extra attributes on slotted instances.",
+        },
     }
 
-    __slots__ = ("raw_name", "impl_attrs", "__weakref__")
+    __slots__ = ("raw_name", "impl_attrs", "impl_extra_attrs", "__weakref__")
 
     # ------------------------------------------------------------------
     # Initialization
@@ -124,6 +127,7 @@ class ClassBase:
         # attribute template.
         impl_attrs = deepcopy(type(self).__attr_defs__)
         object.__setattr__(self, "impl_attrs", impl_attrs)
+        object.__setattr__(self, "impl_extra_attrs", {})
 
         # Normalize the initial name before routing it through the shared
         # name assignment path.
@@ -526,6 +530,10 @@ class ClassBase:
     # Extra attributes
     # ------------------------------------------------------------------
 
+    def _helper_store_extra_attr(self, name: str, value) -> None:
+        """Store one dynamic extra attribute value in the runtime extra store."""
+        self.impl_extra_attrs[name] = value
+
     def act_add_attr(
         self,
         name: str,
@@ -541,8 +549,8 @@ class ClassBase:
             is_overwrite=is_overwrite,
             is_extra=True,
         )
-        if is_overwrite or (not hasattr(self, name)):
-            object.__setattr__(self, name, default)
+        if is_overwrite or (name not in self.impl_extra_attrs):
+            self._helper_store_extra_attr(name, default)
 
     # ------------------------------------------------------------------
     # Attribute inspection
@@ -641,8 +649,13 @@ class ClassBase:
         if raw_key in self.impl_attrs:
             return object.__getattribute__(self, raw_key)
 
-        if key in self.impl_attrs and self._helper_is_relation_attr(key):
-            return self._helper_resolve_relation_value(key)
+        if key in self.impl_attrs:
+            if self._helper_is_relation_attr(key):
+                return self._helper_resolve_relation_value(key)
+            if self._helper_is_extra_attr(key):
+                extra_attrs = object.__getattribute__(self, "impl_extra_attrs")
+                if key in extra_attrs:
+                    return extra_attrs[key]
 
         cls_name = type(self).__name__
         try:
@@ -699,6 +712,9 @@ class ClassBase:
         target_key = key if target_key is None else target_key
         if target_key == "raw_name":
             self.act_set_name(value)
+            return
+        if self._helper_is_extra_attr(target_key):
+            self._helper_store_extra_attr(target_key, value)
             return
 
         object.__setattr__(self, target_key, value)

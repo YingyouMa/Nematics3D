@@ -255,7 +255,7 @@ class PlaneGrid(HostBase):
         if not is_reapply_opts and not kwargs:
             return
 
-        with self.opts._helper_internal_update():
+        with self.opts.act_internal_update():
             cover_value(
                 self.opts,
                 is_allow_cover_target_set=True,
