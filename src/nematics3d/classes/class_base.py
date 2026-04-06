@@ -1,4 +1,4 @@
-﻿"""
+"""
 Base object model for structured Nematics3D classes.
 
 This module defines ``ClassBase``, the shared foundation for repository objects
@@ -128,22 +128,11 @@ class ClassBase:
         object.__setattr__(self, "impl_attrs", impl_attrs)
         object.__setattr__(self, "impl_extra_attrs", {})
 
-        # Normalize the initial name before routing it through the shared
-        # name assignment path.
-        if name is None:
-            name_final = name_replace
-        else:
-            attr_info = self.impl_attrs["raw_name"]
-            validator = self._helper_get_name_validator(attr_info)
-            name_final = validator(
-                name,
-                name=attr_info["doc"],
-                replace=name_replace,
-            )
-            if not name_final:
-                name_final = name_replace
-
-        self.act_set_name(name_final)
+        # Normalize the initial name once, then route it through the shared
+        # registry-aware assignment path.
+        self._helper_assign_name(
+            self._helper_validate_name(name, replace=name_replace),
+        )
 
     # ------------------------------------------------------------------
     # Name handling
@@ -156,11 +145,18 @@ class ClassBase:
             return as_str
         return validator
 
-    def act_set_name(self, name):
-        """Validate and assign one public name for this instance."""
+    def _helper_validate_name(self, name, *, replace=None):
+        """Validate one name value through the registered raw_name validator."""
         attr_info = self.impl_attrs["raw_name"]
         validator = self._helper_get_name_validator(attr_info)
-        name = validator(name, name=attr_info["doc"])
+        name = validator(name, name=attr_info["doc"], replace=replace)
+        if not name and replace is not None:
+            return replace
+        return name
+
+    def act_set_name(self, name):
+        """Validate and assign one public name for this instance."""
+        name = self._helper_validate_name(name)
         return self._helper_assign_name(name)
 
     def _helper_assign_name(self, name):
@@ -545,6 +541,13 @@ class ClassBase:
         is_overwrite: bool = False,
     ):
         """Register a dynamic extra attribute with documentation and a default value."""
+        if name in self.impl_attrs and not self._helper_is_extra_attr(name):
+            raise AttributeError(
+                f"Cannot register extra attribute {name!r}: it is already a managed "
+                f"attribute of {type(self).__name__} and cannot be overwritten "
+                "through act_add_attr()."
+            )
+
         self._helper_register_attr_def(
             name,
             doc=doc,
@@ -706,9 +709,6 @@ class ClassBase:
                 f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                 f"{target_key!r} is protected."
             )
-
-        if target_key == "raw_name":
-            value = attr_info["validator"](value, name=attr_info["doc"])
 
         self._helper_setattr_final(key, value, target_key=target_key)
 
