@@ -56,7 +56,8 @@ from ..logging_decorator import logging_and_warning_decorator
 #   subclass registers one, its property setter should call that validator
 #   explicitly.
 # - extra attrs are runtime-registered public fields and should still enter the
-#   managed schema through the provided registration helpers.
+#   managed schema through the provided registration helpers. Their current
+#   runtime values also live in the same ``impl_attrs`` entry via ``value``.
 # - for semantic clarity, do not introduce other non-underscore public field
 #   categories beyond these conventions: `raw_`, `state_`, `default_`, `calc_`,
 #   `entity_`, `impl_`, direct-named relations, direct-named properties, and
@@ -76,7 +77,7 @@ class ClassBase:
 
     Each entry in ``impl_attrs`` combines relatively stable definition data
     such as ``doc`` and ``validator`` with runtime state such as protection
-    flags or current relation bindings.
+    flags, current relation bindings, or current extra-attribute values.
 
     This class supports ordinary raw/public attribute access, runtime protection
     of registered attributes, dynamic registration of extra attributes, semantic
@@ -110,12 +111,9 @@ class ClassBase:
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
         },
-        "impl_extra_attrs": {
-            "doc": "Runtime storage for dynamic extra attributes on slotted instances.",
-        },
     }
 
-    __slots__ = ("raw_name", "impl_attrs", "impl_extra_attrs", "__weakref__")
+    __slots__ = ("raw_name", "impl_attrs", "__weakref__")
 
     # ------------------------------------------------------------------
     # Initialization
@@ -126,7 +124,6 @@ class ClassBase:
         # attribute template.
         impl_attrs = deepcopy(type(self).__attr_defs__)
         object.__setattr__(self, "impl_attrs", impl_attrs)
-        object.__setattr__(self, "impl_extra_attrs", {})
 
         # Normalize the initial name once, then route it through the shared
         # registry-aware assignment path.
@@ -188,7 +185,7 @@ class ClassBase:
 
     def _helper_is_extra_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute was registered as an extra attr."""
-        return bool(self.impl_attrs[attr_name].get("is_extra", False))
+        return self.impl_attrs[attr_name].get("kind") == "extra"
 
     def _helper_is_public_settable_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute is writable from the public surface."""
@@ -529,9 +526,13 @@ class ClassBase:
     # Extra attributes
     # ------------------------------------------------------------------
 
+    def _helper_resolve_extra_attr_value(self, name: str):
+        """Return the current runtime value of one registered extra attribute."""
+        return self.impl_attrs[name].get("value", None)
+
     def _helper_store_extra_attr(self, name: str, value) -> None:
-        """Store one dynamic extra attribute value in the runtime extra store."""
-        self.impl_extra_attrs[name] = value
+        """Store one dynamic extra attribute value in impl_attrs metadata."""
+        self.impl_attrs[name]["value"] = value
 
     def act_add_attr(
         self,
@@ -551,12 +552,11 @@ class ClassBase:
         self._helper_register_attr_def(
             name,
             doc=doc,
+            kind="extra",
             is_public_settable=True,
             is_overwrite=is_overwrite,
-            is_extra=True,
+            value=default,
         )
-        if is_overwrite or (name not in self.impl_extra_attrs):
-            self._helper_store_extra_attr(name, default)
 
     # ------------------------------------------------------------------
     # Attribute inspection
@@ -661,9 +661,7 @@ class ClassBase:
             if self._helper_is_relation_attr(key):
                 return self._helper_resolve_relation_value(key)
             if self._helper_is_extra_attr(key):
-                extra_attrs = object.__getattribute__(self, "impl_extra_attrs")
-                if key in extra_attrs:
-                    return extra_attrs[key]
+                return self._helper_resolve_extra_attr_value(key)
 
         cls_name = type(self).__name__
         try:
@@ -709,6 +707,10 @@ class ClassBase:
                 f"[{cls_name}: {obj_name!r}] Assignment blocked: "
                 f"{target_key!r} is protected."
             )
+
+        validator = attr_info.get("validator")
+        if validator is not None and target_key != "raw_name":
+            value = validator(value, attr_info["doc"])
 
         self._helper_setattr_final(key, value, target_key=target_key)
 

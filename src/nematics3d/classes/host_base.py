@@ -171,8 +171,30 @@ class OptsBase:
         )
 
         attrs = type(self).__attrs__
-        for field_info in fields(self):
-            field_name = field_info.name
+        field_names = {field_info.name for field_info in fields(self)}
+
+        missing_attr_fields = sorted(set(attrs) - field_names)
+        if missing_attr_fields:
+            raise ValueError(
+                "OptsBase.__attrs__ keys must all be declared as dataclass fields. "
+                f"Missing field(s): {missing_attr_fields!r}."
+            )
+
+        invalid_validator_keys = sorted(set(type(self).impl_validators) - set(attrs))
+        if invalid_validator_keys:
+            raise ValueError(
+                "OptsBase.impl_validators keys must belong to __attrs__. "
+                f"Invalid key(s): {invalid_validator_keys!r}."
+            )
+
+        invalid_default_keys = sorted(set(type(self).impl_defaults_frozen) - set(attrs))
+        if invalid_default_keys:
+            raise ValueError(
+                "OptsBase.impl_defaults_frozen keys must belong to __attrs__. "
+                f"Invalid key(s): {invalid_default_keys!r}."
+            )
+
+        for field_name in field_names:
             if field_name in attrs:
                 continue
             if not field_name.startswith("impl_"):
@@ -1311,7 +1333,8 @@ class HostBase(ClassBase):
         for attr_name, attr_info in self.impl_attrs.items():
             if self._helper_is_property_attr(attr_name):
                 if attr_info.get("is_public_settable", False):
-                    attrs_properties.append(attr_name)
+                    if attr_name not in attrs_forbidden:
+                        attrs_properties.append(attr_name)
                 continue
 
             if not (
