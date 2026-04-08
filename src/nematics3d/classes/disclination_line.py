@@ -944,7 +944,6 @@ class DisclinationLineSmoothPlot(HostBase):
     # it must create and bind an internal PlotTube wrapped by this
     # visualization wrapper during initialization.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         line: DisclinationLineSmooth,
@@ -954,7 +953,6 @@ class DisclinationLineSmoothPlot(HostBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         opts_tube_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
-        logger=None,
         **kwargs,
     ):
 
@@ -971,12 +969,14 @@ class DisclinationLineSmoothPlot(HostBase):
             if key in self_descriptions
         }
 
+        name_replace = line.name
+        name = name_replace if name is None else name
         super().__init__(
             opts_type=OptsDefectLinePlot,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
             name=name,
-            name_replace=line.name,
+            name_replace=name_replace,
             **self_kwargs,
         )
 

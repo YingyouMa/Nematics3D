@@ -237,6 +237,13 @@ class OptsBase:
         host = self.host
         is_has_host = host is not None
         is_internal_key = key.startswith("impl_")
+        field_names = {field_info.name for field_info in fields(self)}
+
+        if is_internal_key and key not in field_names:
+            raise AttributeError(
+                f"Invalid internal option field {key!r}. Valid dataclass fields are: "
+                f"{sorted(field_names)!r}"
+            )
 
         if (not is_internal_key) and (key not in type(self).__attrs__):
             raise AttributeError(
@@ -761,6 +768,8 @@ class HostBase(ClassBase):
                 names.update([attr_name, attr_name[4:]])
             elif attr_name.startswith("state_"):
                 names.add(attr_name)
+            elif self._helper_is_extra_attr(attr_name):
+                names.add(attr_name)
             elif self._helper_is_property_attr(attr_name) and attr_info.get(
                 "is_public_settable", False
             ):
@@ -966,6 +975,10 @@ class HostBase(ClassBase):
             attr_value = kwargs.pop(key)
             validator = attr_info.get("validator")
             try:
+                if attr_info.get("is_protected", False):
+                    raise AttributeError(
+                        f"Extra attribute {key!r} is protected and cannot be modified."
+                    )
                 if validator is not None:
                     attr_value = validator(attr_value, attr_info["doc"])
                 self._helper_store_extra_attr(key, attr_value)
@@ -1097,6 +1110,11 @@ class HostBase(ClassBase):
             opts_after = self.opts.act_asdict()
             _, kwargs_applied_opts_main = diff_dict_values(opts_before, opts_after)
         else:
+            if (not isinstance(return_main, tuple)) or len(return_main) != 2:
+                raise TypeError(
+                    "_helper_commit_apply_opts_main() must return None or a "
+                    "2-tuple of (kwargs_left, kwargs_applied_opts_main)."
+                )
             kwargs_left, kwargs_applied_opts_main = return_main
 
         kwargs_applied_opts |= kwargs_applied_opts_main
@@ -1473,6 +1491,8 @@ class HostBase(ClassBase):
                         )
                 elif attr in type(self.opts).__attrs__:
                     self.opts.impl_attr_flags[attr][flag_name] = is_enabled
+                elif attr in self.impl_attrs and self._helper_is_extra_attr(attr):
+                    self.impl_attrs[attr][flag_name] = is_enabled
                 elif (
                     attr in self.impl_attrs
                     and self._helper_is_property_attr(attr)
@@ -1485,7 +1505,7 @@ class HostBase(ClassBase):
                     raise AttributeError(
                         f"Attribute {attr!r} is not a valid protectable host or opts attr. "
                         "Host-side protection is limited to raw aliases, raw_ attrs, "
-                        "state_ attrs, writable properties, and opts attrs."
+                        "state_ attrs, extra attrs, writable properties, and opts attrs."
                     )
             except (TypeError, ValueError, KeyError, AttributeError):
                 logger.exception("Invalid attr name.")

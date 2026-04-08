@@ -91,16 +91,14 @@ class OptsPickManager:
 
             else:
                 for glyph in owner._impl_registry.values():
-                    if (
-                        hasattr(glyph, "_entity_silhouette")
-                        and glyph._entity_silhouette.visibility
-                    ):
+                    silhouette = getattr(glyph, "entity_silhouette", None)
+                    if silhouette is not None and silhouette.visibility:
                         if key == "sil_color":
-                            glyph._entity_silhouette.prop.color = value
+                            silhouette.prop.color = value
                         if key == "sil_opacity":
-                            glyph._entity_silhouette.prop.opacity = value
+                            silhouette.prop.opacity = value
                         if key == "sil_width":
-                            glyph._entity_silhouette.prop.line_width = value
+                            silhouette.prop.line_width = value
 
             owner.owner.pl.render()
 
@@ -382,7 +380,7 @@ class PickManager:
             return
 
         # Double click: delete nearest marker if close; otherwise add a new marker.
-        resolved, msg, _ = owner._helper_resolve_pick(point)
+        resolved, msg, _ = owner.act_resolve_pick(point)
 
         nearest_pack, nearest_d2 = self._helper_find_nearest_marker_pack(resolved)
 
@@ -426,7 +424,7 @@ class PickManager:
             return None
 
         # Expect PlotFigure to have overlay renderer prepared (layer=1)
-        overlay = getattr(fig, "_entity_overlay", None)
+        overlay = getattr(fig, "overlay", None)
         if overlay is None:
             return None
 
@@ -678,8 +676,9 @@ class PickManager:
         object.__setattr__(self, "_state_last_rclick_actor", actor)
 
         # Once clicked, switch the highlight status
-        if hasattr(owner, "_entity_silhouette"):
-            if owner._entity_silhouette.visibility == True:
+        silhouette = getattr(owner, "entity_silhouette", None)
+        if silhouette is not None:
+            if silhouette.visibility == True:
                 owner.act_dehighlight()
             else:
                 owner.act_highlight(
@@ -695,7 +694,7 @@ class PickManager:
 
         # 3) on right-double-click
 
-        if getattr(owner, "_state_is_interactable", False):
+        if getattr(owner, "state_is_interactable", False):
             owner.act_interact()
 
         # reset to avoid triple-trigger

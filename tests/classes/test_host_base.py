@@ -69,6 +69,19 @@ class DemoHost(HostBase):
     def theme(self, value):
         object.__setattr__(self, "_theme", value)
 
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
+        del is_reapply_opts
+        kwargs_left = {}
+        for key, value in kwargs.items():
+            object.__setattr__(self.opts, key, value)
+        return kwargs_left, dict(kwargs)
+
+
+class BadReturnHost(DemoHost):
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
+        del is_reapply_opts, kwargs
+        return "bad-return"
+
 
 @dataclass(slots=True, repr=False)
 class MissingAttrFieldOpts(OptsBase):
@@ -131,6 +144,48 @@ class TestHostBase(unittest.TestCase):
 
         self.assertNotIn("'theme': Writable display theme.", output)
         self.assertIn("Protected or wrapped fields are excluded", output)
+
+    def test_internal_impl_assignment_rejects_unknown_field(self):
+        opts = DemoOpts()
+
+        with self.assertRaisesRegex(AttributeError, "Invalid internal option field"):
+            opts.impl_missing = 1
+
+    def test_commit_apply_opts_main_must_return_two_tuple(self):
+        host = BadReturnHost()
+
+        with self.assertRaisesRegex(TypeError, "must return None or a 2-tuple"):
+            host.act_commit(width=3)
+
+    def test_commit_extra_ignores_protected_extra_attr(self):
+        host = DemoHost()
+        host.act_add_attr("note", "Extra note.", default="a")
+        host.act_register_protected_attr("note")
+
+        host.act_commit(note="b")
+
+        self.assertEqual(host.note, "a")
+        self.assertIn("note", host.attrs_protected)
+        self.assertIn("note", host.attrs_forbidden)
+
+    def test_show_modifiable_attrs_excludes_forbidden_extra_attr(self):
+        host = DemoHost()
+        host.act_add_attr("note", "Extra note.", default="a")
+        host.act_register_protected_attr("note")
+
+        output = host.show_modifiable_attrs(is_return=True)
+
+        self.assertNotIn("'note': Extra note.", output)
+        self.assertIn("note", host.attrs_forbidden)
+
+    def test_register_wrapped_attr_accepts_extra_attr(self):
+        host = DemoHost()
+        host.act_add_attr("note", "Extra note.", default="a")
+
+        host.act_register_wrapped_attr("note")
+
+        self.assertIn("note", host.attrs_wrapped)
+        self.assertIn("note", host.attrs_forbidden)
 
 
 if __name__ == "__main__":

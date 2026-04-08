@@ -771,7 +771,7 @@ class PlotGlyph(HostBase):
                 try:
                     pm.act_unregister(actor)
                 except (KeyError, AttributeError, RuntimeError):
-                    pm._impl_registry.pop(actor, None)
+                    pass
             _safe_remove_actor(actor)
         _safe_remove_actor(self.impl_name_pv)
         self._helper_clear_silhouette()
@@ -1105,6 +1105,10 @@ class PlotGlyph(HostBase):
         silhouette = getattr(self, "entity_silhouette", None)
         if silhouette:
             silhouette.visibility = False
+
+    def act_resolve_pick(self, picked_point):
+        """Resolve a picked world point into the glyph-local point report."""
+        return self._helper_resolve_pick(picked_point)
 
     def _helper_resolve_pick(self, picked_point):
         pos, idx = find_nearest_point(picked_point, self.raw_coords, is_return_idx=True)

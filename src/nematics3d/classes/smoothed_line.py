@@ -253,6 +253,8 @@ class SmoothedLine(HostBase):
         )
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "calc_coords", self.raw_coords)
+        object.__setattr__(self, "calc_result", self.raw_coords)
+        object.__setattr__(self, "entity_tck", None)
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "state_is_window_warning", is_window_warning)
         object.__setattr__(self, "calc_status", "Failure, reason unknown.")
