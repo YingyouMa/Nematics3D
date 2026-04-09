@@ -347,7 +347,7 @@ class PlaneGrid(HostBase):
         object.__setattr__(self.opts, "axis1", axis1)
 
         if self.field:
-            self.field._helper_commit()
+            self.field.act_refresh()
 
     # ==================== OVERRIDE ====================
     # PlaneGrid overrides ClassBase.__repr__ because a plane grid is more useful
@@ -393,8 +393,7 @@ class PlaneGrid(HostBase):
         name_new = self.name if name is None else name
         return type(self)(name=name_new, opts=opts_new, bounds=bounds_new)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_unbind_bounds(self, is_apply=True, logger=None):
+    def act_unbind_bounds(self, is_apply=True):
         """Detach the current bounds object and optionally rebuild the grid."""
         bounds_old = self.bounds
         if bounds_old is None:

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, ClassVar, Literal, Mapping
 
 import numpy as np
 from scipy.interpolate import interp1d, splev, splprep
@@ -532,263 +532,352 @@ class SmoothedLine(HostBase):
 # interpolation data for periodic behavior.
 
 
-# NOTE:
-# The legacy `SmoothedLineFunc` below still follows the old `ClassBase`
-# protocol and has not yet been migrated to the new managed-attribute
-# conventions. Keep it commented out for now and revisit it in a later pass.
-## class SmoothedLineFunc(ClassBase):
-#     """
-#     SmoothedLineFunc represents a sampled function of `u_percent` along a
-#     smoothed line.
-#
-#     Users provide a numerical sampling function and a set of `u_percent`
-#     sampling points. The class evaluates the function at those points, stores
-#     the sampled values and metrics, and builds an interpolator for later
-#     evaluation.
-#
-#     Important readable attributes:
-#
-#     - `owner`: the SmoothedLine currently associated with this sampled function.
-#     - `_raw_func`: the numerical sampling function.
-#     - `_raw_u_samples`: the normalized sample locations in `u_percent`.
-#     - `_raw_func_kwargs`: extra keyword arguments forwarded during sampling.
-#     - `_raw_owner_opts_snapshot`: the owner opts snapshot recorded at the last
-#       successful refresh.
-#     - `_calc_values`: sampled values returned by the numerical function.
-#     - `_calc_metrics`: optional per-sample metrics returned by the function.
-#     - `_entity_interpolator`: the interpolator built from the sampled values.
-#
-#     Common inspection helpers:
-#
-#     - `show_readable_attrs()`: show the main readable stored fields.
-#     - `show_attr_desc(name)`: describe a specific readable attribute.
-#     - `show_relations()`: show object relations such as the bound owner.
-#
-#     Common user actions:
-#
-#     - `act_refresh(...)`: rebuild the sampled values and interpolator.
-#     - `interpolate(u_percent)`: evaluate the interpolated function.
-#     - `__call__(u_percent)`: shorthand for `interpolate(...)`.
-#
-#     Representation:
-#
-#     - `str(obj)` returns the short ClassBase-style identity.
-#     - `repr(obj)` returns a compact summary including sample count and mode.
-#     """
-#
-#     __attrs__ = {
-#         **(ClassBase.__attrs__),
-#         "raw_name": "The name identifier of this smoothed-line function.",
-#         "_raw_func": "Numerical function that maps a single u_percent sample to a value or to a (value, metric) pair.",
-#         "_raw_u_samples": "Sampling locations in u_percent used to evaluate the numerical function.",
-#         "_raw_func_kwargs": "Extra keyword arguments passed to the numerical function during sampling.",
-#         "_raw_owner_opts_snapshot": "Snapshot of owner.opts at the time this line function was last sampled.",
-#         "_calc_values": "Values returned by the numerical function at each sampling location.",
-#         "_calc_metrics": "Per-sample metrics returned by the numerical function, or None if unavailable.",
-#         "_entity_interpolator": "Interpolator object built from the sampled values.",
-#     }
-#
-#     __relations__ = {
-#         **(ClassBase.__relations__),
-#         "owner": "The SmoothedLine instance that this function is associated with.",
-#     }
-#
-#     __slots__ = (
-#         "raw_coords",
-#         "calc_coords",
-#         "impl_calc_num_out",
-#         "calc_result",
-#         "entity_tck",
-#         "calc_is_smoothed",
-#         "state_is_window_warning",
-#         "calc_status",
-#     )
-#
-#     # -------------------------------
-#     # Validation and owner-state helpers
-#     # -------------------------------
-#
-#     @staticmethod
-#     def _helper_validate_u_samples(u_samples):
-#         u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
-#         if u_samples.ndim != 1 or len(u_samples) == 0:
-#             raise ValueError("`u_samples` must be a non-empty one-dimensional array.")
-#         if np.any(~np.isfinite(u_samples)):
-#             raise ValueError("`u_samples` must contain only finite values.")
-#         if np.min(u_samples) < 0 or np.max(u_samples) > 100:
-#             raise ValueError("`u_samples` must stay within the range [0, 100].")
-#         u_samples = np.unique(np.sort(u_samples))
-#         if len(u_samples) == 0:
-#             raise ValueError(
-#                 "`u_samples` must remain non-empty after sorting and deduplication."
-#             )
-#         return u_samples
-#
-#     def _helper_get_owner_mode_from(self, opts_dict):
-#         owner_mode = None if opts_dict is None else opts_dict.get("mode", None)
-#         return (
-#             "interp"
-#             if owner_mode is None
-#             else as_str(
-#                 owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
-#             )
-#         )
-#
-#     # -------------------------------
-#     # Initialization
-#     # -------------------------------
-#
-#     @logging_and_warning_decorator(start_finish_level=5)
-#     def __init__(
-#         self,
-#         func,
-#         u_samples,
-#         owner: SmoothedLine,
-#         func_kwargs: Mapping[str, Any] | None = None,
-#         name: str = "smoothed line function",
-#         logger=None,
-#     ):
-#         super().__init__(name=name, name_replace="smoothed line function")
-#
-#         if not isinstance(owner, SmoothedLine):
-#             raise TypeError("`owner` for SmoothedLineFunc must be a SmoothedLine.")
-#         if not callable(func):
-#             raise TypeError("`func` for SmoothedLineFunc must be callable.")
-#
-#         u_samples = self._helper_validate_u_samples(u_samples)
-#
-#         object.__setattr__(self, "_raw_func", func)
-#         object.__setattr__(self, "_raw_u_samples", u_samples)
-#         object.__setattr__(
-#             self,
-#             "_raw_func_kwargs",
-#             {} if func_kwargs is None else dict(func_kwargs),
-#         )
-#         object.__setattr__(self, "_raw_owner_opts_snapshot", None)
-#         object.__setattr__(self, "_calc_values", None)
-#         object.__setattr__(self, "_calc_metrics", None)
-#         object.__setattr__(self, "_entity_interpolator", None)
-#         self.act_bind_relation_base("owner", owner, is_weak=True)
-#
-#         self.act_refresh(u_samples=u_samples)
-#
-#     # -------------------------------
-#     # Sampling and refresh helpers
-#     # -------------------------------
-#
-#     @logging_and_warning_decorator(start_finish_level=5)
-#     def _helper_warn_if_owner_opts_changed(self, logger=None):
-#         owner = self.owner
-#         if owner is None:
-#             return
-#
-#         opts_now = owner.opts.act_asdict()
-#         opts_then = self._raw_owner_opts_snapshot
-#         diff_then, diff_now = diff_dict_values(opts_then, opts_now)
-#         if not diff_then and not diff_now:
-#             return
-#
-#         logger.warning(
-#             f"Smoothed line function {self.name!r} was sampled with stale owner opts.\n"
-#             f"Recorded opts diff: {diff_then}\n"
-#             f"Current owner opts diff: {diff_now}\n"
-#             "Consider calling `act_refresh(...)` to rebuild the sampled interpolator."
-#         )
-#
-#     @logging_and_warning_decorator(start_finish_level=5)
-#     def act_refresh(self, u_samples=None, logger=None):
-#         owner = self.owner
-#         if owner is None:
-#             raise RuntimeError(
-#                 "Cannot refresh a SmoothedLineFunc without a live owner."
-#             )
-#
-#         if u_samples is not None:
-#             object.__setattr__(
-#                 self,
-#                 "_raw_u_samples",
-#                 self._helper_validate_u_samples(u_samples),
-#             )
-#
-#         values = []
-#         metrics = []
-#         has_metric = False
-#         for u in self._raw_u_samples:
-#             sample_result = self._raw_func(float(u), **self._raw_func_kwargs)
-#             if isinstance(sample_result, tuple) and len(sample_result) == 2:
-#                 value, metric = sample_result
-#             else:
-#                 value, metric = sample_result, None
-#             values.append(np.asarray(value))
-#             metrics.append(metric)
-#             has_metric = has_metric or (metric is not None)
-#
-#         values = np.stack(values, axis=0)
-#         metrics = metrics if has_metric else None
-#
-#         opts_snapshot = owner.opts.act_asdict()
-#         mode = self._helper_get_owner_mode_from(opts_snapshot)
-#
-#         if mode == "wrap":
-#             u_interp = np.concatenate(
-#                 [
-#                     self._raw_u_samples - 100.0,
-#                     self._raw_u_samples,
-#                     self._raw_u_samples + 100.0,
-#                 ]
-#             )
-#             values_interp = np.concatenate([values, values, values], axis=0)
-#         else:
-#             u_interp = self._raw_u_samples
-#             values_interp = values
-#
-#         interpolator = interp1d(
-#             u_interp,
-#             values_interp,
-#             axis=0,
-#             kind="linear",
-#             bounds_error=False,
-#             fill_value="extrapolate",
-#             assume_sorted=True,
-#         )
-#
-#         object.__setattr__(self, "_raw_owner_opts_snapshot", dict(opts_snapshot))
-#         object.__setattr__(self, "_calc_values", values)
-#         object.__setattr__(self, "_calc_metrics", metrics)
-#         object.__setattr__(self, "_entity_interpolator", interpolator)
-#
-#     # -------------------------------
-#     # Public evaluation actions
-#     # -------------------------------
-#
-#     def interpolate(self, u_percent):
-#         self._helper_warn_if_owner_opts_changed()
-#         u_percent = np.asarray(u_percent, dtype=float)
-#         mode = self._helper_get_owner_mode_from(self._raw_owner_opts_snapshot)
-#         if mode == "wrap":
-#             u_percent = np.mod(u_percent, 100.0)
-#         return self._entity_interpolator(u_percent)
-#
-#     def __call__(self, u_percent):
-#         return self.interpolate(u_percent)
-#
-#     # -------------------------------
-#     # Representation
-#     # -------------------------------
-#
-#     def __repr__(self) -> str:
-#         cls_name = self.__class__.__name__
-#         mode = self._helper_get_owner_mode_from(self._raw_owner_opts_snapshot)
-#         return (
-#             f"{cls_name}({self.name!r}), num_samples={len(self._raw_u_samples)}, "
-#             f"mode={mode!r}"
-#         )
-#
-#     # ==================== OVERRIDE ====================
-#     # SmoothedLineFunc overrides the default string form to keep the short
-#     # ClassBase-style identity view for compact display.
-#     # ==================================================
-#
-#     def __str__(self) -> str:
-#         return ClassBase.__str__(self)
-#
+def _raise_type_error(name: str, value: Any):
+    raise TypeError(f"{name} must be callable, got {type(value).__name__}.")
+
+
+class SmoothedLineFunc(ClassBase):
+    """
+    Sample and interpolate a numerical function along one SmoothedLine.
+
+    Users provide a callable `func(u_percent, **func_kwargs)` together with
+    normalized sample locations in `[0, 100]`. The object evaluates that
+    callable on the current line parameter domain, stores sampled outputs, and
+    exposes a linear interpolator for later reuse.
+
+    The sampling mode follows the current owner opts mode:
+
+    - `"interp"`: interpolate directly over the sampled range.
+    - `"wrap"`: tile the samples across `[-100, 0, 100]` offsets so periodic
+      evaluation remains continuous across the wrap boundary.
+    """
+
+    # fmt: off
+    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
+        **dict(ClassBase.__attr_defs__),
+        "raw_name": {
+            **dict(ClassBase.__attr_defs__["raw_name"]),
+            "doc": "The name identifier of this smoothed-line function.",
+        },
+        "owner": {
+            **dict(ClassBase.__attr_defs__["owner"]),
+            "doc": "The SmoothedLine instance that this function is associated with.",
+        },
+        "raw_func": {
+            "doc": "Numerical sampling function mapping one u_percent to a value or a (value, metric) pair.",
+            "validator": lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
+        },
+        "raw_u_samples": {
+            "doc": "Sampling locations in u_percent used to evaluate the numerical function.",
+            "validator": lambda v, d: SmoothedLineFunc._helper_validate_u_samples(v, name=d),
+        },
+        "raw_func_kwargs": {
+            "doc": "Extra keyword arguments passed to the numerical function during sampling.",
+            "validator": lambda v, d: SmoothedLineFunc._helper_validate_func_kwargs(v, name=d),
+        },
+        "impl_owner_opts_snapshot": {
+            "doc": "Snapshot of owner.opts at the time this line function was last sampled.",
+        },
+        "calc_values": {
+            "doc": "Values returned by the numerical function at each sampling location.",
+            "kind": "calc",
+        },
+        "calc_metrics": {
+            "doc": "Per-sample metrics returned by the numerical function, or None if unavailable.",
+            "kind": "calc",
+        },
+        "entity_interpolator": {
+            "doc": "Interpolator object built from the sampled values.",
+            "kind": "entity",
+        },
+    }
+    # fmt: on
+
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
+        and name not in ClassBase.__slots__
+    )
+
+    # -------------------------------
+    # Validation and owner-state helpers
+    # -------------------------------
+
+    @staticmethod
+    def _helper_validate_u_samples(
+        u_samples,
+        *,
+        name: str = "`u_samples`",
+    ) -> np.ndarray:
+        u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
+        if u_samples.ndim != 1 or len(u_samples) == 0:
+            raise ValueError(f"{name} must be a non-empty one-dimensional array.")
+        if np.any(~np.isfinite(u_samples)):
+            raise ValueError(f"{name} must contain only finite values.")
+        if np.min(u_samples) < 0 or np.max(u_samples) > 100:
+            raise ValueError(f"{name} must stay within the range [0, 100].")
+        u_samples = np.unique(np.sort(u_samples))
+        if len(u_samples) == 0:
+            raise ValueError(
+                f"{name} must remain non-empty after sorting and deduplication."
+            )
+        return u_samples
+
+    @staticmethod
+    def _helper_validate_func_kwargs(
+        func_kwargs,
+        *,
+        name: str = "`func_kwargs`",
+    ) -> dict[str, Any]:
+        if func_kwargs is None:
+            return {}
+        if not isinstance(func_kwargs, Mapping):
+            raise TypeError(f"{name} must be a mapping or None.")
+        return dict(func_kwargs)
+
+    def _helper_get_owner_mode_from(self, opts_dict):
+        owner_mode = None if opts_dict is None else opts_dict.get("mode", None)
+        return (
+            "interp"
+            if owner_mode is None
+            else as_str(
+                owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
+            )
+        )
+
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def __init__(
+        self,
+        func,
+        u_samples,
+        owner: SmoothedLine,
+        func_kwargs: Mapping[str, Any] | None = None,
+        name: str = "smoothed line function",
+        logger=None,
+    ):
+        del logger
+        super().__init__(name=name, name_replace="smoothed line function")
+
+        if not isinstance(owner, SmoothedLine):
+            raise TypeError("`owner` for SmoothedLineFunc must be a SmoothedLine.")
+
+        object.__setattr__(
+            self,
+            "raw_func",
+            type(self).__attr_defs__["raw_func"]["validator"](
+                func,
+                type(self).__attr_defs__["raw_func"]["doc"],
+            ),
+        )
+        object.__setattr__(
+            self,
+            "raw_u_samples",
+            type(self).__attr_defs__["raw_u_samples"]["validator"](
+                u_samples,
+                type(self).__attr_defs__["raw_u_samples"]["doc"],
+            ),
+        )
+        object.__setattr__(
+            self,
+            "raw_func_kwargs",
+            type(self).__attr_defs__["raw_func_kwargs"]["validator"](
+                func_kwargs,
+                type(self).__attr_defs__["raw_func_kwargs"]["doc"],
+            ),
+        )
+        object.__setattr__(self, "impl_owner_opts_snapshot", None)
+        object.__setattr__(self, "calc_values", None)
+        object.__setattr__(self, "calc_metrics", None)
+        object.__setattr__(self, "entity_interpolator", None)
+
+        self.act_bind_relation_base("owner", owner, is_weak=True)
+        self.act_refresh()
+
+    # -------------------------------
+    # Sampling and refresh helpers
+    # -------------------------------
+
+    def _helper_get_owner_opts_comparison(self):
+        owner = self.owner
+        opts_then = self.impl_owner_opts_snapshot
+        opts_now = None if owner is None else owner.opts.act_asdict()
+
+        if opts_then is None or opts_now is None:
+            diff_then = {}
+            diff_now = {}
+            is_stale = False
+        else:
+            diff_then, diff_now = diff_dict_values(opts_then, opts_now)
+            is_stale = bool(diff_then or diff_now)
+
+        lines = [f"Smoothed line function {self.name!r} owner opts comparison:"]
+        lines.append(f"Stored opts snapshot: {opts_then!r}")
+        lines.append(f"Current owner opts: {opts_now!r}")
+        if owner is None:
+            lines.append("Owner relation is currently unavailable.")
+        elif opts_then is None:
+            lines.append(
+                "No stored opts snapshot is available yet. Call `act_refresh(...)` first."
+            )
+        elif is_stale:
+            lines.append(f"Stored opts diff: {diff_then}")
+            lines.append(f"Current owner opts diff: {diff_now}")
+            lines.append(
+                "Stored snapshot differs from the current owner opts. Consider calling `act_refresh(...)`."
+            )
+        else:
+            lines.append("Stored snapshot matches the current owner opts.")
+
+        return {
+            "owner": owner,
+            "opts_then": opts_then,
+            "opts_now": opts_now,
+            "diff_then": diff_then,
+            "diff_now": diff_now,
+            "is_stale": is_stale,
+            "message": "\n".join(lines),
+        }
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_warn_if_owner_opts_changed(self, logger=None):
+        comparison = self._helper_get_owner_opts_comparison()
+        if not comparison["is_stale"]:
+            return
+        logger.warning(comparison["message"])
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_refresh(
+        self,
+        u_samples=None,
+        func=None,
+        func_kwargs: Mapping[str, Any] | None = None,
+        logger=None,
+    ):
+        del logger
+        owner = self.owner
+        if owner is None:
+            raise RuntimeError(
+                "Cannot refresh a SmoothedLineFunc without a live owner."
+            )
+
+        if u_samples is not None:
+            object.__setattr__(
+                self,
+                "raw_u_samples",
+                self._helper_validate_u_samples(
+                    u_samples,
+                    name=type(self).__attr_defs__["raw_u_samples"]["doc"],
+                ),
+            )
+        if func is not None:
+            object.__setattr__(
+                self,
+                "raw_func",
+                type(self).__attr_defs__["raw_func"]["validator"](
+                    func,
+                    type(self).__attr_defs__["raw_func"]["doc"],
+                ),
+            )
+        if func_kwargs is not None:
+            object.__setattr__(
+                self,
+                "raw_func_kwargs",
+                self._helper_validate_func_kwargs(
+                    func_kwargs,
+                    name=type(self).__attr_defs__["raw_func_kwargs"]["doc"],
+                ),
+            )
+
+        values = []
+        metrics = []
+        is_has_metric = False
+        for u in self.raw_u_samples:
+            sample_result = self.raw_func(float(u), **self.raw_func_kwargs)
+            if isinstance(sample_result, tuple) and len(sample_result) == 2:
+                value, metric = sample_result
+            else:
+                value, metric = sample_result, None
+            values.append(np.asarray(value))
+            metrics.append(metric)
+            is_has_metric = is_has_metric or (metric is not None)
+
+        values = np.stack(values, axis=0)
+        metrics = metrics if is_has_metric else None
+
+        opts_snapshot = owner.opts.act_asdict()
+        mode = self._helper_get_owner_mode_from(opts_snapshot)
+
+        if mode == "wrap":
+            u_interp = np.concatenate(
+                [
+                    self.raw_u_samples - 100.0,
+                    self.raw_u_samples,
+                    self.raw_u_samples + 100.0,
+                ]
+            )
+            values_interp = np.concatenate([values, values, values], axis=0)
+        else:
+            u_interp = self.raw_u_samples
+            values_interp = values
+
+        interpolator = interp1d(
+            u_interp,
+            values_interp,
+            axis=0,
+            kind="linear",
+            bounds_error=False,
+            fill_value="extrapolate",
+            assume_sorted=True,
+        )
+
+        object.__setattr__(self, "impl_owner_opts_snapshot", dict(opts_snapshot))
+        object.__setattr__(self, "calc_values", values)
+        object.__setattr__(self, "calc_metrics", metrics)
+        object.__setattr__(self, "entity_interpolator", interpolator)
+        return self
+
+    # -------------------------------
+    # Public evaluation actions
+    # -------------------------------
+
+    def interpolate(self, u_percent):
+        if self.entity_interpolator is None:
+            raise RuntimeError(
+                "SmoothedLineFunc has no interpolator yet. Call `act_refresh()` first."
+            )
+
+        self._helper_warn_if_owner_opts_changed()
+        u_percent = np.asarray(u_percent, dtype=float)
+        mode = self._helper_get_owner_mode_from(self.impl_owner_opts_snapshot)
+        if mode == "wrap":
+            u_percent = np.mod(u_percent, 100.0)
+        return self.entity_interpolator(u_percent)
+
+    def __call__(self, u_percent):
+        return self.interpolate(u_percent)
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_owner_opts_snapshot(self, is_return=False, logger=None):
+        comparison = self._helper_get_owner_opts_comparison()
+        logger.info(comparison["message"])
+        if is_return:
+            return comparison["message"]
+        return None
+
+    # -------------------------------
+    # Representation
+    # -------------------------------
+
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        mode = self._helper_get_owner_mode_from(self.impl_owner_opts_snapshot)
+        return (
+            f"{cls_name}({self.name!r}), num_samples={len(self.raw_u_samples)}, "
+            f"mode={mode!r}"
+        )
+

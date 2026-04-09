@@ -788,7 +788,6 @@ class DisclinationLineSmooth(SmoothedLine):
         self,
         u_percent,
         opts_grid: OptsPlaneGridPolar | None = None,
-        is_wrap: bool | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
@@ -802,6 +801,10 @@ class DisclinationLineSmooth(SmoothedLine):
             q_host.act_add_interpolator()
 
         tangent, origin = self.act_calc_tangent(u_percent, is_return_coord=True)
+        origin = wrap_points_to_box(
+            origin,
+            self.owner.raw_box_size_periodic_index,
+        )
         grid = PlaneGridPolar(
             normal=tangent,
             origin=origin,

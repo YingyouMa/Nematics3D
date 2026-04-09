@@ -73,7 +73,6 @@ class InterpolatePlane(ClassBase):
     # update the plane grid binding before validating the interpolator and
     # computing the first sampled result.
     # ==================================================
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         interpolator: QInterpolator,
@@ -81,7 +80,6 @@ class InterpolatePlane(ClassBase):
         grid: PlaneGrid | PlaneGridPolar | None = None,
         opts: OptsPlaneGrid | OptsPlaneGridPolar | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
         super().__init__(name=name, name_replace="interpolate plane")
@@ -108,12 +106,11 @@ class InterpolatePlane(ClassBase):
             )
         self.act_bind_relation_base("interpolator", interpolator, is_weak=True)
 
-        self._helper_commit()
+        self.act_refresh()
 
     # InterpolatePlane adds `_helper_commit` as its internal recomputation step
     # for re-sampling interpolated values on the currently bound plane grid.
-    @logging_and_warning_decorator()
-    def _helper_commit(self, logger=None):
+    def act_refresh(self):
         plane_grid = self.grid
 
         grid_all = plane_grid.entity_grid_all

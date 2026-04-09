@@ -175,12 +175,11 @@ class QPlane(InterpolatePlane):
         )
 
     # ==================== OVERRIDE ====================
-    # QPlane overrides InterpolatePlane._helper_commit because Q-plane updates
+    # QPlane overrides InterpolatePlane.act_refresh because Q-plane updates
     # must diagonalize interpolated tensors, detect defects, refresh derived
     # caches, and then propagate the new data into any live visuals.
     # ==================================================
-    @logging_and_warning_decorator()
-    def _helper_commit(self, logger=None):
+    def act_refresh(self):
 
         plane_grid = self.grid
 

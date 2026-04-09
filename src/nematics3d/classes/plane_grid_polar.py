@@ -7,7 +7,6 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 
 from nematics3d.datatypes import (
-    Number,
     Tensor,
     UNSET,
     Unset,
@@ -32,7 +31,7 @@ class OptsPlaneGridPolar(OptsBase):
     Options for generating a polar (concentric-ring) point lattice on a plane.
 
     This option set targets the "ring + equal arc-length" strategy:
-    - Rings are placed at radii r_i = R_min + i * dr
+    - Rings are placed at radii r_i = r_min + i * dr
     - Points on each ring are spaced by approximately constant arc length
       (via N_theta(i) ~ round(2*pi*r_i / arc_dist))
     - Rings are angularly staggered using the golden angle for reduced aliasing
@@ -42,7 +41,7 @@ class OptsPlaneGridPolar(OptsBase):
     origin: Vect(3) | Unset = UNSET
     normal: Vect(3) | Unset = UNSET
     theta0_axis: Vect(3) | None | Unset = UNSET
-    R_min: float | Unset = UNSET
+    r_min: float | Unset = UNSET
     layers: int | Unset = UNSET
     dr: float | Unset = UNSET
     arc_dist: float | Unset = UNSET
@@ -58,9 +57,9 @@ class OptsPlaneGridPolar(OptsBase):
             "in-plane reference axis defining theta=0; will be projected onto "
             "the plane and normalized (None uses the default axis)"
         ),
-        "R_min": "minimum radius of the first ring (or 0 for center point)",
+        "r_min": "minimum radius of the first ring (or 0 for center point)",
         "layers": "total number of rings/layers to generate",
-        "dr": "radial spacing between rings; rings at r_i = R_min + i * dr",
+        "dr": "radial spacing between rings; rings at r_i = r_min + i * dr",
         "arc_dist": (
             "target arc-length spacing between adjacent points along each ring"
         ),
@@ -84,7 +83,7 @@ class OptsPlaneGridPolar(OptsBase):
         "theta0_axis": lambda v, d: (
             None if v is None else as_Vect(v, name=d, is_norm=True)
         ),
-        "R_min": lambda v, d: (
+        "r_min": lambda v, d: (
             None if v is None else as_Number(v, name=d, value_range=(0, np.inf))
         ),
         "layers": lambda v, d: as_Number(
@@ -104,7 +103,7 @@ class OptsPlaneGridPolar(OptsBase):
             **dict(OptsBase.impl_defaults_frozen),
             "tag": "polar plane grid options",
             "theta0_axis": None,
-            "R_min": None,
+            "r_min": None,
             "layers": 4,
             "dr": 0.5,
             "arc_dist": None,
@@ -156,7 +155,7 @@ class PlaneGridPolar(HostBase):
             "doc": "Cumulative offsets defining the start/end indices of each polar ring.",
         },
         "calc_box_mask": {
-            "doc": "Boolean mask selecting the polar grid points kept after optional bounds filtering.",
+            "doc": "Boolean mask selecting the grid points kept after optional bounds filtering.",
         },
         "impl_name_bounds_sync": {
             "doc": "Internal sync-task name used to react to bounds geometry updates.",
@@ -246,7 +245,7 @@ class PlaneGridPolar(HostBase):
             )
 
         arc_dist = self.opts.dr if self.opts.arc_dist is None else self.opts.arc_dist
-        R_min = self.opts.dr if self.opts.R_min is None else self.opts.R_min
+        r_min = self.opts.dr if self.opts.r_min is None else self.opts.r_min
         origin = self.opts.origin
         dr = self.opts.dr
         normal = self.opts.normal
@@ -282,7 +281,7 @@ class PlaneGridPolar(HostBase):
         ring_sizes = []
 
         for i in range(layers):
-            r = R_min + i * dr
+            r = r_min + i * dr
 
             if np.isclose(r, 0):
                 points_list.append(origin.copy()[None, :])
@@ -338,7 +337,7 @@ class PlaneGridPolar(HostBase):
         object.__setattr__(self.opts, "theta0_axis", theta0_axis)
 
         if self.field:
-            self.field._helper_commit()
+            self.field.act_refresh()
 
     # ==================== OVERRIDE ====================
     # PlaneGridPolar overrides ClassBase.__repr__ because a polar grid is more
@@ -382,8 +381,7 @@ class PlaneGridPolar(HostBase):
         name_new = self.name if name is None else name
         return type(self)(name=name_new, opts=opts_new, bounds=bounds_new)
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def act_unbind_bounds(self, is_apply=True, logger=None):
+    def act_unbind_bounds(self, is_apply=True):
         """Detach the current bounds object and optionally rebuild the polar grid."""
         bounds_old = self.bounds
         if bounds_old is None:

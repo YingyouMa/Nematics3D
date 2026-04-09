@@ -476,6 +476,15 @@ class OptsBase:
 #   runtime entities such as caches, render handles, or external engine objects.
 #   Both are output-side storage and should be read-only from the public write
 #   surface.
+# - Relations may still matter to the concrete computation of a subclass, but
+#   they are not part of the ordinary HostBase commit pipeline input surface.
+#   Binding or unbinding a relation does not automatically call `act_commit()`
+#   or trigger opts reapplication by itself.
+# - If a particular relation should affect derived results, handle that
+#   explicitly in the concrete subclass. A common pattern is to provide a
+#   dedicated bind/unbind helper that updates the relation and then explicitly
+#   triggers `act_commit(is_reapply_opts=True)`, similar to how `PlotGlyph`
+#   manages the `bounds` relation.
 # - Because dependent variables are outputs rather than inputs, they normally do
 #   not register `validator`, `is_protected`, or `is_wrapped` in the static
 #   schema.

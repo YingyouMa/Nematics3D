@@ -1,4 +1,4 @@
-"""
+﻿"""
 Base object model for structured Nematics3D classes.
 
 This module defines ``ClassBase``, the shared foundation for repository objects
@@ -144,11 +144,17 @@ class ClassBase:
 
     def _helper_validate_name(self, name, *, replace=None):
         """Validate one name value through the registered raw_name validator."""
+        if name is None:
+            if replace is not None:
+                return replace
+            else:
+                raise NameError(
+                    "`name` and `replace` are both None."
+                    "A valid str name is needed"
+                )
         attr_info = self.impl_attrs["raw_name"]
         validator = self._helper_get_name_validator(attr_info)
         name = validator(name, name=attr_info["doc"], replace=replace)
-        if not name and replace is not None:
-            return replace
         return name
 
     def act_set_name(self, name):
