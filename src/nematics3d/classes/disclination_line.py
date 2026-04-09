@@ -256,7 +256,7 @@ class DisclinationLine(ClassBase):
         if name is None:
             name = "disclination line"
 
-        super().__init__(name=name, name_replace="disclination line")
+        super().__init__(name=name, name_replace="disclination line", is_fixed=True)
 
         inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
         if inputValue.defect_indices is None:

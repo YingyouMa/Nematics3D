@@ -333,7 +333,7 @@ class QFieldObject(ClassBase):
         **kwargs,
     ) -> None:
 
-        super().__init__(name=name, name_replace="Q")
+        super().__init__(name=name, name_replace="Q", is_fixed=True)
         if inputValue is None:
             inputValue = InputQ()
 
@@ -1343,14 +1343,6 @@ class QFieldObject(ClassBase):
     @property
     def objs(self):
         return self.objects
-
-    @property
-    def S(self):
-        return self.raw_S
-
-    @property
-    def n(self):
-        return self.raw_n
 
     def __call__(self) -> np.ndarray:
         return self.raw_Q

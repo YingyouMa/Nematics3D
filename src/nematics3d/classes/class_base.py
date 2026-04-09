@@ -509,6 +509,57 @@ class ClassBase:
         self.impl_attrs[name]["is_weak"] = None
 
     @logging_and_warning_decorator(start_finish_level=5)
+    def show_readable_attrs(self, is_return=False, is_desc=True, logger=None):
+        """Show the registered readable attributes for this instance."""
+        lines = [
+            "When reading, the raw_ prefix may be omitted where a public alias exists."
+        ]
+
+        def _readable_attr_sort_key(attr_name: str) -> tuple[int, str]:
+            if attr_name.startswith("raw_"):
+                group = 0
+            elif attr_name.startswith("state_"):
+                group = 1
+            elif attr_name.startswith("default_"):
+                group = 2
+            elif self._helper_is_relation_attr(attr_name):
+                group = 3
+            elif attr_name.startswith("calc_"):
+                group = 4
+            elif self._helper_is_property_attr(attr_name):
+                group = 5
+            else:
+                group = 6
+            return group, attr_name
+
+        attr_names = sorted(
+            (
+                attr_name
+                for attr_name in self.impl_attrs
+                if not self._helper_is_impl_attr(attr_name)
+            ),
+            key=_readable_attr_sort_key,
+        )
+
+        if not attr_names:
+            lines.append("- <none>")
+        else:
+            for attr_name in attr_names:
+                if self._helper_is_relation_attr(attr_name):
+                    desc = self._helper_get_relation_doc(attr_name)
+                else:
+                    desc = self.impl_attrs[attr_name]["doc"]
+                lines.append(f"- {attr_name}")
+                if is_desc:
+                    lines.append(f"    {desc}")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
     def show_relations(self, is_return=False, logger=None):
         """Show currently bound relations and their descriptions."""
         lines = []
@@ -521,11 +572,12 @@ class ClassBase:
             if target is None:
                 continue
 
-            lines.append(f"{attr_name}: {self._helper_get_relation_doc(attr_name)}")
-            lines.append(f"  current: {target}")
+            lines.append(f"- {attr_name}")
+            lines.append(f"      {self._helper_get_relation_doc(attr_name)}")
+            lines.append(f"      current: {target}")
 
         if not lines:
-            lines.append("<none>")
+            lines.append("- <none>")
 
         output = "\n".join(lines)
         logger.info(output)
@@ -617,67 +669,45 @@ class ClassBase:
         )
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def show_readable_attrs(self, is_return=False, logger=None):
-        """Show the public readable attribute surface for this instance."""
-        lines = [
-            "When reading or assigning, the 'raw_' prefix may be omitted "
-            "where a public alias exists."
-        ]
-
-        for attr_name in sorted(
-            self._helper_collect_readable_names(is_exclude_impl=True)
-        ):
-            lines.append(self.show_attr_desc(attr_name))
-
-        output = "\n".join(lines)
-        logger.info(output)
-        if is_return:
-            return output
-        return None
-
-    @logging_and_warning_decorator(start_finish_level=5)
-    def show_modifiable_attrs(self, is_return=False, logger=None):
+    def show_modifiable_attrs(self, is_return=False, is_desc=True, logger=None):
         """Show public attributes and properties intended for assignment."""
         lines = [
-            "When assigning, the 'raw_' prefix may be omitted.",
+            "When assigning, the raw_ prefix may be omitted where a public alias exists."
         ]
 
-        attr_names = []
-        property_names = []
-        for attr_name, attr_info in self.impl_attrs.items():
-            if self._helper_is_property_attr(attr_name):
-                if attr_info.get("is_public_settable", False) and (
-                    not attr_info.get("is_protected", False)
-                ):
-                    property_names.append(attr_name)
-                continue
+        def _modifiable_attr_sort_key(attr_name: str) -> tuple[int, str]:
+            if attr_name.startswith("raw_"):
+                group = 0
+            elif attr_name.startswith("state_"):
+                group = 1
+            elif self._helper_is_property_attr(attr_name):
+                group = 2
+            elif self._helper_is_extra_attr(attr_name):
+                group = 3
+            else:
+                group = 4
+            return group, attr_name
 
+        attr_names = []
+        for attr_name, attr_info in self.impl_attrs.items():
             if not self._helper_is_public_settable_attr(attr_name):
                 continue
             if attr_info.get("is_protected", False):
                 continue
             if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(attr_name):
                 continue
-
             attr_names.append(attr_name)
-            if attr_name.startswith("raw_"):
-                attr_names.append(attr_name[4:])
 
-        if attr_names:
-            lines.append("[Attributes]")
-            for attr_name in sorted(attr_names):
-                lines.append(f"  - {attr_name}")
-        else:
-            lines.append("[Attributes]")
-            lines.append("  - <none>")
+        attr_names = sorted(attr_names, key=_modifiable_attr_sort_key)
 
-        if property_names:
-            lines.append("[Writable properties]")
-            for prop_name in sorted(property_names):
-                lines.append(f"  - {prop_name}")
+        if not attr_names:
+            lines.append("- <none>")
         else:
-            lines.append("[Writable properties]")
-            lines.append("  - <none>")
+            for attr_name in attr_names:
+                desc = self.impl_attrs[attr_name]["doc"]
+                lines.append(f"- {attr_name}")
+                if is_desc:
+                    lines.append(f"    {desc}")
 
         output = "\n".join(lines)
         logger.info(output)

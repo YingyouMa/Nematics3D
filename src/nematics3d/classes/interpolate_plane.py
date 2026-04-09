@@ -1,10 +1,8 @@
 """Plane-based interpolation results built on top of PlaneGrid sampling objects."""
 
 from typing import Any, ClassVar, Mapping
-
 import numpy as np
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .class_base import ClassBase
 from .plane_grid import OptsPlaneGrid, PlaneGrid
@@ -111,6 +109,7 @@ class InterpolatePlane(ClassBase):
     # InterpolatePlane adds `_helper_commit` as its internal recomputation step
     # for re-sampling interpolated values on the currently bound plane grid.
     def act_refresh(self):
+        """Re-sample the bound interpolator on the current plane grid mask."""
         plane_grid = self.grid
 
         grid_all = plane_grid.entity_grid_all
