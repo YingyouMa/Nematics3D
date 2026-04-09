@@ -340,7 +340,7 @@ class PlotSphere(PlotGlyph):
     # sphere glyphs can center-clip by filtering raw points directly.
     # ==================================================
     def _helper_bound_coords(self):
-        bounds = self.bounds
+        bounds = self._helper_get_bounds_effective()
         if bounds is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
             object.__setattr__(self, "calc_keep_index", keep_index)

@@ -176,6 +176,9 @@ class PlaneGrid(HostBase):
         "impl_name_bounds_sync": {
             "doc": "Internal sync-task name used to react to bounds geometry updates.",
         },
+        "impl_is_bounds_enabled": {
+            "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
+        },
         "field": {
             "doc": "The interpolated field object attached to this plane grid.",
             "kind": "relation",
@@ -228,6 +231,7 @@ class PlaneGrid(HostBase):
         object.__setattr__(
             self, "impl_name_bounds_sync", f"plane_grid_bounds::{id(self)}"
         )
+        object.__setattr__(self, "impl_is_bounds_enabled", True)
 
         for attr_name, value in {
             "normal": self.opts.normal,
@@ -319,7 +323,7 @@ class PlaneGrid(HostBase):
             grid, transform=grid_transform, offset=grid_offset
         )
 
-        bounds = self.bounds
+        bounds = self.bounds if self.impl_is_bounds_enabled else None
         if bounds is None:
             logger.debug("No bounds filtering applied to this plane grid.")
             mask = np.ones(len(grid), dtype=bool)
@@ -404,6 +408,16 @@ class PlaneGrid(HostBase):
         self.act_unbind_relation_base("bounds")
         if is_apply:
             self.act_commit(is_reapply_opts=True)
+
+    def act_bounds_enable(self):
+        """Enable the effect of the currently bound bounds without unbinding it."""
+        object.__setattr__(self, "impl_is_bounds_enabled", True)
+        self.act_commit(is_reapply_opts=True)
+
+    def act_bounds_disable(self):
+        """Disable the effect of the currently bound bounds without unbinding it."""
+        object.__setattr__(self, "impl_is_bounds_enabled", False)
+        self.act_commit(is_reapply_opts=True)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_bind_bounds(self, bounds, is_apply=True, is_replace=True, logger=None):

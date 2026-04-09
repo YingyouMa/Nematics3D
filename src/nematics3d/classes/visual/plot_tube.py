@@ -488,7 +488,7 @@ class PlotTube(PlotGlyph):
     # build the tube mesh from the surviving centerline segments.
     # ==================================================
     def _helper_bound_coords(self):
-        bounds = self.bounds
+        bounds = self._helper_get_bounds_effective()
         if bounds is None:
             self._helper_sync_calc_line_index()
             keep_index = np.arange(len(self.raw_coords), dtype=int)

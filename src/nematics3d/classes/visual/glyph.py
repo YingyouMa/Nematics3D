@@ -423,6 +423,9 @@ class PlotGlyph(HostBase):
         "impl_name_pv": {
             "doc": "The unique identifier of this glyph stored in the PyVista plotter.",
         },
+        "impl_is_bounds_enabled": {
+            "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
+        },
         "impl_interact_func": {
             "doc": (
                 "The function to trigger the control window when the "
@@ -528,6 +531,7 @@ class PlotGlyph(HostBase):
         str_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
         unique_id = self.name + str_now
         object.__setattr__(self, "impl_name_pv", unique_id)
+        object.__setattr__(self, "impl_is_bounds_enabled", True)
 
         object.__setattr__(self, "impl_interact_func", None)
         self.act_bind_bounds(
@@ -614,8 +618,25 @@ class PlotGlyph(HostBase):
         if is_apply:
             self.act_commit(is_reapply_opts=True)
 
-    def _helper_apply_bounds_mesh(self, mesh):
+    def _helper_get_bounds_effective(self):
+        """Return the bound bounds only when its effect is currently enabled."""
         bounds = self.bounds
+        if bounds is None or not self.impl_is_bounds_enabled:
+            return None
+        return bounds
+
+    def act_bounds_enable(self):
+        """Enable the effect of the currently bound bounds without unbinding it."""
+        object.__setattr__(self, "impl_is_bounds_enabled", True)
+        self.act_commit(is_reapply_opts=True)
+
+    def act_bounds_disable(self):
+        """Disable the effect of the currently bound bounds without unbinding it."""
+        object.__setattr__(self, "impl_is_bounds_enabled", False)
+        self.act_commit(is_reapply_opts=True)
+
+    def _helper_apply_bounds_mesh(self, mesh):
+        bounds = self._helper_get_bounds_effective()
         if bounds is None:
             return mesh
         return mesh.clip_surface(
