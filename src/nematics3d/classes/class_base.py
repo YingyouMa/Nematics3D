@@ -1,4 +1,4 @@
-﻿"""
+"""
 Base object model for structured Nematics3D classes.
 
 This module defines ``ClassBase``, the shared foundation for repository objects
@@ -111,19 +111,32 @@ class ClassBase:
         "impl_attrs": {
             "doc": "Runtime attribute metadata copied from the class template.",
         },
+        "impl_is_fixed": {
+            "doc": (
+                "Whether the core raw/state data of this instance is frozen "
+                "after initialization."
+            ),
+        },
     }
 
-    __slots__ = ("raw_name", "impl_attrs", "__weakref__")
+    __slots__ = ("raw_name", "impl_attrs", "impl_is_fixed", "__weakref__")
 
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
 
-    def __init__(self, *, name: str | None, name_replace: str):
+    def __init__(
+        self,
+        *,
+        name: str | None,
+        name_replace: str,
+        is_fixed: bool = False,
+    ):
         # Each instance starts from a private copy of the class-level
         # attribute template.
         impl_attrs = deepcopy(type(self).__attr_defs__)
         object.__setattr__(self, "impl_attrs", impl_attrs)
+        object.__setattr__(self, "impl_is_fixed", bool(is_fixed))
 
         # Normalize the initial name once, then route it through the shared
         # registry-aware assignment path.
@@ -149,8 +162,7 @@ class ClassBase:
                 return replace
             else:
                 raise NameError(
-                    "`name` and `replace` are both None."
-                    "A valid str name is needed"
+                    "`name` and `replace` are both None." "A valid str name is needed"
                 )
         attr_info = self.impl_attrs["raw_name"]
         validator = self._helper_get_name_validator(attr_info)
@@ -192,6 +204,23 @@ class ClassBase:
     def _helper_is_extra_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute was registered as an extra attr."""
         return self.impl_attrs[attr_name].get("kind") == "extra"
+
+    def _helper_is_fixed_blocked_attr(self, attr_name: str) -> bool:
+        """Return whether one attr belongs to the fixed raw/state core surface."""
+        return (attr_name != "raw_name") and attr_name.startswith(("raw_", "state_"))
+
+    def _helper_raise_fixed_assignment_error(self, target_key: str) -> None:
+        """Raise the standard assignment error for fixed raw/state attrs."""
+        cls_name = type(self).__name__
+        obj_name = getattr(self, "raw_name", "Uninitialized")
+        raise AttributeError(
+            f"[{cls_name}: {obj_name!r}] Assignment blocked: "
+            f"{target_key!r} belongs to the fixed core data of this object. "
+            "This class is designed so that its core raw/state data should not "
+            "be modified after initialization, because too many dependent "
+            "results may need synchronized updates. Please create a new "
+            "instance instead."
+        )
 
     def _helper_is_public_settable_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute is writable from the public surface."""
@@ -627,6 +656,8 @@ class ClassBase:
                 continue
             if attr_info.get("is_protected", False):
                 continue
+            if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(attr_name):
+                continue
 
             attr_names.append(attr_name)
             if attr_name.startswith("raw_"):
@@ -705,6 +736,9 @@ class ClassBase:
                 f"{key!r} resolves to internal attribute {target_key!r}, "
                 "which cannot be assigned through the public setattr path."
             )
+
+        if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(target_key):
+            self._helper_raise_fixed_assignment_error(target_key)
 
         if attr_info.get("is_protected", False):
             cls_name = type(self).__name__
