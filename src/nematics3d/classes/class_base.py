@@ -224,7 +224,9 @@ class ClassBase:
 
     def _helper_is_public_settable_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute is writable from the public surface."""
-        if attr_name == "raw_name" or attr_name.startswith(("raw_", "state_")):
+        if attr_name == "raw_name" or attr_name.startswith(
+            ("raw_", "state_", "default_")
+        ):
             return True
         if self._helper_is_property_attr(attr_name) or self._helper_is_extra_attr(
             attr_name
@@ -315,7 +317,7 @@ class ClassBase:
 
         is_public_assignable = (
             name == "raw_name"
-            or name.startswith(("raw_", "state_"))
+            or name.startswith(("raw_", "state_", "default_"))
             or bool(attr_info.get("is_public_settable", False))
         )
         if is_public_assignable:
@@ -680,12 +682,14 @@ class ClassBase:
                 group = 0
             elif attr_name.startswith("state_"):
                 group = 1
-            elif self._helper_is_property_attr(attr_name):
+            elif attr_name.startswith("default_"):
                 group = 2
-            elif self._helper_is_extra_attr(attr_name):
+            elif self._helper_is_property_attr(attr_name):
                 group = 3
-            else:
+            elif self._helper_is_extra_attr(attr_name):
                 group = 4
+            else:
+                group = 5
             return group, attr_name
 
         attr_names = []

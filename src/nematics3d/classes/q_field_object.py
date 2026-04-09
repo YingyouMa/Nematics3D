@@ -283,14 +283,6 @@ class QFieldObject(ClassBase):
             "relation_value": None,
             "doc_runtime": None,
         },
-        "S": {
-            "doc": "Read-only: Scalar order parameter field. Alias of `raw_S`.",
-            "kind": "property",
-        },
-        "n": {
-            "doc": "Read-only: Director field. Alias of `raw_n`.",
-            "kind": "property",
-        },
         "lines": {
             "doc": "Read-only: Classified disclination lines.",
             "kind": "property",
