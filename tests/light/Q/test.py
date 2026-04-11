@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
 import numpy as np
 
@@ -18,8 +19,10 @@ def main() -> None:
     print(f"Loading Q from: {q_path}")
     Q = np.load(q_path)
     print(f"Q shape: {Q.shape}")
-
+    
+    now = time.time()
     result = analyze_Q(Q)
+    print(time.time()-now)
 
     print("\nLightweight analysis result")
     print(f"defect count: {result.defect_count}")

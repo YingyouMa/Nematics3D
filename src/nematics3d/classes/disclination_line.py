@@ -1,3 +1,5 @@
+"""Disclination-line domain objects and their plot/section wrappers."""
+
 import weakref
 from dataclasses import asdict, dataclass, field
 from types import MappingProxyType
@@ -72,9 +74,19 @@ class InputLine:
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         "defect_indices": "indices of defect points in the Q array",
-        "box_size_periodic_index": "the maximum index of each index in the Q array (finite values for periodic boundary conditions and np.inf for non-periodic)",
-        "grid_offset": "grid translation offset to map lattice indices of Q array to real-space coordinates",
-        "grid_transform": "grid transform matrix to map lattice indices of Q array to real-space coordinates (3x3)",
+        "box_size_periodic_index": (
+            "the maximum index of each index in the Q array "
+            "(finite values for periodic boundary conditions and np.inf for "
+            "non-periodic)"
+        ),
+        "grid_offset": (
+            "grid translation offset to map lattice indices of Q array to "
+            "real-space coordinates"
+        ),
+        "grid_transform": (
+            "grid transform matrix to map lattice indices of Q array to "
+            "real-space coordinates (3x3)"
+        ),
     }
 
     impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
@@ -404,7 +416,8 @@ class DisclinationLine(ClassBase):
             if is_smooth:
                 logger.warning(
                     f"No cached smoothed version exists yet for disclination line {self.name!r}. "
-                    "A smoothed object has been prepared for later interaction, but this call will plot the original points instead."
+                    "A smoothed object has been prepared for later interaction, "
+                    "but this call will plot the original points instead."
                 )
                 is_smooth = False
 
@@ -564,11 +577,17 @@ class DisclinationLineSmooth(SmoothedLine):
             "kind": "relation",
         },
         "visual": {
-            "doc": "The one-to-one visualization wrapper currently associated with this smoothed disclination line.",
+            "doc": (
+                "The one-to-one visualization wrapper currently associated with "
+                "this smoothed disclination line."
+            ),
             "kind": "relation",
         },
         "sections": {
-            "doc": "RegistryBase object managing cross-section grids created from this smoothed disclination line.",
+            "doc": (
+                "RegistryBase object managing cross-section grids created from "
+                "this smoothed disclination line."
+            ),
             "kind": "relation",
         },
     }
@@ -600,7 +619,8 @@ class DisclinationLineSmooth(SmoothedLine):
 
         if not isinstance(line, DisclinationLine):
             raise TypeError(
-                "The `line` input of DisclinationLineSmooth must be an instance of `DisclinationLine`. "
+                "The `line` input of DisclinationLineSmooth must be an "
+                "instance of `DisclinationLine`. "
                 f"Got type={type(line).__name__} instead."
             )
 
@@ -1472,13 +1492,15 @@ class DefectSectionGrid(HostBase):
             key = as_str(key, name="The name of a registered defect-section normal")
         except (TypeError, ValueError):
             logger.warning(
-                f"Skip registering a defect-section normal because key={key!r} is not a valid string."
+                "Skip registering a defect-section normal because "
+                f"key={key!r} is not a valid string."
             )
             return
 
         if key == "tangent":
             logger.warning(
-                "The reserved normal name 'tangent' is built in and cannot be overwritten. Skip this registration."
+                "The reserved normal name 'tangent' is built in and cannot be "
+                "overwritten. Skip this registration."
             )
             return
 
@@ -1494,7 +1516,8 @@ class DefectSectionGrid(HostBase):
             )
         except (TypeError, ValueError):
             logger.warning(
-                f"Skip registering defect-section normal {key!r} because the value is neither a callable nor a valid 3-vector."
+                f"Skip registering defect-section normal {key!r} because the "
+                "value is neither a callable nor a valid 3-vector."
             )
             return
 

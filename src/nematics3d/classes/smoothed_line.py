@@ -536,6 +536,296 @@ def _raise_type_error(name: str, value: Any):
     raise TypeError(f"{name} must be callable, got {type(value).__name__}.")
 
 
+def linefunc_window_span_percent(
+    *,
+    window_ratio: Number,
+) -> float:
+    """
+    Convert a SmoothedLine window ratio to a u-percent window span.
+
+    The returned span is the full window width in the normalized `[0, 100]`
+    parameter domain. `SmoothedLine` keeps `window_length` and `window_ratio`
+    synchronized, so the line-function smoother only needs the normalized ratio.
+    """
+    window_ratio = as_Number(
+        window_ratio,
+        name="line function window_ratio",
+        value_range=(1e-12, np.inf),
+    )
+    return 100.0 / float(window_ratio)
+
+
+def linefunc_spacing_weights(
+    u_samples,
+    mode: Literal["interp", "wrap"] = "interp",
+) -> np.ndarray:
+    """
+    Estimate quadrature weights for non-uniform u-percent samples.
+
+    Each sample receives the local cell width it represents. In `"interp"`
+    mode, end samples receive half of their nearest interval. In `"wrap"` mode,
+    samples are treated as periodic around the `[0, 100]` domain.
+    """
+    u_samples = _linefunc_as_u_samples(u_samples)
+    mode = as_str(mode, name="line function smoothing mode", pool=("interp", "wrap"))
+    _linefunc_validate_wrap_endpoint(u_samples, mode)
+
+    if len(u_samples) == 1:
+        return np.array([100.0], dtype=float)
+
+    if mode == "wrap":
+        prev_samples = np.roll(u_samples, 1)
+        next_samples = np.roll(u_samples, -1)
+        left = np.mod(u_samples - prev_samples, 100.0)
+        right = np.mod(next_samples - u_samples, 100.0)
+        return 0.5 * (left + right)
+
+    weights = np.empty_like(u_samples, dtype=float)
+    weights[0] = 0.5 * (u_samples[1] - u_samples[0])
+    weights[-1] = 0.5 * (u_samples[-1] - u_samples[-2])
+    if len(u_samples) > 2:
+        weights[1:-1] = 0.5 * (u_samples[2:] - u_samples[:-2])
+    return weights
+
+
+def linefunc_kernel_weights(
+    delta,
+    window_span_percent: Number,
+    *,
+    kernel: Literal["boxcar", "tricube", "triangular", "gaussian"] = "boxcar",
+) -> np.ndarray:
+    """
+    Compute smoothing-kernel weights from u-percent deltas.
+
+    `window_span_percent` is interpreted as a full window width. Compact kernels
+    therefore use `window_span_percent / 2` as their support radius.
+    """
+    delta = np.asarray(delta, dtype=float)
+    window_span_percent = as_Number(
+        window_span_percent,
+        name="line function window span in percent",
+        value_range=(1e-12, np.inf),
+    )
+    radius = 0.5 * float(window_span_percent)
+    if radius <= 0:
+        raise ValueError("window_span_percent must be positive.")
+
+    kernel = as_str(
+        kernel,
+        name="line function smoothing kernel",
+        pool=("boxcar", "tricube", "triangular", "gaussian"),
+    )
+    distance_scaled = np.abs(delta) / radius
+
+    if kernel == "boxcar":
+        return (distance_scaled <= 1.0).astype(float)
+
+    if kernel == "tricube":
+        weights = np.zeros_like(distance_scaled, dtype=float)
+        mask = distance_scaled < 1.0
+        weights[mask] = (1.0 - distance_scaled[mask] ** 3) ** 3
+        return weights
+
+    if kernel == "triangular":
+        return np.maximum(1.0 - distance_scaled, 0.0)
+
+    return np.exp(-0.5 * distance_scaled**2)
+
+
+def linefunc_smooth_values(
+    u_samples,
+    values,
+    *,
+    window_ratio: Number,
+    order: int,
+    mode: Literal["interp", "wrap"] = "interp",
+    spacing_weights=None,
+    kernel: Literal["boxcar", "tricube", "triangular", "gaussian"] = "boxcar",
+    min_weight: float = 1e-12,
+) -> np.ndarray:
+    """
+    Smooth values at their own u-percent sample locations.
+
+    This is the public value-smoothing helper used before building the final
+    line-function interpolator. The owner SmoothedLine already synchronizes
+    `window_length` and `window_ratio`, so only `window_ratio` is needed here.
+    """
+    u_samples = _linefunc_as_u_samples(u_samples)
+    mode = as_str(mode, name="line function smoothing mode", pool=("interp", "wrap"))
+    _linefunc_validate_wrap_endpoint(u_samples, mode)
+
+    values = np.asarray(values)
+    if values.shape[0] != len(u_samples):
+        raise ValueError(
+            "values must have the same first dimension as u_samples. "
+            f"Got values.shape={values.shape} and len(u_samples)={len(u_samples)}."
+        )
+
+    window_span_percent = linefunc_window_span_percent(window_ratio=window_ratio)
+    order = as_Number(
+        order,
+        name="line function local polynomial order",
+        is_int=True,
+        value_range=(0, np.inf),
+    )
+    if spacing_weights is None:
+        spacing_weights = linefunc_spacing_weights(u_samples, mode=mode)
+    else:
+        spacing_weights = np.asarray(spacing_weights, dtype=float).reshape(-1)
+        if spacing_weights.shape != u_samples.shape:
+            raise ValueError(
+                "spacing_weights must have the same shape as u_samples. "
+                f"Got {spacing_weights.shape} and {u_samples.shape}."
+            )
+        if np.any(spacing_weights < 0) or np.any(~np.isfinite(spacing_weights)):
+            raise ValueError("spacing_weights must be finite and non-negative.")
+
+    values_flat = values.reshape(len(u_samples), -1)
+    output = np.empty_like(values_flat, dtype=float)
+    deltas_all = _linefunc_sample_delta_matrix(u_samples, mode=mode)
+
+    for idx, delta in enumerate(deltas_all):
+        kernel_weights = linefunc_kernel_weights(
+            delta,
+            window_span_percent,
+            kernel=kernel,
+        )
+        weights = kernel_weights * spacing_weights
+        is_active = weights > min_weight
+
+        if not np.any(is_active):
+            nearest_idx = int(np.argmin(np.abs(delta)))
+            output[idx] = values_flat[nearest_idx]
+            continue
+
+        degree = min(int(order), int(np.count_nonzero(is_active)) - 1)
+        if degree <= 0:
+            active_weights = weights[is_active]
+            output[idx] = np.average(
+                values_flat[is_active],
+                axis=0,
+                weights=active_weights,
+            )
+            continue
+
+        x_active = delta[is_active]
+        y_active = values_flat[is_active]
+        sqrt_weights = np.sqrt(weights[is_active])
+        design = np.vander(x_active, N=degree + 1, increasing=True)
+        design_weighted = design * sqrt_weights[:, np.newaxis]
+        y_weighted = y_active * sqrt_weights[:, np.newaxis]
+        try:
+            coeffs = np.linalg.lstsq(design_weighted, y_weighted, rcond=None)[0]
+            output[idx] = coeffs[0]
+        except np.linalg.LinAlgError:
+            output[idx] = np.average(
+                y_active,
+                axis=0,
+                weights=weights[is_active],
+            )
+
+    return output.reshape(values.shape)
+
+
+def linefunc_build_smoothed_interpolator(
+    u_samples,
+    values,
+    *,
+    window_ratio: Number,
+    order: int,
+    mode: Literal["interp", "wrap"] = "interp",
+    spacing_weights=None,
+    kernel: Literal["boxcar", "tricube", "triangular", "gaussian"] = "boxcar",
+    interp_kind: str = "linear",
+    min_weight: float = 1e-12,
+) -> tuple[interp1d, np.ndarray]:
+    """
+    Build a smooth interpolator from non-uniform line-function samples.
+
+    The returned tuple is `(interpolator, values_smooth)`. The interpolator
+    accepts arbitrary u-percent query points. `values_smooth` is returned so the
+    caller can cache or inspect the smoothed support values separately.
+    """
+    u_samples = _linefunc_as_u_samples(u_samples)
+    mode = as_str(mode, name="line function smoothing mode", pool=("interp", "wrap"))
+    _linefunc_validate_wrap_endpoint(u_samples, mode)
+
+    values_smooth = linefunc_smooth_values(
+        u_samples,
+        values,
+        window_ratio=window_ratio,
+        order=order,
+        mode=mode,
+        spacing_weights=spacing_weights,
+        kernel=kernel,
+        min_weight=min_weight,
+    )
+
+    if mode == "wrap":
+        u_interp = np.concatenate([u_samples - 100.0, u_samples, u_samples + 100.0])
+        values_interp = np.concatenate(
+            [values_smooth, values_smooth, values_smooth],
+            axis=0,
+        )
+    else:
+        u_interp = u_samples
+        values_interp = values_smooth
+
+    interpolator = interp1d(
+        u_interp,
+        values_interp,
+        axis=0,
+        kind=interp_kind,
+        bounds_error=False,
+        fill_value="extrapolate",
+        assume_sorted=True,
+    )
+    return interpolator, values_smooth
+
+
+def _linefunc_sample_delta_matrix(
+    u_samples,
+    mode: Literal["interp", "wrap"] = "interp",
+) -> np.ndarray:
+    """Return sample-to-sample deltas for smoothing at the sample locations."""
+    u_samples = _linefunc_as_u_samples(u_samples)
+    mode = as_str(mode, name="line function smoothing mode", pool=("interp", "wrap"))
+    _linefunc_validate_wrap_endpoint(u_samples, mode)
+
+    delta = u_samples[np.newaxis, :] - u_samples[:, np.newaxis]
+    if mode == "wrap":
+        delta = (delta + 50.0) % 100.0 - 50.0
+    return delta
+
+
+def _linefunc_as_u_samples(u_samples) -> np.ndarray:
+    """Validate sorted, unique u-percent samples for line-function smoothing."""
+    u_samples = np.asarray(u_samples, dtype=float).reshape(-1)
+    if u_samples.ndim != 1 or len(u_samples) == 0:
+        raise ValueError("u_samples must be a non-empty one-dimensional array.")
+    if np.any(~np.isfinite(u_samples)):
+        raise ValueError("u_samples must contain only finite values.")
+    if np.min(u_samples) < 0 or np.max(u_samples) > 100:
+        raise ValueError("u_samples must stay within the range [0, 100].")
+    if np.any(np.diff(u_samples) <= 0):
+        raise ValueError("u_samples must be strictly increasing with no duplicates.")
+    return u_samples
+
+
+def _linefunc_validate_wrap_endpoint(
+    u_samples: np.ndarray,
+    mode: Literal["interp", "wrap"],
+) -> None:
+    """Reject duplicate periodic endpoints in wrap mode."""
+    if mode != "wrap" or len(u_samples) < 2:
+        return
+    if np.isclose(u_samples[0], 0.0) and np.isclose(u_samples[-1], 100.0):
+        raise ValueError(
+            "wrap mode treats u_percent=0 and u_percent=100 as the same point. "
+            "Provide only one of these endpoints."
+        )
+
+
 class SmoothedLineFunc(ClassBase):
     """
     Sample and interpolate a numerical function along one SmoothedLine.
@@ -880,4 +1170,3 @@ class SmoothedLineFunc(ClassBase):
             f"{cls_name}({self.name!r}), num_samples={len(self.raw_u_samples)}, "
             f"mode={mode!r}"
         )
-

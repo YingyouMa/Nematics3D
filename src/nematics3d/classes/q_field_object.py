@@ -1,7 +1,10 @@
-import numpy as np
+"""Q-field object model, defect analysis, and visualization helpers."""
+
 import time
-from typing import Any, ClassVar, Mapping, Union
 from dataclasses import replace, dataclass, field, fields
+from typing import Any, ClassVar, Mapping, Union
+
+import numpy as np
 from pyvistaqt import BackgroundPlotter
 import pyvista as pv
 
@@ -24,7 +27,6 @@ from ..datatypes import (
     check_bool_flags,
     UNSET,
     Unset,
-    as_str,
     as_bool,
 )
 from ..field import (
@@ -46,7 +48,7 @@ from .plane_grid import OptsPlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
 from .opts import merge_opts_all, cover_value
-from ..general import get_box_corners
+from ..general import blue_red_in_white_bg, get_box_corners, sample_far
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine, DisclinationLineSmooth
@@ -106,12 +108,28 @@ class InputQ:
         "Q": "Q field (tensor order parameter)",
         "S": "S field (scalar order parameter)",
         "n": "director field",
-        "box_periodic_flag": "flag indicating whether periodic boundary condition is applied along each dimension",
-        "grid_offset": "grid translation offset to map lattice indices to real-space coordinates",
-        "grid_transform": "grid transform matrix to map lattice indices to real-space coordinates (3x3)",
-        "default_miminum_line_length_smooth": "the minimum length (#points) of disclination lines to be smoothed",
-        "default_smooth_window_length": "the default window length  (#points) of disclination lines to be smoothed",
-        "default_miminum_line_length_visual": "the minimum length (#points) of disclination lines to be visualized",
+        "box_periodic_flag": (
+            "flag indicating whether periodic boundary condition is applied "
+            "along each dimension"
+        ),
+        "grid_offset": (
+            "grid translation offset to map lattice indices to real-space "
+            "coordinates"
+        ),
+        "grid_transform": (
+            "grid transform matrix to map lattice indices to real-space "
+            "coordinates (3x3)"
+        ),
+        "default_miminum_line_length_smooth": (
+            "the minimum length (#points) of disclination lines to be smoothed"
+        ),
+        "default_smooth_window_length": (
+            "the default window length (#points) of disclination lines to be "
+            "smoothed"
+        ),
+        "default_miminum_line_length_visual": (
+            "the minimum length (#points) of disclination lines to be visualized"
+        ),
     }
 
     _validators = {
@@ -160,7 +178,8 @@ class QFieldObject(ClassBase):
     - `interpolator`: QInterpolator used for off-grid sampling.
     - `calc_grid`: full real-space lattice coordinates of the Q field.
     - `calc_corners`: Bounds object describing the Q-field box.
-    - `calc_defect_indices` / `calc_defect_grid`: detected defect positions in index and world coordinates.
+    - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
+      in index and world coordinates.
 
     Common inspection helpers:
 
@@ -179,7 +198,8 @@ class QFieldObject(ClassBase):
     - `act_visualize_disclination_lines(...)`: draw disclination lines on a figure.
     - `act_visualize_n_plane(...)`: create a Cartesian director analysis plane.
     - `act_visualize_S_plane(...)`: create a Cartesian scalar-order analysis plane.
-    - `act_visualize_n_near_defect(...)`: create a polar director analysis plane around a smoothed line.
+    - `act_visualize_n_near_defect(...)`: create a polar director analysis
+      plane around a smoothed line.
 
     Representation:
 
@@ -195,7 +215,10 @@ class QFieldObject(ClassBase):
             "doc": "Name identifier of this Q tensor object.",
         },
         "raw_Q": {
-            "doc": "Raw Q-tensor field on lattice. Typically QField5 or QField9 (shape: (Nx, Ny, Nz, ...)).",
+            "doc": (
+                "Raw Q-tensor field on lattice. Typically QField5 or QField9 "
+                "(shape: (Nx, Ny, Nz, ...))."
+            ),
         },
         "raw_S": {
             "doc": "Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
@@ -207,10 +230,16 @@ class QFieldObject(ClassBase):
             "doc": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
         },
         "raw_grid_offset": {
-            "doc": "A 3D vector, as the grid translation offset mapping lattice indices -> real-space coordinates.",
+            "doc": (
+                "A 3D vector, as the grid translation offset mapping lattice "
+                "indices -> real-space coordinates."
+            ),
         },
         "raw_grid_transform": {
-            "doc": "A 3x3 tensor, as the linear transform mapping lattice indices -> real-space coordinates",
+            "doc": (
+                "A 3x3 tensor, as the linear transform mapping lattice "
+                "indices -> real-space coordinates"
+            ),
         },
         "default_miminum_line_length_smooth": {
             "doc": "Default minimum line length (#points) required to apply smoothing.",
@@ -442,7 +471,11 @@ class QFieldObject(ClassBase):
                 msg += " and classifying them into distinct lines"
             msg += f" for Q tensor `{self.name}` \n"
             msg += "This operation might take a while.\n"
-            msg += "You can disable this automatic operation by setting is_detect_defects=False and is_classify_lines=False when initializing the Q tensor."
+            msg += (
+                "You can disable this automatic operation by setting "
+                "is_detect_defects=False and is_classify_lines=False when "
+                "initializing the Q tensor."
+            )
             logger.progress(msg)
 
             self.act_defect_detect()
@@ -577,13 +610,20 @@ class QFieldObject(ClassBase):
         if opts.min_line_length is UNSET:
             opts.min_line_length = self.default_miminum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
-            msg += f"Using the default value self.default_miminum_line_length_smooth={self.default_miminum_line_length_smooth}."
+            msg += (
+                "Using the default value "
+                "self.default_miminum_line_length_smooth="
+                f"{self.default_miminum_line_length_smooth}."
+            )
             logger.info(msg)
 
         opts.act_finalize()
 
         if opts.window_length is not None and opts.window_ratio is not None:
-            msg = f"``window_length`` of smoothing disclination lines is manual input as {opts.window_length}.\n"
+            msg = (
+                "``window_length`` of smoothing disclination lines is manual "
+                f"input as {opts.window_length}.\n"
+            )
             msg += f"``window_ratio`` as {opts.window_ratio} would be ignored."
             logger.warning(msg)
             opts.window_ratio = None
@@ -591,10 +631,16 @@ class QFieldObject(ClassBase):
         if opts.window_length is None and opts.window_ratio is None:
             opts.window_length = self.default_smooth_window_length
             msg = "No input value provided for smooth window length of disclination lines. \n"
-            msg += f"Using the default value self.default_smooth_window_length={self.default_smooth_window_length}."
+            msg += (
+                "Using the default value self.default_smooth_window_length="
+                f"{self.default_smooth_window_length}."
+            )
             logger.info(msg)
 
-        msg = f"Start to smooth disclination lines in Q tensor {self.name!r} With paramaters: \n"
+        msg = (
+            f"Start to smooth disclination lines in Q tensor {self.name!r} "
+            "With paramaters: \n"
+        )
         msg += f"window length = {opts.window_length}\n"
         msg += f"window ratio = {opts.window_ratio}\n"
         msg += f"minimum smoothed line length = {opts.min_line_length}"
@@ -609,10 +655,14 @@ class QFieldObject(ClassBase):
                 window_list[line.name] = line.smooth.opts.window_length
             else:
                 logger.debug(
-                    f"Line `{line.name}` is not smoothed because it is too short, with only {line.calc_defect_num} defects. "
+                    f"Line `{line.name}` is not smoothed because it is too "
+                    f"short, with only {line.calc_defect_num} defects. "
                 )
 
-        msg = f"There are {len(self.lines)} disclination lines in total, with {num_smooth} lines are smoothed.\n"
+        msg = (
+            f"There are {len(self.lines)} disclination lines in total, with "
+            f"{num_smooth} lines are smoothed.\n"
+        )
         msg += "The smoothing window length is: "
         if opts.window_length is not None:
             msg += str(opts.window_length)
@@ -622,8 +672,7 @@ class QFieldObject(ClassBase):
                 msg += f"{k}: {v} \n"
         logger.info(msg)
 
-    @logging_and_warning_decorator()
-    def act_add_interpolator(self, logger=None):
+    def act_add_interpolator(self):
         """Create and bind a `QInterpolator` if one is not already present."""
         interpolator_old = self.interpolator
         if isinstance(interpolator_old, QInterpolator):
@@ -713,11 +762,12 @@ class QFieldObject(ClassBase):
                 else:
                     raise ValueError(
                         "`figure` input must be either index in FigureManager (str or int) "
-                        "or a valid PlotFigure object, or a valid pyvistaqt BackgroundPlotter object, "
+                        "or a valid PlotFigure object, or a valid pyvistaqt "
+                        "BackgroundPlotter object, "
                         "or None (creating a new figure) "
                         f"Got type {type(figure)!r} instead."
                     )
-            except Exception:
+            except (KeyError, IndexError, TypeError, ValueError, AttributeError):
                 logger.exception("Could not find figure in FigureManager.")
                 logger.recovery("Create a new figure instead.")
                 figure = PlotFigure(opts=opts_figure, name=title)
@@ -738,7 +788,7 @@ class QFieldObject(ClassBase):
 
         try:
             bounds_obj = as_bounds(bounds, name=f"{label} bounds")
-        except Exception:
+        except (TypeError, ValueError):
             logger.exception("Check input.")
             logger.recovery("Use the default Q bounds instead.")
             return self.calc_corners
@@ -856,8 +906,6 @@ class QFieldObject(ClassBase):
         ]
 
         if opts_line.color == "sample_far":
-            from ..general import blue_red_in_white_bg, sample_far
-
             color_map = blue_red_in_white_bg()
             color_map_length = np.shape(color_map)[0] - 1
             lines_colors = color_map[
@@ -884,7 +932,6 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
-    @logging_and_warning_decorator()
     def act_visualize_n_plane(
         self,
         figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
@@ -901,7 +948,6 @@ class QFieldObject(ClassBase):
         bounds=None,
         title: str = "visualization of n plane",
         plane_name: str = "n-plane",
-        logger=None,
         **kwargs,
     ):
         """
@@ -1041,7 +1087,6 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
-    @logging_and_warning_decorator()
     def act_visualize_S_plane(
         self,
         figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
@@ -1054,7 +1099,6 @@ class QFieldObject(ClassBase):
         bounds=None,
         title: str = "visualization of S plane",
         plane_name: str = "S-plane",
-        logger=None,
         **kwargs,
     ):
         """
@@ -1167,7 +1211,6 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
-    @logging_and_warning_decorator()
     def act_visualize_n_near_defect(
         self,
         u_percent: float,
@@ -1186,7 +1229,6 @@ class QFieldObject(ClassBase):
         bounds=None,
         title: str = "visualization of n near defect",
         plane_name: str | None = None,
-        logger=None,
         **kwargs,
     ):
         """
@@ -1338,15 +1380,18 @@ class QFieldObject(ClassBase):
 
     @property
     def lines(self):
+        """Return registered disclination-line objects."""
         result = [item for item in self.objects if isinstance(item, DisclinationLine)]
         return result
 
     @property
     def figs(self):
+        """Return the figure manager bound to this Q field."""
         return self.figures
 
     @property
     def objs(self):
+        """Return the object registry bound to this Q field."""
         return self.objects
 
     def __call__(self) -> np.ndarray:

@@ -69,10 +69,12 @@ def as_QField9(Q: np.ndarray) -> np.ndarray:
     - (..., 5): [Qxx, Qxy, Qxz, Qyy, Qyz], with Qzz = -Qxx - Qyy.
     - (..., 3, 3): full tensor form.
     """
-    Q = np.asarray(Q, dtype=float)
+    Q = np.asarray(Q)
+    if not np.issubdtype(Q.dtype, np.floating):
+        Q = Q.astype(float)
 
     if Q.ndim >= 2 and Q.shape[-1] == 5:
-        Q9 = np.zeros((*Q.shape[:-1], 3, 3), dtype=float)
+        Q9 = np.zeros((*Q.shape[:-1], 3, 3), dtype=Q.dtype)
         Q9[..., 0, 0] = Q[..., 0]
         Q9[..., 0, 1] = Q[..., 1]
         Q9[..., 0, 2] = Q[..., 2]
@@ -109,13 +111,30 @@ def diagonalize_Q(Q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Diagonalize Q and return (S, n).
 
-    S is 1.5 times the largest eigenvalue, matching the convention used by the
-    full package. n is the eigenvector associated with that largest eigenvalue.
+    This uses the same fast invariant-based path as the full package instead of
+    calling np.linalg.eigh on every 3x3 tensor. S is 1.5 times the largest
+    eigenvalue, matching the convention used by the full package. n is the
+    eigenvector associated with that largest eigenvalue.
     """
     Q = as_QField9(Q)
-    eigenvalues, eigenvectors = np.linalg.eigh(Q)
-    lambda_max = eigenvalues[..., -1]
-    n = eigenvectors[..., :, -1]
+
+    p = 0.5 * np.einsum("...ab,...ba->...", Q, Q)
+    q = np.linalg.det(Q)
+    r = 2 * np.sqrt(p / 3)
+
+    cos_arg = 4 * q / r**3
+    cos_arg = np.clip(cos_arg, -1.0, 1.0)
+    lambda_max = r * np.cos((1 / 3) * np.arccos(cos_arg))
+
+    n_raw = np.array(
+        [
+            Q[..., 0, 2] * (Q[..., 1, 1] - lambda_max) - Q[..., 0, 1] * Q[..., 1, 2],
+            Q[..., 1, 2] * (Q[..., 0, 0] - lambda_max) - Q[..., 0, 1] * Q[..., 0, 2],
+            Q[..., 0, 1] ** 2
+            - (Q[..., 0, 0] - lambda_max) * (Q[..., 1, 1] - lambda_max),
+        ]
+    )
+    n = np.moveaxis(n_raw / np.linalg.norm(n_raw, axis=0), 0, -1)
     S = 1.5 * lambda_max
     return S, n
 
