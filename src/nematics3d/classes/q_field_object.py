@@ -634,7 +634,12 @@ class QFieldObject(ClassBase):
 
         return self.interpolator
 
-    def act_interpolate(self, points: np.ndarray, is_index=False):
+    def act_interpolate(
+        self,
+        points: np.ndarray,
+        is_index=False,
+        is_out_warning=False,
+    ):
         """
         Interpolate the Q field at arbitrary sample points.
 
@@ -646,10 +651,18 @@ class QFieldObject(ClassBase):
             If False, `points` are interpreted in real-space coordinates.
             If True, `points` are interpreted in lattice-index coordinates
             before interpolation.
+        is_out_warning
+            If True, warn when any sample point falls outside non-periodic
+            dimensions and return those out-of-domain input points with the
+            interpolated values.
         """
         if self.interpolator is None:
             self.act_add_interpolator()
-        return self.interpolator.interpolate(points, is_index=is_index)
+        return self.interpolator.interpolate(
+            points,
+            is_index=is_index,
+            is_out_warning=is_out_warning,
+        )
 
     # -------------------------------
     # Visualization helpers

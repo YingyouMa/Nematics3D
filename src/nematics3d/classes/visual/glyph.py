@@ -629,11 +629,13 @@ class PlotGlyph(HostBase):
         """Enable the effect of the currently bound bounds without unbinding it."""
         object.__setattr__(self, "impl_is_bounds_enabled", True)
         self.act_commit(is_reapply_opts=True)
+        self._helper_trigger_sync_batch(is_bounds_enabled=True)
 
     def act_bounds_disable(self):
         """Disable the effect of the currently bound bounds without unbinding it."""
         object.__setattr__(self, "impl_is_bounds_enabled", False)
         self.act_commit(is_reapply_opts=True)
+        self._helper_trigger_sync_batch(is_bounds_enabled=False)
 
     def _helper_apply_bounds_mesh(self, mesh):
         bounds = self._helper_get_bounds_effective()

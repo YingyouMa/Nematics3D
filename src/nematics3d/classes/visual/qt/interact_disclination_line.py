@@ -62,6 +62,10 @@ class InteractDisclinationLine(InteractGlyphBase):
             color=(0, 0, 0),
             is_reset_camera=False,
         )
+        if bool(getattr(self.host, "impl_is_bounds_enabled", True)):
+            self.spheres.act_bounds_enable()
+        else:
+            self.spheres.act_bounds_disable()
 
     def _build_extra_group(self):
 
@@ -175,6 +179,30 @@ class InteractDisclinationLine(InteractGlyphBase):
     # ==================================================
     def _helper_run_commit(self, params):
         self.wrapper.act_commit(**params)
+
+    # ==================== OVERRIDE ====================
+    # InteractDisclinationLine overrides the shared bounds checkbox handler so
+    # the helper defect-point spheres follow the same bounds effect as the tube.
+    # ==================================================
+    def _on_toggle_bounds_enabled(self, _state):
+        super()._on_toggle_bounds_enabled(_state)
+        is_enabled = self.chk_is_bounds_enabled.isChecked()
+        if is_enabled:
+            self.spheres.act_bounds_enable()
+        else:
+            self.spheres.act_bounds_disable()
+
+    # ==================== OVERRIDE ====================
+    # InteractDisclinationLine extends the glyph sync handler so backend bounds
+    # toggles on the tube also keep the helper defect-point spheres in sync.
+    # ==================================================
+    def _sync_func(self, **kwargs):
+        super()._sync_func(**kwargs)
+        if "is_bounds_enabled" in kwargs:
+            if bool(kwargs["is_bounds_enabled"]):
+                self.spheres.act_bounds_enable()
+            else:
+                self.spheres.act_bounds_disable()
 
     def _on_toggle_is_wrap(self, _state):
         is_wrap = self.chk_is_wrap.isChecked()

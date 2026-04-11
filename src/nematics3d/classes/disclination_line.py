@@ -6,7 +6,7 @@ from typing import Any, Callable, ClassVar, Mapping
 import numpy as np
 from scipy.interpolate import splprep
 
-from ..general import sort_line_indices  # , get_plane, get_tangent
+from ..general import sort_line_indices
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
@@ -30,7 +30,7 @@ from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..format import is_given_str
-from ..general import pop_exclusive, find_plane_normal
+from ..general import find_plane_normal
 from .class_base import ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
@@ -1074,6 +1074,7 @@ class DisclinationLineSmoothPlot(HostBase):
         return line_coords, line_index
 
     def _helper_enrich_kwargs_wrapped_visual(self, host=None, kwargs=None):
+        del host, kwargs
         line_coords, line_index = self._helper_get_coords()
         return {"coords": line_coords, "line_index": line_index}
 
@@ -1110,10 +1111,7 @@ class DisclinationLineSmoothPlot(HostBase):
     # because its own opts only control wrapped-visualization state and should
     # be applied without redefining the wrapped PlotTube opts interface.
     # ==================================================
-    @logging_and_warning_decorator()
-    def _helper_commit_apply_opts_main(
-        self, is_reapply_opts=False, logger=None, **kwargs
-    ):
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         if not is_reapply_opts and not kwargs:
             return
         with self.opts.act_internal_update():
@@ -1406,6 +1404,7 @@ class DefectSectionGrid(HostBase):
         return {"origin": origin, "normal": normal}
 
     def _helper_enrich_kwargs_wrapped_section(self, host=None, kwargs=None):
+        del host, kwargs
         return self._helper_resolve_pose()
 
     # -------------------------------
@@ -1434,9 +1433,7 @@ class DefectSectionGrid(HostBase):
     # because section opts only update the local section pose and then forward
     # the resolved origin/normal to the wrapped polar grid.
     # ==================================================
-    def _helper_commit_apply_opts_main(
-        self, is_reapply_opts=False, logger=None, **kwargs
-    ):
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         for key, value in kwargs.items():
             object.__setattr__(self.opts, key, value)
         return self._helper_resolve_pose(), kwargs
@@ -1531,3 +1528,4 @@ class DefectSectionGrid(HostBase):
         logger.info(output)
         if is_return:
             return output
+        return None

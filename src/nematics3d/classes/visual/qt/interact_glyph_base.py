@@ -93,6 +93,7 @@ class InteractGlyphBase(PanelBase):
             self.config["is_radius"]
             or self.config["is_sides"]
             or self.config["is_geometry"]
+            or hasattr(self.host, "act_bounds_enable")
         ):
             self.group_geometry = QtWidgets.QGroupBox("Geometry", self)
             self.gl_geometry = QtWidgets.QVBoxLayout(self.group_geometry)
@@ -128,6 +129,27 @@ class InteractGlyphBase(PanelBase):
                     value_init=self.state["sides"],
                     value_fmt="{:.0f}",
                 )
+
+            if hasattr(self.host, "act_bounds_enable") and hasattr(
+                self.host, "act_bounds_disable"
+            ):
+                self.state["is_bounds_enabled"] = bool(
+                    getattr(self.host, "impl_is_bounds_enabled", True)
+                )
+                self.chk_is_bounds_enabled = QtWidgets.QCheckBox(
+                    "Enable bounds effect", self.group_geometry
+                )
+                self.chk_is_bounds_enabled.setChecked(self.state["is_bounds_enabled"])
+                self.gl_geometry.addWidget(self.chk_is_bounds_enabled)
+                self.chk_is_bounds_enabled.stateChanged.connect(
+                    self._on_toggle_bounds_enabled
+                )
+                self.lbl_bounds_restore_note = QtWidgets.QLabel(
+                    "Note: this option does not currently support Restore Original or Reset to Live.",
+                    self.group_geometry,
+                )
+                self.lbl_bounds_restore_note.setWordWrap(True)
+                self.gl_geometry.addWidget(self.lbl_bounds_restore_note)
 
             self._build_extra_geometry(self.group_geometry, self.gl_geometry)
 
@@ -324,14 +346,31 @@ class InteractGlyphBase(PanelBase):
         if not self._is_block_chk_commit:
             self.commit()
 
+    def _on_toggle_bounds_enabled(self, _):
+        is_enabled = self.chk_is_bounds_enabled.isChecked()
+        self.state["is_bounds_enabled"] = is_enabled
+        if self._is_block_chk_commit:
+            return
+        if is_enabled:
+            self.host.act_bounds_enable()
+        else:
+            self.host.act_bounds_disable()
+
     # ==================== OVERRIDE ====================
     # InteractGlyphBase overrides PanelBase._sync_func so live host updates can
     # be reflected back into the panel widgets and helper marker state.
     # ==================================================
 
     def _sync_func(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(kwargs)
+        kwargs_live = dict(kwargs)
+        is_bounds_enabled = kwargs_live.pop("is_bounds_enabled", None)
+        is_external = self._helper_sync_update_live_backup(kwargs_live)
 
+        if is_bounds_enabled is not None and hasattr(self, "chk_is_bounds_enabled"):
+            self._is_block_chk_commit = True
+            self.chk_is_bounds_enabled.setChecked(bool(is_bounds_enabled))
+            self._is_block_chk_commit = False
+            self.state["is_bounds_enabled"] = bool(is_bounds_enabled)
         if is_external:
             if "sides" in kwargs and self.config["is_sides"]:
                 self._sync_from_host_slider("sides", kwargs["sides"])

@@ -1,8 +1,12 @@
-import numpy as np
-from scipy.interpolate import RegularGridInterpolator
+"""Q-tensor interpolation helpers for sampled Q-field objects."""
+
 from typing import Any, ClassVar, Mapping
 
+import numpy as np
+from scipy.interpolate import RegularGridInterpolator
+
 from nematics3d.field import apply_linear_transform
+from ..logging_decorator import logging_and_warning_decorator
 from .class_base import ClassBase
 
 
@@ -75,21 +79,52 @@ class QInterpolator(ClassBase):
         )
         object.__setattr__(self, "entity_backend", backend)
 
-    def interpolate(self, points: np.ndarray, is_index=False):
+    @logging_and_warning_decorator()
+    def interpolate(
+        self,
+        points: np.ndarray,
+        is_index=False,
+        is_out_warning=False,
+        logger=None,
+    ):
+        """
+        Interpolate Q values at query points.
+
+        If `is_out_warning` is True, also return input points outside
+        non-periodic dimensions and warn when any are found.
+        """
 
         pts = np.asarray(points, dtype=float).copy()
+        points_input = pts.copy()
 
         if not is_index:
-            grid_transform = self.owner.raw_grid_transform
-            grid_offset = self.owner.raw_grid_offset
             pts = apply_linear_transform(
                 pts,
-                transform=np.linalg.inv(grid_transform),
-                offset=-grid_offset,
+                transform=np.linalg.inv(self.owner.raw_grid_transform),
+                offset=-self.owner.raw_grid_offset,
             )
 
         shape = np.shape(self.owner.raw_Q)[:3]
         periodic = np.asarray(self.owner.raw_box_periodic_flag, dtype=bool)
+
+        out_mask = np.zeros(len(pts), dtype=bool)
+        for d in range(3):
+            if not periodic[d]:
+                out_mask |= (pts[:, d] < 0) | (pts[:, d] > shape[d] - 1)
+        out_points = points_input[out_mask]
+
+        if is_out_warning and len(out_points) > 0:
+            out_points_text = np.array2string(
+                out_points,
+                precision=6,
+                separator=", ",
+                suppress_small=False,
+            )
+            logger.warning(
+                "Some interpolation query points are outside the non-periodic "
+                "Q-field domain and will be clipped to the boundary.\n"
+                f"Out-of-domain points ({len(out_points)}):\n{out_points_text}"
+            )
 
         for d in range(3):
             if periodic[d]:
@@ -97,4 +132,7 @@ class QInterpolator(ClassBase):
             else:
                 pts[:, d] = np.clip(pts[:, d], 0, shape[d] - 1)
 
-        return self.entity_backend(pts)
+        values = self.entity_backend(pts)
+        if is_out_warning:
+            return values, out_points
+        return values

@@ -78,6 +78,13 @@ class QPlane(InterpolatePlane):
             "doc": "Detected defect positions on this Q plane.",
             "kind": "calc",
         },
+        "calc_defect_pos_all": {
+            "doc": (
+                "Detected defect positions on this Q plane before optional "
+                "bounds filtering."
+            ),
+            "kind": "calc",
+        },
         "state_is_interactable": {
             "doc": "Whether to create a control window when the instance is double right-clicked.",
         },
@@ -197,6 +204,7 @@ class QPlane(InterpolatePlane):
         object.__setattr__(
             self, "calc_is_near_defect", adjacent_mask[plane_grid.calc_box_mask]
         )
+        object.__setattr__(self, "calc_defect_pos_all", defect_centers)
 
         if defect_centers is None:
             object.__setattr__(self, "calc_defect_pos", None)
@@ -740,7 +748,8 @@ class QPlanePolar(QPlane):
 
             # stop condition: we are about to step into a ring with < 6 points
             if n_inner < 6:
-                last_good_ring = r  # the current outer ring is the last ring still >= 6 (in practice)
+                # Current outer ring is the last ring still >= 6 in practice.
+                last_good_ring = r
                 break
 
             # process this ring-pair (outer -> inner)
@@ -795,17 +804,50 @@ class QPlanePolar(QPlane):
 
         return defect_centers, adjacent_mask
 
+    def _helper_project_defect_radii(self, defect_centers):
+        """Project defect centers onto this polar plane and return their radii."""
+        if defect_centers is None or len(defect_centers) == 0:
+            return np.array([], dtype=float)
+
+        plane_grid = self.grid
+        defects_local = apply_linear_transform(
+            defect_centers,
+            transform=np.linalg.inv(plane_grid.opts.grid_transform),
+            offset=-plane_grid.opts.grid_offset,
+        )
+        delta = defects_local - plane_grid.opts.origin
+        axis1 = plane_grid.opts.theta0_axis
+        axis2 = np.cross(plane_grid.opts.normal, axis1)
+
+        defect_x = delta @ axis1
+        defect_y = delta @ axis2
+        return np.hypot(defect_x, defect_y)
+
+    def _helper_get_omega_metric_flags(self, radius, out_points):
+        """Return diagnostic flags for one omega calculation."""
+        defect_radii = self._helper_project_defect_radii(self.calc_defect_pos_all)
+        is_defect_inside_radius = bool(np.any(defect_radii <= radius))
+        is_defect_at_center = bool(
+            np.any(defect_radii <= max(1e-8, 1e-6 * max(1.0, radius)))
+        )
+
+        return {
+            "is_out_of_domain": len(out_points) > 0,
+            "is_defect_inside_R": is_defect_inside_radius,
+            "is_defect_at_center": is_defect_at_center,
+        }
+
     @logging_and_warning_decorator()
     def act_calc_omega(self, layer, logger=None):
         """Estimate one average in-plane rotation axis on a selected polar ring."""
         plane_grid = self.grid
         ring_offsets = plane_grid.calc_ring_offsets
-        n_rings = ring_offsets.shape[0] - 1
 
         layer = int(layer)
-        if layer < 0 or layer >= n_rings:
+        if layer < 0 or layer >= ring_offsets.shape[0] - 1:
             raise ValueError(
-                f"`layer` must be between 0 and {n_rings - 1}, got {layer}."
+                f"`layer` must be between 0 and {ring_offsets.shape[0] - 2}, "
+                f"got {layer}."
             )
 
         s, e = ring_offsets[layer], ring_offsets[layer + 1]
@@ -814,15 +856,31 @@ class QPlanePolar(QPlane):
                 f"Layer {layer} contains fewer than 2 directors and cannot define a rotation axis."
             )
 
-        Q_all = self.interpolator.interpolate(plane_grid.entity_grid_all)
-        _, n_all = Q_diagonalize(Q_all)
-        directors = np.asarray(n_all[s:e], dtype=float).copy()
+        radius = float(plane_grid.entity_polar[s, 0])
+        q_layer, out_points = self.interpolator.interpolate(
+            plane_grid.entity_grid_all[s:e],
+            is_out_warning=True,
+        )
+        _, directors = Q_diagonalize(q_layer)
+        directors = np.asarray(directors, dtype=float).copy()
 
         for i in range(1, len(directors)):
             directors[i] = align_directors(directors[i - 1], directors[i])
 
         omega, metric = find_rotation_axis(directors, is_return_metric=True)
+        metric_flags = self._helper_get_omega_metric_flags(radius, out_points)
+
+        if not metric_flags["is_defect_at_center"]:
+            logger.warning("No defect is detected at the center of this polar plane.")
+        if metric_flags["is_defect_inside_R"]:
+            logger.warning(
+                f"Defects are detected inside or on omega layer {layer} (R={radius})."
+            )
+
         metric["layer"] = layer
         metric["num_directors"] = int(len(directors))
+        metric["R"] = radius
+        metric["opts"] = deepcopy(plane_grid.opts)
+        metric.update(metric_flags)
 
         return omega, metric
