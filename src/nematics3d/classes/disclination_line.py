@@ -811,7 +811,38 @@ class DisclinationLineSmooth(SmoothedLine):
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
-        """Evaluate local omega on one polar section along the smoothed line."""
+        """
+        Evaluate local omega on one polar section along the smoothed line.
+
+        The section pose is resolved from ``u_percent``. Keep ``origin`` and
+        ``normal`` out of ``opts_grid`` and keyword arguments so the resolved
+        pose is never ambiguous.
+        """
+        if opts_grid is not None and not isinstance(opts_grid, OptsPlaneGridPolar):
+            raise TypeError(
+                "`opts_grid` must be an OptsPlaneGridPolar instance or None. "
+                f"Got {type(opts_grid).__name__!r} instead."
+            )
+
+        opts_grid_keys = set() if opts_grid is None else set(opts_grid.act_asdict())
+        opts_grid_default_keys = (
+            set()
+            if opts_grid_defaults_override is None
+            else set(opts_grid_defaults_override)
+        )
+        section_pose_keys = {"origin", "normal"} & (
+            set(kwargs) | opts_grid_keys | opts_grid_default_keys
+        )
+        if section_pose_keys:
+            keys = ", ".join(sorted(section_pose_keys))
+            raise ValueError(
+                "act_calc_omega resolves the section pose from `u_percent`; "
+                f"do not pass {keys} through `opts_grid`, "
+                "`opts_grid_defaults_override`, or keyword arguments. Use "
+                "`opts_grid` only for polar-grid sampling options such as "
+                "layers, dr, arc_dist, theta0_axis, and clipping settings."
+            )
+
         q_host = getattr(getattr(self.owner, "registry", None), "owner", None)
         if q_host is None:
             raise RuntimeError(
@@ -825,6 +856,8 @@ class DisclinationLineSmooth(SmoothedLine):
             origin,
             self.owner.raw_box_size_periodic_index,
         )
+
+
         grid = PlaneGridPolar(
             normal=tangent,
             origin=origin,

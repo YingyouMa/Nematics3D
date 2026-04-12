@@ -854,7 +854,10 @@ class SmoothedLineFunc(ClassBase):
             "doc": "The SmoothedLine instance that this function is associated with.",
         },
         "raw_func": {
-            "doc": "Numerical sampling function mapping one u_percent to a value or a (value, metric) pair.",
+            "doc": (
+                "Numerical sampling function mapping one u_percent to a value "
+                "or a (value, metric) pair."
+            ),
             "validator": lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
         },
         "raw_u_samples": {
@@ -864,6 +867,13 @@ class SmoothedLineFunc(ClassBase):
         "raw_func_kwargs": {
             "doc": "Extra keyword arguments passed to the numerical function during sampling.",
             "validator": lambda v, d: SmoothedLineFunc._helper_validate_func_kwargs(v, name=d),
+        },
+        "state_is_follow_owner_opts": {
+            "doc": (
+                "Whether owner opts changes should automatically refresh this "
+                "function before interpolation."
+            ),
+            "validator": lambda v, d: as_bool(v, name=d),
         },
         "impl_owner_opts_snapshot": {
             "doc": "Snapshot of owner.opts at the time this line function was last sampled.",
@@ -947,6 +957,7 @@ class SmoothedLineFunc(ClassBase):
         u_samples,
         owner: SmoothedLine,
         func_kwargs: Mapping[str, Any] | None = None,
+        is_follow_owner_opts: bool = True,
         name: str = "smoothed line function",
         logger=None,
     ):
@@ -980,12 +991,47 @@ class SmoothedLineFunc(ClassBase):
                 type(self).__attr_defs__["raw_func_kwargs"]["doc"],
             ),
         )
+        object.__setattr__(
+            self,
+            "state_is_follow_owner_opts",
+            type(self).__attr_defs__["state_is_follow_owner_opts"]["validator"](
+                is_follow_owner_opts,
+                type(self).__attr_defs__["state_is_follow_owner_opts"]["doc"],
+            ),
+        )
         object.__setattr__(self, "impl_owner_opts_snapshot", None)
         object.__setattr__(self, "calc_values", None)
         object.__setattr__(self, "calc_metrics", None)
         object.__setattr__(self, "entity_interpolator", None)
 
         self.act_bind_relation_base("owner", owner, is_weak=True)
+        self.act_refresh()
+
+    # ==================== OVERRIDE ====================
+    # SmoothedLineFunc overrides ClassBase.__setattr__ so public raw_/state_
+    # changes immediately rebuild sampled values and the dependent interpolator.
+    # ==================================================
+    def __setattr__(self, key, value):
+        try:
+            attr_info_map = object.__getattribute__(self, "impl_attrs")
+        except AttributeError:
+            super().__setattr__(key, value)
+            return
+
+        target_key = key
+        if target_key not in attr_info_map:
+            raw_key = f"raw_{key}"
+            if raw_key in attr_info_map:
+                target_key = raw_key
+
+        super().__setattr__(key, value)
+
+        if not target_key.startswith(("raw_", "state_")):
+            return
+        if target_key == "raw_name":
+            return
+        if getattr(self, "entity_interpolator", None) is None:
+            return
         self.act_refresh()
 
     # -------------------------------
@@ -1018,7 +1064,8 @@ class SmoothedLineFunc(ClassBase):
             lines.append(f"Stored opts diff: {diff_then}")
             lines.append(f"Current owner opts diff: {diff_now}")
             lines.append(
-                "Stored snapshot differs from the current owner opts. Consider calling `act_refresh(...)`."
+                "Stored snapshot differs from the current owner opts. "
+                "Consider calling `act_refresh(...)`."
             )
         else:
             lines.append("Stored snapshot matches the current owner opts.")
@@ -1037,6 +1084,20 @@ class SmoothedLineFunc(ClassBase):
     def _helper_warn_if_owner_opts_changed(self, logger=None):
         comparison = self._helper_get_owner_opts_comparison()
         if not comparison["is_stale"]:
+            return
+        logger.warning(comparison["message"])
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_refresh_if_owner_opts_changed(self, logger=None):
+        comparison = self._helper_get_owner_opts_comparison()
+        if not comparison["is_stale"]:
+            return
+        if self.state_is_follow_owner_opts:
+            logger.info(
+                f"Owner opts changed for {self.name!r}; "
+                "refreshing sampled values and interpolator."
+            )
+            self.act_refresh()
             return
         logger.warning(comparison["message"])
 
@@ -1101,32 +1162,16 @@ class SmoothedLineFunc(ClassBase):
 
         opts_snapshot = owner.opts.act_asdict()
         mode = self._helper_get_owner_mode_from(opts_snapshot)
-
-        if mode == "wrap":
-            u_interp = np.concatenate(
-                [
-                    self.raw_u_samples - 100.0,
-                    self.raw_u_samples,
-                    self.raw_u_samples + 100.0,
-                ]
-            )
-            values_interp = np.concatenate([values, values, values], axis=0)
-        else:
-            u_interp = self.raw_u_samples
-            values_interp = values
-
-        interpolator = interp1d(
-            u_interp,
-            values_interp,
-            axis=0,
-            kind="linear",
-            bounds_error=False,
-            fill_value="extrapolate",
-            assume_sorted=True,
+        interpolator, values_smooth = linefunc_build_smoothed_interpolator(
+            self.raw_u_samples,
+            values,
+            window_ratio=opts_snapshot["window_ratio"],
+            order=opts_snapshot["order"],
+            mode=mode,
         )
 
         object.__setattr__(self, "impl_owner_opts_snapshot", dict(opts_snapshot))
-        object.__setattr__(self, "calc_values", values)
+        object.__setattr__(self, "calc_values", values_smooth)
         object.__setattr__(self, "calc_metrics", metrics)
         object.__setattr__(self, "entity_interpolator", interpolator)
         return self
@@ -1141,7 +1186,7 @@ class SmoothedLineFunc(ClassBase):
                 "SmoothedLineFunc has no interpolator yet. Call `act_refresh()` first."
             )
 
-        self._helper_warn_if_owner_opts_changed()
+        self._helper_refresh_if_owner_opts_changed()
         u_percent = np.asarray(u_percent, dtype=float)
         mode = self._helper_get_owner_mode_from(self.impl_owner_opts_snapshot)
         if mode == "wrap":
