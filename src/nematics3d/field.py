@@ -22,6 +22,8 @@ from .datatypes import (
     DimensionFlagInput,
     DimensionPeriodicInput,
     as_dimension_info,
+    as_points,
+    as_Tensor,
 )
 from .logging_decorator import logging_and_warning_decorator
 
@@ -353,13 +355,56 @@ def generate_fixed_step_grid(
     return grid, grid_int, (size1_eff, size2_eff)
 
 
+class _GridTransformIdentity:
+    """
+    Sentinel representing the canonical identity grid transform.
+
+    This is intentionally identity-based, like ``UNSET`` in ``datatypes``.
+    Do not make it array-like: callers that need a numeric matrix should handle
+    this sentinel explicitly so the fast path is not lost through coercion.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "GRID_TRANSFORM_IDENTITY"
+
+    def __deepcopy__(self, memo):
+        del memo
+        return self
+
+
+GRID_TRANSFORM_IDENTITY = _GridTransformIdentity()
+GridTransformIdentity = _GridTransformIdentity
+
+
+def is_grid_transform_identity(transform) -> bool:
+    """Return whether ``transform`` should be treated as the identity transform."""
+    return transform is GRID_TRANSFORM_IDENTITY or transform is None
+
+
+def as_grid_transform(transform, name="grid_transform"):
+    """Validate a grid transform while preserving the identity sentinel."""
+    if is_grid_transform_identity(transform):
+        return transform
+    return as_Tensor(transform, (3, 3), name=name)
+
+
 def apply_linear_transform(
     points: np.ndarray,
-    transform: Optional[np.ndarray] = None,
+    transform=GRID_TRANSFORM_IDENTITY,
     offset: Optional[np.ndarray] = None,
+    *,
+    is_inv: bool = False,
 ) -> np.ndarray:
     """
-    Apply a linear transformation and optional offset to a point cloud.
+    Apply the repository grid transform convention, or its inverse.
+
+    Forward convention:
+        ``points_physical = points_index @ transform + offset``
+
+    Inverse convention:
+        ``points_index = (points_physical - offset) @ inv(transform)``
 
     Parameters
     ----------
@@ -367,11 +412,14 @@ def apply_linear_transform(
         Array of shape (..., N), where N is the dimensionality.
         This can be a coordinate grid or any point set.
 
-    transform : np.ndarray, optional
-        Linear transformation matrix of shape (N, N). Defaults to identity.
+    transform : np.ndarray or GRID_TRANSFORM_IDENTITY, optional
+        Linear transformation matrix of shape (N, N), or the identity sentinel.
 
     offset : np.ndarray, optional
         Offset vector (translation) of shape (N,). Defaults to zero.
+
+    is_inv : bool, optional
+        Whether to apply the inverse convention instead of the forward one.
 
     Returns
     -------
@@ -386,19 +434,32 @@ def apply_linear_transform(
     points = np.asarray(points)
     ndim = points.shape[-1]
 
-    if transform is not None:
-        transform = np.asarray(transform)
-        if transform.shape != (ndim, ndim):
-            raise ValueError(f"transform must have shape ({ndim}, {ndim})")
-        points = np.einsum("...i,ij->...j", points, transform)
+    if is_grid_transform_identity(transform):
+        transform_use = transform
+    else:
+        transform_use = as_Tensor(transform, (ndim, ndim), name="grid transform")
 
-    if offset is not None:
-        offset = np.asarray(offset)
-        if offset.shape != (ndim,):
+    if offset is None:
+        offset_use = None
+    else:
+        offset_use = np.asarray(offset)
+        if offset_use.shape != (ndim,):
             raise ValueError(f"offset must have shape ({ndim},)")
-        points = points + offset
 
-    return points
+    if is_inv:
+        result = points if offset_use is None else points - offset_use
+        if is_grid_transform_identity(transform_use):
+            return result
+        return np.einsum("...i,ij->...j", result, np.linalg.inv(transform_use))
+
+    if is_grid_transform_identity(transform_use):
+        result = points
+    else:
+        result = np.einsum("...i,ij->...j", points, transform_use)
+
+    if offset_use is not None:
+        result = result + offset_use
+    return result
 
 
 def generate_mirror_point_periodic_boundary(
@@ -483,42 +544,62 @@ def generate_mirror_point_periodic_boundary(
 def wrap_points_to_box(
     points: Union[np.ndarray, Sequence[Sequence[float]], Sequence[float]],
     box_size_periodic: DimensionPeriodicInput = np.inf,
+    transform=GRID_TRANSFORM_IDENTITY,
+    offset: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """
-    Wrap one point or an array of points into the principal periodic box.
+    Wrap points into the principal periodic box.
+
+    Periodicity is encoded in lattice/index coordinates. When a non-identity
+    transform or offset is supplied, input points are interpreted as physical
+    coordinates, mapped back to grid coordinates, wrapped there, and mapped
+    back to physical coordinates.
 
     Parameters
     ----------
-    points : array-like of shape (..., 3)
-        Index-space coordinates to wrap. The last axis must represent the
-        three spatial coordinates.
+    points : array-like of shape (3,) or (N, 3)
+        Coordinates to wrap.
 
     box_size_periodic : DimensionPeriodicInput, optional
         Periodic box size along each axis. Finite values indicate periodic
         dimensions, while `np.inf` leaves the corresponding coordinate
         unchanged.
 
+    transform : np.ndarray or GRID_TRANSFORM_IDENTITY, optional
+        Grid-to-physical transform for physical-space inputs.
+
+    offset : np.ndarray, optional
+        Grid-to-physical translation offset for physical-space inputs.
+
     Returns
     -------
     np.ndarray
-        Wrapped coordinates with the same shape as the input. Periodic
-        dimensions are mapped into `[0, L)`, while non-periodic dimensions are
-        returned unchanged.
+        Wrapped coordinates. A single input point returns shape ``(3,)``;
+        point-cloud input returns shape ``(N, 3)``.
     """
     box_size_periodic = as_dimension_info(box_size_periodic)
-    points = np.asarray(points, dtype=float)
-
-    if points.shape[-1] != 3:
-        raise ValueError(
-            "`points` must have shape (..., 3) so the last axis stores x, y, z coordinates."
-        )
-
-    wrapped = points.copy()
-    mask_periodic = np.isfinite(box_size_periodic)
-    wrapped[..., mask_periodic] = np.mod(
-        wrapped[..., mask_periodic], box_size_periodic[mask_periodic]
+    points_input = np.asarray(points, dtype=float)
+    is_single_point = points_input.ndim == 1
+    points = as_points(points_input, name="points to wrap", dim=3)
+    points_index = apply_linear_transform(
+        points,
+        transform=transform,
+        offset=offset,
+        is_inv=True,
     )
-    return wrapped
+
+    points_index_wrapped = points_index.copy()
+    mask_periodic = np.isfinite(box_size_periodic)
+    points_index_wrapped[..., mask_periodic] = np.mod(
+        points_index_wrapped[..., mask_periodic],
+        box_size_periodic[mask_periodic],
+    )
+    wrapped = apply_linear_transform(
+        points_index_wrapped,
+        transform=transform,
+        offset=offset,
+    )
+    return wrapped[0] if is_single_point else wrapped
 
 
 def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
