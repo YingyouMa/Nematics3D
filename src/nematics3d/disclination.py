@@ -17,6 +17,7 @@ from .datatypes import (
     DefectIndex,
     check_Sn,
 )
+from .field import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
 
 # from .debug.debug_store import DEBUG_VARS
@@ -188,7 +189,7 @@ def defect_classify_into_lines(
     defect_indices: DefectIndex,
     box_size_periodic: DimensionFlagInput = np.inf,
     grid_offset: Optional[Vect(3)] = None,
-    grid_transform: Optional[np.ndarray] = None,
+    grid_transform=GRID_TRANSFORM_IDENTITY,
     logger=None,
 ) -> List["DisclinationLine"]:
     """
@@ -227,7 +228,7 @@ def defect_classify_into_lines(
     transform : np.ndarray of shape (3, 3), optional
         Linear transformation matrix applied to the defect indices
         to convert from grid space to physical space (e.g., for anisotropic grids).
-        Default is None (identity transform).
+        Default is the canonical identity transform.
 
     logger : Logger object, optional
         Used internally by the logging decorator: logging_and_warning_decorator()
@@ -247,6 +248,7 @@ def defect_classify_into_lines(
     logger.debug("Start line classfication")
 
     box_size_periodic = as_dimension_info(box_size_periodic)
+    grid_transform = as_grid_transform(grid_transform)
     logger.debug(f"box_size_periodic: {box_size_periodic}")
 
     defect_indices_hash = make_hash_table(defect_indices)

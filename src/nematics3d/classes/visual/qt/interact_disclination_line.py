@@ -3,6 +3,7 @@ import numpy as np
 
 from .panel_base import make_labeled_slider_row
 from nematics3d.datatypes import boundary_periodic_size_to_flag
+from nematics3d.field import apply_linear_transform
 from ..plot_sphere import PlotSphere
 from .interact_glyph_base import InteractGlyphBase
 from nematics3d.logging_decorator import logging_and_warning_decorator
@@ -165,8 +166,10 @@ class InteractDisclinationLine(InteractGlyphBase):
                 owner.raw_defect_indices % owner.raw_box_size_periodic_index,
                 owner.raw_defect_indices,
             )
-            coords = owner.raw_grid_offset + np.dot(
-                coords_index, owner.raw_grid_transform.T
+            coords = apply_linear_transform(
+                coords_index,
+                transform=owner.raw_grid_transform,
+                offset=owner.raw_grid_offset,
             )
         else:
             coords = owner.calc_defect_coords

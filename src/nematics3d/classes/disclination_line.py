@@ -533,10 +533,13 @@ class DisclinationLineSmooth(SmoothedLine):
     Important readable attributes:
 
     - `owner`: the raw DisclinationLine that this smoothed version belongs to.
-    - `calc_coords`: the index-space coordinates currently entering the smoothing
-      pipeline, including any temporary periodic padding.
-    - `calc_result`: the final smoothed defect-line indices in lattice space.
-    - `calc_result_coords`: the corresponding transformed real-space result.
+    - `calc_coords_index`: the index-space trajectory after any periodic
+      padding/unwrap and before physical-space smoothing.
+    - `calc_coords`: the physical-space coordinates entering the smoothing
+      pipeline.
+    - `calc_result_index`: the final smoothed defect-line indices in lattice space.
+    - `calc_result`: the final smoothed defect-line coordinates in real space.
+    - `calc_result_coords`: compatibility alias of `calc_result`.
     - `calc_padding_num`: temporary padding length used for cross-boundary lines.
     - `visual`: the current one-to-one visualization wrapper, if any.
     - `sections`: the registry of derived cross-section grids.
@@ -560,13 +563,24 @@ class DisclinationLineSmooth(SmoothedLine):
     - `str(obj)` returns the short HostBase-style identity.
     - `repr(obj)` follows the SmoothedLine summary style.
     - `np.asarray(obj)`, indexing, iteration, and `len(obj)` operate on the
-      current smoothed lattice-space result.
+      current smoothed real-space result.
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
         **dict(SmoothedLine.__attr_defs__),
+        "calc_coords_index": {
+            "doc": (
+                "Index-space trajectory entering smoothing before conversion "
+                "to real-space coordinates."
+            ),
+            "kind": "calc",
+        },
+        "calc_result_index": {
+            "doc": "The smoothed disclination coordinates in lattice-index space.",
+            "kind": "calc",
+        },
         "calc_result_coords": {
-            "doc": "The smoothed disclination coordinates in real space.",
+            "doc": "Compatibility alias of calc_result for real-space coordinates.",
             "kind": "calc",
         },
         "calc_padding_num": {
@@ -635,7 +649,7 @@ class DisclinationLineSmooth(SmoothedLine):
         object.__setattr__(self, "impl_owner_init_ref", weakref.ref(line))
 
         super().__init__(
-            line.raw_defect_indices,
+            line.calc_defect_coords,
             name=name,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
@@ -678,7 +692,8 @@ class DisclinationLineSmooth(SmoothedLine):
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine._helper_resolve_coords
     # because defect-line smoothing must handle loop and cross-boundary
-    # trajectories before passing coordinates into the generic smooth pipeline.
+    # trajectories in index space before passing physical coordinates into the
+    # generic smooth pipeline.
     # ==================================================
     def _helper_resolve_coords(self):
         owner = self._helper_get_owner_during_init()
@@ -714,7 +729,13 @@ class DisclinationLineSmooth(SmoothedLine):
             indices += shift * box_size
 
         object.__setattr__(self, "calc_padding_num", padding_num)
-        object.__setattr__(self, "calc_coords", indices)
+        object.__setattr__(self, "calc_coords_index", indices)
+        coords = apply_linear_transform(
+            indices,
+            transform=owner.raw_grid_transform,
+            offset=owner.raw_grid_offset,
+        )
+        object.__setattr__(self, "calc_coords", coords)
         object.__setattr__(self.opts, "mode", smooth_mode)
 
     # -------------------------------
@@ -759,18 +780,28 @@ class DisclinationLineSmooth(SmoothedLine):
                 object.__setattr__(self, "entity_tck", tck)
 
         if not self.calc_is_smoothed:
+            result_index = owner.raw_defect_indices.copy()
+            result = apply_linear_transform(
+                result_index,
+                transform=owner.raw_grid_transform,
+                offset=owner.raw_grid_offset,
+            )
             object.__setattr__(
                 self,
                 "calc_result",
-                owner.raw_defect_indices.copy(),
+                result,
+            )
+        else:
+            result = self.calc_result
+            result_index = apply_linear_transform(
+                result,
+                transform=owner.raw_grid_transform,
+                offset=owner.raw_grid_offset,
+                is_inv=True,
             )
 
-        result_coords = apply_linear_transform(
-            self.calc_result,
-            transform=owner.raw_grid_transform,
-            offset=owner.raw_grid_offset,
-        )
-        object.__setattr__(self, "calc_result_coords", result_coords)
+        object.__setattr__(self, "calc_result_index", result_index)
+        object.__setattr__(self, "calc_result_coords", result)
 
         tube_wrapper = getattr(self, "visual", None)
         if tube_wrapper:
@@ -819,9 +850,9 @@ class DisclinationLineSmooth(SmoothedLine):
         """
         Evaluate local omega on one polar section along the smoothed line.
 
-        The section pose is resolved from ``u_percent``. Keep ``origin`` and
-        ``normal`` out of ``opts_grid`` and keyword arguments so the resolved
-        pose is never ambiguous.
+        The section pose is resolved from ``u_percent`` in real space. Keep
+        pose and global grid-transform fields out of ``opts_grid`` and keyword
+        arguments so the resolved physical sampling plane is never ambiguous.
         """
         if opts_grid is not None and not isinstance(opts_grid, OptsPlaneGridPolar):
             raise TypeError(
@@ -838,6 +869,7 @@ class DisclinationLineSmooth(SmoothedLine):
         section_pose_keys = {"origin", "normal"} & (
             set(kwargs) | opts_grid_keys | opts_grid_default_keys
         )
+        section_pose_keys |= {"grid_offset", "grid_transform"} & set(kwargs)
         if section_pose_keys:
             keys = ", ".join(sorted(section_pose_keys))
             raise ValueError(
@@ -860,6 +892,8 @@ class DisclinationLineSmooth(SmoothedLine):
         origin = wrap_points_to_box(
             origin,
             self.owner.raw_box_size_periodic_index,
+            transform=self.owner.raw_grid_transform,
+            offset=self.owner.raw_grid_offset,
         )
 
         grid = PlaneGridPolar(
@@ -867,6 +901,8 @@ class DisclinationLineSmooth(SmoothedLine):
             origin=origin,
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
+            grid_offset=(0, 0, 0),
+            grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )
         q_plane = QPlanePolar(
@@ -1083,11 +1119,7 @@ class DisclinationLineSmoothPlot(HostBase):
         )
 
         if not is_wrap:
-            line_coords = (
-                owner.calc_result_coords
-                if is_smooth
-                else owner.owner.calc_defect_coords
-            )
+            line_coords = owner.result if is_smooth else owner.owner.calc_defect_coords
             if owner.owner.kind == "loop":
                 line_coords = np.concatenate((line_coords, [line_coords[0]]))
             line_index = None
@@ -1100,7 +1132,7 @@ class DisclinationLineSmoothPlot(HostBase):
             )
 
             line_coords_origin = (
-                owner.result if is_smooth else owner.owner.raw_defect_indices
+                owner.calc_result_index if is_smooth else owner.owner.raw_defect_indices
             )
             if owner.owner.kind == "loop":
                 line_coords_origin = np.concatenate(
@@ -1370,6 +1402,26 @@ class DefectSectionGrid(HostBase):
         if is_wrap is not None:
             self_kwargs["is_wrap"] = is_wrap
 
+        opts_grid_keys = set() if opts_grid is None else set(opts_grid.act_asdict())
+        opts_grid_default_keys = (
+            set()
+            if opts_grid_defaults_override is None
+            else set(opts_grid_defaults_override)
+        )
+        section_pose_keys = {"origin", "normal"} & (
+            set(kwargs) | opts_grid_keys | opts_grid_default_keys
+        )
+        section_pose_keys |= {"grid_offset", "grid_transform"} & set(kwargs)
+        if section_pose_keys:
+            keys = ", ".join(sorted(section_pose_keys))
+            raise ValueError(
+                "DefectSectionGrid resolves the section pose in real space; "
+                f"do not pass {keys} through `opts_grid`, "
+                "`opts_grid_defaults_override`, or keyword arguments. Use "
+                "`opts_grid` only for polar-grid sampling options such as "
+                "layers, dr, arc_dist, theta0_axis, and clipping settings."
+            )
+
         super().__init__(
             opts_type=OptsDefectSectionGrid,
             opts=opts,
@@ -1402,6 +1454,8 @@ class DefectSectionGrid(HostBase):
             origin=pose["origin"],
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
+            grid_offset=(0, 0, 0),
+            grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )
         grid.act_bind_wrapper(self, protected_attrs=["origin", "normal"])
@@ -1456,6 +1510,8 @@ class DefectSectionGrid(HostBase):
             origin = wrap_points_to_box(
                 origin,
                 self.owner.owner.raw_box_size_periodic_index,
+                transform=self.owner.owner.raw_grid_transform,
+                offset=self.owner.owner.raw_grid_offset,
             )
         normal = self._helper_resolve_normal(tangent)
         return {"origin": origin, "normal": normal}
