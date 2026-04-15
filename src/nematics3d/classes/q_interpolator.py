@@ -100,8 +100,9 @@ class QInterpolator(ClassBase):
         if not is_index:
             pts = apply_linear_transform(
                 pts,
-                transform=np.linalg.inv(self.owner.raw_grid_transform),
-                offset=-self.owner.raw_grid_offset,
+                transform=self.owner.raw_grid_transform,
+                offset=self.owner.raw_grid_offset,
+                is_inv=True,
             )
 
         shape = np.shape(self.owner.raw_Q)[:3]
