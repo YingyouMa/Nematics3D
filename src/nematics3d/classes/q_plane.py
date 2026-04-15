@@ -812,8 +812,9 @@ class QPlanePolar(QPlane):
         plane_grid = self.grid
         defects_local = apply_linear_transform(
             defect_centers,
-            transform=np.linalg.inv(plane_grid.opts.grid_transform),
-            offset=-plane_grid.opts.grid_offset,
+            transform=plane_grid.opts.grid_transform,
+            offset=plane_grid.opts.grid_offset,
+            is_inv=True,
         )
         delta = defects_local - plane_grid.opts.origin
         axis1 = plane_grid.opts.theta0_axis

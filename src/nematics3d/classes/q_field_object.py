@@ -1,7 +1,7 @@
 """Q-field object model, defect analysis, and visualization helpers."""
 
 import time
-from dataclasses import replace, dataclass, field, fields
+from dataclasses import replace, dataclass, fields
 from typing import Any, ClassVar, Mapping, Union
 
 import numpy as np
@@ -13,7 +13,6 @@ from ..datatypes import (
     Vect,
     as_Vect,
     Tensor,
-    as_Tensor,
     QField5,
     QField9,
     as_QField5,
@@ -30,7 +29,9 @@ from ..datatypes import (
     as_bool,
 )
 from ..field import (
+    GRID_TRANSFORM_IDENTITY,
     Q_diagonalize,
+    as_grid_transform,
     getQ,
     generate_coordinate_grid,
     apply_linear_transform,
@@ -99,7 +100,7 @@ class InputQ:
     n: nField | Unset = UNSET
     box_periodic_flag: DimensionFlagInput = False
     grid_offset: Vect(3) = (0, 0, 0)
-    grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
+    grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
     default_miminum_line_length_smooth: Number = 61
     default_smooth_window_length: Number = 41
     default_miminum_line_length_visual: Number = 75
@@ -138,7 +139,7 @@ class InputQ:
         "S": lambda v, d: check_Sn(v, "S"),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
+        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "default_miminum_line_length_smooth": lambda v, d: as_Number(
             v, name=d, value_range=(1, np.inf)
         ),
@@ -276,10 +277,6 @@ class QFieldObject(ClassBase):
             ),
             "kind": "calc",
         },
-        "calc_box_size_periodic_coord": {
-            "doc": "Effective periodic box size in real-space coordinates.",
-            "kind": "calc",
-        },
         "calc_defect_indices": {
             "doc": "Indices (lattice coordinates) of detected defect points.",
             "kind": "calc",
@@ -409,15 +406,6 @@ class QFieldObject(ClassBase):
                 self.calc_box_size_periodic_index[i] = np.shape(self.raw_Q)[i]
             else:
                 self.calc_box_size_periodic_index[i] = np.inf
-        T = np.asarray(self.raw_grid_transform, dtype=float)
-        diag = np.diag(T).astype(float)
-        object.__setattr__(
-            self, "calc_box_size_periodic_coord", np.full(3, np.inf, dtype=float)
-        )
-        finite_mask = np.isfinite(self.calc_box_size_periodic_index)
-        self.calc_box_size_periodic_coord[finite_mask] = (
-            diag[finite_mask] * self.calc_box_size_periodic_index[finite_mask]
-        )
         grid_shape = np.shape(self.raw_Q)[:3]
         object.__setattr__(
             self,

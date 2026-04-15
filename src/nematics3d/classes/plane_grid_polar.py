@@ -12,11 +12,14 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_Number,
-    as_Tensor,
     as_Vect,
     as_bool,
 )
-from nematics3d.field import apply_linear_transform
+from nematics3d.field import (
+    GRID_TRANSFORM_IDENTITY,
+    apply_linear_transform,
+    as_grid_transform,
+)
 from nematics3d.general import rotation_matrix_from_vectors, select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
@@ -72,7 +75,7 @@ class OptsPlaneGridPolar(OptsBase):
         ),
         "grid_transform": (
             "grid transform matrix to map lattice indices to real-space coordinates "
-            "(3x3 orthogonal matrix)"
+            "(3x3 matrix)"
         ),
     }
 
@@ -95,7 +98,7 @@ class OptsPlaneGridPolar(OptsBase):
         ),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
+        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -109,7 +112,7 @@ class OptsPlaneGridPolar(OptsBase):
             "arc_dist": None,
             "is_clip_inside": True,
             "grid_offset": (0, 0, 0),
-            "grid_transform": np.diag((1, 1, 1)),
+            "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )
 

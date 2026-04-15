@@ -13,12 +13,16 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_Number,
-    as_Tensor,
     as_Vect,
     as_bool,
     as_str,
 )
-from nematics3d.field import apply_linear_transform, generate_fixed_step_grid
+from nematics3d.field import (
+    GRID_TRANSFORM_IDENTITY,
+    apply_linear_transform,
+    as_grid_transform,
+    generate_fixed_step_grid,
+)
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
@@ -71,7 +75,7 @@ class OptsPlaneGrid(OptsBase):
         ),
         "grid_transform": (
             "grid transform matrix to map lattice indices to real-space coordinates "
-            "(3x3 orthogonal matrix)"
+            "(3x3 matrix)"
         ),
     }
 
@@ -91,7 +95,7 @@ class OptsPlaneGrid(OptsBase):
         "axis1": lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
+        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -105,7 +109,7 @@ class OptsPlaneGrid(OptsBase):
             "axis1": None,
             "is_clip_inside": True,
             "grid_offset": (0, 0, 0),
-            "grid_transform": np.diag((1, 1, 1)),
+            "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )
 

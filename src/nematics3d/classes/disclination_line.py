@@ -1,7 +1,7 @@
 """Disclination-line domain objects and their plot/section wrappers."""
 
 import weakref
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping
 
@@ -14,7 +14,6 @@ from ..datatypes import (
     Vect,
     as_Vect,
     Tensor,
-    as_Tensor,
     DefectIndex,
     as_DefectIndex,
     DimensionPeriodicInput,
@@ -26,7 +25,13 @@ from ..datatypes import (
     UNSET,
     Unset,
 )
-from ..field import apply_linear_transform, unwrap_trajectory, wrap_points_to_box
+from ..field import (
+    GRID_TRANSFORM_IDENTITY,
+    apply_linear_transform,
+    as_grid_transform,
+    unwrap_trajectory,
+    wrap_points_to_box,
+)
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all, cover_value
@@ -70,7 +75,7 @@ class InputLine:
     defect_indices: DefectIndex | None = None
     box_size_periodic_index: DimensionPeriodicInput = False
     grid_offset: Vect(3) = (0, 0, 0)
-    grid_transform: Tensor((3, 3)) = field(default_factory=lambda: np.eye(3))
+    grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         "defect_indices": "indices of defect points in the Q array",
@@ -95,7 +100,7 @@ class InputLine:
         ),
         "box_size_periodic_index": lambda v, d: as_dimension_info(v, name=d),
         "grid_offset": lambda v, d: as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_Tensor(v, (3, 3), name=d),
+        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
     # -------------------------------
@@ -856,7 +861,6 @@ class DisclinationLineSmooth(SmoothedLine):
             origin,
             self.owner.raw_box_size_periodic_index,
         )
-
 
         grid = PlaneGridPolar(
             normal=tangent,
