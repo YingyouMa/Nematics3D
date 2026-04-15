@@ -1,7 +1,7 @@
 """Disclination-line domain objects and their plot/section wrappers."""
 
 import weakref
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from types import MappingProxyType
 from typing import Any, Callable, ClassVar, Mapping
 
@@ -840,11 +840,13 @@ class DisclinationLineSmooth(SmoothedLine):
         plane = DefectSectionGrid(self, u_percent=x_param, **kwargs)
         return plane
 
+    @logging_and_warning_decorator()
     def act_calc_omega(
         self,
         u_percent,
         opts_grid: OptsPlaneGridPolar | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
+        logger=None,
         **kwargs,
     ):
         """
@@ -858,6 +860,38 @@ class DisclinationLineSmooth(SmoothedLine):
             raise TypeError(
                 "`opts_grid` must be an OptsPlaneGridPolar instance or None. "
                 f"Got {type(opts_grid).__name__!r} instead."
+            )
+
+        ignored_clip_keys = []
+        if "bounds" in kwargs:
+            kwargs.pop("bounds")
+            ignored_clip_keys.append("bounds")
+        if "is_clip_inside" in kwargs:
+            kwargs.pop("is_clip_inside")
+            ignored_clip_keys.append("is_clip_inside")
+        if (
+            opts_grid is not None
+            and opts_grid.act_asdict().get("is_clip_inside", UNSET) is not UNSET
+        ):
+            opts_grid = replace(opts_grid, is_clip_inside=UNSET)
+            ignored_clip_keys.append("opts_grid.is_clip_inside")
+        if (
+            opts_grid_defaults_override is not None
+            and "is_clip_inside" in opts_grid_defaults_override
+        ):
+            opts_grid_defaults_override = {
+                key: value
+                for key, value in opts_grid_defaults_override.items()
+                if key != "is_clip_inside"
+            }
+            ignored_clip_keys.append("opts_grid_defaults_override.is_clip_inside")
+        if ignored_clip_keys:
+            logger.warning(
+                "Ignoring omega clipping settings "
+                f"{sorted(set(ignored_clip_keys))}. Omega is evaluated on the "
+                "complete polar ring via `entity_grid_all`; clipping only "
+                "changes the selected `entity_grid`, which is not used for "
+                "the ring-wise omega calculation."
             )
 
         opts_grid_keys = set() if opts_grid is None else set(opts_grid.act_asdict())
@@ -917,9 +951,9 @@ class DisclinationLineSmooth(SmoothedLine):
                 "The local polar section does not contain a valid ring layer."
             )
 
-        omega, metric = q_plane.act_calc_omega(layer)
-        metric["u_percent"] = float(u_percent)
-        return omega, metric
+        omega, info = q_plane.act_calc_omega(layer)
+        info["u_percent"] = float(u_percent)
+        return omega, info
 
 
 @dataclass(slots=True, repr=False)

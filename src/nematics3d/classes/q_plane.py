@@ -878,10 +878,15 @@ class QPlanePolar(QPlane):
                 f"Defects are detected inside or on omega layer {layer} (R={radius})."
             )
 
-        metric["layer"] = layer
-        metric["num_directors"] = int(len(directors))
-        metric["R"] = radius
-        metric["opts"] = deepcopy(plane_grid.opts)
-        metric.update(metric_flags)
+        info = {
+            "metric": {
+                **metric,
+                **metric_flags,
+            },
+            "layer": layer,
+            "num_directors": int(len(directors)),
+            "R": radius,
+            "opts": deepcopy(plane_grid.opts),
+        }
 
-        return omega, metric
+        return omega, info
