@@ -950,7 +950,6 @@ class SmoothedLineFunc(ClassBase):
     # Initialization
     # -------------------------------
 
-    @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
         self,
         func,
@@ -959,9 +958,7 @@ class SmoothedLineFunc(ClassBase):
         func_kwargs: Mapping[str, Any] | None = None,
         is_follow_owner_opts: bool = True,
         name: str = "smoothed line function",
-        logger=None,
     ):
-        del logger
         super().__init__(name=name, name_replace="smoothed line function")
 
         if not isinstance(owner, SmoothedLine):

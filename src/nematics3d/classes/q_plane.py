@@ -827,10 +827,12 @@ class QPlanePolar(QPlane):
     def _helper_get_omega_metric_flags(self, radius, out_points):
         """Return diagnostic flags for one omega calculation."""
         defect_radii = self._helper_project_defect_radii(self.calc_defect_pos_all)
-        is_defect_inside_radius = bool(np.any(defect_radii <= radius))
-        is_defect_at_center = bool(
-            np.any(defect_radii <= max(1e-8, 1e-6 * max(1.0, radius)))
+        center_tol = max(1e-8, 1e-6 * max(1.0, radius))
+        is_defect_center = defect_radii <= center_tol
+        is_defect_inside_radius = bool(
+            np.any((defect_radii <= radius) & ~is_defect_center)
         )
+        is_defect_at_center = bool(np.any(is_defect_center))
 
         return {
             "is_out_of_domain": len(out_points) > 0,

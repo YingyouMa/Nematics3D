@@ -1574,7 +1574,7 @@ class DefectSectionGrid(HostBase):
         )
         return kwargs_sync | kwargs_applied_state, (is_reapply_opts or is_reapply_state)
 
-    @logging_and_warning_decorator()
+
     # ==================== OVERRIDE ====================
     # DefectSectionGrid overrides HostBase._helper_commit_apply_opts_main
     # because section opts only update the local section pose and then forward
