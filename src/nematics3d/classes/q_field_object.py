@@ -52,7 +52,7 @@ from .opts import merge_opts_all, cover_value
 from ..general import blue_red_in_white_bg, get_box_corners, sample_far
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
-from .disclination_line import DisclinationLine, DisclinationLineSmooth
+from .disclination_line import DisclinationLine
 from .class_base import ClassBase
 
 
@@ -1202,7 +1202,8 @@ class QFieldObject(ClassBase):
     def act_visualize_n_near_defect(
         self,
         u_percent: float,
-        smooth: DisclinationLineSmooth,
+        index_line: int = 0,
+        index_smooth: int = -1,
         figure: PlotFigure | BackgroundPlotter | pv.Plotter | str | int | None = None,
         is_new: bool = False,
         is_extent: bool = False,
@@ -1222,8 +1223,8 @@ class QFieldObject(ClassBase):
         """
         Visualize the director field on a polar cross-section around a defect.
 
-        This creates a `DefectSectionGrid` from the given smoothed
-        disclination line, wraps it as a `QPlanePolar`, and renders the
+        This selects one smoothed disclination line by index, creates a
+        `DefectSectionGrid`, wraps it as a `QPlanePolar`, and renders the
         director field near the selected cross-section.
 
         Parameters
@@ -1231,8 +1232,11 @@ class QFieldObject(ClassBase):
         u_percent
             Parametric position along the smoothed disclination line used to
             choose the cross-section.
-        smooth
-            Smoothed disclination line supplying the local cross-section frame.
+        index_line
+            Index of the classified disclination line in `self.lines`.
+        index_smooth
+            Index of the smoothed version under that line. Defaults to `-1`,
+            the latest smoothed version.
         figure
             Target figure, plotter, registered figure name/index, or `None`.
         is_new
@@ -1271,16 +1275,17 @@ class QFieldObject(ClassBase):
         --------
         Visualize the director field near the middle of a smoothed line::
 
-            q.act_visualize_n_near_defect(0.5, smooth_line)
+            q.act_visualize_n_near_defect(50, index_line=0)
 
         Create a new figure and override polar-grid settings::
 
             q.act_visualize_n_near_defect(
-                0.25,
-                smooth_line,
+                25,
+                index_line=1,
+                index_smooth=-1,
                 is_new=True,
-                grid_N_r=40,
-                grid_N_theta=80,
+                grid_layers=40,
+                grid_arc_dist=0.4,
             )
         """
 
@@ -1329,6 +1334,29 @@ class QFieldObject(ClassBase):
 
         if self.interpolator is None:
             self.act_add_interpolator()
+
+        try:
+            line = self.lines[index_line]
+        except IndexError as exc:
+            raise IndexError(
+                f"Invalid index_line={index_line!r}; "
+                f"there are {len(self.lines)} disclination lines."
+            ) from exc
+
+        smooths = line.smooths
+        if not smooths:
+            raise ValueError(
+                f"Disclination line {index_line!r} has no smoothed versions. "
+                "Call `act_smooth()` on the line or `act_lines_smooth()` on "
+                "the Q-field object first."
+            )
+        try:
+            smooth = smooths[index_smooth]
+        except IndexError as exc:
+            raise IndexError(
+                f"Invalid index_smooth={index_smooth!r} for line "
+                f"{index_line!r}; there are {len(smooths)} smoothed versions."
+            ) from exc
 
         section = smooth.act_cross_section(
             u_percent,
