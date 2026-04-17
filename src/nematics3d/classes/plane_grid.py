@@ -183,6 +183,12 @@ class PlaneGrid(HostBase):
         "impl_is_bounds_enabled": {
             "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
         },
+        "impl_is_warn_orthogonal": {
+            "doc": (
+                "Internal runtime switch controlling whether automatic axis "
+                "orthogonalization emits warnings."
+            ),
+        },
         "field": {
             "doc": "The interpolated field object attached to this plane grid.",
             "kind": "relation",
@@ -236,6 +242,7 @@ class PlaneGrid(HostBase):
             self, "impl_name_bounds_sync", f"plane_grid_bounds::{id(self)}"
         )
         object.__setattr__(self, "impl_is_bounds_enabled", True)
+        object.__setattr__(self, "impl_is_warn_orthogonal", True)
 
         for attr_name, value in {
             "normal": self.opts.normal,
@@ -291,12 +298,13 @@ class PlaneGrid(HostBase):
                 old_axis1 = axis1.copy()
                 axis1 = axis1 - dot_product * normal
                 axis1 /= np.linalg.norm(axis1)
-                logger.warning(
-                    f"Invalid geometry: axis1 is not perpendicular to normal "
-                    f"(dot product: {dot_product:.4e}). Projecting original "
-                    f"axis1 {old_axis1} onto the plane defined by normal {normal}. "
-                    f"New orthonormal axis1: {axis1}."
-                )
+                if self.impl_is_warn_orthogonal:
+                    logger.warning(
+                        f"Invalid geometry: axis1 is not perpendicular to normal "
+                        f"(dot product: {dot_product:.4e}). Projecting original "
+                        f"axis1 {old_axis1} onto the plane defined by normal "
+                        f"{normal}. New orthonormal axis1: {axis1}."
+                    )
         else:
             rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
             axis1 = rotation_matrix @ np.array([1, 0, 0])

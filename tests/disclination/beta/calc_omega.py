@@ -44,3 +44,10 @@ Q.act_visualize_disclination_lines(
     title="WT disclination lines",
 )
 Q.act_visualize_n_near_defect(u_percent=0)
+
+norm = Q.lines[0].act_calc_norm()
+
+smooth = Q.lines[0].smooth
+for u in range(0, 100, 5):
+    beta = smooth.act_calc_omega(u)["beta"]
+    print(u, beta)

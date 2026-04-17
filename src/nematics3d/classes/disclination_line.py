@@ -952,9 +952,17 @@ class DisclinationLineSmooth(SmoothedLine):
             )
 
         result = q_plane.act_calc_omega(layer)
+        omega = np.asarray(result["omega"], dtype=float)
+        cos_beta = abs(float(np.dot(tangent, omega)))
+        if not np.isfinite(cos_beta):
+            beta = np.nan
+        else:
+            cos_beta = float(np.clip(cos_beta, -1.0, 1.0))
+            beta = float(np.degrees(np.arccos(cos_beta)))
+
+        result["beta"] = beta
         result["u_percent"] = float(u_percent)
         result["position"] = origin
-
 
         return result
 
@@ -1576,7 +1584,6 @@ class DefectSectionGrid(HostBase):
             validator=self._helper_check_state_normal,
         )
         return kwargs_sync | kwargs_applied_state, (is_reapply_opts or is_reapply_state)
-
 
     # ==================== OVERRIDE ====================
     # DefectSectionGrid overrides HostBase._helper_commit_apply_opts_main

@@ -28,6 +28,7 @@ class InteractPlane(PanelBase):
     def __init__(self, field, figure):
         self.field = field
         object.__setattr__(self.field, "state_is_interactable", False)
+        object.__setattr__(field.grid, "impl_is_warn_orthogonal", False)
 
         origin = np.asarray(field.grid.opts.origin, dtype=float).reshape(1, 3)
         normal = np.asarray(field.grid.opts.normal, dtype=float).reshape(1, 3)
@@ -492,6 +493,7 @@ class InteractPlane(PanelBase):
     def on_close(self):
         self._helper_end_continuous_interaction()
         super().on_close()
+        object.__setattr__(self.host, "impl_is_warn_orthogonal", True)
         object.__setattr__(self.field, "state_is_interactable", True)
         self.visual_normal.act_remove()
         self.visual_origin.act_remove()

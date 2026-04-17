@@ -11,6 +11,7 @@ class InteractDefectSection(PanelBase):
         self.field = field
         self.defect_plane = field.grid.wrapper
         object.__setattr__(self.field, "state_is_interactable", False)
+        object.__setattr__(field.grid, "impl_is_warn_orthogonal", False)
 
         self.visual_normal = PlotRod(
             coords=field.grid.opts.origin,
@@ -409,5 +410,6 @@ class InteractDefectSection(PanelBase):
         self._helper_end_continuous_interaction()
         self.defect_plane.act_detach_sync_task(self._section_sync_name)
         super().on_close()
+        object.__setattr__(self.host, "impl_is_warn_orthogonal", True)
         object.__setattr__(self.field, "state_is_interactable", True)
         self.visual_normal.act_remove()

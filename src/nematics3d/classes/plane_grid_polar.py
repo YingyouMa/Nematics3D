@@ -166,6 +166,12 @@ class PlaneGridPolar(HostBase):
         "impl_is_bounds_enabled": {
             "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
         },
+        "impl_is_warn_orthogonal": {
+            "doc": (
+                "Internal runtime switch controlling whether automatic axis "
+                "orthogonalization emits warnings."
+            ),
+        },
         "field": {
             "doc": "The interpolated field object attached to this polar plane grid.",
             "kind": "relation",
@@ -217,6 +223,7 @@ class PlaneGridPolar(HostBase):
             self, "impl_name_bounds_sync", f"plane_grid_polar_bounds::{id(self)}"
         )
         object.__setattr__(self, "impl_is_bounds_enabled", True)
+        object.__setattr__(self, "impl_is_warn_orthogonal", True)
 
         for key, value in {
             "origin": self.opts.origin,
@@ -265,12 +272,14 @@ class PlaneGridPolar(HostBase):
                 old_theta0_axis = theta0_axis.copy()
                 theta0_axis = theta0_axis - dot_product * normal
                 theta0_axis /= np.linalg.norm(theta0_axis)
-                logger.warning(
-                    f"Invalid geometry: theta0_axis is not perpendicular to normal "
-                    f"(dot product: {dot_product:.4e}). Projecting original "
-                    f"theta0_axis {old_theta0_axis} onto the plane defined by "
-                    f"normal {normal}. New orthonormal theta0_axis: {theta0_axis}."
-                )
+                if self.impl_is_warn_orthogonal:
+                    logger.warning(
+                        f"Invalid geometry: theta0_axis is not perpendicular to "
+                        f"normal (dot product: {dot_product:.4e}). Projecting "
+                        f"original theta0_axis {old_theta0_axis} onto the plane "
+                        f"defined by normal {normal}. New orthonormal "
+                        f"theta0_axis: {theta0_axis}."
+                    )
         else:
             rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
             theta0_axis = rotation_matrix @ np.array([1, 0, 0])
