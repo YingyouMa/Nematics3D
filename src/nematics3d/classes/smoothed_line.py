@@ -167,7 +167,6 @@ class SmoothedLine(HostBase):
         },
         "calc_coords": {
             "doc":                "The processed coordinates actually sent into the smoothing pipeline",
-            "kind":               "calc",
 
         },
         "calc_num_init": {
@@ -182,17 +181,14 @@ class SmoothedLine(HostBase):
         },
         "calc_result": {
             "doc":                "The smoothed output coordinates (shape: M x D)",
-            "kind":               "calc",
 
         },
         "entity_tck": {
             "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
-            "kind":               "entity",
 
         },
         "entity_linefuncs": {
             "doc":                "RegistryBase object managing functions sampled along this line.",
-            "kind":               "entity",
 
         },
         "impl_linefunc_count": {
@@ -201,7 +197,6 @@ class SmoothedLine(HostBase):
         },
         "calc_is_smoothed": {
             "doc":                "Boolean flag indicating whether smoothing was applied",
-            "kind":               "calc",
 
         },
         "state_is_window_warning": {
@@ -217,7 +212,6 @@ class SmoothedLine(HostBase):
                 "or numerical failures), this field stores a human-readable "
                 "string describing the specific reason."
             ),
-            "kind":               "calc",
 
         },
         "result": {
