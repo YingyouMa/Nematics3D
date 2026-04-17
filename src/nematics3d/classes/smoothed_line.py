@@ -11,6 +11,7 @@ from ..logging_decorator import logging_and_warning_decorator
 from .class_base import ClassBase
 from .host_base import HostBase, OptsBase
 from .opts import cover_value, diff_dict_values
+from .registry_base import RegistryBase
 
 # fmt: off
 @dataclass(slots=True, repr=False)
@@ -127,6 +128,8 @@ class SmoothedLine(HostBase):
     - `calc_is_smoothed`: whether smoothing completed successfully.
     - `calc_status`: a human-readable status string describing the pipeline
       outcome.
+    - `linefuncs`: registry of functions sampled and interpolated along this
+      line.
 
     Common inspection helpers:
 
@@ -187,6 +190,15 @@ class SmoothedLine(HostBase):
             "kind":               "entity",
 
         },
+        "entity_linefuncs": {
+            "doc":                "RegistryBase object managing functions sampled along this line.",
+            "kind":               "entity",
+
+        },
+        "impl_linefunc_count": {
+            "doc":                "Monotonic counter used to assign default line-function names.",
+
+        },
         "calc_is_smoothed": {
             "doc":                "Boolean flag indicating whether smoothing was applied",
             "kind":               "calc",
@@ -210,6 +222,11 @@ class SmoothedLine(HostBase):
         },
         "result": {
             "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
+            "kind":               "property",
+
+        },
+        "linefuncs": {
+            "doc":                "Read-only: Registry of functions sampled along this line.",
             "kind":               "property",
 
         },
@@ -255,6 +272,8 @@ class SmoothedLine(HostBase):
         object.__setattr__(self, "calc_coords", self.raw_coords)
         object.__setattr__(self, "calc_result", self.raw_coords)
         object.__setattr__(self, "entity_tck", None)
+        object.__setattr__(self, "entity_linefuncs", None)
+        object.__setattr__(self, "impl_linefunc_count", 0)
         object.__setattr__(self, "calc_is_smoothed", False)
         object.__setattr__(self, "state_is_window_warning", is_window_warning)
         object.__setattr__(self, "calc_status", "Failure, reason unknown.")
@@ -270,6 +289,13 @@ class SmoothedLine(HostBase):
 
         self.opts.act_finalize()
         self._helper_commit_apply_opts(is_reapply_opts=True)
+
+        linefuncs = RegistryBase(
+            "line functions",
+            info=f"functions sampled along smoothed line {self.name!r}",
+        )
+        linefuncs.act_bind_relation_base("owner", self, is_weak=True)
+        object.__setattr__(self, "entity_linefuncs", linefuncs)
 
     # -------------------------------
     # Coordinate and fallback helpers
@@ -493,6 +519,33 @@ class SmoothedLine(HostBase):
 
         return np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
 
+    def act_create_linefunc(
+        self,
+        func,
+        u_samples,
+        func_kwargs: Mapping[str, Any] | None = None,
+        is_follow_owner_opts: bool = True,
+        name: str | None = None,
+    ):
+        if name is None:
+            name = f"line_func_{self.impl_linefunc_count}"
+
+        linefunc = SmoothedLineFunc(
+            func=func,
+            u_samples=u_samples,
+            owner=self,
+            func_kwargs=func_kwargs,
+            is_follow_owner_opts=is_follow_owner_opts,
+            name=name,
+        )
+        self.entity_linefuncs.act_register(linefunc)
+        object.__setattr__(
+            self,
+            "impl_linefunc_count",
+            self.impl_linefunc_count + 1,
+        )
+        return linefunc
+
     # -------------------------------
     # Array-style access
     # -------------------------------
@@ -522,6 +575,10 @@ class SmoothedLine(HostBase):
     @property
     def result(self):
         return self.calc_result
+
+    @property
+    def linefuncs(self):
+        return self.entity_linefuncs
 
 
 # SmoothedLineFunc samples a numerical function along the normalized parameter
