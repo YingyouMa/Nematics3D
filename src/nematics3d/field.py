@@ -14,7 +14,7 @@ from .datatypes import (
     as_Vect,
     QField5,
     QField9,
-    as_QField9,
+    as_qfield9,
     nField,
     SField,
     check_Sn,
@@ -71,7 +71,7 @@ def Q_diagonalize(
     ValueError
         If `qtensor` shape is not a valid QField5 or QField9.
     """
-    Q: QField9 = as_QField9(qtensor)
+    Q: QField9 = as_qfield9(qtensor, is_single_field=False)
 
     # Compute tensor invariants
     logger.debug("Computing tensor invariants (p, q, r).")

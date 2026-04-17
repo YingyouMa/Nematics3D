@@ -657,14 +657,37 @@ QField5 = np.ndarray
 QField9 = np.ndarray
 
 
-def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
+def _validate_qfield_single_shape(
+    shape: tuple[int, ...],
+    *,
+    name: str,
+    expected_ndim: int,
+    expected_label: str,
+) -> None:
+    if len(shape) != expected_ndim:
+        raise ValueError(
+            f"{name!r} must be a single 3D Q field in one of the supported "
+            "representations: (Nx, Ny, Nz, 5) or (Nx, Ny, Nz, 3, 3). "
+            f"This input matches the {expected_label} representation by its "
+            f"trailing dimensions, but has shape {shape}."
+        )
+
+
+def as_qfield9(
+    qtensor: Union[QField5, QField9],
+    name="QField",
+    is_single_field: bool = True,
+) -> QField9:
     #! strict3d
     """
     Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
 
     Accepts either:
-    - a 5-component representation (QField5), shape (..., 5), or
-    - a full matrix representation (QField9), shape (..., 3, 3)
+    - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
+    - a full matrix representation (QField9), shape (Nx, Ny, Nz, 3, 3)
+
+    Set ``is_single_field=False`` to allow the more general legacy shapes
+    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, or batched tensors.
 
     Parameters
     ----------
@@ -692,7 +715,14 @@ def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
 
     shape = qtensor.shape
 
-    if len(shape) >= 2 and shape[-1] == 5:
+    if len(shape) >= 1 and shape[-1] == 5:
+        if is_single_field:
+            _validate_qfield_single_shape(
+                shape,
+                name=name,
+                expected_ndim=4,
+                expected_label="(Nx, Ny, Nz, 5)",
+            )
         # Convert from 5-component representation to full 3x3 tensor
         Q = np.zeros((*shape[:-1], 3, 3), dtype=qtensor.dtype)
         Q[..., 0, 0] = qtensor[..., 0]  # Q_xx
@@ -706,24 +736,38 @@ def as_QField9(qtensor: Union[QField5, QField9], name="QField") -> QField9:
         Q[..., 2, 2] = -Q[..., 0, 0] - Q[..., 1, 1]  # Q_zz from traceless condition
         return Q
 
-    if len(shape) >= 3 and shape[-2:] == (3, 3):
+    if len(shape) >= 2 and shape[-2:] == (3, 3):
+        if is_single_field:
+            _validate_qfield_single_shape(
+                shape,
+                name=name,
+                expected_ndim=5,
+                expected_label="(Nx, Ny, Nz, 3, 3)",
+            )
         Q = qtensor
         return Q  # Already in QField9 form
 
     raise ValueError(
-        "Invalid QField shape: expected (..., 5) or (..., 3, 3), "
-        f"but got shape {shape}"
+        "Invalid QField shape: expected (Nx, Ny, Nz, 5) or "
+        f"(Nx, Ny, Nz, 3, 3), but got shape {shape}. "
         f"Name of QField: {name}"
     )
 
 
-def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
+def as_qfield5(
+    qtensor: Union[QField5, QField9],
+    name="QField",
+    is_single_field: bool = True,
+) -> QField5:
     """
     Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
 
     Accepts either:
-    - a 5-component representation (QField5), shape (..., 5), or
-    - a full matrix representation (QField9), shape (..., 3, 3)
+    - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
+    - a full matrix representation (QField9), shape (Nx, Ny, Nz, 3, 3)
+
+    Set ``is_single_field=False`` to allow the more general legacy shapes
+    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, or batched tensors.
 
     Assumes the input is a symmetric, traceless 3Ãƒâ€”3 tensor field.
 
@@ -754,6 +798,13 @@ def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
     shape = qtensor.shape
 
     if len(shape) >= 2 and shape[-2:] == (3, 3):
+        if is_single_field:
+            _validate_qfield_single_shape(
+                shape,
+                name=name,
+                expected_ndim=5,
+                expected_label="(Nx, Ny, Nz, 3, 3)",
+            )
 
         Q5 = np.empty(shape[:-2] + (5,), dtype=qtensor.dtype)
 
@@ -765,13 +816,20 @@ def as_QField5(qtensor: Union[QField5, QField9], name="QField") -> QField5:
 
         return Q5
 
-    if len(shape) >= 3 and shape[-1] == 5:
+    if len(shape) >= 1 and shape[-1] == 5:
+        if is_single_field:
+            _validate_qfield_single_shape(
+                shape,
+                name=name,
+                expected_ndim=4,
+                expected_label="(Nx, Ny, Nz, 5)",
+            )
         Q5 = qtensor
         return Q5
 
     raise ValueError(
-        "Invalid QField shape: expected (..., 5) or (..., 3, 3), "
-        f"but got shape {shape}"
+        "Invalid QField shape: expected (Nx, Ny, Nz, 5) or "
+        f"(Nx, Ny, Nz, 3, 3), but got shape {shape}. "
         f"Name of QField: {name}"
     )
 

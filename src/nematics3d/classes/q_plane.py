@@ -880,7 +880,8 @@ class QPlanePolar(QPlane):
                 f"Defects are detected inside or on omega layer {layer} (R={radius})."
             )
 
-        info = {
+        result = {
+            "omega": omega,
             "metric": {
                 **metric,
                 **metric_flags,
@@ -891,4 +892,4 @@ class QPlanePolar(QPlane):
             "opts": deepcopy(plane_grid.opts),
         }
 
-        return omega, info
+        return result

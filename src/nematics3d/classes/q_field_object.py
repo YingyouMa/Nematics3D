@@ -15,7 +15,7 @@ from ..datatypes import (
     Tensor,
     QField5,
     QField9,
-    as_QField5,
+    as_qfield5,
     SField,
     nField,
     check_Sn,
@@ -134,7 +134,7 @@ class InputQ:
     }
 
     _validators = {
-        "Q": lambda v, d: as_QField5(v, name=d),
+        "Q": lambda v, d: as_qfield5(v, name=d),
         "n": lambda v, d: check_Sn(v, "n"),
         "S": lambda v, d: check_Sn(v, "S"),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
@@ -390,7 +390,7 @@ class QFieldObject(ClassBase):
                     f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
                 )
             object.__setattr__(
-                self, "raw_Q", as_QField5(getQ(self.raw_n, S=self.raw_S))
+                self, "raw_Q", as_qfield5(getQ(self.raw_n, S=self.raw_S))
             )
         else:
             if self.raw_Q is not UNSET:

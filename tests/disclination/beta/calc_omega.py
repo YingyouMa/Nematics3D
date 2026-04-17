@@ -12,24 +12,35 @@ if str(SRC_PATH) not in sys.path:
 import nematics3d
 
 
-DATA_PATH = Path(__file__).with_name("WT.npy")
+DATA_PATH = Path(__file__).with_name("Q_1630.npy")
+Q = np.load(DATA_PATH)[0]
 
+# Q = nematics3d.QFieldObject(
+#     Q=Q,
+#     name="WT",
+# )
+# Q.act_lines_smooth()
+# Q.act_visualize_disclination_lines(
+#     min_line_length=0,
+#     title="WT disclination lines",
+# )
 
-def main():
-    Q = np.load(DATA_PATH)
+# Q.act_visualize_n_plane(
+#     grid_origin=(256,20,20),
+#     grid_normal=(0,0,1),
+#     grid_spacing=4,
+#     grid_size=400
+# )
 
-    q_obj = nematics3d.QFieldObject(
-        Q=Q,
-        name="WT",
-    )
-    q_obj.act_lines_smooth()
-    q_obj.act_visualize_disclination_lines(
-        min_line_length=0,
-        title="WT disclination lines",
-    )
+Q = Q[168:185, 5:32, 10:35]
 
-    return q_obj, q_obj.figs.active_fig
-
-
-if __name__ == "__main__":
-    Q_OBJ, FIGURE = main()
+Q = nematics3d.QFieldObject(
+    Q=Q,
+    name="WT",
+)
+Q.act_lines_smooth(window_length=28)
+Q.act_visualize_disclination_lines(
+    min_line_length=0,
+    title="WT disclination lines",
+)
+Q.act_visualize_n_near_defect(u_percent=0)

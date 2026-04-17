@@ -417,7 +417,7 @@ class DisclinationLine(ClassBase):
     ) -> None:
         """Visualize this line through one cached smoothed object or a new fallback."""
         if len(self.smooths) == 0:
-            self.act_smooth(window_length=5)
+            self.act_smooth(window_length=5, min_line_length=6)
             if is_smooth:
                 logger.warning(
                     f"No cached smoothed version exists yet for disclination line {self.name!r}. "
@@ -951,9 +951,12 @@ class DisclinationLineSmooth(SmoothedLine):
                 "The local polar section does not contain a valid ring layer."
             )
 
-        omega, info = q_plane.act_calc_omega(layer)
-        info["u_percent"] = float(u_percent)
-        return omega, info
+        result = q_plane.act_calc_omega(layer)
+        result["u_percent"] = float(u_percent)
+        result["position"] = origin
+
+
+        return result
 
 
 @dataclass(slots=True, repr=False)
