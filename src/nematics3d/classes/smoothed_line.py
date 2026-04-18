@@ -130,6 +130,8 @@ class SmoothedLine(HostBase):
       outcome.
     - `linefuncs`: registry of functions sampled and interpolated along this
       line.
+    - `linefunc_mode`: interpolation mode used by functions sampled along this
+      line. By default it follows `opts.mode`.
 
     Common inspection helpers:
 
@@ -221,6 +223,11 @@ class SmoothedLine(HostBase):
         },
         "linefuncs": {
             "doc":                "Read-only: Registry of functions sampled along this line.",
+            "kind":               "property",
+
+        },
+        "linefunc_mode": {
+            "doc":                "Read-only: Interpolation mode used by functions sampled along this line.",
             "kind":               "property",
 
         },
@@ -573,6 +580,10 @@ class SmoothedLine(HostBase):
     @property
     def linefuncs(self):
         return self.entity_linefuncs
+
+    @property
+    def linefunc_mode(self):
+        return self.opts.mode
 
 
 # SmoothedLineFunc samples a numerical function along the normalized parameter
@@ -927,7 +938,10 @@ class SmoothedLineFunc(ClassBase):
             "validator": lambda v, d: as_bool(v, name=d),
         },
         "impl_owner_opts_snapshot": {
-            "doc": "Snapshot of owner.opts at the time this line function was last sampled.",
+            "doc": (
+                "Snapshot of owner opts and line-function mode at the time "
+                "this line function was last sampled."
+            ),
         },
         "calc_values": {
             "doc": "Values returned by the numerical function at each sampling location.",
@@ -996,6 +1010,28 @@ class SmoothedLineFunc(ClassBase):
                 owner_mode, name="owner smoothing mode", pool=("interp", "wrap")
             )
         )
+
+    def _helper_get_owner_linefunc_mode_from(self, opts_dict):
+        linefunc_mode = (
+            None if opts_dict is None else opts_dict.get("linefunc_mode", None)
+        )
+        if linefunc_mode is None:
+            return self._helper_get_owner_mode_from(opts_dict)
+        return as_str(
+            linefunc_mode,
+            name="owner line-function interpolation mode",
+            pool=("interp", "wrap"),
+        )
+
+    def _helper_get_owner_opts_snapshot(self, owner):
+        opts_snapshot = dict(owner.opts.act_asdict())
+        linefunc_mode = getattr(owner, "linefunc_mode", opts_snapshot.get("mode"))
+        opts_snapshot["linefunc_mode"] = as_str(
+            linefunc_mode,
+            name="owner line-function interpolation mode",
+            pool=("interp", "wrap"),
+        )
+        return opts_snapshot
 
     # -------------------------------
     # Initialization
@@ -1089,7 +1125,9 @@ class SmoothedLineFunc(ClassBase):
     def _helper_get_owner_opts_comparison(self):
         owner = self.owner
         opts_then = self.impl_owner_opts_snapshot
-        opts_now = None if owner is None else owner.opts.act_asdict()
+        opts_now = (
+            None if owner is None else self._helper_get_owner_opts_snapshot(owner)
+        )
 
         if opts_then is None or opts_now is None:
             diff_then = {}
@@ -1208,8 +1246,8 @@ class SmoothedLineFunc(ClassBase):
         values = np.stack(values, axis=0)
         metrics = metrics if is_has_metric else None
 
-        opts_snapshot = owner.opts.act_asdict()
-        mode = self._helper_get_owner_mode_from(opts_snapshot)
+        opts_snapshot = self._helper_get_owner_opts_snapshot(owner)
+        mode = self._helper_get_owner_linefunc_mode_from(opts_snapshot)
         interpolator, values_smooth = linefunc_build_smoothed_interpolator(
             self.raw_u_samples,
             values,
@@ -1236,7 +1274,7 @@ class SmoothedLineFunc(ClassBase):
 
         self._helper_refresh_if_owner_opts_changed()
         u_percent = np.asarray(u_percent, dtype=float)
-        mode = self._helper_get_owner_mode_from(self.impl_owner_opts_snapshot)
+        mode = self._helper_get_owner_linefunc_mode_from(self.impl_owner_opts_snapshot)
         if mode == "wrap":
             u_percent = np.mod(u_percent, 100.0)
         return self.entity_interpolator(u_percent)
@@ -1258,7 +1296,7 @@ class SmoothedLineFunc(ClassBase):
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        mode = self._helper_get_owner_mode_from(self.impl_owner_opts_snapshot)
+        mode = self._helper_get_owner_linefunc_mode_from(self.impl_owner_opts_snapshot)
         return (
             f"{cls_name}({self.name!r}), num_samples={len(self.raw_u_samples)}, "
             f"mode={mode!r}"

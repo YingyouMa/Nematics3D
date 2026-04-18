@@ -609,6 +609,14 @@ class DisclinationLineSmooth(SmoothedLine):
             ),
             "kind": "relation",
         },
+        "linefunc_mode": {
+            "doc": (
+                "Read-only: Interpolation mode used by functions sampled along "
+                "this smoothed disclination line. Loop and cross-boundary lines "
+                "are periodic for line functions."
+            ),
+            "kind": "property",
+        },
     }
 
     __slots__ = tuple(
@@ -688,6 +696,15 @@ class DisclinationLineSmooth(SmoothedLine):
                 "DisclinationLineSmooth could not resolve its owning line during initialization."
             )
         return owner
+
+    @property
+    def linefunc_mode(self):
+        owner = self.owner
+        if owner is None:
+            return self.opts.mode
+        if owner.calc_end2end_kind in ("loop", "cross"):
+            return "wrap"
+        return "interp"
 
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine._helper_resolve_coords
