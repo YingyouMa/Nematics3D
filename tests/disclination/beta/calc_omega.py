@@ -47,6 +47,18 @@ Q.act_visualize_n_near_defect(u_percent=0)
 
 norm = Q.lines[0].act_calc_norm()
 smooth = Q.lines[0].smooth
+beta_func = smooth.act_create_linefunc(
+    func=lambda u: smooth.act_calc_omega(u)["beta"],
+    u_samples=np.arange(0, 100, 5),
+    name="beta",
+)
+smooth.visual.wrapped.act_commit(
+    paint_by="scalars",
+    resolver_source="u_percent",
+    scalars=beta_func,
+    scalars_cmap="viridis",
+    scalar_bar_title="beta",
+)
 
 # for u in range(0, 100, 5):
 #     beta = smooth.act_calc_omega(u)["beta"]

@@ -49,6 +49,6 @@ Q.act_visualize_n_near_defect(u_percent=0, index_line=0, grid_layers=5, grid_dr=
 
 norm = Q.lines[0].act_calc_norm()
 for u in range(0, 100, 5):
-    omega = Q.lines[0].smooth.act_calc_omega(u_percent=u)[0]
+    omega = Q.lines[0].smooth.act_calc_omega(u_percent=u)["beta"]
     beta = np.arccos(-norm@omega) / np.pi * 180
     print(u, beta)

@@ -7,8 +7,8 @@ from typing import Any, Mapping
 import numpy as np
 import pyvista as pv
 import vtk
-from PyQt5 import QtCore
 from pyvistaqt import BackgroundPlotter
+from qtpy import QtCore
 
 from nematics3d.datatypes import (
     ColorRGB,

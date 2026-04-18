@@ -1,5 +1,4 @@
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtGui import QFont
+from qtpy import QtCore, QtGui, QtWidgets
 
 
 class ScopedConsoleDock(QtWidgets.QDockWidget):
@@ -22,7 +21,7 @@ class ScopedConsoleDock(QtWidgets.QDockWidget):
         self._text.document().setMaximumBlockCount(20000)  # avoid unbounded growth
         self.setWidget(self._text)
 
-        font = QFont("Consolas")
+        font = QtGui.QFont("Consolas")
         font.setPointSize(font_size)
         self._text.setFont(font)
 
