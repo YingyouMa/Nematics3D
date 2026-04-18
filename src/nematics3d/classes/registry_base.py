@@ -195,6 +195,30 @@ class RegistryBase(ClassBase):
             if callable(unbind_relation):
                 unbind_relation("registry")
 
+    @logging_and_warning_decorator(start_finish_level=5)
+    def act_clear(
+        self,
+        *,
+        is_return_removed: bool = False,
+        is_show_existing: bool = True,
+        logger=None,
+    ):
+        """Unregister all objects currently stored in this registry."""
+        removed = tuple(self.impl_entity)
+
+        if is_show_existing:
+            logger.info(
+                "Clear registered objects from "
+                f"{self._helper_show_name_info()}:\n{self.act_repr_by_order()}"
+            )
+
+        for term in removed:
+            self.act_unregister(term, is_missing_ok=True)
+
+        if is_return_removed:
+            return removed
+        return None
+
     # ------------------------------------------------------------------
     # Collection protocol
     # ------------------------------------------------------------------
