@@ -16,6 +16,7 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_ColorRGB,
+    as_bool,
     as_Number,
     as_Vect,
     as_str,
@@ -479,6 +480,31 @@ class PlotFigure(HostBase):
                 panel.close()
             except (AttributeError, RuntimeError, ReferenceError):
                 pass
+
+    def act_close(self, *, is_remove_glyphs: bool = True):
+        """Close interact panels, optional glyphs, and the plotter backend."""
+        is_remove_glyphs = as_bool(
+            is_remove_glyphs,
+            name="Whether to remove registered glyphs before closing the figure",
+        )
+
+        self._helper_close_interacts()
+
+        if is_remove_glyphs:
+            for glyph in list(self.glyphs):
+                remove = getattr(glyph, "act_remove", None)
+                try:
+                    if callable(remove):
+                        remove()
+                    else:
+                        self.act_unregister(glyph, is_missing_ok=True)
+                except (AttributeError, RuntimeError, ReferenceError):
+                    self.act_unregister(glyph, is_missing_ok=True)
+
+        try:
+            self.pl.close()
+        except (AttributeError, RuntimeError, ReferenceError):
+            pass
 
     # -------------------------------
     # Naming and commit hooks

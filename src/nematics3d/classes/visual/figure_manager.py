@@ -1,4 +1,4 @@
-from nematics3d.datatypes import as_str
+from nematics3d.datatypes import as_bool, as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..registry_base import RegistryBase
@@ -136,6 +136,56 @@ class FigureManager(RegistryBase):
             logger.warning(
                 "The active figure was removed. Active figure has been reset to None."
             )
+
+    def _helper_close_figure(self, figure):
+        """Best-effort close for a PlotFigure-like registered object."""
+        close = getattr(figure, "act_close", None)
+        try:
+            if callable(close):
+                close()
+        except (AttributeError, RuntimeError, ReferenceError):
+            pass
+
+    # ==================== OVERRIDE ====================
+    # FigureManager overrides RegistryBase.act_clear because it owns the
+    # active-figure state and may optionally close live figure windows.
+    # ==================================================
+    def act_clear(
+        self,
+        *,
+        is_close: bool = False,
+        is_return_removed: bool = False,
+        is_show_existing: bool = True,
+    ):
+        is_close = as_bool(is_close, name="Whether to close figures before clearing")
+
+        removed = tuple(self.impl_entity)
+        if is_close:
+            for figure in removed:
+                self._helper_close_figure(figure)
+
+        super().act_clear(
+            is_return_removed=False,
+            is_show_existing=is_show_existing,
+        )
+        object.__setattr__(self, "state_active_name", None)
+
+        if is_return_removed:
+            return removed
+        return None
+
+    def act_close_all(
+        self,
+        *,
+        is_return_removed: bool = False,
+        is_show_existing: bool = True,
+    ):
+        """Close and unregister all figures currently managed by this registry."""
+        return self.act_clear(
+            is_close=True,
+            is_return_removed=is_return_removed,
+            is_show_existing=is_show_existing,
+        )
 
     # ------------------------------------------------------------------
     # Representation
