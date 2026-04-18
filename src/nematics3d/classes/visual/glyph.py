@@ -666,7 +666,7 @@ class PlotGlyph(HostBase):
         n_points = len(self.raw_coords)
         if n_points == 0:
             return np.empty((0,), dtype=np.float32)
-        return np.arange(n_points, dtype=np.float32) / float(n_points) * 100.0
+        return np.linspace(0.0, 100.0, n_points, dtype=np.float32)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(

@@ -602,6 +602,13 @@ class DisclinationLineSmooth(SmoothedLine):
             ),
             "kind": "relation",
         },
+        "visual_tube": {
+            "doc": (
+                "Read-only: PlotTube wrapped by the current visualization wrapper, "
+                "or None when no visualization exists."
+            ),
+            "kind": "property",
+        },
         "sections": {
             "doc": (
                 "RegistryBase object managing cross-section grids created from "
@@ -705,6 +712,13 @@ class DisclinationLineSmooth(SmoothedLine):
         if owner.calc_end2end_kind in ("loop", "cross"):
             return "wrap"
         return "interp"
+
+    @property
+    def visual_tube(self):
+        visual = self.visual
+        if visual is None:
+            return None
+        return visual.wrapped
 
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine._helper_resolve_coords
