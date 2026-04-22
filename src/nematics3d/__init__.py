@@ -12,6 +12,7 @@ from .classes.visual.plot_tube import *
 from .classes.visual.plot_rod import *
 from .classes.visual.plot_figure import *
 from .classes.visual.plot_sphere import *
+from .classes.visual.plot_vector import *
 from .classes.visual.plot_extent import *
 from .classes.visual.plot_surface import *
 from .classes.plane_grid import *

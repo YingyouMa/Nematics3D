@@ -1,0 +1,642 @@
+"""Vector glyph visuals built on the shared PlotGlyph pipeline."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Callable, ClassVar, Mapping, Sequence
+
+import numpy as np
+import pyvista as pv
+
+from nematics3d.datatypes import UNSET, Unset, as_Number, as_points, as_str
+from nematics3d.general import find_nearest_point, fmt_value
+from nematics3d.logging_decorator import logging_and_warning_decorator
+
+from ..bounds import BoundsData
+from .glyph import OptsGlyph, PlotGlyph
+from .plot_figure import FigureData
+
+LengthMode = float | Callable | Sequence
+
+
+def _as_positive_resolver_mode(value, name):
+    """Validate a positive scalar/array resolver input, or pass callables through."""
+    if callable(value):
+        return value
+    if np.isscalar(value):
+        return as_Number(value, name=name, value_range=(1e-12, np.inf))
+
+    arr = np.asarray(value, dtype=float)
+    if np.any(arr <= 0):
+        raise ValueError(f"{name} must contain only positive values.")
+    return value
+
+
+@dataclass(slots=True, repr=False)
+class OptsVector(OptsGlyph):
+    """
+    Visual configuration object for `PlotVector`.
+
+    `OptsVector` stores vector-arrow appearance and topology controls. The
+    total vector length uses the same flexible resolver model as other glyphs:
+
+    - `length` may be one shared value, one value per vector, or a callable
+      resolver.
+    - `radius` is inherited from `OptsGlyph` and represents shaft radius. It
+      may also be one shared value, one value per vector, or a callable
+      resolver.
+    - `anchor` decides whether the input `coords` represent vector tails or
+      vector centers.
+
+    Arrow tips intentionally stay simpler. Their dimensions are derived from
+    ratios:
+
+    - `tip_length_fraction` is `tip_length / length`
+    - `tip_radius_ratio` multiplies the resolved `radius`
+
+    This keeps per-vector vector-field scaling expressive while avoiding four
+    separate fully-resolved geometry fields for routine vector plots.
+    """
+
+    # --- Geometry & Topology (Vector-specific) ---
+    length: LengthMode | Unset = UNSET
+    tip_length_fraction: float | Unset = UNSET
+    tip_radius_ratio: float | Unset = UNSET
+    anchor: str | Unset = UNSET
+
+    # fmt: off
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsGlyph.__attrs__),
+        "length":           "The total display length of vectors.",
+        "tip_length_fraction": "Tip length as a fraction of total vector length.",
+        "tip_radius_ratio": "Tip radius as a multiplier of resolved shaft radius.",
+        "anchor":           "How input coords are interpreted: 'tail' or 'center'.",
+    }
+
+    impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
+        **dict(OptsGlyph.impl_validators),
+        "length": lambda v, d: _as_positive_resolver_mode(v, d),
+        "radius": lambda v, d: _as_positive_resolver_mode(v, d),
+        "tip_length_fraction": lambda v, d: as_Number(
+            v, name=d, value_range=(1e-12, 1), bounded=True
+        ),
+        "tip_radius_ratio": lambda v, d: as_Number(
+            v, name=d, value_range=(1e-12, np.inf)
+        ),
+        "resolver_source": lambda v, d: as_str(
+            v,
+            name=d,
+            pool=("coords", "orient", "orient_length"),
+        ),
+        "anchor": lambda v, d: as_str(
+            v,
+            name=d,
+            pool=("tail", "center"),
+        ),
+    }
+
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {
+            **dict(OptsGlyph.impl_defaults_frozen),
+            "length":           3,
+            "radius":           0.3,
+            "tip_length_fraction": 0.2,
+            "tip_radius_ratio": 2.5,
+            "resolver_source":  "orient_length",
+            "anchor":           "center",
+        }
+    )
+    # fmt: on
+
+
+# PlotVector follows the PlotRod host shape, but separates shaft geometry from
+# arrow-tip proportions.
+class PlotVector(PlotGlyph):
+    """
+    Render one arrow-style vector at each input point.
+
+    This first implementation establishes the managed host/opts surface and
+    initialization path. Mesh construction is intentionally left as an empty
+    placeholder so the class contract can settle before the arrow geometry is
+    filled in.
+    """
+
+    # fmt: off
+    __attr_defs__ = {
+        **dict(PlotGlyph.__attr_defs__),
+        "raw_orient": {
+            "doc":                       "The orientation vectors of plotted vectors.",
+            "validator":                 lambda v, d: as_points(v, name=d),
+            "is_reapply_opts_after_raw": True,
+        },
+        "calc_length": {
+            "doc": "The resolved per-vector total display length array.",
+        },
+        "calc_shaft_length": {
+            "doc": "The resolved per-vector shaft length array.",
+        },
+        "calc_tip_length": {
+            "doc": "The resolved per-vector tip length array derived from length.",
+        },
+        "calc_tip_radius": {
+            "doc": "The resolved per-vector tip radius array derived from radius.",
+        },
+        "calc_orient_unit": {
+            "doc": "The unit direction vectors used for plotting vector geometry.",
+        },
+        "calc_tail": {
+            "doc": "The resolved per-vector tail coordinates.",
+        },
+        "calc_shaft_end": {
+            "doc": "The resolved per-vector shaft-end coordinates.",
+        },
+        "calc_tip_end": {
+            "doc": "The resolved per-vector tip-end coordinates.",
+        },
+        "calc_keep_index": {
+            "doc": "Indices of raw vector anchors kept after center-based point filtering.",
+        },
+    }
+    # fmt: on
+
+    __slots__ = tuple(
+        name
+        for name, spec in __attr_defs__.items()
+        if spec.get("kind") not in ("relation", "property")
+    )
+
+    _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
+        "length"
+    ]
+
+    # -------------------------------
+    # Initialization
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph.__init__ because it must accept
+    # vector-specific orientation data before the generic glyph
+    # initialization and opts resolution are performed.
+    # ==================================================
+    def __init__(
+        self,
+        coords: np.ndarray,
+        orient: np.ndarray,
+        name: str = "vector",
+        name_replace: str = "vector",
+        category: str = "vectors",
+        figure: FigureData | None = None,
+        opts: OptsVector | None = None,
+        bounds: BoundsData | None = None,
+        clip_mode: str = "center",
+        is_clip_inside: bool = True,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        **kwargs,
+    ):
+
+        orient = type(self).__attr_defs__["raw_orient"]["validator"](
+            orient,
+            type(self).__attr_defs__["raw_orient"]["doc"],
+        )
+        object.__setattr__(self, "raw_orient", orient)
+
+        super().__init__(
+            coords=coords,
+            opts_type=OptsVector,
+            category=category,
+            name=name,
+            name_replace=name_replace,
+            opts=opts,
+            figure=figure,
+            bounds=bounds,
+            clip_mode=clip_mode,
+            is_clip_inside=is_clip_inside,
+            opts_defaults_override=opts_defaults_override,
+            **kwargs,
+        )
+
+        if len(self.raw_orient) != len(self.raw_coords):
+            raise ValueError(
+                f"There are {len(self.raw_orient)} points for orientation, "
+                f"while {len(self.raw_coords)} points for positions."
+            )
+
+        object.__setattr__(self, "calc_keep_index", None)
+
+        from .qt.interact_vector import InteractVector
+
+        self.act_set_interact_func(lambda: InteractVector(self, self.fig).show())
+
+        self._helper_init_end()
+
+    # -------------------------------
+    # Resolver helpers
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_get_resolver_source to add vector
+    # orientation and vector-length resolver sources.
+    # ==================================================
+    def _helper_get_resolver_source(self):
+        source_name = as_str(
+            self.opts.resolver_source,
+            name="glyph resolver source",
+            pool=("coords", "orient", "orient_length"),
+        )
+        if source_name == "orient":
+            return self.raw_orient
+        if source_name == "orient_length":
+            return np.linalg.norm(self.raw_orient, axis=1)
+        return self.raw_coords
+
+    def _helper_sync_derived_geometry(self):
+        """Update shaft/tip derived arrays from resolved length and radius."""
+        if not hasattr(self, "calc_length") or not hasattr(self, "calc_radius"):
+            return
+
+        tip_length_fraction = float(self.opts.tip_length_fraction)
+        shaft_length_fraction = 1.0 - tip_length_fraction
+
+        length = np.asarray(self.calc_length, dtype=np.float32)
+        radius = np.asarray(self.calc_radius, dtype=np.float32)
+
+        object.__setattr__(self, "calc_shaft_length", length * shaft_length_fraction)
+        object.__setattr__(self, "calc_tip_length", length * tip_length_fraction)
+        object.__setattr__(
+            self,
+            "calc_tip_radius",
+            radius * float(self.opts.tip_radius_ratio),
+        )
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_get_orient_unit(self, logger=None):
+        orient = np.asarray(self.raw_orient, dtype=float)
+        orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
+
+        mask = orient_norm.squeeze() > 1e-12
+        orient_unit = np.zeros_like(orient, dtype=float)
+        orient_unit[mask] = orient[mask] / orient_norm[mask]
+
+        if not np.all(mask):
+            n_bad = np.count_nonzero(~mask)
+            logger.warning(
+                f"{n_bad} vector(s) have near-zero orientation norm (<= 1e-12). "
+                "Their generated geometry will be degenerate."
+            )
+
+        return orient_unit
+
+    def _helper_sync_vector_key_points(self):
+        """Update vector tail, shaft-end, and tip-end coordinates."""
+        if (
+            not hasattr(self, "calc_length")
+            or not hasattr(self, "calc_shaft_length")
+            or not hasattr(self, "calc_tip_length")
+        ):
+            return
+
+        orient_unit = self._helper_get_orient_unit()
+        length = np.asarray(self.calc_length, dtype=float).reshape(-1, 1)
+        shaft_length = np.asarray(self.calc_shaft_length, dtype=float).reshape(-1, 1)
+
+        if self.opts.anchor == "tail":
+            tail = np.asarray(self.raw_coords, dtype=float).copy()
+        else:
+            tail = np.asarray(self.raw_coords, dtype=float) - 0.5 * length * orient_unit
+
+        shaft_end = tail + shaft_length * orient_unit
+        tip_end = tail + length * orient_unit
+
+        object.__setattr__(self, "calc_orient_unit", orient_unit)
+        object.__setattr__(self, "calc_tail", tail)
+        object.__setattr__(self, "calc_shaft_end", shaft_end)
+        object.__setattr__(self, "calc_tip_end", tip_end)
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_resolver_spec so resolved total
+    # length/radius immediately refresh the derived shaft and tip dimensions.
+    # ==================================================
+    def _helper_resolver_spec(self, attr_name, attr_value=None):
+        result = super()._helper_resolver_spec(attr_name, attr_value=attr_value)
+        if attr_name in ("length", "radius"):
+            self._helper_sync_derived_geometry()
+            self._helper_sync_vector_key_points()
+        return result
+
+    # -------------------------------
+    # Commit pipeline
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_commit_apply_opts_main because
+    # tip ratios and anchor are scalar vector-shape controls that still require
+    # the glyph geometry to be rebuilt.
+    # ==================================================
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
+        vector_shape_keys = ("tip_length_fraction", "tip_radius_ratio", "anchor")
+        is_vector_shape_update = False
+        for key in vector_shape_keys:
+            if key not in kwargs:
+                continue
+            object.__setattr__(self.opts, key, kwargs.pop(key))
+            is_vector_shape_update = True
+
+        if is_vector_shape_update:
+            self._helper_sync_derived_geometry()
+            self._helper_sync_vector_key_points()
+            is_reapply_opts = True
+
+        return super()._helper_commit_apply_opts_main(
+            is_reapply_opts=is_reapply_opts,
+            **kwargs,
+        )
+
+    # -------------------------------
+    # Center clipping and polydata preparation
+    # -------------------------------
+
+    def _helper_expand_endpoint_values(self, values, keep_index=None):
+        values = np.asarray(values)
+        if keep_index is not None:
+            keep_index = np.asarray(keep_index, dtype=int)
+            values = values[keep_index]
+        return np.repeat(values, 2, axis=0)
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_bound_coords because vectors can
+    # center-clip by filtering their raw anchor points directly.
+    # ==================================================
+    def _helper_bound_coords(self):
+        bounds = self._helper_get_bounds_effective()
+        if bounds is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+            object.__setattr__(self, "calc_keep_index", keep_index)
+            return self.raw_coords.copy()
+
+        axis1 = np.asarray(bounds.opts.axis1, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
+        length1 = float(bounds.opts.length1)
+        length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
+        length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
+        origin = np.asarray(bounds.opts.origin, dtype=float)
+
+        if bounds.opts.alignment == "min_corner":
+            origin_min_corner = origin
+        else:
+            origin_min_corner = origin - 0.5 * (
+                length1 * axis1 + length2 * axis2 + length3 * axis3
+            )
+
+        basis = np.column_stack([axis1, axis2, axis3])
+        coords_local = (self.raw_coords - origin_min_corner) @ basis
+        tol = 1e-10
+        upper = np.array([length1, length2, length3], dtype=float)
+        mask_inside = np.all(
+            (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
+        )
+        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
+        keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
+        object.__setattr__(self, "calc_keep_index", keep_index)
+        return self.raw_coords[keep_index]
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_build_poly because vector shafts
+    # are represented by oriented line segments before tube meshing.
+    # ==================================================
+    def _helper_build_poly(self):
+        keep_index = getattr(self, "calc_keep_index", None)
+        if keep_index is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+
+        if not hasattr(self, "calc_tail") or not hasattr(self, "calc_shaft_end"):
+            self._helper_sync_vector_key_points()
+
+        keep_index = np.asarray(keep_index, dtype=int)
+        n_vectors = len(keep_index)
+        if n_vectors == 0:
+            poly = pv.PolyData(np.empty((0, 3), dtype=float))
+            object.__setattr__(self, "calc_poly", poly)
+            self._helper_set_poly(poly)
+            return
+
+        tail = np.asarray(self.calc_tail, dtype=float)[keep_index]
+        shaft_end = np.asarray(self.calc_shaft_end, dtype=float)[keep_index]
+
+        endpoints = np.empty((2 * n_vectors, 3), dtype=float)
+        endpoints[0::2] = tail
+        endpoints[1::2] = shaft_end
+
+        lines = np.empty((n_vectors, 3), dtype=np.int64)
+        lines[:, 0] = 2
+        lines[:, 1] = 2 * np.arange(n_vectors)
+        lines[:, 2] = 2 * np.arange(n_vectors) + 1
+
+        poly = pv.PolyData(endpoints, lines=lines.ravel())
+        object.__setattr__(self, "calc_poly", poly)
+        self._helper_set_poly(poly)
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_set_poly so shaft endpoints share
+    # the same resolved per-vector visual data.
+    # ==================================================
+    def _helper_set_poly(self, poly):
+        if poly.n_points == 0:
+            return
+
+        keep_index = getattr(self, "calc_keep_index", None)
+        if keep_index is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+
+        color = self._helper_expand_endpoint_values(self.calc_color, keep_index)
+        opacity = self._helper_expand_endpoint_values(self.calc_opacity, keep_index)
+        radius = self._helper_expand_endpoint_values(self.calc_radius, keep_index)
+        scalars = self._helper_expand_endpoint_values(self.calc_scalars, keep_index)
+
+        poly.point_data["radius"] = radius
+        poly.point_data["opacity"] = opacity
+        poly.point_data["scalars"] = scalars
+        poly.point_data["rgba"] = np.hstack([color, opacity.reshape(-1, 1)])
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_build_mesh because vectors combine
+    # a tube shaft with a manually generated cone tip.
+    # ==================================================
+    def _helper_build_shaft_mesh(self):
+        poly = self.calc_poly
+        if poly.n_points < 2 or "radius" not in poly.point_data:
+            return pv.PolyData()
+
+        mesh = poly.tube(
+            scalars="radius",
+            n_sides=self.opts.sides,
+            absolute=True,
+        )
+        self._helper_set_mesh_data_from_points(mesh)
+        return mesh
+
+    def _helper_make_perp_basis(self, direction):
+        direction = np.asarray(direction, dtype=float)
+        if np.linalg.norm(direction) <= 1e-12:
+            return None, None
+
+        helper = np.array([1.0, 0.0, 0.0], dtype=float)
+        if abs(float(np.dot(direction, helper))) > 0.9:
+            helper = np.array([0.0, 1.0, 0.0], dtype=float)
+
+        axis1 = np.cross(direction, helper)
+        axis1_norm = np.linalg.norm(axis1)
+        if axis1_norm <= 1e-12:
+            return None, None
+        axis1 /= axis1_norm
+
+        axis2 = np.cross(direction, axis1)
+        axis2_norm = np.linalg.norm(axis2)
+        if axis2_norm <= 1e-12:
+            return None, None
+        axis2 /= axis2_norm
+
+        return axis1, axis2
+
+    def _helper_build_tip_mesh(self):
+        keep_index = getattr(self, "calc_keep_index", None)
+        if keep_index is None:
+            keep_index = np.arange(len(self.raw_coords), dtype=int)
+        keep_index = np.asarray(keep_index, dtype=int)
+
+        if len(keep_index) == 0:
+            return pv.PolyData()
+
+        if not hasattr(self, "calc_tail") or not hasattr(self, "calc_tip_end"):
+            self._helper_sync_vector_key_points()
+
+        sides = int(self.opts.sides)
+        angles = np.linspace(0.0, 2.0 * np.pi, sides, endpoint=False)
+        cos_vals = np.cos(angles)
+        sin_vals = np.sin(angles)
+
+        points = []
+        faces = []
+        rgba_values = []
+        opacity_values = []
+        scalar_values = []
+
+        color = np.asarray(self.calc_color)
+        opacity = np.asarray(self.calc_opacity)
+        scalars = np.asarray(self.calc_scalars)
+
+        for raw_idx in keep_index:
+            direction = np.asarray(self.calc_orient_unit[raw_idx], dtype=float)
+            axis1, axis2 = self._helper_make_perp_basis(direction)
+            if axis1 is None:
+                continue
+
+            base = np.asarray(self.calc_shaft_end[raw_idx], dtype=float)
+            tip = np.asarray(self.calc_tip_end[raw_idx], dtype=float)
+            radius = float(self.calc_tip_radius[raw_idx])
+
+            base_center_idx = len(points)
+            tip_idx = base_center_idx + 1
+            ring_start_idx = base_center_idx + 2
+
+            points.append(base)
+            points.append(tip)
+            rgba = np.r_[color[raw_idx], opacity[raw_idx]]
+            rgba_values.append(rgba)
+            rgba_values.append(rgba)
+            opacity_values.append(opacity[raw_idx])
+            opacity_values.append(opacity[raw_idx])
+            scalar_values.append(scalars[raw_idx])
+            scalar_values.append(scalars[raw_idx])
+
+            for cos_val, sin_val in zip(cos_vals, sin_vals):
+                point = base + radius * (cos_val * axis1 + sin_val * axis2)
+                points.append(point)
+                rgba_values.append(rgba)
+                opacity_values.append(opacity[raw_idx])
+                scalar_values.append(scalars[raw_idx])
+
+            for side_idx in range(sides):
+                j0 = ring_start_idx + side_idx
+                j1 = ring_start_idx + ((side_idx + 1) % sides)
+                faces.extend([3, tip_idx, j0, j1])
+                faces.extend([3, base_center_idx, j1, j0])
+
+        if not points:
+            return pv.PolyData()
+
+        mesh = pv.PolyData(
+            np.asarray(points, dtype=float),
+            faces=np.asarray(faces, dtype=np.int64),
+        )
+        mesh.point_data["opacity"] = np.asarray(opacity_values, dtype=np.float32)
+        mesh.point_data["scalars"] = np.asarray(scalar_values, dtype=np.float32)
+        mesh.point_data["rgba"] = np.asarray(rgba_values, dtype=np.float32)
+        return mesh
+
+    def _helper_set_mesh_data_from_points(self, mesh):
+        if mesh.n_points == 0:
+            return mesh
+
+        if not hasattr(self, "calc_tail") or not hasattr(self, "calc_tip_end"):
+            self._helper_sync_vector_key_points()
+
+        ref_points = 0.5 * (
+            np.asarray(self.calc_tail, dtype=float)
+            + np.asarray(self.calc_tip_end, dtype=float)
+        )
+        idx = np.array(
+            [
+                find_nearest_point(point, ref_points, is_return_idx=True)[1]
+                for point in mesh.points
+            ],
+            dtype=int,
+        )
+
+        color = np.asarray(self.calc_color)[idx]
+        opacity = np.asarray(self.calc_opacity)[idx]
+        scalars = np.asarray(self.calc_scalars)[idx]
+
+        mesh.point_data["opacity"] = opacity.astype(np.float32, copy=False)
+        mesh.point_data["scalars"] = scalars.astype(np.float32, copy=False)
+        mesh.point_data["rgba"] = np.hstack([color, opacity.reshape(-1, 1)]).astype(
+            np.float32,
+            copy=False,
+        )
+        return mesh
+
+    def _helper_build_mesh(self):
+        shaft_mesh = self._helper_build_shaft_mesh()
+        tip_mesh = self._helper_build_tip_mesh()
+
+        if shaft_mesh.n_points == 0:
+            return tip_mesh
+        if tip_mesh.n_points == 0:
+            return shaft_mesh
+
+        mesh = shaft_mesh.merge(tip_mesh)
+        self._helper_set_mesh_data_from_points(mesh)
+        return mesh
+
+    # -------------------------------
+    # Picking
+    # -------------------------------
+
+    # ==================== OVERRIDE ====================
+    # PlotVector overrides PlotGlyph._helper_resolve_pick to expose vector
+    # direction and derived arrow geometry in pick reports.
+    # ==================================================
+    def _helper_resolve_pick(self, picked_point):
+        pos, msg, idx = super()._helper_resolve_pick(picked_point)
+        orient = np.asarray(self.raw_orient[idx], dtype=float)
+        orient_length = float(np.linalg.norm(orient))
+
+        msg_head = (
+            f"Local orientation: {fmt_value(orient)} \n"
+            f"Local orientation length: {orient_length:.6g} \n"
+            f"Local display length: {fmt_value(self.calc_length[idx])} \n"
+            f"Local shaft length: {fmt_value(self.calc_shaft_length[idx])} \n"
+            f"Local tip length: {fmt_value(self.calc_tip_length[idx])} \n"
+        )
+        return pos, msg_head + msg, idx
