@@ -12,8 +12,11 @@ from nematics3d.datatypes import (
     Unset,
 )
 
+from ..bounds import as_bounds
 from ..class_base import ClassBase
 from ..registry_base import RegistryBase
+from ...field import apply_linear_transform, generate_coordinate_grid
+from ...general import get_box_corners
 from .input_grid_field import InputGridField, as_grid_shape
 
 
@@ -90,6 +93,29 @@ class GridFieldDataset(ClassBase):
         "raw_grid_transform": {
             "doc": "Linear transform mapping lattice indices to real space.",
         },
+        "calc_grid_index": {
+            "doc": "Lattice coordinate grid in index space.",
+            "kind": "calc",
+        },
+        "calc_grid": {
+            "doc": "Coordinate grid in real space after transform and offset.",
+            "kind": "calc",
+        },
+        "calc_corners_index": {
+            "doc": "Box corners in lattice-index space.",
+            "kind": "calc",
+        },
+        "calc_corners": {
+            "doc": "Bounds object describing the dataset box in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_box_size_periodic_index": {
+            "doc": (
+                "Effective periodic box size in index units. "
+                "For periodic dims equals grid size, otherwise inf."
+            ),
+            "kind": "calc",
+        },
         "fields": {
             "doc": "Registry of physical fields bound to this shared grid.",
             "kind": "relation",
@@ -119,14 +145,21 @@ class GridFieldDataset(ClassBase):
         if inputValue is None:
             inputValue = InputGridField()
         if kwargs:
-            input_kwargs = {f.name: getattr(inputValue, f.name) for f in fields(inputValue)}
+            input_kwargs = {
+                f.name: getattr(inputValue, f.name) for f in fields(inputValue)
+            }
             input_kwargs.update(kwargs)
             inputValue = replace(inputValue, **input_kwargs)
 
         object.__setattr__(self, "raw_shape", inputValue.shape)
-        object.__setattr__(self, "raw_box_periodic_flag", inputValue.box_periodic_flag)
+        object.__setattr__(
+            self,
+            "raw_box_periodic_flag",
+            inputValue.box_periodic_flag,
+        )
         object.__setattr__(self, "raw_grid_offset", inputValue.grid_offset)
         object.__setattr__(self, "raw_grid_transform", inputValue.grid_transform)
+        self._helper_refresh_grid_cache()
 
         registry = RegistryBase(
             "fields manager",
@@ -135,11 +168,15 @@ class GridFieldDataset(ClassBase):
         self.act_bind_relation_base("fields", registry, is_weak=False)
         registry.act_bind_relation_base("owner", self, is_weak=True)
 
-    def _helper_ensure_or_infer_shape(self, values: np.ndarray) -> tuple[int, int, int]:
+    def _helper_ensure_or_infer_shape(
+        self,
+        values: np.ndarray,
+    ) -> tuple[int, int, int]:
         """Infer the dataset shape once, then require every field to match it."""
         field_shape = as_grid_shape(np.shape(values)[:3], name="field grid shape")
         if self.raw_shape is UNSET:
             object.__setattr__(self, "raw_shape", field_shape)
+            self._helper_refresh_grid_cache()
             return field_shape
         if field_shape != tuple(self.raw_shape):
             raise ValueError(
@@ -147,6 +184,58 @@ class GridFieldDataset(ClassBase):
                 f"Dataset shape is {self.raw_shape}; field shape is {field_shape}."
             )
         return field_shape
+
+    # -------------------------------
+    # Shared-grid geometry cache
+    # -------------------------------
+
+    def _helper_refresh_grid_cache(self) -> None:
+        """Refresh geometry caches from the current shared grid metadata."""
+        if self.raw_shape is UNSET:
+            object.__setattr__(self, "calc_grid_index", UNSET)
+            object.__setattr__(self, "calc_grid", UNSET)
+            object.__setattr__(self, "calc_corners_index", UNSET)
+            object.__setattr__(self, "calc_corners", UNSET)
+            object.__setattr__(self, "calc_box_size_periodic_index", UNSET)
+            return
+
+        grid_shape = as_grid_shape(self.raw_shape, name="dataset grid shape")
+
+        box_size_periodic_index = np.zeros(3, dtype=float)
+        for i, is_periodic in enumerate(self.raw_box_periodic_flag):
+            if is_periodic:
+                box_size_periodic_index[i] = grid_shape[i]
+            else:
+                box_size_periodic_index[i] = np.inf
+
+        grid_index = generate_coordinate_grid(grid_shape, grid_shape)[0]
+        grid = apply_linear_transform(
+            grid_index,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
+        )
+
+        lengths_index = np.asarray(grid_shape) - np.array([1, 1, 1])
+        corners_index = get_box_corners(*lengths_index)
+        corners_coord = apply_linear_transform(
+            corners_index,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
+        )
+        corners = as_bounds(
+            corners_coord,
+            name=f"Bounds of grid field dataset {self.name!r}",
+        )
+
+        object.__setattr__(
+            self,
+            "calc_box_size_periodic_index",
+            box_size_periodic_index,
+        )
+        object.__setattr__(self, "calc_grid_index", grid_index)
+        object.__setattr__(self, "calc_grid", grid)
+        object.__setattr__(self, "calc_corners_index", corners_index)
+        object.__setattr__(self, "calc_corners", corners)
 
     def act_add_field(
         self,

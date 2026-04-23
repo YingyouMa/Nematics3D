@@ -128,6 +128,7 @@ from ..field import (
     Q_diagonalize,
     as_grid_transform,
     getQ,
+    generate_coordinate_grid,
     apply_linear_transform,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
@@ -142,9 +143,8 @@ from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
-from .grid_field import FieldData, GridFieldDataset, InputGridField
 from .opts import merge_opts_all, cover_value
-from ..general import blue_red_in_white_bg, sample_far
+from ..general import blue_red_in_white_bg, get_box_corners, sample_far
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine
@@ -380,22 +380,6 @@ class QFieldObject(ClassBase):
             "doc": "Real-space coordinates of detected defect points.",
             "kind": "calc",
         },
-        "dataset": {
-            "doc": "Shared-grid dataset that owns the canonical raw Q field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "field": {
-            "doc": "Dataset-owned FieldData entry storing the canonical raw Q values.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
         "figures": {
             "doc": "FigureManager object that manages PlotFigure objects created for this Q field.",
             "kind": "relation",
@@ -447,14 +431,9 @@ class QFieldObject(ClassBase):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # QFieldObject overrides ClassBase.__init__ because this class is not just a
-    # passive data container. Initialization must:
-    # - accept either raw Q/S/n input or an already prepared Q field,
-    # - derive the companion S/n views when needed,
-    # - attach the shared grid/dataset context used by later operations,
-    # - create the object registry used to hold bounds, lines, planes, and
-    #   other physical objects derived from this Q field,
-    # - optionally run defect detection / line classification immediately.
+    # QFieldObject overrides ClassBase.__init__ because it must normalize input
+    # Q/S/n data, derive geometry caches, optionally detect defects and lines,
+    # and create the default interpolator and figure/object managers.
     # ==================================================
     @logging_and_warning_decorator()
     def __init__(
@@ -462,218 +441,94 @@ class QFieldObject(ClassBase):
         is_detect_defects: bool = True,
         is_classify_lines: bool = True,
         inputValue: InputQ | None = None,
-        field: FieldData | None = None,
         name: str = "Q",
         logger=None,
         **kwargs,
     ) -> None:
 
-        # Initialize the base identity/protection layer first so every later
-        # relation and managed attribute attaches to a fully formed ClassBase.
         super().__init__(name=name, name_replace="Q", is_fixed=True)
+        if inputValue is None:
+            inputValue = InputQ()
 
-        # `objects` is the catch-all registry for physical or geometric objects
-        # derived from this Q field, for example bounds, disclination lines, and
-        # analysis planes created later by user actions.
+        inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[""]
+        for f in fields(inputValue):
+            k = f.name
+            v = getattr(inputValue, k)
+            if k.startswith("default"):
+                object.__setattr__(self, k, v)
+            else:
+                object.__setattr__(self, f"raw_{k}", v)
+
         objects = RegistryBase(
             "objects manager",
             info=f"physical objects attached to Q field {self.name!r}",
         )
-        # Bind the registry both ways so derived objects can find their owning
-        # QFieldObject and the QFieldObject can expose them through `self.objects`.
         self.act_bind_relation_base("objects", objects, is_weak=False)
         objects.act_bind_relation_base("owner", self, is_weak=True)
 
         logger.progress(f"Start to initialize Q tensor `{self.name}`.")
-        if field is not None:
-            # If a prepared field is provided, treat it as the source Q data and
-            # build only the QFieldObject analysis layer around it.
-            invalid_kwargs = [key for key in kwargs if not key.startswith("default_")]
-            if invalid_kwargs:
-                raise ValueError(
-                    "Attached-analysis initialization via `field=...` only accepts "
-                    "default_* override kwargs. Invalid key(s): "
-                    f"{invalid_kwargs!r}."
+        if self.raw_n is not UNSET:
+            logger.debug("Initialize Q field with S and n")
+            if self.raw_S is UNSET:
+                logger.warning("No S input. Set to 1 everywhere.")
+                object.__setattr__(
+                    self, "raw_S", np.zeros(np.shape(self.raw_n)[:-1]) + 1.0
                 )
-
-            # Attached initialization may still customize analysis defaults such
-            # as smoothing/visual thresholds, but the raw Q data and grid model
-            # must come entirely from the attached field + dataset pair.
-            attached_defaults = InputQ() if inputValue is None else inputValue
-            attached_defaults = merge_opts_all(
-                {"": attached_defaults},
-                kwargs,
-                type(self).__name__,
-            )[""]
-
-            # Raw-Q and grid-related values always come from the attached
-            # field/dataset pair. If the caller also passes these values through
-            # InputQ, they are ignored here. To change them, create a new field
-            # or a new QFieldObject from raw inputs instead of mixing both
-            # initialization styles in one call.
-            ignored_attached_inputs = [
-                attr_name
-                for attr_name in ("Q", "S", "n")
-                if getattr(attached_defaults, attr_name) is not UNSET
-            ]
-            if ignored_attached_inputs:
+            if self.raw_Q is not UNSET:
                 logger.warning(
-                    "Attached-analysis initialization received extra raw field "
-                    f"input(s) {ignored_attached_inputs!r}. These values are "
-                    "ignored because the attached `field` already defines the "
-                    "Q/S/n data used by this object. If you want to change the "
-                    "underlying field data, please create a new QFieldObject "
-                    "from raw inputs instead."
+                    "Both Q and n are provided to initialize Q field. Q will be IGNORED."
                 )
-
-            for attr_name in (
-                "default_miminum_line_length_smooth",
-                "default_smooth_window_length",
-                "default_miminum_line_length_visual",
-            ):
-                object.__setattr__(
-                    self,
-                    attr_name,
-                    getattr(attached_defaults, attr_name),
+            if np.shape(self.raw_S) != np.shape(self.raw_n)[:3]:
+                raise ValueError(
+                    "Shape mismatch between director field `n` and scalar field `S`: "
+                    f"expected n.shape[:3] == S.shape, "
+                    f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
                 )
-
-            # The attached-analysis path is only meaningful when `field` is the
-            # repository FieldData wrapper, because later code expects the field
-            # to expose both its raw values and its owning dataset relation.
-            if not isinstance(field, FieldData):
-                raise TypeError(
-                    "`field` must be a dataset-owned FieldData instance for "
-                    "attached-analysis initialization."
-                )
-            dataset = field.owner
-            if not isinstance(dataset, GridFieldDataset):
-                raise TypeError(
-                    "Attached-analysis initialization requires a FieldData whose "
-                    "owner is a GridFieldDataset."
-                )
-
-            field.raw_values = as_qfield5(
-                field.raw_values,
-                name="attached Q field values",
-            )
-
-            # Reconstruct S and n from the provided Q values so the rest of the
-            # class can keep using the same readable surfaces regardless of how
-            # this object was initialized.
-            object.__setattr__(self, "raw_Q", field.raw_values)
-            temp_S, temp_n = Q_diagonalize(self.raw_Q)
-            object.__setattr__(self, "raw_S", temp_S)
-            object.__setattr__(self, "raw_n", temp_n)
             object.__setattr__(
-                self,
-                "raw_box_periodic_flag",
-                dataset.raw_box_periodic_flag,
+                self, "raw_Q", as_qfield5(getQ(self.raw_n, S=self.raw_S))
             )
-            object.__setattr__(self, "raw_grid_offset", dataset.raw_grid_offset)
-            object.__setattr__(self, "raw_grid_transform", dataset.raw_grid_transform)
         else:
-            # Standalone path: accept raw Q/S/n-style input, normalize it into a
-            # canonical Q field, and then continue exactly as if that field had
-            # already been prepared elsewhere.
-            if inputValue is None:
-                inputValue = InputQ()
-
-            inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[
-                ""
-            ]
-            for f in fields(inputValue):
-                k = f.name
-                v = getattr(inputValue, k)
-                if k.startswith("default"):
-                    object.__setattr__(self, k, v)
-                else:
-                    object.__setattr__(self, f"raw_{k}", v)
-
-            # Standalone initialization accepts either n/S or raw Q:
-            # - if n is given, rebuild Q from n and S;
-            # - otherwise, diagonalize the provided Q to recover S and n.
-            # This keeps the three views synchronized before later analysis.
-            if self.raw_n is not UNSET:
-                logger.debug("Initialize Q field with S and n")
-                if self.raw_S is UNSET:
-                    logger.warning("No S input. Set to 1 everywhere.")
-                    object.__setattr__(
-                        self, "raw_S", np.zeros(np.shape(self.raw_n)[:-1]) + 1.0
-                    )
-                if self.raw_Q is not UNSET:
-                    logger.warning(
-                        "Both Q and n are provided to initialize Q field. Q will be IGNORED."
-                    )
-                if np.shape(self.raw_S) != np.shape(self.raw_n)[:3]:
-                    raise ValueError(
-                        "Shape mismatch between director field `n` and scalar field `S`: "
-                        f"expected n.shape[:3] == S.shape, "
-                        f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
-                    )
-                object.__setattr__(
-                    self, "raw_Q", as_qfield5(getQ(self.raw_n, S=self.raw_S))
-                )
+            if self.raw_Q is not UNSET:
+                temp_S, temp_n = Q_diagonalize(self.raw_Q)
+                object.__setattr__(self, "raw_S", temp_S)
+                object.__setattr__(self, "raw_n", temp_n)
             else:
-                if self.raw_Q is not UNSET:
-                    temp_S, temp_n = Q_diagonalize(self.raw_Q)
-                    object.__setattr__(self, "raw_S", temp_S)
-                    object.__setattr__(self, "raw_n", temp_n)
-                else:
-                    raise NameError("No data is input to initialize Q field.")
+                raise NameError("No data is input to initialize Q field.")
 
-            # Build the shared grid container even for standalone construction,
-            # so this Q field and any future sibling fields can live on the
-            # same grid model.
-            dataset = GridFieldDataset(
-                inputValue=InputGridField(
-                    shape=np.shape(self.raw_Q)[:3],
-                    box_periodic_flag=self.raw_box_periodic_flag,
-                    grid_offset=self.raw_grid_offset,
-                    grid_transform=self.raw_grid_transform,
-                ),
-                name=f"{self.name} dataset",
-            )
-            field = dataset.act_add_field("Q", self.raw_Q)
-
-        self.act_bind_relation_base("dataset", dataset, is_weak=False)
-        self.act_bind_relation_base("field", field, is_weak=False)
-
-        # After both relations are bound, sanity-check that they are consistent:
-        # the canonical field used by this QFieldObject must actually belong to
-        # the canonical dataset bound above.
-        if field.owner is not dataset:
-            raise RuntimeError(
-                "QFieldObject internal binding error: the attached field is not "
-                "owned by the attached dataset."
-            )
-
-        if field.name != "Q":
-            logger.warning(
-                f"Attached field name is {field.name!r}, not 'Q'. "
-                "This is allowed for now, but QFieldObject will still treat it "
-                "as the canonical Q field."
-            )
-
-        # From here on, `field.raw_values` is the Q data actually used by this
-        # object. We mirror it onto `raw_Q` so existing methods can keep reading
-        # `self.raw_Q` without caring how the field was supplied.
-        object.__setattr__(self, "raw_Q", field.raw_values)
-        # These grid/bounds caches are copied from the shared dataset because a
-        # large part of the existing QFieldObject code expects to find them on
-        # `self` directly.
+        object.__setattr__(self, "calc_box_size_periodic_index", np.zeros(3))
+        for i, flag in enumerate(self.raw_box_periodic_flag):
+            if flag:
+                self.calc_box_size_periodic_index[i] = np.shape(self.raw_Q)[i]
+            else:
+                self.calc_box_size_periodic_index[i] = np.inf
+        grid_shape = np.shape(self.raw_Q)[:3]
         object.__setattr__(
             self,
-            "calc_box_size_periodic_index",
-            dataset.calc_box_size_periodic_index,
+            "calc_grid_index",
+            generate_coordinate_grid(grid_shape, grid_shape)[0],
         )
-        object.__setattr__(self, "calc_grid_index", dataset.calc_grid_index)
-        object.__setattr__(self, "calc_grid", dataset.calc_grid)
-        object.__setattr__(self, "calc_corners_index", dataset.calc_corners_index)
-        object.__setattr__(self, "calc_corners", dataset.calc_corners)
+        object.__setattr__(
+            self,
+            "calc_grid",
+            apply_linear_transform(
+                self.calc_grid_index,
+                transform=self.raw_grid_transform,
+                offset=self.raw_grid_offset,
+            ),
+        )
 
-        # Register the box bounds as a normal derived object so they show up in
-        # the same object registry as other geometry derived from this Q field.
-        bounds = self.calc_corners
+        logger.debug("Generating the coorners of Q.")
+        Lx, Ly, Lz = np.shape(self.raw_Q)[:3] - np.array([1, 1, 1])
+        corners_index = get_box_corners(Lx, Ly, Lz)
+        corners_coord = apply_linear_transform(
+            corners_index,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
+        )
+        bounds = as_bounds(corners_coord, name=f"Bounds of Q field {self.name!r}")
+
+        object.__setattr__(self, "calc_corners_index", corners_index)
+        object.__setattr__(self, "calc_corners", bounds)
         self.objs.act_register(bounds, is_contain_ok=True)
         logger.debug(
             f"Box corners in lattice-index units is {self.calc_corners_index}."
@@ -714,11 +569,9 @@ class QFieldObject(ClassBase):
             logger.progress(
                 f"Defect analysis is finished, with {time.time()-start:.2f} s"
             )
-        # Create the interpolator eagerly so later sampling/plane-visualization
-        # actions can assume `self.interpolator` already exists.
+
         self.act_add_interpolator()
-        # `figures` manages all PlotFigure windows created from this Q field and
-        # tracks which one is currently active for later visualization calls.
+
         figures = FigureManager()
         self.act_bind_relation_base("figures", figures, is_weak=False)
         figures.act_bind_relation_base("owner", self, is_weak=True)
