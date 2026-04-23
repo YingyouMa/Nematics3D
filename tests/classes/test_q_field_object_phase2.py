@@ -16,7 +16,11 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.q_field_object import InputQ, QFieldObject
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.classes.grid_field import (
+    GridFieldDataset,
+    GridInterpolator,
+    InputGridField,
+)
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
@@ -59,6 +63,8 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(tuple(q.raw_box_periodic_flag), (True, False, True))
         self.assertEqual(tuple(q.raw_grid_offset), grid_offset)
         self.assertTrue(np.allclose(q.raw_grid_transform, grid_transform))
+        self.assertIsInstance(q.interpolator, GridInterpolator)
+        self.assertIs(q.interpolator, q.field.interpolator)
 
     def test_attached_analysis_init_reuses_existing_dataset_owned_q_field(self):
         shape = (2, 2, 2)

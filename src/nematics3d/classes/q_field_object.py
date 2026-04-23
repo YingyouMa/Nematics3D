@@ -131,7 +131,6 @@ from ..field import (
     apply_linear_transform,
 )
 from ..disclination import defect_detect, defect_classify_into_lines
-from .q_interpolator import QInterpolator
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
@@ -142,7 +141,7 @@ from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
-from .grid_field import FieldData, GridFieldDataset, InputGridField
+from .grid_field import FieldData, GridFieldDataset, GridInterpolator, InputGridField
 from .opts import merge_opts_all, cover_value
 from ..general import blue_red_in_white_bg, sample_far
 from .smoothed_line import OptsSmooth
@@ -271,7 +270,7 @@ class QFieldObject(ClassBase):
     - `lines`: classified disclination lines registered under this Q field.
     - `figures` / `figs`: FigureManager storing figures created from this Q field.
     - `objects` / `objs`: RegistryBase storing physical objects derived from this Q field.
-    - `interpolator`: QInterpolator used for off-grid sampling.
+    - `interpolator`: GridInterpolator used for off-grid sampling.
     - `calc_grid`: full real-space lattice coordinates of the Q field.
     - `calc_corners`: Bounds object describing the Q-field box.
     - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
@@ -289,7 +288,7 @@ class QFieldObject(ClassBase):
     - `act_defect_detect()`: detect defect points from the director field.
     - `act_lines_classify()`: classify detected defects into disclination lines.
     - `act_lines_smooth(...)`: smooth eligible classified lines.
-    - `act_add_interpolator()`: create and bind a QInterpolator if absent.
+    - `act_add_interpolator()`: create and bind a GridInterpolator if absent.
     - `act_interpolate(points, ...)`: interpolate the Q field at arbitrary points.
     - `act_visualize_disclination_lines(...)`: draw disclination lines on a figure.
     - `act_visualize_n_plane(...)`: create a Cartesian director analysis plane.
@@ -413,7 +412,7 @@ class QFieldObject(ClassBase):
             "doc_runtime": None,
         },
         "interpolator": {
-            "doc": "The QInterpolator object associated with this Q field.",
+            "doc": "The grid interpolator object associated with this Q field.",
             "kind": "relation",
             "is_weak_by_default": False,
             "is_weak": None,
@@ -903,12 +902,12 @@ class QFieldObject(ClassBase):
         logger.info(msg)
 
     def act_add_interpolator(self):
-        """Create and bind a `QInterpolator` if one is not already present."""
+        """Create and bind a `GridInterpolator` if one is not already present."""
         interpolator_old = self.interpolator
-        if isinstance(interpolator_old, QInterpolator):
+        if isinstance(interpolator_old, GridInterpolator):
             return interpolator_old
 
-        interpolator = QInterpolator(self, name=f"{self.name} interpolator")
+        interpolator = self.field.act_add_interpolator()
         self.act_bind_relation_base("interpolator", interpolator, is_weak=False)
 
         return self.interpolator
@@ -937,7 +936,7 @@ class QFieldObject(ClassBase):
         """
         if self.interpolator is None:
             self.act_add_interpolator()
-        return self.interpolator.interpolate(
+        return self.field.act_interpolate(
             points,
             is_index=is_index,
             is_out_warning=is_out_warning,

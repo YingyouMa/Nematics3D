@@ -47,6 +47,10 @@ class FieldData(ClassBase):
             "doc": "Field values with leading axes matching the dataset grid.",
             "validator": as_field_values,
         },
+        "interpolator": {
+            "doc": "The generic interpolator associated with this field.",
+            "kind": "entity",
+        },
     }
     # fmt: on
 
@@ -69,6 +73,34 @@ class FieldData(ClassBase):
 
         super().__init__(name=name, name_replace="field")
         object.__setattr__(self, "raw_values", values)
+        object.__setattr__(self, "interpolator", None)
+
+    def act_add_interpolator(self):
+        """Create and bind a GridInterpolator if one is not already present."""
+        from .grid_interpolator import GridInterpolator
+
+        interpolator_old = self.interpolator
+        if isinstance(interpolator_old, GridInterpolator):
+            return interpolator_old
+
+        interpolator = GridInterpolator(self, name=f"{self.name} interpolator")
+        object.__setattr__(self, "interpolator", interpolator)
+        return self.interpolator
+
+    def act_interpolate(
+        self,
+        points: np.ndarray,
+        is_index: bool = False,
+        is_out_warning: bool = False,
+    ):
+        """Interpolate this field at arbitrary sample points."""
+        if self.interpolator is None:
+            self.act_add_interpolator()
+        return self.interpolator.interpolate(
+            points,
+            is_index=is_index,
+            is_out_warning=is_out_warning,
+        )
 
 
 class GridFieldDataset(ClassBase):

@@ -15,7 +15,11 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.classes.grid_field import (
+    GridFieldDataset,
+    GridInterpolator,
+    InputGridField,
+)
 from nematics3d.datatypes import UNSET
 from nematics3d.field import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
@@ -68,6 +72,34 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(tuple(dataset.raw_shape), (2, 3, 4))
         self.assertEqual(dataset.calc_grid.shape, (2, 3, 4, 3))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
+
+    def test_field_can_create_generic_interpolator_and_sample_world_points(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 2, 2),
+                box_periodic_flag=(True, False, False),
+                grid_offset=(10.0, 20.0, 30.0),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        values = np.arange(8, dtype=float).reshape(2, 2, 2)
+        field = dataset.act_add_field("scalar", values)
+
+        interpolator = field.act_add_interpolator()
+
+        self.assertIsInstance(interpolator, GridInterpolator)
+        self.assertIs(field.interpolator, interpolator)
+        self.assertIs(interpolator.owner, field)
+
+        sampled = field.act_interpolate(np.array([[12.0, 23.0, 34.0]]))
+        self.assertTrue(np.allclose(sampled, np.array([7.0])))
+
+        periodic_sampled = field.act_interpolate(
+            np.array([[14.0, 23.0, 34.0]]),
+            is_out_warning=True,
+        )
+        self.assertTrue(np.allclose(periodic_sampled[0], np.array([3.0])))
+        self.assertEqual(len(periodic_sampled[1]), 0)
 
 
 if __name__ == "__main__":
