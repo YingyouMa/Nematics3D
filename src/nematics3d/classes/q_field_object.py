@@ -1,5 +1,43 @@
 """Q-field object model, defect analysis, and visualization helpers."""
 
+# ---------------------------------------------------------------------------
+# Planned architecture direction
+# ---------------------------------------------------------------------------
+#
+# The long-term structure is expected to move toward a shared-grid dataset
+# model:
+#
+#     GridFieldDataset
+#         -> FieldData("Q")
+#             -> QFieldObject
+#
+# In that design:
+#
+# - GridFieldDataset defines the common grid, boundary conditions, and later
+#   shared interpolation / differential operators for all physical fields.
+# - Q becomes one FieldData entry inside the dataset, alongside future fields
+#   such as velocity, concentration, or active-force-related fields.
+# - QFieldObject becomes the Q-specific analysis layer attached to that Q
+#   field, rather than the owner of the whole grid/data system.
+#
+# The intended initialization paths for QFieldObject are:
+#
+# 1. Standalone / legacy-style initialization
+#    - User passes raw Q-related input data, as in the current API.
+#    - QFieldObject will create the needed GridFieldDataset and Q FieldData
+#      automatically, then attach itself to that FieldData.
+#
+# 2. Attached analysis initialization
+#    - User passes an existing parent Q FieldData (or an equivalent direct
+#      reference to the dataset-owned Q field).
+#    - QFieldObject does not rebuild the dataset or raw field storage, and only
+#      performs Q-specific analysis on top of the existing field.
+#
+# Under that future structure, the canonical raw Q array should live on the
+# dataset-owned FieldData, while QFieldObject serves as the analysis/view layer
+# for defect detection, line classification, smoothing, visualization, and
+# other Q-specific workflows.
+
 import time
 from dataclasses import replace, dataclass, fields
 from typing import Any, ClassVar, Mapping, Union
