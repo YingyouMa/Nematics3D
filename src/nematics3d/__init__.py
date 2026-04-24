@@ -7,7 +7,7 @@ from .classes.opts import *
 from .classes.smoothed_line import *
 from .classes.disclination_line import DisclinationLine
 from .classes.graph import Graph
-from .classes.q_field_object_origin import QFieldObject
+from .classes.q_field_object import QFieldObject
 from .classes.visual.plot_tube import *
 from .classes.visual.plot_rod import *
 from .classes.visual.plot_figure import *
@@ -18,6 +18,7 @@ from .classes.visual.plot_surface import *
 from .classes.plane_grid import *
 from .classes.plane_grid_polar import *
 from .classes.q_plane import *
+from .classes.vector_plane import *
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
 from .classes.visual import qt

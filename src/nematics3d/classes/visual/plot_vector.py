@@ -10,7 +10,7 @@ import numpy as np
 import pyvista as pv
 
 from nematics3d.datatypes import UNSET, Unset, as_Number, as_points, as_str
-from nematics3d.general import find_nearest_point, fmt_value
+from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
@@ -319,9 +319,11 @@ class PlotVector(PlotGlyph):
     # ==================================================
     def _helper_resolver_spec(self, attr_name, attr_value=None):
         result = super()._helper_resolver_spec(attr_name, attr_value=attr_value)
-        if attr_name in ("length", "radius"):
+        if attr_name == "length":
             self._helper_sync_derived_geometry()
             self._helper_sync_vector_key_points()
+        elif attr_name == "radius":
+            self._helper_sync_derived_geometry()
         return result
 
     # -------------------------------
@@ -473,7 +475,6 @@ class PlotVector(PlotGlyph):
             n_sides=self.opts.sides,
             absolute=True,
         )
-        self._helper_set_mesh_data_from_points(mesh)
         return mesh
 
     def _helper_make_perp_basis(self, direction):
@@ -516,94 +517,121 @@ class PlotVector(PlotGlyph):
         cos_vals = np.cos(angles)
         sin_vals = np.sin(angles)
 
-        points = []
-        faces = []
-        rgba_values = []
-        opacity_values = []
-        scalar_values = []
+        direction = np.asarray(self.calc_orient_unit, dtype=float)[keep_index]
+        base = np.asarray(self.calc_shaft_end, dtype=float)[keep_index]
+        tip = np.asarray(self.calc_tip_end, dtype=float)[keep_index]
+        radius = np.asarray(self.calc_tip_radius, dtype=float)[keep_index]
 
-        color = np.asarray(self.calc_color)
-        opacity = np.asarray(self.calc_opacity)
-        scalars = np.asarray(self.calc_scalars)
+        helper = np.tile(np.array([1.0, 0.0, 0.0], dtype=float), (len(keep_index), 1))
+        mask_parallel = np.abs(np.sum(direction * helper, axis=1)) > 0.9
+        helper[mask_parallel] = np.array([0.0, 1.0, 0.0], dtype=float)
 
-        for raw_idx in keep_index:
-            direction = np.asarray(self.calc_orient_unit[raw_idx], dtype=float)
-            axis1, axis2 = self._helper_make_perp_basis(direction)
-            if axis1 is None:
-                continue
-
-            base = np.asarray(self.calc_shaft_end[raw_idx], dtype=float)
-            tip = np.asarray(self.calc_tip_end[raw_idx], dtype=float)
-            radius = float(self.calc_tip_radius[raw_idx])
-
-            base_center_idx = len(points)
-            tip_idx = base_center_idx + 1
-            ring_start_idx = base_center_idx + 2
-
-            points.append(base)
-            points.append(tip)
-            rgba = np.r_[color[raw_idx], opacity[raw_idx]]
-            rgba_values.append(rgba)
-            rgba_values.append(rgba)
-            opacity_values.append(opacity[raw_idx])
-            opacity_values.append(opacity[raw_idx])
-            scalar_values.append(scalars[raw_idx])
-            scalar_values.append(scalars[raw_idx])
-
-            for cos_val, sin_val in zip(cos_vals, sin_vals):
-                point = base + radius * (cos_val * axis1 + sin_val * axis2)
-                points.append(point)
-                rgba_values.append(rgba)
-                opacity_values.append(opacity[raw_idx])
-                scalar_values.append(scalars[raw_idx])
-
-            for side_idx in range(sides):
-                j0 = ring_start_idx + side_idx
-                j1 = ring_start_idx + ((side_idx + 1) % sides)
-                faces.extend([3, tip_idx, j0, j1])
-                faces.extend([3, base_center_idx, j1, j0])
-
-        if not points:
+        axis1 = np.cross(direction, helper)
+        axis1_norm = np.linalg.norm(axis1, axis=1, keepdims=True)
+        mask_valid = axis1_norm[:, 0] > 1e-12
+        if not np.any(mask_valid):
             return pv.PolyData()
 
-        mesh = pv.PolyData(
-            np.asarray(points, dtype=float),
-            faces=np.asarray(faces, dtype=np.int64),
+        axis1 = axis1[mask_valid] / axis1_norm[mask_valid]
+        direction = direction[mask_valid]
+        axis2 = np.cross(direction, axis1)
+        axis2 /= np.linalg.norm(axis2, axis=1, keepdims=True)
+
+        base = base[mask_valid]
+        tip = tip[mask_valid]
+        radius = radius[mask_valid]
+
+        raw_idx = keep_index[mask_valid]
+        color = np.asarray(self.calc_color, dtype=np.float32)[raw_idx]
+        opacity = np.asarray(self.calc_opacity, dtype=np.float32)[raw_idx]
+        scalars = np.asarray(self.calc_scalars, dtype=np.float32)[raw_idx]
+
+        n_vectors = len(raw_idx)
+        n_points_per_vector = sides + 2
+        n_faces_per_vector = 2 * sides
+
+        ring_offsets = (
+            radius[:, None, None]
+            * (
+                cos_vals[None, :, None] * axis1[:, None, :]
+                + sin_vals[None, :, None] * axis2[:, None, :]
+            )
         )
-        mesh.point_data["opacity"] = np.asarray(opacity_values, dtype=np.float32)
-        mesh.point_data["scalars"] = np.asarray(scalar_values, dtype=np.float32)
-        mesh.point_data["rgba"] = np.asarray(rgba_values, dtype=np.float32)
+        ring_points = base[:, None, :] + ring_offsets
+
+        points = np.empty((n_vectors, n_points_per_vector, 3), dtype=float)
+        points[:, 0, :] = base
+        points[:, 1, :] = tip
+        points[:, 2:, :] = ring_points
+        points = points.reshape(-1, 3)
+
+        face_template = np.empty((n_faces_per_vector, 4), dtype=np.int64)
+        for side_idx in range(sides):
+            row_tip = 2 * side_idx
+            row_base = row_tip + 1
+            j0 = 2 + side_idx
+            j1 = 2 + ((side_idx + 1) % sides)
+            face_template[row_tip] = (3, 1, j0, j1)
+            face_template[row_base] = (3, 0, j1, j0)
+
+        vector_offsets = (
+            np.arange(n_vectors, dtype=np.int64)[:, None, None] * n_points_per_vector
+        )
+        faces = np.broadcast_to(
+            face_template[None, :, :], (n_vectors, n_faces_per_vector, 4)
+        ).copy()
+        faces[:, :, 1:] += vector_offsets
+        faces = faces.reshape(-1)
+
+        rgba = np.concatenate([color, opacity[:, None]], axis=1)
+        point_rgba = np.repeat(rgba, n_points_per_vector, axis=0)
+        point_opacity = np.repeat(opacity, n_points_per_vector)
+        point_scalars = np.repeat(scalars, n_points_per_vector)
+
+        mesh = pv.PolyData(points, faces=faces)
+        mesh.point_data["opacity"] = point_opacity
+        mesh.point_data["scalars"] = point_scalars
+        mesh.point_data["rgba"] = point_rgba
         return mesh
 
-    def _helper_set_mesh_data_from_points(self, mesh):
+    def _helper_set_merged_mesh_arrays(self, mesh, shaft_mesh, tip_mesh):
+        """Restore shared point-data arrays after merging shaft and tip meshes."""
         if mesh.n_points == 0:
             return mesh
 
-        if not hasattr(self, "calc_tail") or not hasattr(self, "calc_tip_end"):
-            self._helper_sync_vector_key_points()
+        points_merged = np.asarray(mesh.points)
+        points_shaft = np.asarray(shaft_mesh.points)
+        points_tip = np.asarray(tip_mesh.points)
 
-        ref_points = 0.5 * (
-            np.asarray(self.calc_tail, dtype=float)
-            + np.asarray(self.calc_tip_end, dtype=float)
-        )
-        idx = np.array(
-            [
-                find_nearest_point(point, ref_points, is_return_idx=True)[1]
-                for point in mesh.points
-            ],
-            dtype=int,
-        )
+        n_shaft = len(points_shaft)
+        n_tip = len(points_tip)
 
-        color = np.asarray(self.calc_color)[idx]
-        opacity = np.asarray(self.calc_opacity)[idx]
-        scalars = np.asarray(self.calc_scalars)[idx]
+        if (
+            len(points_merged) == n_tip + n_shaft
+            and np.allclose(points_merged[:n_tip], points_tip)
+            and np.allclose(points_merged[n_tip:], points_shaft)
+        ):
+            sources = (tip_mesh, shaft_mesh)
+        elif (
+            len(points_merged) == n_shaft + n_tip
+            and np.allclose(points_merged[:n_shaft], points_shaft)
+            and np.allclose(points_merged[n_shaft:], points_tip)
+        ):
+            sources = (shaft_mesh, tip_mesh)
+        else:
+            raise RuntimeError(
+                "Unexpected point ordering after merging vector shaft and tip meshes."
+            )
 
-        mesh.point_data["opacity"] = opacity.astype(np.float32, copy=False)
-        mesh.point_data["scalars"] = scalars.astype(np.float32, copy=False)
-        mesh.point_data["rgba"] = np.hstack([color, opacity.reshape(-1, 1)]).astype(
-            np.float32,
-            copy=False,
-        )
+        for name in ("opacity", "scalars", "rgba"):
+            if any(name not in source.point_data for source in sources):
+                continue
+            mesh.point_data[name] = np.concatenate(
+                [
+                    np.asarray(source.point_data[name]) for source in sources
+                ],
+                axis=0,
+            )
         return mesh
 
     def _helper_build_mesh(self):
@@ -615,8 +643,8 @@ class PlotVector(PlotGlyph):
         if tip_mesh.n_points == 0:
             return shaft_mesh
 
-        mesh = shaft_mesh.merge(tip_mesh)
-        self._helper_set_mesh_data_from_points(mesh)
+        mesh = shaft_mesh.merge(tip_mesh, merge_points=False)
+        self._helper_set_merged_mesh_arrays(mesh, shaft_mesh, tip_mesh)
         return mesh
 
     # -------------------------------

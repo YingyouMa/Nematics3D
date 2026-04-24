@@ -67,6 +67,7 @@ class InteractPlane(PanelBase):
     def _iter_silhouette_targets(self):
         targets = []
         for name in (
+            "visual",
             "visual_nb",
             "visual_nd",
             "visual_defect",

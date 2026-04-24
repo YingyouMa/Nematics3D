@@ -350,26 +350,26 @@ class QFieldObject(ClassBase):
         },
         "calc_grid_index": {
             "doc": "Lattice coordinate grid in index space (before applying transform/offset).",
-            "kind": "calc",
+            "kind": "property",
         },
         "calc_grid": {
             "doc": "Coordinate grid in real space after applying grid_transform and grid_offset.",
-            "kind": "calc",
+            "kind": "property",
         },
         "calc_corners_index": {
             "doc": "Box corners in lattice-index space.",
-            "kind": "calc",
+            "kind": "property",
         },
         "calc_corners": {
             "doc": "Bounds object describing the Q-field box in real-space coordinates.",
-            "kind": "calc",
+            "kind": "property",
         },
         "calc_box_size_periodic_index": {
             "doc": (
                 "Effective periodic box size in index units. "
                 "For periodic dims equals grid size, otherwise inf."
             ),
-            "kind": "calc",
+            "kind": "property",
         },
         "calc_defect_indices": {
             "doc": "Indices (lattice coordinates) of detected defect points.",
@@ -657,19 +657,6 @@ class QFieldObject(ClassBase):
         # object. We mirror it onto `raw_Q` so existing methods can keep reading
         # `self.raw_Q` without caring how the field was supplied.
         object.__setattr__(self, "raw_Q", field.raw_values)
-        # These grid/bounds caches are copied from the shared dataset because a
-        # large part of the existing QFieldObject code expects to find them on
-        # `self` directly.
-        object.__setattr__(
-            self,
-            "calc_box_size_periodic_index",
-            dataset.calc_box_size_periodic_index,
-        )
-        object.__setattr__(self, "calc_grid_index", dataset.calc_grid_index)
-        object.__setattr__(self, "calc_grid", dataset.calc_grid)
-        object.__setattr__(self, "calc_corners_index", dataset.calc_corners_index)
-        object.__setattr__(self, "calc_corners", dataset.calc_corners)
-
         # Register the box bounds as a normal derived object so they show up in
         # the same object registry as other geometry derived from this Q field.
         bounds = self.calc_corners
@@ -1634,6 +1621,31 @@ class QFieldObject(ClassBase):
     # -------------------------------
     # Readable properties and array-style access
     # -------------------------------
+
+    @property
+    def calc_grid_index(self):
+        """Return the dataset-owned lattice coordinate grid in index space."""
+        return self.dataset.calc_grid_index
+
+    @property
+    def calc_grid(self):
+        """Return the dataset-owned coordinate grid in real space."""
+        return self.dataset.calc_grid
+
+    @property
+    def calc_corners_index(self):
+        """Return the dataset-owned box corners in lattice-index space."""
+        return self.dataset.calc_corners_index
+
+    @property
+    def calc_corners(self):
+        """Return the dataset-owned bounds object for this Q field."""
+        return self.dataset.calc_corners
+
+    @property
+    def calc_box_size_periodic_index(self):
+        """Return the dataset-owned periodic box size in index units."""
+        return self.dataset.calc_box_size_periodic_index
 
     @property
     def lines(self):

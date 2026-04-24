@@ -474,6 +474,11 @@ class PlotGlyph(HostBase):
             type(self).__attr_defs__["raw_coords"]["doc"],
         )
         object.__setattr__(self, "raw_coords", coords)
+        if len(coords) == 0:
+            logger.warning(
+                f"{type(self).__name__} received empty coords with shape {coords.shape}; "
+                "it will initialize as an empty glyph until coordinates are provided."
+            )
         clip_mode = type(self).__attr_defs__["state_clip_mode"]["validator"](
             clip_mode,
             type(self).__attr_defs__["state_clip_mode"]["doc"],
@@ -545,13 +550,16 @@ class PlotGlyph(HostBase):
     # Figure / Bounds Bootstrap
     # ------------------------------------------------------------------
     def _helper_init_end(self):
-
-        for attr in self._pending_resolution_attrs:
-            self._helper_resolver_spec(attr)
         if self.state_clip_mode == "center":
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())
         else:
             object.__setattr__(self, "calc_coords", self.raw_coords.copy())
+
+        if len(self.raw_coords) == 0:
+            self._helper_apply_empty_input_state()
+        else:
+            for attr in self._pending_resolution_attrs:
+                self._helper_resolver_spec(attr)
         self._helper_make_figure()
 
         figure = self.fig
@@ -667,6 +675,20 @@ class PlotGlyph(HostBase):
         if n_points == 0:
             return np.empty((0,), dtype=np.float32)
         return np.linspace(0.0, 100.0, n_points, dtype=np.float32)
+
+    def _helper_apply_empty_input_state(self):
+        """Populate empty resolved arrays and polydata for glyphs with no input points."""
+        empty_coords = np.asarray(self.calc_coords, dtype=float)
+        if empty_coords.shape != (0, 3):
+            empty_coords = np.empty((0, 3), dtype=float)
+            object.__setattr__(self, "calc_coords", empty_coords)
+
+        object.__setattr__(self, "calc_radius", np.empty((0,), dtype=np.float32))
+        object.__setattr__(self, "calc_opacity", np.empty((0,), dtype=np.float32))
+        object.__setattr__(self, "calc_scalars", np.empty((0,), dtype=np.float32))
+        object.__setattr__(self, "calc_color", np.empty((0, 3), dtype=np.float32))
+        object.__setattr__(self, "calc_poly", pv.PolyData(empty_coords))
+        object.__setattr__(self, "calc_is_empty", True)
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_resolver_generic(
@@ -805,6 +827,16 @@ class PlotGlyph(HostBase):
         """
         Creates or updates the rendering in a PyVista Plotter.
         """
+
+        if len(self.raw_coords) == 0:
+            if self.state_clip_mode == "center":
+                object.__setattr__(self, "calc_coords", self._helper_bound_coords())
+            else:
+                object.__setattr__(self, "calc_coords", self.raw_coords.copy())
+            self._helper_apply_empty_input_state()
+            self._helper_clear_live_actor()
+            self.fig.pl.render()
+            return
 
         is_scalars = self.opts.paint_by == "scalars"
         unique_id = self.impl_name_pv
@@ -1011,6 +1043,32 @@ class PlotGlyph(HostBase):
             object.__setattr__(self.opts, "resolver_source", resolver_source)
             is_reresolve = True
 
+        if len(self.raw_coords) == 0:
+            for attr in self._pending_resolution_attrs:
+                if attr in kwargs:
+                    object.__setattr__(self.opts, attr, kwargs.pop(attr))
+
+            if "sides" in kwargs:
+                object.__setattr__(self.opts, "sides", kwargs.pop("sides"))
+
+            if self.state_clip_mode == "center":
+                object.__setattr__(self, "calc_coords", self._helper_bound_coords())
+            else:
+                object.__setattr__(self, "calc_coords", self.raw_coords.copy())
+
+            self._helper_apply_empty_input_state()
+            self._helper_clear_live_actor()
+
+            for key, value in kwargs.items():
+                try:
+                    object.__setattr__(self.opts, key, value)
+                except (AttributeError, TypeError, ValueError, KeyError):
+                    logger.exception(f"Failed to reset value of {key!r}")
+                    logger.recovery("Ignore this modification")
+
+            self.fig.pl.render()
+            return
+
         is_needs_remesh = is_reresolve
         for attr in self._pending_resolution_attrs:
             if attr not in kwargs:
@@ -1134,6 +1192,8 @@ class PlotGlyph(HostBase):
         return self._helper_resolve_pick(picked_point)
 
     def _helper_resolve_pick(self, picked_point):
+        if len(self.raw_coords) == 0:
+            raise RuntimeError("Cannot resolve pick on an empty glyph.")
         pos, idx = find_nearest_point(picked_point, self.raw_coords, is_return_idx=True)
         with np.printoptions(precision=2, suppress=True):
             if self.opts.paint_by == "color":
