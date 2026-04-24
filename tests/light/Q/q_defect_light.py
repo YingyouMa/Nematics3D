@@ -117,14 +117,25 @@ def diagonalize_Q(Q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     eigenvector associated with that largest eigenvalue.
     """
     Q = as_QField9(Q)
+    float_dtype = np.result_type(Q.dtype, np.float64)
+    Q = np.asarray(Q, dtype=float_dtype)
+    eps = np.finfo(Q.dtype).eps
+    q_abs_max = np.max(np.abs(Q), axis=(-2, -1))
+    q_scale = np.maximum(1.0, q_abs_max)
 
     p = 0.5 * np.einsum("...ab,...ba->...", Q, Q)
     q = np.linalg.det(Q)
     r = 2 * np.sqrt(p / 3)
 
-    cos_arg = 4 * q / r**3
+    is_near_isotropic = r <= 32 * eps * q_scale
+    cos_arg = np.zeros_like(r)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        np.divide(4 * q, r**3, out=cos_arg, where=~is_near_isotropic)
     cos_arg = np.clip(cos_arg, -1.0, 1.0)
-    lambda_max = r * np.cos((1 / 3) * np.arccos(cos_arg))
+    lambda_max = np.zeros_like(r)
+    lambda_max[~is_near_isotropic] = r[~is_near_isotropic] * np.cos(
+        (1 / 3) * np.arccos(cos_arg[~is_near_isotropic])
+    )
 
     n_raw = np.array(
         [
@@ -134,7 +145,24 @@ def diagonalize_Q(Q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
             - (Q[..., 0, 0] - lambda_max) * (Q[..., 1, 1] - lambda_max),
         ]
     )
-    n = np.moveaxis(n_raw / np.linalg.norm(n_raw, axis=0), 0, -1)
+    n = np.zeros(Q.shape[:-1], dtype=Q.dtype)
+    n[..., 0] = 1.0
+
+    n_raw_norm = np.linalg.norm(n_raw, axis=0)
+    n_raw_tol = 32 * eps * np.maximum(1.0, q_scale**2)
+    is_fast_director_ok = (~is_near_isotropic) & (n_raw_norm > n_raw_tol)
+
+    if np.any(is_fast_director_ok):
+        n_fast = n_raw[:, is_fast_director_ok] / n_raw_norm[is_fast_director_ok]
+        n[is_fast_director_ok] = np.moveaxis(n_fast, 0, -1)
+
+    is_director_fallback = (~is_near_isotropic) & (~is_fast_director_ok)
+    if np.any(is_director_fallback):
+        q_fallback = Q[is_director_fallback]
+        evals, evecs = np.linalg.eigh(q_fallback)
+        lambda_max[is_director_fallback] = evals[..., -1]
+        n[is_director_fallback] = evecs[..., :, -1]
+
     S = 1.5 * lambda_max
     return S, n
 
