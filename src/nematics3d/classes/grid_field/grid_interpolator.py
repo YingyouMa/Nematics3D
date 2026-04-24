@@ -1,4 +1,6 @@
-"""Q-tensor interpolation helpers for sampled Q-field objects."""
+"""Generic interpolation helpers for fields living on a shared grid dataset."""
+
+from __future__ import annotations
 
 from typing import Any, ClassVar, Mapping
 
@@ -6,23 +8,17 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from nematics3d.field import apply_linear_transform
-from ..logging_decorator import logging_and_warning_decorator
-from .class_base import ClassBase
+from ..class_base import ClassBase
+from ...logging_decorator import logging_and_warning_decorator
 
 
-# QInterpolator wraps the scipy backend as a structured repository object so
-# Q-field owners can bind it through the standard relation model.
-#
-# Subclasses should preserve the coupling between the owner relation, the
-# periodic-boundary expansion rules, and the backend interpolator state.
-class QInterpolator(ClassBase):
+class GridInterpolator(ClassBase):
     """
-    Interpolator object specialized for QFieldObject sampling.
+    Generic interpolator for one `FieldData` object on a shared grid dataset.
 
-    For normal users this object is usually created by `QFieldObject` and then
-    accessed through `Q.interpolator`. It converts real-space query points into
-    lattice-index coordinates and handles periodic-boundary interpolation when
-    required by the owning Q field.
+    The owning field provides the numeric values to be sampled, while the
+    owning dataset provides the grid transform, offset, and periodic-boundary
+    rules used to interpret sample points.
     """
 
     # fmt: off
@@ -30,14 +26,10 @@ class QInterpolator(ClassBase):
         **dict(ClassBase.__attr_defs__),
         "raw_name": {
             **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this Q-field interpolator.",
-        },
-        "owner": {
-            **dict(ClassBase.__attr_defs__["owner"]),
-            "doc": "The QFieldObject whose field values are sampled by this interpolator.",
+            "doc": "Name identifier of this shared-grid interpolator.",
         },
         "entity_backend": {
-            "doc": "The scipy RegularGridInterpolator backend used to evaluate Q values.",
+            "doc": "The scipy RegularGridInterpolator backend used to evaluate field values.",
             "kind": "entity",
         },
     }
@@ -53,12 +45,19 @@ class QInterpolator(ClassBase):
     def __init__(self, owner, name: str | None = None):
         if name is None:
             name = f"{owner.name} interpolator"
-        super().__init__(name=name, name_replace="Q interpolator")
+        super().__init__(name=name, name_replace="grid interpolator")
         self.act_bind_relation_base("owner", owner, is_weak=True)
 
-        values = owner.raw_Q
+        dataset = owner.owner
+        if dataset is None:
+            raise RuntimeError(
+                "GridInterpolator requires a FieldData owner that is already "
+                "bound to a GridFieldDataset."
+            )
+
+        values = owner.raw_values
         shape = np.shape(values)[:3]
-        periodic = np.asarray(owner.raw_box_periodic_flag, dtype=bool)
+        periodic = np.asarray(dataset.raw_box_periodic_flag, dtype=bool)
 
         grid_axes = [np.arange(n, dtype=float) for n in shape]
         values_interp = values
@@ -83,30 +82,33 @@ class QInterpolator(ClassBase):
     def interpolate(
         self,
         points: np.ndarray,
-        is_index=False,
-        is_out_warning=False,
+        is_index: bool = False,
+        is_out_warning: bool = False,
         logger=None,
     ):
         """
-        Interpolate Q values at query points.
+        Interpolate field values at arbitrary sample points.
 
-        If `is_out_warning` is True, also return input points outside
-        non-periodic dimensions and warn when any are found.
+        If `is_out_warning` is True, also return the input points that lie
+        outside non-periodic dimensions before clipping.
         """
 
         pts = np.asarray(points, dtype=float).copy()
         points_input = pts.copy()
 
+        dataset = self.owner.owner
+        values = self.owner.raw_values
+
         if not is_index:
             pts = apply_linear_transform(
                 pts,
-                transform=self.owner.raw_grid_transform,
-                offset=self.owner.raw_grid_offset,
+                transform=dataset.raw_grid_transform,
+                offset=dataset.raw_grid_offset,
                 is_inv=True,
             )
 
-        shape = np.shape(self.owner.raw_Q)[:3]
-        periodic = np.asarray(self.owner.raw_box_periodic_flag, dtype=bool)
+        shape = np.shape(values)[:3]
+        periodic = np.asarray(dataset.raw_box_periodic_flag, dtype=bool)
 
         out_mask = np.zeros(len(pts), dtype=bool)
         for d in range(3):
@@ -123,7 +125,7 @@ class QInterpolator(ClassBase):
             )
             logger.warning(
                 "Some interpolation query points are outside the non-periodic "
-                "Q-field domain and will be clipped to the boundary.\n"
+                f"domain of field {self.owner.name!r} and will be clipped to the boundary.\n"
                 f"Out-of-domain points ({len(out_points)}):\n{out_points_text}"
             )
 
@@ -133,7 +135,7 @@ class QInterpolator(ClassBase):
             else:
                 pts[:, d] = np.clip(pts[:, d], 0, shape[d] - 1)
 
-        values = self.entity_backend(pts)
+        result = self.entity_backend(pts)
         if is_out_warning:
-            return values, out_points
-        return values
+            return result, out_points
+        return result

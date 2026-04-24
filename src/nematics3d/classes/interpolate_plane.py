@@ -5,9 +5,9 @@ import numpy as np
 
 
 from .class_base import ClassBase
+from .grid_field import GridInterpolator
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
-from .q_interpolator import QInterpolator
 
 
 # InterpolatePlane is a lightweight bridge between an interpolator and a
@@ -19,7 +19,7 @@ from .q_interpolator import QInterpolator
 # Cartesian or polar plane-grid implementations.
 class InterpolatePlane(ClassBase):
     """
-    InterpolatePlane samples a `QInterpolator` on a plane grid.
+    InterpolatePlane samples a `GridInterpolator` on a plane grid.
 
     Normal users pass in an interpolator plus either an existing plane grid
     or plane-grid options. The sampled values are then available through
@@ -46,7 +46,7 @@ class InterpolatePlane(ClassBase):
             "doc_runtime": None,
         },
         "interpolator": {
-            "doc": "The QInterpolator object used to sample this plane.",
+            "doc": "The grid interpolator object used to sample this plane.",
             "kind": "relation",
             "is_weak_by_default": True,
             "is_weak": None,
@@ -73,7 +73,7 @@ class InterpolatePlane(ClassBase):
     # ==================================================
     def __init__(
         self,
-        interpolator: QInterpolator,
+        interpolator: GridInterpolator,
         name: str = "interpolate plane",
         grid: PlaneGrid | PlaneGridPolar | None = None,
         opts: OptsPlaneGrid | OptsPlaneGridPolar | None = None,
@@ -97,10 +97,10 @@ class InterpolatePlane(ClassBase):
         self.act_bind_relation_base("grid", grid, is_weak=False)
         grid.act_bind_relation_base("field", self, is_weak=True)
 
-        if not isinstance(interpolator, QInterpolator):
+        if not isinstance(interpolator, GridInterpolator):
             raise TypeError(
                 "Interpolator for InterplatePlane must be an instance of "
-                "nematics3d.classes.q_interpolator.QInterpolator."
+                "nematics3d.classes.grid_field.grid_interpolator.GridInterpolator."
             )
         self.act_bind_relation_base("interpolator", interpolator, is_weak=True)
 

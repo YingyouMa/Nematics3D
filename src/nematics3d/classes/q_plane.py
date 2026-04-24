@@ -23,10 +23,10 @@ from nematics3d.geometry import wrap_to_pi
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .interpolate_plane import InterpolatePlane
+from .grid_field import GridInterpolator
 from .opts import merge_opts_all
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
-from .q_interpolator import QInterpolator
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
@@ -144,7 +144,7 @@ class QPlane(InterpolatePlane):
     # ==================================================
     def __init__(
         self,
-        interpolator: QInterpolator,
+        interpolator: GridInterpolator,
         name: str = "Q-plane",
         grid: PlaneGrid | None = None,
         opts: OptsPlaneGrid | None = None,
@@ -588,7 +588,7 @@ class QPlanePolar(QPlane):
     # ==================================================
     def __init__(
         self,
-        interpolator: QInterpolator,
+        interpolator: GridInterpolator,
         name: str = "Q-plane (polar)",
         grid: PlaneGridPolar | None = None,
         opts: OptsPlaneGridPolar | None = None,
