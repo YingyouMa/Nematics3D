@@ -133,6 +133,7 @@ class PickManager:
         ),
         "_entity_helper_markers": "A dict of panel/helper marker packs keyed by logical name.",
         "_entity_settings_action": "Menu action opening interaction settings for this window.",
+        "_entity_figure_opts_action": "Menu action showing this PlotFigure opts snapshot.",
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
@@ -149,6 +150,7 @@ class PickManager:
         object.__setattr__(self, "_entity_markers", [])
         object.__setattr__(self, "_entity_helper_markers", {})
         object.__setattr__(self, "_entity_settings_action", None)
+        object.__setattr__(self, "_entity_figure_opts_action", None)
 
         if opts is None:
             opts = OptsPickManager()
@@ -328,9 +330,60 @@ class PickManager:
 
         dialog.exec()
 
+    def _helper_open_figure_opts_dialog(self):
+        fig = self.owner
+        parent = (
+            fig.pl.app_window
+            if (fig is not None and hasattr(fig.pl, "app_window"))
+            else None
+        )
+        opts_snapshot = (
+            repr(fig.opts) if fig is not None else "<PlotFigure unavailable>"
+        )
+
+        dialog = QtWidgets.QDialog(parent)
+        dialog.setWindowTitle("PlotFigure Options")
+        dialog.resize(720, 520)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        notice = QtWidgets.QLabel(
+            "Live refresh is temporarily not updated. "
+            "This view shows only the PlotFigure options captured when this "
+            "dialog was opened.",
+            dialog,
+        )
+        notice_font = notice.font()
+        notice_font.setPointSize(max(1, notice_font.pointSize() * 2))
+        notice.setFont(notice_font)
+        notice.setWordWrap(True)
+        layout.addWidget(notice)
+
+        text_opts = QtWidgets.QPlainTextEdit(dialog)
+        text_opts.setReadOnly(True)
+        text_opts.setPlainText(opts_snapshot)
+        font = QtWidgets.QApplication.font("QPlainTextEdit")
+        font.setFamily("Consolas")
+        font.setPointSize(max(1, font.pointSize() * 2))
+        text_opts.setFont(font)
+        layout.addWidget(text_opts)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Close,
+            parent=dialog,
+        )
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        dialog.exec()
+
     def _helper_init_settings_menu(self):
         fig = self.owner
-        if fig is None or self._entity_settings_action is not None:
+        if (
+            fig is None
+            or self._entity_settings_action is not None
+            or self._entity_figure_opts_action is not None
+        ):
             return
         settings_menu = self._helper_get_or_create_settings_menu()
         if settings_menu is None:
@@ -338,6 +391,9 @@ class PickManager:
         action = settings_menu.addAction("Interaction Settings")
         action.triggered.connect(self._helper_open_settings_dialog)
         object.__setattr__(self, "_entity_settings_action", action)
+        action = settings_menu.addAction("Show Figure Options")
+        action.triggered.connect(self._helper_open_figure_opts_dialog)
+        object.__setattr__(self, "_entity_figure_opts_action", action)
 
     # ---------------------------------------------------------------------
     # Registry: actor -> owner (PlotTube / PlotSphere / PlotRod / ...)
