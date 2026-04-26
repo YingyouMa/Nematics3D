@@ -1222,8 +1222,18 @@ class DisclinationLineSmoothPlot(HostBase):
             )
 
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
-            diff = np.linalg.norm(diff, axis=-1)
-            end_list = np.where(diff > 1)[0] + 1
+            if np.any(boundary_flag):
+                # Split the rendered polyline only at actual periodic seams.
+                # Normal spacing between neighboring smoothed samples should
+                # remain connected inside the same periodic image.
+                jump = np.any(
+                    np.abs(diff[:, boundary_flag])
+                    > owner.owner.raw_box_size_periodic_index[boundary_flag] / 2,
+                    axis=-1,
+                )
+            else:
+                jump = np.zeros(len(diff), dtype=bool)
+            end_list = np.where(jump)[0] + 1
             end_list = np.concatenate([[0], end_list, [len(line_coords_origin)]])
 
             line_index = np.ones(len(line_coords_origin))
