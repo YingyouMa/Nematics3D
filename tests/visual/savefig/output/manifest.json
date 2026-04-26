@@ -1,0 +1,418 @@
+[
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_900x600_scale_1.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_900x600_scale_1p5.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_900x600_scale_2.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_900x600_scale_3.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_1400x900_scale_1.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_1400x900_scale_1p5.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_1400x900_scale_2.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_900x600_save_1400x900_scale_3.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_900x600_scale_1.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_900x600_scale_1p5.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_900x600_scale_2.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_900x600_scale_3.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_1400x900_scale_1.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_1400x900_scale_1p5.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_1400x900_scale_2.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_900x600_save_1400x900_scale_3.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      900,
+      600
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_900x600_scale_1.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_900x600_scale_1p5.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_900x600_scale_2.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_900x600_scale_3.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_1400x900_scale_1.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_1400x900_scale_1p5.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_1400x900_scale_2.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_interactive_initial_1200x800_save_1400x900_scale_3.png",
+    "is_off_screen": false,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_900x600_scale_1.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_900x600_scale_1p5.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_900x600_scale_2.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_900x600_scale_3.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      900,
+      600
+    ],
+    "save_scale": 3
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_1400x900_scale_1.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_1400x900_scale_1p5.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 1.5
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_1400x900_scale_2.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 2
+  },
+  {
+    "path": "tests\\visual\\savefig\\output\\savefig_offscreen_initial_1200x800_save_1400x900_scale_3.png",
+    "is_off_screen": true,
+    "initial_window_size": [
+      1200,
+      800
+    ],
+    "save_window_size": [
+      1400,
+      900
+    ],
+    "save_scale": 3
+  }
+]
