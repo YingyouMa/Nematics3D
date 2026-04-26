@@ -829,13 +829,42 @@ class PlotFigure(HostBase):
         """Lookup a registered glyph object by index or name."""
         return self.glyphs[key]
 
+    @logging_and_warning_decorator(start_finish_level=5)
     def act_savefig(
-        self, filename, scale=1, is_transparent_background=False, window_size=None
+        self,
+        filename,
+        scale=1,
+        is_transparent_background=False,
+        window_size=None,
+        logger=None,
     ):
         """Save a screenshot of the current figure to an image file."""
+        scale = as_Number(
+            scale,
+            name="savefig scale",
+            is_int=True,
+            value_range=(1, np.inf),
+            replace=1,
+        )
+
+        is_window_size_given = window_size is not None
         if window_size is None:
             window_size = self.opts.size
         window_size = tuple(int(x) for x in window_size)
+        current_window_size = tuple(int(x) for x in self.pl.window_size)
+
+        if (
+            is_window_size_given
+            and window_size != current_window_size
+            and not getattr(self.pl, "off_screen", False)
+        ):
+            logger.warning(
+                "Saving an interactive figure with a window_size different "
+                "from the current one can fail. "
+                f"Use current window_size={current_window_size} instead."
+            )
+            window_size = current_window_size
+
         self.pl.screenshot(
             filename,
             scale=scale,
