@@ -6,6 +6,7 @@ from nematics3d.geometry import (
     canonicalize_axes,
     compute_convex_hull_points,
     fit_obb_pca,
+    refine_obb_random_search,
 )
 
 
@@ -144,3 +145,47 @@ def test_fit_obb_pca_handles_single_point():
     np.testing.assert_allclose(fit.lengths, [0.0, 0.0, 0.0])
     np.testing.assert_allclose(fit.axes, np.eye(3))
     assert fit.volume == pytest.approx(0.0)
+
+
+def test_refine_obb_random_search_does_not_worsen_initial_fit():
+    rng = np.random.default_rng(123)
+    points = rng.normal(size=(30, 3))
+    initial_fit = fit_obb_pca(points)
+
+    refined_fit = refine_obb_random_search(
+        points,
+        initial_fit,
+        angle_scales_deg=(10.0, 2.0),
+        trials_per_scale=8,
+        seed=456,
+    )
+
+    assert refined_fit.volume <= initial_fit.volume
+    np.testing.assert_allclose(refined_fit.axes.T @ refined_fit.axes, np.eye(3))
+    assert np.linalg.det(refined_fit.axes) == pytest.approx(1.0)
+
+
+def test_refine_obb_random_search_is_reproducible_with_seed():
+    rng = np.random.default_rng(789)
+    points = rng.normal(size=(24, 3))
+    initial_fit = fit_obb_pca(points)
+
+    refined_fit_a = refine_obb_random_search(
+        points,
+        initial_fit,
+        angle_scales_deg=(12.0, 3.0),
+        trials_per_scale=10,
+        seed=100,
+    )
+    refined_fit_b = refine_obb_random_search(
+        points,
+        initial_fit,
+        angle_scales_deg=(12.0, 3.0),
+        trials_per_scale=10,
+        seed=100,
+    )
+
+    np.testing.assert_allclose(refined_fit_a.axes, refined_fit_b.axes)
+    np.testing.assert_allclose(refined_fit_a.center, refined_fit_b.center)
+    np.testing.assert_allclose(refined_fit_a.lengths, refined_fit_b.lengths)
+    assert refined_fit_a.volume == pytest.approx(refined_fit_b.volume)
