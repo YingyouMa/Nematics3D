@@ -3,9 +3,37 @@ Geometry helpers for vector parameterization, angle wrapping, and local frame co
 """
 
 import numpy as np
+from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
-from .datatypes import Tensor, Vect, as_Vect
+from .datatypes import Tensor, Vect, as_Vect, as_points
+
+
+def compute_convex_hull_points(points):
+    """Return the unique convex-hull vertices of a 3D point cloud.
+
+    Degenerate point clouds, such as coplanar or collinear points, do not have a
+    full 3D convex hull under Qhull's default rules. For those cases, this
+    helper falls back to the unique input points so downstream approximate OBB
+    fitting can decide how to handle the lower-dimensional geometry.
+    """
+
+    points = as_points(
+        points,
+        name="points used to compute a convex hull",
+        dim=3,
+        is_unique=True,
+        min_num=1,
+    )
+    if len(points) <= 3:
+        return points
+
+    try:
+        hull = ConvexHull(points)
+    except QhullError:
+        return points
+
+    return points[np.unique(hull.vertices)]
 
 
 def calc_vec_from_azimuth_polar(azimuth, polar_angle):

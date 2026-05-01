@@ -928,7 +928,7 @@ def check_bool_flags(d: dict, prefix: str = "is_"):
                 raise TypeError(f"{name} must be a bool, got {type(value)}")
 
 
-def as_points(coords, name="input data", dim=3):
+def as_points(coords, name="input data", dim=3, *, is_unique=False, min_num=None):
     try:
         coords = np.asarray(coords, dtype=float)
         if coords.ndim == 1:
@@ -940,6 +940,13 @@ def as_points(coords, name="input data", dim=3):
         if dim is not None and coords.shape[1] != dim:
             raise ValueError(
                 f"{name!r} must be an (N, {dim}) array. Got shape={coords.shape}."
+            )
+        if is_unique:
+            coords = np.unique(coords, axis=0)
+        if min_num is not None and len(coords) < min_num:
+            raise ValueError(
+                f"{name!r} must contain at least {min_num} point(s). "
+                f"Got {len(coords)}."
             )
         return coords.copy()
     except (ValueError, TypeError) as e:
