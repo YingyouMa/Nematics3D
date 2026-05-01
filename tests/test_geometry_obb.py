@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 
 from nematics3d.datatypes import as_points
-from nematics3d.geometry import compute_convex_hull_points
+from nematics3d.geometry import (
+    canonicalize_axes,
+    compute_convex_hull_points,
+    fit_obb_pca,
+)
 
 
 def test_as_points_can_deduplicate_and_check_min_num():
@@ -32,6 +36,21 @@ def test_as_points_raises_when_unique_points_are_too_few():
 
     with pytest.raises(TypeError, match="at least 2 point"):
         as_points(points, is_unique=True, min_num=2)
+
+
+def test_canonicalize_axes_makes_signs_deterministic_and_right_handed():
+    axes = np.array(
+        [
+            [-1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+
+    canonical_axes = canonicalize_axes(axes)
+
+    np.testing.assert_allclose(canonical_axes, np.eye(3))
+    assert np.linalg.det(canonical_axes) == pytest.approx(1.0)
 
 
 def test_compute_convex_hull_points_removes_interior_point():
@@ -83,3 +102,45 @@ def test_compute_convex_hull_points_falls_back_for_coplanar_points():
     hull_points = compute_convex_hull_points(points)
 
     np.testing.assert_allclose(hull_points, np.unique(points, axis=0))
+
+
+def test_fit_obb_pca_axis_aligned_box():
+    x = [-2.0, 2.0]
+    y = [-1.5, 1.5]
+    z = [-1.0, 1.0]
+    points = np.array([[xi, yi, zi] for xi in x for yi in y for zi in z])
+
+    fit = fit_obb_pca(points)
+
+    np.testing.assert_allclose(np.sort(fit.lengths), [2.0, 3.0, 4.0])
+    np.testing.assert_allclose(fit.center, [0.0, 0.0, 0.0], atol=1e-12)
+    assert fit.volume == pytest.approx(24.0)
+    np.testing.assert_allclose(fit.axes.T @ fit.axes, np.eye(3), atol=1e-12)
+    assert np.linalg.det(fit.axes) == pytest.approx(1.0)
+
+
+def test_fit_obb_pca_tracks_translated_center():
+    offset = np.array([10.0, -2.0, 4.5])
+    points = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [0.0, 4.0, 0.0],
+            [2.0, 4.0, 0.0],
+        ]
+    )
+
+    fit = fit_obb_pca(points + offset)
+
+    np.testing.assert_allclose(fit.center, offset + [1.0, 2.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(np.sort(fit.lengths), [0.0, 2.0, 4.0], atol=1e-12)
+    assert fit.volume == pytest.approx(0.0)
+
+
+def test_fit_obb_pca_handles_single_point():
+    fit = fit_obb_pca([1.0, 2.0, 3.0])
+
+    np.testing.assert_allclose(fit.center, [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(fit.lengths, [0.0, 0.0, 0.0])
+    np.testing.assert_allclose(fit.axes, np.eye(3))
+    assert fit.volume == pytest.approx(0.0)

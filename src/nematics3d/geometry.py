@@ -2,11 +2,25 @@
 Geometry helpers for vector parameterization, angle wrapping, and local frame conversions.
 """
 
+from dataclasses import dataclass
+
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
 from .datatypes import Tensor, Vect, as_Vect, as_points
+
+
+@dataclass(slots=True, frozen=True)
+class OBBFit:
+    """Pure geometry result for an oriented bounding-box fit."""
+
+    axes: np.ndarray
+    center: np.ndarray
+    lengths: np.ndarray
+    local_min: np.ndarray
+    local_max: np.ndarray
+    volume: float
 
 
 def compute_convex_hull_points(points):
@@ -34,6 +48,91 @@ def compute_convex_hull_points(points):
         return points
 
     return points[np.unique(hull.vertices)]
+
+
+def fit_obb_pca(points):
+    """Fit a deterministic PCA-oriented bounding box to 3D points.
+
+    The returned axes are stored as columns. The fit is not a guaranteed
+    minimum-volume OBB; it is a fast, stable initial orientation for later
+    refinement.
+    """
+
+    points = as_points(
+        points,
+        name="points used to fit a PCA oriented bounding box",
+        dim=3,
+        is_unique=True,
+        min_num=1,
+    )
+
+    centroid = np.mean(points, axis=0)
+    centered_points = points - centroid
+    covariance = centered_points.T @ centered_points / len(points)
+
+    if np.allclose(covariance, 0.0):
+        axes = np.eye(3)
+    else:
+        eigenvalues, eigenvectors = np.linalg.eigh(covariance)
+        order = np.argsort(eigenvalues)[::-1]
+        axes = eigenvectors[:, order]
+
+    axes = canonicalize_axes(axes)
+    return _fit_obb_in_axes(points, axes)
+
+
+def canonicalize_axes(axes):
+    """Make a column-wise axes matrix deterministic and right-handed.
+
+    Eigenvectors are sign-ambiguous: both ``v`` and ``-v`` describe the same
+    axis. This helper fixes each axis sign by making its largest-magnitude
+    component positive, then flips the final axis if needed so the full frame is
+    right-handed.
+    """
+
+    axes = np.asarray(axes, dtype=float).copy()
+    if axes.shape != (3, 3):
+        raise ValueError(f"Expected axes to have shape (3, 3), got {axes.shape}.")
+
+    for axis_index in range(3):
+        axis = axes[:, axis_index]
+        pivot = int(np.argmax(np.abs(axis)))
+        if axis[pivot] < 0:
+            axes[:, axis_index] = -axis
+
+    if np.linalg.det(axes) < 0:
+        axes[:, -1] = -axes[:, -1]
+
+    return axes
+
+
+def _fit_obb_in_axes(points, axes):
+    """Return the smallest OBB fit wrapping points in the supplied axes."""
+
+    points = as_points(
+        points,
+        name="points used to fit an oriented bounding box",
+        dim=3,
+        min_num=1,
+    )
+    axes = canonicalize_axes(axes)
+
+    local_points = points @ axes
+    local_min = np.min(local_points, axis=0)
+    local_max = np.max(local_points, axis=0)
+    lengths = local_max - local_min
+    local_center = 0.5 * (local_min + local_max)
+    center = local_center @ axes.T
+    volume = float(np.prod(lengths))
+
+    return OBBFit(
+        axes=axes,
+        center=center,
+        lengths=lengths,
+        local_min=local_min,
+        local_max=local_max,
+        volume=volume,
+    )
 
 
 def calc_vec_from_azimuth_polar(azimuth, polar_angle):
