@@ -11,9 +11,9 @@ from nematics3d.disclination import defect_detect, defect_vicinity_grid
 from nematics3d.field import (
     Q_diagonalize,
     align_directors,
-    apply_linear_transform,
     n_color_immerse,
 )
+from nematics3d.grid import apply_linear_transform
 from nematics3d.general import (
     find_rotation_axis,
     mark_points_membership,

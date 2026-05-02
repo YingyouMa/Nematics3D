@@ -3,7 +3,7 @@ import numpy as np
 
 from .panel_base import make_labeled_slider_row
 from nematics3d.datatypes import boundary_periodic_size_to_flag
-from nematics3d.field import apply_linear_transform
+from nematics3d.grid import apply_linear_transform
 from ..plot_sphere import PlotSphere
 from .interact_glyph_base import InteractGlyphBase
 from nematics3d.logging_decorator import logging_and_warning_decorator

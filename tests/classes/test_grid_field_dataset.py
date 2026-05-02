@@ -21,7 +21,7 @@ from nematics3d.classes.grid_field import (
     InputGridField,
 )
 from nematics3d.datatypes import UNSET
-from nematics3d.field import apply_linear_transform, generate_coordinate_grid
+from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
 
 

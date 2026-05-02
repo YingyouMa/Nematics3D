@@ -21,7 +21,7 @@ from nematics3d.datatypes import (
     as_points,
     as_str,
 )
-from nematics3d.field import apply_linear_transform
+from nematics3d.grid import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase

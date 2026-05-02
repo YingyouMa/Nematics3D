@@ -17,7 +17,7 @@ from .datatypes import (
     DefectIndex,
     check_Sn,
 )
-from .field import GRID_TRANSFORM_IDENTITY, as_grid_transform
+from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
 
 # from .debug.debug_store import DEBUG_VARS
@@ -242,7 +242,7 @@ def defect_classify_into_lines(
 
     from .classes.graph import Graph
     from .classes.disclination_line import DisclinationLine
-    from .field import unwrap_trajectory
+    from .grid import unwrap_trajectory
     from .general import make_hash_table, search_in_reservoir
 
     logger.debug("Start line classfication")
@@ -329,7 +329,7 @@ def defect_neighbor_possible_get(
         If input shape is not (3,) or if the "layer" dimension cannot be identified.
     """
 
-    from .field import generate_mirror_point_periodic_boundary
+    from .grid import generate_mirror_point_periodic_boundary
 
     defect_index = np.asarray(defect_index, dtype=np.float64)
     if defect_index.shape != (3,):

@@ -15,7 +15,7 @@ from nematics3d.datatypes import (
     as_Vect,
     as_bool,
 )
-from nematics3d.field import (
+from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
     apply_linear_transform,
     as_grid_transform,

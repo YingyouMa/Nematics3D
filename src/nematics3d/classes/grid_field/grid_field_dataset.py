@@ -15,7 +15,7 @@ from nematics3d.datatypes import (
 from ..bounds import as_bounds
 from ..class_base import ClassBase
 from ..registry_base import RegistryBase
-from ...field import apply_linear_transform, generate_coordinate_grid
+from ...grid import apply_linear_transform, generate_coordinate_grid
 from ...general import get_box_corners
 from .input_grid_field import InputGridField, as_grid_shape
 

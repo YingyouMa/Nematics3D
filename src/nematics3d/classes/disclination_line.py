@@ -25,7 +25,7 @@ from ..datatypes import (
     UNSET,
     Unset,
 )
-from ..field import (
+from ..grid import (
     GRID_TRANSFORM_IDENTITY,
     apply_linear_transform,
     as_grid_transform,

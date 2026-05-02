@@ -124,10 +124,12 @@ from ..datatypes import (
     as_bool,
 )
 from ..field import (
-    GRID_TRANSFORM_IDENTITY,
     Q_diagonalize,
-    as_grid_transform,
     getQ,
+)
+from ..grid import (
+    GRID_TRANSFORM_IDENTITY,
+    as_grid_transform,
     apply_linear_transform,
 )
 from ..disclination import defect_detect, defect_classify_into_lines

@@ -14,7 +14,7 @@ from nematics3d.datatypes import (
     as_Vect,
     as_dimension_info,
 )
-from nematics3d.field import GRID_TRANSFORM_IDENTITY, as_grid_transform
+from nematics3d.grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 
 
 def as_grid_shape(value, name: str = "grid shape") -> tuple[int, int, int]:
