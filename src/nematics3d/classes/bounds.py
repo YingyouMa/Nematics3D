@@ -17,6 +17,7 @@ from nematics3d.datatypes import (
     Vect,
     as_Number,
     as_Vect,
+    as_axes,
     as_dimension_info,
     as_points,
     as_str,
@@ -838,13 +839,7 @@ def bounds_minimal_wrapping_points(
         dim=3,
         min_num=1,
     )
-    axes = np.asarray(axes, dtype=float).copy()
-    if axes.shape != (3, 3):
-        raise ValueError(f"Expected axes to have shape (3, 3), got {axes.shape}.")
-    if not np.allclose(axes.T @ axes, np.eye(3), atol=_DEF_TOL):
-        raise ValueError("`axes` must be an orthonormal frame with columns as axes.")
-    if np.linalg.det(axes) < 0:
-        axes[:, 2] = -axes[:, 2]
+    axes = as_axes(axes, name="axes", atol=_DEF_TOL)
 
     if origin is None:
         origin = np.zeros(3, dtype=float)

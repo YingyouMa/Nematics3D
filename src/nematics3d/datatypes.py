@@ -198,6 +198,34 @@ def as_Tensor(input_data, shape, name="input data"):
     return input_data
 
 
+# Axes is a 3D orthonormal frame stored as columns.
+Axes = np.ndarray
+AxesInput = Union[Sequence[Sequence[Number]], np.ndarray]
+
+
+def as_axes(
+    input_data: AxesInput,
+    name: str = "axes",
+    *,
+    atol: float = 1e-8,
+    is_right_handed: bool = True,
+) -> Axes:
+    """Validate a 3D orthonormal axes frame stored as column vectors."""
+
+    axes = as_Tensor(input_data, (3, 3), name=name).copy()
+    if not np.allclose(axes.T @ axes, np.eye(3), atol=atol):
+        raise ValueError(f"{name!r} must be an orthonormal axes frame.")
+
+    det = float(np.linalg.det(axes))
+    if np.isclose(det, 0.0, atol=atol):
+        raise ValueError(f"{name!r} must be a non-degenerate axes frame.")
+
+    if is_right_handed and det < 0:
+        axes[:, -1] = -axes[:, -1]
+
+    return axes
+
+
 # ColorRGB represents a color in RGB expression. It must be a tuple
 ColorRGB = Tuple[float, float, float]
 

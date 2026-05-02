@@ -20,7 +20,7 @@ from .classes.bounds import (
     obb_bounds_from_fit,
 )
 from .classes.result_base import ResultBase
-from .datatypes import as_dimension_info, as_points
+from .datatypes import as_axes, as_dimension_info, as_points
 from .field import Q_diagonalize, align_directors, getQ
 from .geometry import obb_fit_approx
 
@@ -61,21 +61,6 @@ class NMLPrincipalPlaneResult(ResultBase):
     converged: bool
 
 
-def nml_mean_s_equals_one_q(directors: np.ndarray) -> np.ndarray:
-    """Average S=1 Q tensors reconstructed from local director orientations."""
-
-    directors = np.asarray(directors, dtype=float)
-    if directors.ndim < 2 or directors.shape[-1] != 3:
-        raise ValueError(
-            "`directors` must contain director vectors with trailing shape (3,)."
-        )
-    if directors.size == 0:
-        raise ValueError("`directors` cannot be empty.")
-
-    q_values = getQ(directors.reshape(-1, 3), S=1)
-    return np.mean(q_values, axis=0)
-
-
 def nml_axes_from_mean_q(mean_q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Diagonalize a local mean Q tensor into descending N, M, L axes."""
 
@@ -101,7 +86,8 @@ def nml_axes_from_q_values(
         raise ValueError("`q_values` cannot be empty.")
 
     _, directors = Q_diagonalize(q_values)
-    mean_q = nml_mean_s_equals_one_q(directors)
+    directors = np.asarray(directors, dtype=float)
+    mean_q = np.mean(getQ(directors.reshape(-1, 3), S=1), axis=0)
     eigenvalues, axes = nml_axes_from_mean_q(mean_q)
     return mean_q, eigenvalues, axes
 
@@ -111,8 +97,8 @@ def align_nml_axes_to_reference(
 ) -> np.ndarray:
     """Flip N/M/L signs to match a reference frame under nematic symmetry."""
 
-    axes = _as_axes(axes, name="axes")
-    reference_axes = _as_axes(reference_axes, name="reference_axes")
+    axes = as_axes(axes, name="axes")
+    reference_axes = as_axes(reference_axes, name="reference_axes")
     aligned_axes = align_directors(reference_axes.T, axes.T).T
     if np.linalg.det(aligned_axes) < 0:
         aligned_axes[:, -1] = -aligned_axes[:, -1]
@@ -124,8 +110,8 @@ def nml_axis_angle_changes_deg(
 ) -> np.ndarray:
     """Return unsigned per-axis angle changes between two NML frames."""
 
-    axes = _as_axes(axes, name="axes")
-    reference_axes = _as_axes(reference_axes, name="reference_axes")
+    axes = as_axes(axes, name="axes")
+    reference_axes = as_axes(reference_axes, name="reference_axes")
     cosines = np.sum(axes * reference_axes, axis=0)
     cosines = np.clip(np.abs(cosines), 0.0, 1.0)
     return np.degrees(np.arccos(cosines))
@@ -167,31 +153,85 @@ def nml_principal_plane_analysis(
 ) -> NMLPrincipalPlaneResult:
     """Run the self-consistent NML principal-plane iteration.
 
+    This function finds a local N/M/L frame from the director texture inside an
+    oriented sampling box.  The frame is "principal" in the NML sense: it comes
+    from the eigenvectors of the local mean S=1 Q tensor, not from PCA or from
+    the geometric long/short axes of a loop.
+
+    The central loop is:
+
+    1. In the current axes frame, build the smallest ``Bounds`` that encloses
+       the required geometry.
+    2. Expand that minimal box so the Q sampling region includes enough local
+       neighborhood around the required geometry.
+    3. Sample Q on a regular grid inside the expanded oriented box.
+    4. Recover the local director at each sample point, rebuild each director
+       as an S=1 Q tensor, and average those tensors.
+    5. Diagonalize the mean Q.  Its eigenvectors define the updated N/M/L axes.
+    6. Flip eigenvector signs to stay close to the previous axes, then stop when
+       the largest per-axis change is below ``angle_tol_deg``.
+
+    ``required_points`` and ``seed_bounds`` intentionally separate geometry
+    from texture analysis.  The direct workflow can pass loop points as
+    ``required_points``.  The OBB-seeded workflow can pass ``seed_bounds`` and
+    let this function enclose ``seed_bounds.corners`` at every iteration.  In
+    both cases, N/M/L itself is computed only from sampled Q values.
+
+    The returned principal plane is the final N-M plane:
+
+    - ``result.plane_axes`` stores the final N and M axes as columns;
+    - ``result.plane_normal`` stores the final L axis;
+    - ``result.plane_center`` is the center of the final minimal bounds in the
+      converged/final NML frame.
+
+    Each per-iteration result stores the minimal and expanded bounds used for
+    that iteration.  After convergence, the function rebuilds final minimal and
+    expanded bounds once more using the final axes, so the top-level
+    ``minimal_bounds`` and ``expanded_bounds`` match the returned plane.
+
     Parameters
     ----------
     q_obj
-        Object exposing ``act_interpolate(points, is_index=...)``.
+        Object exposing ``act_interpolate(points, is_index=...)``.  In normal
+        repository use this is a ``QFieldObject`` or compatible object.
     required_points
         Geometry that every iteration must enclose in the current axes frame.
         Pass loop points for the direct workflow, or seed bounds corners for
-        the OBB-seeded workflow.
+        the OBB-seeded workflow.  These points constrain the sampling box only;
+        they do not directly determine the NML axes.
     seed_bounds
         Optional seed ``Bounds``.  When supplied and ``required_points`` is
-        omitted, the iteration encloses ``seed_bounds.corners``.
+        omitted, the iteration encloses ``seed_bounds.corners``.  This supports
+        the workflow where an initial geometric proxy is preserved while the
+        texture-derived NML frame iterates.
     initial_axes
         Starting axes with columns as axes.  Defaults to lab-frame identity.
-    expand_factors, min_lengths, spacing
-        Scalar or per-axis values controlling sampling bounds construction.
+        This is only the initial sampling-frame guess, not a claim that the lab
+        axes are physically principal.
+    expand_factors
+        Scalar or per-axis multiplicative expansion applied to the minimal box
+        lengths before sampling Q.
+    min_lengths
+        Scalar or per-axis lower bound on box side lengths.  This prevents thin
+        or nearly planar required geometry from producing too few sample points.
+    spacing
+        Scalar or per-axis sample spacing used to generate the regular grid
+        inside each expanded bounds.
     angle_tol_deg
-        Stop once all N/M/L axis changes are below this tolerance.
+        Stop once all N/M/L axis changes are below this tolerance.  Axis signs
+        are aligned before measuring the angle, respecting nematic ``n == -n``
+        symmetry.
     max_iterations
         Maximum number of self-consistency iterations.
     min_sample_points
         Minimum interpolation sample count accepted per iteration.
     is_index
-        Passed through to ``q_obj.act_interpolate``.
+        Passed through to ``q_obj.act_interpolate``.  The current local trial
+        script uses index-space sample points, so the default is ``True``.
     origin
-        Optional projection origin used when wrapping ``required_points``.
+        Optional projection origin used when wrapping ``required_points`` into
+        the current axes frame.  By default the required-point centroid is used,
+        which keeps the projection numerically centered for unwrapped loops.
     """
 
     if seed_bounds is not None and not isinstance(seed_bounds, Bounds):
@@ -208,7 +248,7 @@ def nml_principal_plane_analysis(
         min_num=1,
     )
 
-    axes = np.eye(3, dtype=float) if initial_axes is None else _as_axes(initial_axes)
+    axes = np.eye(3, dtype=float) if initial_axes is None else as_axes(initial_axes)
     expand_factors = as_dimension_info(expand_factors, name="expand_factors").astype(
         float
     )
@@ -246,6 +286,9 @@ def nml_principal_plane_analysis(
     converged = False
 
     for iteration in range(max_iterations):
+        # Geometry step: in the current candidate NML frame, find the smallest
+        # box that still encloses the required geometry.  This box is a
+        # constraint container; it is not where the NML axes come from.
         minimal_bounds = bounds_minimal_wrapping_points(
             required_points,
             axes,
@@ -253,6 +296,10 @@ def nml_principal_plane_analysis(
             name=f"NML minimal bounds {iteration}",
             min_lengths=min_lengths,
         )
+
+        # Sampling step: enlarge the minimal container before interpolation.
+        # The expanded bounds is the actual local neighborhood whose director
+        # texture will define the next N/M/L frame.
         expanded_bounds = bounds_expanded(
             minimal_bounds,
             expand_factors,
@@ -267,8 +314,16 @@ def nml_principal_plane_analysis(
                 f"{iteration}; check expand_factors, min_lengths, and spacing."
             )
 
+        # Texture step: sample Q, discard scalar-order weighting by rebuilding
+        # directors as S=1 Q tensors, and diagonalize their mean.  This is the
+        # operation that makes N-M the principal plane of the local director
+        # distribution.
         q_values = q_obj.act_interpolate(sample_points, is_index=is_index)
         mean_q, eigenvalues, new_axes = nml_axes_from_q_values(q_values)
+
+        # Eigenvectors are sign-ambiguous and nematic directors satisfy
+        # n == -n.  Sign-align to the previous frame before measuring rotation,
+        # otherwise a harmless sign flip would look like a large update.
         new_axes = align_nml_axes_to_reference(new_axes, axes)
         angle_changes = nml_axis_angle_changes_deg(new_axes, axes)
         max_axis_angle = float(np.max(angle_changes))
@@ -292,6 +347,9 @@ def nml_principal_plane_analysis(
             converged = True
             break
 
+    # The last per-iteration bounds were built from the axes before applying
+    # that iteration's NML update.  Rebuild once in the final axes so the
+    # top-level bounds and plane metadata describe the same final frame.
     final_minimal_bounds = bounds_minimal_wrapping_points(
         required_points,
         axes,
@@ -319,16 +377,3 @@ def nml_principal_plane_analysis(
         plane_normal=axes[:, 2],
         converged=converged,
     )
-
-
-def _as_axes(axes, name: str = "axes") -> np.ndarray:
-    """Validate and right-hand a 3D axes matrix stored by columns."""
-
-    axes = np.asarray(axes, dtype=float).copy()
-    if axes.shape != (3, 3):
-        raise ValueError(f"`{name}` must have shape (3, 3), got {axes.shape}.")
-    if not np.allclose(axes.T @ axes, np.eye(3), atol=1e-8):
-        raise ValueError(f"`{name}` must be an orthonormal axes frame.")
-    if np.linalg.det(axes) < 0:
-        axes[:, -1] = -axes[:, -1]
-    return axes
