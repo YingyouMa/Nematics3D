@@ -704,7 +704,7 @@ def _validate_qfield_single_shape(
 def as_qfield9(
     qtensor: Union[QField5, QField9],
     name="QField",
-    is_single_field: bool = True,
+    is_strict_3d_field: bool = True,
 ) -> QField9:
     #! strict3d
     """
@@ -714,8 +714,9 @@ def as_qfield9(
     - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
     - a full matrix representation (QField9), shape (Nx, Ny, Nz, 3, 3)
 
-    Set ``is_single_field=False`` to allow the more general legacy shapes
-    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, or batched tensors.
+    Set ``is_strict_3d_field=False`` to allow the more general shapes
+    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, batched tensors, or
+    single Q tensors.
 
     Parameters
     ----------
@@ -744,7 +745,7 @@ def as_qfield9(
     shape = qtensor.shape
 
     if len(shape) >= 1 and shape[-1] == 5:
-        if is_single_field:
+        if is_strict_3d_field:
             _validate_qfield_single_shape(
                 shape,
                 name=name,
@@ -765,7 +766,7 @@ def as_qfield9(
         return Q
 
     if len(shape) >= 2 and shape[-2:] == (3, 3):
-        if is_single_field:
+        if is_strict_3d_field:
             _validate_qfield_single_shape(
                 shape,
                 name=name,
@@ -785,7 +786,7 @@ def as_qfield9(
 def as_qfield5(
     qtensor: Union[QField5, QField9],
     name="QField",
-    is_single_field: bool = True,
+    is_strict_3d_field: bool = True,
 ) -> QField5:
     """
     Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
@@ -794,8 +795,9 @@ def as_qfield5(
     - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
     - a full matrix representation (QField9), shape (Nx, Ny, Nz, 3, 3)
 
-    Set ``is_single_field=False`` to allow the more general legacy shapes
-    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, or batched tensors.
+    Set ``is_strict_3d_field=False`` to allow the more general shapes
+    ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, batched tensors, or
+    single Q tensors.
 
     Assumes the input is a symmetric, traceless 3Ãƒâ€”3 tensor field.
 
@@ -826,7 +828,7 @@ def as_qfield5(
     shape = qtensor.shape
 
     if len(shape) >= 2 and shape[-2:] == (3, 3):
-        if is_single_field:
+        if is_strict_3d_field:
             _validate_qfield_single_shape(
                 shape,
                 name=name,
@@ -845,7 +847,7 @@ def as_qfield5(
         return Q5
 
     if len(shape) >= 1 and shape[-1] == 5:
-        if is_single_field:
+        if is_strict_3d_field:
             _validate_qfield_single_shape(
                 shape,
                 name=name,

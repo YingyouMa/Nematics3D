@@ -21,7 +21,7 @@ from .classes.bounds import (
 )
 from .classes.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
-from .field import Q_diagonalize, align_directors, getQ
+from .field import Q_diagonalize, Q_diagonalize_linalg, align_directors, getQ
 from .geometry import obb_fit_approx
 
 
@@ -61,21 +61,6 @@ class NMLPrincipalPlaneResult(ResultBase):
     converged: bool
 
 
-def nml_axes_from_mean_q(mean_q: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """Diagonalize a local mean Q tensor into descending N, M, L axes."""
-
-    mean_q = np.asarray(mean_q, dtype=float)
-    if mean_q.shape != (3, 3):
-        raise ValueError(f"`mean_q` must have shape (3, 3), got {mean_q.shape}.")
-
-    eigenvalues, eigenvectors = np.linalg.eigh(mean_q)
-    order = np.argsort(eigenvalues)[::-1]
-    axes = eigenvectors[:, order]
-    if np.linalg.det(axes) < 0:
-        axes[:, -1] = -axes[:, -1]
-    return eigenvalues[order], axes
-
-
 def nml_axes_from_q_values(
     q_values: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -88,7 +73,7 @@ def nml_axes_from_q_values(
     _, directors = Q_diagonalize(q_values)
     directors = np.asarray(directors, dtype=float)
     mean_q = np.mean(getQ(directors.reshape(-1, 3), S=1), axis=0)
-    eigenvalues, axes = nml_axes_from_mean_q(mean_q)
+    eigenvalues, axes = Q_diagonalize_linalg(mean_q, is_right_handed=True)
     return mean_q, eigenvalues, axes
 
 
