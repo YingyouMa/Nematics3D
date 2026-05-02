@@ -120,6 +120,34 @@ def test_fit_obb_pca_axis_aligned_box():
     assert np.linalg.det(fit.axes) == pytest.approx(1.0)
 
 
+def test_obb_fit_supports_result_base_inspection():
+    fit = fit_obb_pca([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]])
+
+    assert fit.keys() == (
+        "axes",
+        "center",
+        "lengths",
+        "local_min",
+        "local_max",
+        "volume",
+    )
+    assert fit["volume"] == pytest.approx(0.0)
+    assert fit.get("missing", "fallback") == "fallback"
+    assert "center" in fit
+    assert set(fit.asdict()) == set(fit.keys())
+
+    fit_repr = repr(fit)
+    assert fit_repr.startswith(
+        "OBBFit: The parameters of an oriented bounding-box fit\n"
+    )
+    assert "  axes      =" in fit_repr
+    assert "too many elements to display" not in fit_repr
+    assert "[[ 1.," in fit_repr
+    assert "\n               [ 0.," in fit_repr
+    assert "  local_min =" in fit_repr
+    assert "  volume    = 0," in fit_repr
+
+
 def test_fit_obb_pca_tracks_translated_center():
     offset = np.array([10.0, -2.0, 4.5])
     points = np.array(

@@ -3,17 +3,21 @@ Geometry helpers for vector parameterization, angle wrapping, and local frame co
 """
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
+from .classes.result_base import ResultBase
 from .datatypes import Tensor, Vect, as_Vect, as_points
 
 
-@dataclass(slots=True, frozen=True)
-class OBBFit:
+@dataclass(slots=True, frozen=True, repr=False)
+class OBBFit(ResultBase):
     """Pure geometry result for an oriented bounding-box fit."""
+
+    __result_name__: ClassVar[str] = "The parameters of an oriented bounding-box fit"
 
     axes: np.ndarray
     center: np.ndarray

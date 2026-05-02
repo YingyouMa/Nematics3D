@@ -243,17 +243,45 @@ def load_opts_json(path: str | Path) -> tuple[Path, str | None, dict[str, Any]]:
     )
 
 
-def repr_format(v):
+def repr_format(v, *, precision: int = 4, max_array_size: int = 12):
     """Format a value for compact repository-style repr output."""
     if isinstance(v, np.generic):
         v = v.item()
 
     if isinstance(v, float):
-        return f"{v:.2g}"
+        return f"{v:.{precision}g}"
 
     if isinstance(v, np.ndarray):
-        if v.size > 6:
+        if v.size > max_array_size:
             return f"<ndarray shape={v.shape}, too many elements to display>"
-        return repr(v)
+        array_text = np.array2string(
+            v,
+            precision=precision,
+            separator=", ",
+        )
+        return array_text
 
     return repr(v)
+
+
+def repr_field_line(
+    key: str,
+    value,
+    width: int,
+    *,
+    indent: str = "  ",
+    precision: int = 4,
+    max_array_size: int = 12,
+    trailing_comma: bool = True,
+):
+    """Format one aligned ``key = value`` repr line."""
+
+    prefix = f"{indent}{key:<{width}} = "
+    value_text = repr_format(
+        value,
+        precision=precision,
+        max_array_size=max_array_size,
+    )
+    value_text = value_text.replace("\n", "\n" + " " * len(prefix))
+    suffix = "," if trailing_comma else ""
+    return f"{prefix}{value_text}{suffix}"

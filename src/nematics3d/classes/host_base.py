@@ -46,7 +46,7 @@ from typing import Any, Callable, ClassVar, Mapping, Sequence, Type
 import weakref
 
 from ..datatypes import UNSET, Unset, as_list, as_str
-from ..format import repr_format, save_opts_json
+from ..format import repr_field_line, save_opts_json
 from ..general import pop_exclusive
 from ..logging_decorator import logging_and_warning_decorator
 from .class_base import ClassBase
@@ -445,7 +445,7 @@ class OptsBase:
                 value = getattr(self, key)
             except AttributeError:
                 value = "<missing>"
-            lines.append(f"  {key:<{width}} = {repr_format(value)}")
+            lines.append(repr_field_line(key, value, width))
 
         return "\n".join(lines)
 
