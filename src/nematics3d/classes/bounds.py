@@ -21,6 +21,7 @@ from nematics3d.datatypes import (
     as_points,
     as_str,
 )
+from nematics3d.field import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase
@@ -925,6 +926,57 @@ def bounds_expanded(
             alignment=bounds.opts.alignment,
         ),
     )
+
+
+def bounds_sample_points(
+    bounds: Bounds,
+    spacing=1.0,
+    *,
+    is_return_local: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+    """Generate fixed-spacing sample points inside a ``Bounds`` object."""
+    if not isinstance(bounds, Bounds):
+        raise TypeError("`bounds` must be a Bounds instance.")
+
+    spacing = as_dimension_info(spacing, name="spacing").astype(float)
+    if np.any(spacing <= 0):
+        raise ValueError("`spacing` must contain only positive values.")
+
+    axis1 = bounds.opts.axis1
+    axis2 = bounds.calc_axis2
+    axis3 = bounds.calc_axis3
+    axes = np.column_stack([axis1, axis2, axis3])
+
+    length1 = bounds.opts.length1
+    length2 = length1 if bounds.opts.length2 is None else bounds.opts.length2
+    length3 = length1 if bounds.opts.length3 is None else bounds.opts.length3
+    lengths = np.asarray([length1, length2, length3], dtype=float)
+
+    if bounds.opts.alignment == "center":
+        center = bounds.opts.origin
+    elif bounds.opts.alignment == "min_corner":
+        center = bounds.opts.origin + 0.5 * (
+            length1 * axis1 + length2 * axis2 + length3 * axis3
+        )
+    else:
+        raise ValueError(f"Unsupported bounds alignment {bounds.opts.alignment!r}.")
+
+    local_axes = []
+    for length, step in zip(lengths, spacing):
+        sample_count = max(2, int(np.floor(length / step)) + 1)
+        local_axes.append(np.linspace(-0.5 * length, 0.5 * length, sample_count))
+
+    mesh = np.meshgrid(*local_axes, indexing="ij")
+    local_points = np.column_stack([axis_values.ravel() for axis_values in mesh])
+    points = apply_linear_transform(
+        local_points,
+        transform=axes.T,
+        offset=center,
+    )
+
+    if is_return_local:
+        return points, local_points
+    return points
 
 
 def obb_bounds_from_fit(fit: OBBFit, name: str | None = "seed bounds") -> Bounds:

@@ -155,6 +155,7 @@ Likely placement:
   - `obb_bounds_from_fit`
   - `bounds_minimal_wrapping_points`
   - `bounds_expanded`
+  - `bounds_sample_points`
 
 Possible object conversion:
 
@@ -237,6 +238,37 @@ expanded_lengths = max(base_lengths * expand_factors, min_lengths)
 
 The center and axes should remain unchanged unless a later use case explicitly
 requires asymmetric expansion.
+
+## Bounds Sampling Workflow
+
+Given an expanded bounds object, generate fixed-spacing sample points inside the
+box for Q interpolation.
+
+Proposed function:
+
+```python
+bounds_sample_points(bounds, spacing=1.0, ...)
+```
+
+Input:
+
+- a `Bounds` object;
+- scalar or per-axis spacing.
+
+Output:
+
+- sample points with shape `(N, 3)`.
+
+Rule:
+
+```text
+local axes coordinates
+  -> regular 3D grid spanning [-length_i / 2, length_i / 2]
+  -> transform back through the bounds axes and center
+```
+
+The implementation should use the repository `apply_linear_transform` helper
+for the local-to-world affine transform.
 
 ## NML Self-Consistent Bounds Workflow
 

@@ -6,6 +6,7 @@ from nematics3d.classes.bounds import (
     OptsBounds,
     bounds_expanded,
     bounds_minimal_wrapping_points,
+    bounds_sample_points,
     obb_bounds_from_fit,
 )
 from nematics3d.geometry import OBBFit
@@ -212,3 +213,69 @@ def test_bounds_expanded_validates_inputs():
         bounds_expanded(base, expand_factors=(1.0, 0.0, 1.0))
     with pytest.raises(ValueError, match="min_lengths"):
         bounds_expanded(base, expand_factors=(1.0, 1.0, 1.0), min_lengths=(1.0, 1.0))
+
+
+def test_bounds_sample_points_uses_center_aligned_bounds():
+    base = Bounds(
+        opts=OptsBounds(
+            origin=(10.0, 20.0, 30.0),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=2.0,
+            length2=4.0,
+            length3=6.0,
+            alignment="center",
+        ),
+    )
+
+    points, local_points = bounds_sample_points(
+        base,
+        spacing=(1.0, 2.0, 3.0),
+        is_return_local=True,
+    )
+
+    assert points.shape == (27, 3)
+    assert local_points.shape == (27, 3)
+    np.testing.assert_allclose(local_points.min(axis=0), [-1.0, -2.0, -3.0])
+    np.testing.assert_allclose(local_points.max(axis=0), [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(points.min(axis=0), [9.0, 18.0, 27.0])
+    np.testing.assert_allclose(points.max(axis=0), [11.0, 22.0, 33.0])
+
+
+def test_bounds_sample_points_uses_min_corner_aligned_bounds():
+    base = Bounds(
+        opts=OptsBounds(
+            origin=(1.0, 2.0, 3.0),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=2.0,
+            length2=2.0,
+            length3=2.0,
+            alignment="min_corner",
+        ),
+    )
+
+    points = bounds_sample_points(base, spacing=1.0)
+
+    assert points.shape == (27, 3)
+    np.testing.assert_allclose(points.min(axis=0), [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(points.max(axis=0), [3.0, 4.0, 5.0])
+
+
+def test_bounds_sample_points_validates_inputs():
+    base = Bounds(
+        opts=OptsBounds(
+            origin=(0.0, 0.0, 0.0),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=1.0,
+            alignment="center",
+        ),
+    )
+
+    with pytest.raises(TypeError, match="Bounds"):
+        bounds_sample_points(object(), spacing=1.0)
+    with pytest.raises(ValueError, match="spacing"):
+        bounds_sample_points(base, spacing=(1.0, 1.0))
+    with pytest.raises(ValueError, match="positive"):
+        bounds_sample_points(base, spacing=0.0)
