@@ -74,7 +74,7 @@ class InputLine:
 
     defect_indices: DefectIndex | None = None
     box_size_periodic_index: DimensionPeriodicInput = False
-    grid_offset: Vect(3) = (0, 0, 0)
+    grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -99,7 +99,7 @@ class InputLine:
             None if v is None else as_DefectIndex(v, is_return_row=True)
         ),
         "box_size_periodic_index": lambda v, d: as_dimension_info(v, name=d),
-        "grid_offset": lambda v, d: as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
@@ -966,7 +966,7 @@ class DisclinationLineSmooth(SmoothedLine):
             origin=origin,
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
-            grid_offset=(0, 0, 0),
+            grid_offset=None,
             grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )
@@ -1540,7 +1540,7 @@ class DefectSectionGrid(HostBase):
             origin=pose["origin"],
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
-            grid_offset=(0, 0, 0),
+            grid_offset=None,
             grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )

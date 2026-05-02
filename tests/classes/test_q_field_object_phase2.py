@@ -127,7 +127,23 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(
             tuple(q.raw_box_periodic_flag), tuple(dataset.raw_box_periodic_flag)
         )
-        self.assertEqual(tuple(q.raw_grid_offset), tuple(dataset.raw_grid_offset))
+        self.assertIs(q.raw_grid_offset, dataset.raw_grid_offset)
+
+    def test_legacy_init_keeps_default_grid_offset_as_none(self):
+        shape = (2, 2, 2)
+        n = np.zeros(shape + (3,), dtype=float)
+        n[..., 0] = 1.0
+        S = np.ones(shape, dtype=float)
+
+        q = QFieldObject(
+            inputValue=InputQ(n=n, S=S),
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+
+        self.assertIsNone(q.raw_grid_offset)
+        self.assertIsNone(q.dataset.raw_grid_offset)
+        self.assertTrue(np.allclose(q.calc_grid, q.calc_grid_index))
 
 
 if __name__ == "__main__":

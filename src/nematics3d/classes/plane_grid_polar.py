@@ -49,7 +49,7 @@ class OptsPlaneGridPolar(OptsBase):
     dr: float | Unset = UNSET
     arc_dist: float | Unset = UNSET
     is_clip_inside: bool | Unset = UNSET
-    grid_offset: Vect(3) | Unset = UNSET
+    grid_offset: Vect(3) | None | Unset = UNSET
     grid_transform: Tensor((3, 3)) | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -97,7 +97,7 @@ class OptsPlaneGridPolar(OptsBase):
             None if v is None else as_Number(v, name=d, value_range=(1e-6, np.inf))
         ),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
-        "grid_offset": lambda v, d: as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
@@ -111,7 +111,7 @@ class OptsPlaneGridPolar(OptsBase):
             "dr": 0.5,
             "arc_dist": None,
             "is_clip_inside": True,
-            "grid_offset": (0, 0, 0),
+            "grid_offset": None,
             "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )

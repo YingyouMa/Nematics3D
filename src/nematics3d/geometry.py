@@ -10,7 +10,7 @@ from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
 from .classes.result_base import ResultBase
-from .datatypes import Tensor, Vect, as_Vect, as_points
+from .datatypes import Tensor, Vect, as_Vect, as_axes, as_points
 
 
 # ===========================================================================
@@ -204,6 +204,49 @@ def canonicalize_axes(axes):
         axes[:, -1] = -axes[:, -1]
 
     return axes
+
+
+def axes_angle_changes_deg(axes, reference_axes, *, is_unsigned: bool = True):
+    """Return per-axis angle changes between two 3D orthonormal frames.
+
+    The axes are compared column by column.  When ``is_unsigned`` is true,
+    ``v`` and ``-v`` are treated as the same axis, which is useful for nematic
+    axes and eigenvector frames with sign ambiguity.
+    """
+
+    axes = as_axes(axes, name="axes")
+    reference_axes = as_axes(reference_axes, name="reference_axes")
+    cosines = np.sum(axes * reference_axes, axis=0)
+    if is_unsigned:
+        cosines = np.abs(cosines)
+    cosines = np.clip(cosines, -1.0, 1.0)
+    return np.degrees(np.arccos(cosines))
+
+
+def align_axes_to_reference(axes, reference_axes, *, is_right_handed: bool = True):
+    """Flip axes signs column-wise to stay close to a reference frame.
+
+    This handles the sign ambiguity of eigenvector frames and nematic axes.
+    Each axis column is flipped when its dot product with the corresponding
+    reference axis is negative.  When ``is_right_handed`` is true, the final
+    axis is flipped if needed so the returned frame is right-handed.
+    """
+
+    axes = as_axes(axes, name="axes", is_right_handed=False)
+    reference_axes = as_axes(
+        reference_axes,
+        name="reference_axes",
+        is_right_handed=False,
+    )
+
+    dots = np.sum(axes * reference_axes, axis=0)
+    signs = np.where(dots < 0, -1.0, 1.0)
+    aligned_axes = axes * signs
+
+    if is_right_handed and np.linalg.det(aligned_axes) < 0:
+        aligned_axes[:, -1] = -aligned_axes[:, -1]
+
+    return aligned_axes
 
 
 def _obb_fit_in_axes(points, axes):

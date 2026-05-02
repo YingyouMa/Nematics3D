@@ -195,7 +195,7 @@ class InputQ:
     S: SField | Unset = UNSET
     n: nField | Unset = UNSET
     box_periodic_flag: DimensionFlagInput = False
-    grid_offset: Vect(3) = (0, 0, 0)
+    grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
     default_miminum_line_length_smooth: Number = 61
     default_smooth_window_length: Number = 41
@@ -234,7 +234,7 @@ class InputQ:
         "n": lambda v, d: check_Sn(v, "n"),
         "S": lambda v, d: check_Sn(v, "S"),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
-        "grid_offset": lambda v, d: as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "default_miminum_line_length_smooth": lambda v, d: as_Number(
             v, name=d, value_range=(1, np.inf)

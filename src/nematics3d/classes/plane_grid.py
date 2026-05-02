@@ -50,7 +50,7 @@ class OptsPlaneGrid(OptsBase):
     alignment: Literal["center", "bottom-left"] | Unset = UNSET
     axis1: Vect(3) | None | Unset = UNSET
     is_clip_inside: bool | Unset = UNSET
-    grid_offset: Vect(3) | Unset = UNSET
+    grid_offset: Vect(3) | None | Unset = UNSET
     grid_transform: Tensor((3, 3)) | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -94,7 +94,7 @@ class OptsPlaneGrid(OptsBase):
         ),
         "axis1": lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
-        "grid_offset": lambda v, d: as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
@@ -108,7 +108,7 @@ class OptsPlaneGrid(OptsBase):
             "alignment": "center",
             "axis1": None,
             "is_clip_inside": True,
-            "grid_offset": (0, 0, 0),
+            "grid_offset": None,
             "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )

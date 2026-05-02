@@ -17,12 +17,11 @@ from .classes.bounds import (
     bounds_expanded,
     bounds_minimal_wrapping_points,
     bounds_sample_points,
-    obb_bounds_from_fit,
 )
 from .classes.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
-from .field import Q_diagonalize, Q_diagonalize_linalg, align_directors, getQ
-from .geometry import obb_fit_approx
+from .field import Q_diagonalize, Q_diagonalize_linalg, getQ
+from .geometry import align_axes_to_reference, axes_angle_changes_deg
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -59,66 +58,6 @@ class NMLPrincipalPlaneResult(ResultBase):
     plane_axes: np.ndarray
     plane_normal: np.ndarray
     converged: bool
-
-
-def nml_axes_from_q_values(
-    q_values: np.ndarray,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Recover local directors from Q values and return mean-Q NML axes."""
-
-    q_values = np.asarray(q_values, dtype=float)
-    if q_values.size == 0:
-        raise ValueError("`q_values` cannot be empty.")
-
-    _, directors = Q_diagonalize(q_values)
-    directors = np.asarray(directors, dtype=float)
-    mean_q = np.mean(getQ(directors.reshape(-1, 3), S=1), axis=0)
-    eigenvalues, axes = Q_diagonalize_linalg(mean_q, is_right_handed=True)
-    return mean_q, eigenvalues, axes
-
-
-def align_nml_axes_to_reference(
-    axes: np.ndarray, reference_axes: np.ndarray
-) -> np.ndarray:
-    """Flip N/M/L signs to match a reference frame under nematic symmetry."""
-
-    axes = as_axes(axes, name="axes")
-    reference_axes = as_axes(reference_axes, name="reference_axes")
-    aligned_axes = align_directors(reference_axes.T, axes.T).T
-    if np.linalg.det(aligned_axes) < 0:
-        aligned_axes[:, -1] = -aligned_axes[:, -1]
-    return aligned_axes
-
-
-def nml_axis_angle_changes_deg(
-    axes: np.ndarray, reference_axes: np.ndarray
-) -> np.ndarray:
-    """Return unsigned per-axis angle changes between two NML frames."""
-
-    axes = as_axes(axes, name="axes")
-    reference_axes = as_axes(reference_axes, name="reference_axes")
-    cosines = np.sum(axes * reference_axes, axis=0)
-    cosines = np.clip(np.abs(cosines), 0.0, 1.0)
-    return np.degrees(np.arccos(cosines))
-
-
-def nml_seed_bounds_from_points(
-    points,
-    *,
-    name: str | None = "NML seed bounds",
-    angle_scales_deg=(15.0, 5.0, 1.0, 0.2),
-    trials_per_scale=64,
-    seed=None,
-) -> Bounds:
-    """Build the OBB seed bounds used as the required geometry for NML analysis."""
-
-    fit = obb_fit_approx(
-        points,
-        angle_scales_deg=angle_scales_deg,
-        trials_per_scale=trials_per_scale,
-        seed=seed,
-    )
-    return obb_bounds_from_fit(fit, name=name)
 
 
 def nml_principal_plane_analysis(
@@ -304,13 +243,23 @@ def nml_principal_plane_analysis(
         # operation that makes N-M the principal plane of the local director
         # distribution.
         q_values = q_obj.act_interpolate(sample_points, is_index=is_index)
-        mean_q, eigenvalues, new_axes = nml_axes_from_q_values(q_values)
+        q_values = np.asarray(q_values, dtype=float)
+        if q_values.size == 0:
+            raise ValueError("Interpolated Q values cannot be empty.")
+        _, directors = Q_diagonalize(q_values)
+        mean_q = np.mean(
+            getQ(np.asarray(directors, dtype=float).reshape(-1, 3), S=1), axis=0
+        )
+        eigenvalues, new_axes = Q_diagonalize_linalg(
+            mean_q,
+            is_right_handed=True,
+        )
 
         # Eigenvectors are sign-ambiguous and nematic directors satisfy
         # n == -n.  Sign-align to the previous frame before measuring rotation,
         # otherwise a harmless sign flip would look like a large update.
-        new_axes = align_nml_axes_to_reference(new_axes, axes)
-        angle_changes = nml_axis_angle_changes_deg(new_axes, axes)
+        new_axes = align_axes_to_reference(new_axes, axes)
+        angle_changes = axes_angle_changes_deg(new_axes, axes)
         max_axis_angle = float(np.max(angle_changes))
 
         iterations.append(

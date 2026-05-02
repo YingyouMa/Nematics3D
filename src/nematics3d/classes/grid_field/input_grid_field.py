@@ -67,7 +67,7 @@ class InputGridField:
 
     shape: tuple[int, int, int] | Unset = UNSET
     box_periodic_flag: DimensionFlagInput = False
-    grid_offset: Vect(3) = (0, 0, 0)
+    grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -89,7 +89,7 @@ class InputGridField:
     _validators: ClassVar[Mapping[str, object]] = {
         "shape": lambda v, d: as_grid_shape(v, name=d),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
-        "grid_offset": lambda v, d: as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
