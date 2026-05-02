@@ -153,8 +153,8 @@ Likely placement:
   - the lightweight OBB fit dataclass
 - `src/nematics3d/classes/bounds.py`
   - `obb_bounds_from_fit`
-  - `minimal_bounds_wrapping_points`
-  - `expanded_bounds`
+  - `bounds_minimal_wrapping_points`
+  - `bounds_expanded`
 
 Possible object conversion:
 
@@ -179,7 +179,7 @@ that wraps the points.
 Proposed function:
 
 ```python
-minimal_bounds_wrapping_points(points, axes, origin=None, ...)
+bounds_minimal_wrapping_points(points, axes, origin=None, ...)
 ```
 
 Input:
@@ -216,7 +216,7 @@ Given a minimal bounds object, build an expanded box for sampling.
 Proposed function:
 
 ```python
-expanded_bounds(bounds, expand_factors, min_lengths=None, ...)
+bounds_expanded(bounds, expand_factors, min_lengths=None, ...)
 ```
 
 Input:
@@ -360,7 +360,7 @@ Conceptual change:
 - How should degenerate convex hull cases be handled?
 - Should the OBB objective be volume only, or should we later allow alternate
   objectives for thin loop-like objects?
-- Should `minimal_bounds_wrapping_points` return a pure fit object first, with
+- Should `bounds_minimal_wrapping_points` return a pure fit object first, with
   a separate conversion to `Bounds`, or directly return `Bounds`?
 - Where should the NML iteration live: a standalone analysis module, or a thin
   `QFieldObject.act_...` method wrapping a standalone function?
