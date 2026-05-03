@@ -7,7 +7,7 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
-from nematics3d.field import apply_linear_transform
+from nematics3d.grid import apply_linear_transform
 from ..class_base import ClassBase
 from ...logging_decorator import logging_and_warning_decorator
 

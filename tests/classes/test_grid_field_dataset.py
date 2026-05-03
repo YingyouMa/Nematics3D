@@ -21,7 +21,7 @@ from nematics3d.classes.grid_field import (
     InputGridField,
 )
 from nematics3d.datatypes import UNSET
-from nematics3d.field import apply_linear_transform, generate_coordinate_grid
+from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
 
 
@@ -65,12 +65,14 @@ class TestGridFieldDataset(unittest.TestCase):
         values = np.arange(2 * 3 * 4 * 5, dtype=float).reshape(2, 3, 4, 5)
 
         self.assertIs(dataset.raw_shape, UNSET)
+        self.assertIsNone(dataset.raw_grid_offset)
         self.assertIs(dataset.calc_grid, UNSET)
 
         dataset.act_add_field("Q", values)
 
         self.assertEqual(tuple(dataset.raw_shape), (2, 3, 4))
         self.assertEqual(dataset.calc_grid.shape, (2, 3, 4, 3))
+        self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
 
     def test_field_can_create_generic_interpolator_and_sample_world_points(self):

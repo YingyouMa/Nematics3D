@@ -60,7 +60,7 @@ Open handling detail:
 Proposed function:
 
 ```python
-fit_obb_pca(hull_points)
+obb_fit_pca(hull_points)
 ```
 
 Input:
@@ -88,7 +88,7 @@ Reasoning:
 Proposed function:
 
 ```python
-refine_obb_random_search(hull_points, initial_fit, ...)
+obb_refine_random_search(hull_points, initial_fit, ...)
 ```
 
 Input:
@@ -123,7 +123,7 @@ Important properties:
 Proposed function:
 
 ```python
-fit_obb_approx(points, method="pca_random", ...)
+obb_fit_approx(points, ...)
 ```
 
 Workflow:
@@ -131,8 +131,8 @@ Workflow:
 ```text
 points
   -> compute_convex_hull_points
-  -> fit_obb_pca
-  -> refine_obb_random_search
+  -> obb_fit_pca
+  -> obb_refine_random_search
   -> OBB fit result
 ```
 
@@ -147,19 +147,20 @@ Likely placement:
 
 - `src/nematics3d/geometry.py`
   - `compute_convex_hull_points`
-  - `fit_obb_pca`
-  - `refine_obb_random_search`
-  - `fit_obb_approx`
+  - `obb_fit_pca`
+  - `obb_refine_random_search`
+  - `obb_fit_approx`
   - the lightweight OBB fit dataclass
 - `src/nematics3d/classes/bounds.py`
-  - `bounds_from_obb_fit`
-  - `minimal_bounds_wrapping_points`
-  - `expanded_bounds`
+  - `obb_bounds_from_fit`
+  - `bounds_minimal_wrapping_points`
+  - `bounds_expanded`
+  - `bounds_sample_points`
 
 Possible object conversion:
 
 ```python
-bounds = bounds_from_obb_fit(fit, name="seed bounds")
+bounds = obb_bounds_from_fit(fit, name="seed bounds")
 ```
 
 The resulting `Bounds` should use:
@@ -179,7 +180,7 @@ that wraps the points.
 Proposed function:
 
 ```python
-minimal_bounds_wrapping_points(points, axes, origin=None, ...)
+bounds_minimal_wrapping_points(points, axes, origin=None, ...)
 ```
 
 Input:
@@ -216,7 +217,7 @@ Given a minimal bounds object, build an expanded box for sampling.
 Proposed function:
 
 ```python
-expanded_bounds(bounds, expand_factors, min_lengths=None, ...)
+bounds_expanded(bounds, expand_factors, min_lengths=None, ...)
 ```
 
 Input:
@@ -238,6 +239,37 @@ expanded_lengths = max(base_lengths * expand_factors, min_lengths)
 The center and axes should remain unchanged unless a later use case explicitly
 requires asymmetric expansion.
 
+## Bounds Sampling Workflow
+
+Given an expanded bounds object, generate fixed-spacing sample points inside the
+box for Q interpolation.
+
+Proposed function:
+
+```python
+bounds_sample_points(bounds, spacing=1.0, ...)
+```
+
+Input:
+
+- a `Bounds` object;
+- scalar or per-axis spacing.
+
+Output:
+
+- sample points with shape `(N, 3)`.
+
+Rule:
+
+```text
+local axes coordinates
+  -> regular 3D grid spanning [-length_i / 2, length_i / 2]
+  -> transform back through the bounds axes and center
+```
+
+The implementation should use the repository `apply_linear_transform` helper
+for the local-to-world affine transform.
+
 ## NML Self-Consistent Bounds Workflow
 
 The revised NML analysis should use the approximate minimum OBB as a geometric
@@ -254,8 +286,8 @@ Workflow:
 
 ```text
 loop_points
-  -> fit_obb_approx
-  -> bounds_from_obb_fit
+  -> obb_fit_approx
+  -> obb_bounds_from_fit
   -> seed_bounds
 ```
 
@@ -357,12 +389,10 @@ Conceptual change:
 
 ## Open Questions
 
-- Should `fit_obb_approx` expose the random-search refinement directly, or
-  should the random search remain private until benchmarked?
 - How should degenerate convex hull cases be handled?
 - Should the OBB objective be volume only, or should we later allow alternate
   objectives for thin loop-like objects?
-- Should `minimal_bounds_wrapping_points` return a pure fit object first, with
+- Should `bounds_minimal_wrapping_points` return a pure fit object first, with
   a separate conversion to `Bounds`, or directly return `Bounds`?
 - Where should the NML iteration live: a standalone analysis module, or a thin
   `QFieldObject.act_...` method wrapping a standalone function?

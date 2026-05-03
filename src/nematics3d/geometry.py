@@ -10,7 +10,16 @@ from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
 from .classes.result_base import ResultBase
-from .datatypes import Tensor, Vect, as_Vect, as_points
+from .datatypes import Tensor, Vect, as_Vect, as_axes, as_dimension_info, as_points
+
+
+# ===========================================================================
+# OBB fitting helpers
+# ---------------------------------------------------------------------------
+# This block supports approximate oriented bounding-box construction from
+# point clouds: hull reduction, PCA initialization, random refinement, and the
+# shared OBBFit result object.
+# ===========================================================================
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -54,7 +63,7 @@ def compute_convex_hull_points(points):
     return points[np.unique(hull.vertices)]
 
 
-def fit_obb_pca(points):
+def obb_fit_pca(points):
     """Fit a deterministic PCA-oriented bounding box to 3D points.
 
     The returned axes are stored as columns. The fit is not a guaranteed
@@ -82,10 +91,10 @@ def fit_obb_pca(points):
         axes = eigenvectors[:, order]
 
     axes = canonicalize_axes(axes)
-    return _fit_obb_in_axes(points, axes)
+    return _obb_fit_in_axes(points, axes)
 
 
-def refine_obb_random_search(
+def obb_refine_random_search(
     points,
     initial_fit: OBBFit,
     *,
@@ -111,7 +120,7 @@ def refine_obb_random_search(
     )
     if not isinstance(initial_fit, OBBFit):
         raise TypeError(
-            "`initial_fit` must be an OBBFit returned by `fit_obb_pca` or "
+            "`initial_fit` must be an OBBFit returned by `obb_fit_pca` or "
             "another OBB fitting helper."
         )
 
@@ -139,12 +148,65 @@ def refine_obb_random_search(
             rotvec *= rng.normal(scale=angle_scale_rad) / rotvec_norm
             rotation = R.from_rotvec(rotvec).as_matrix()
             candidate_axes = rotation @ best_fit.axes
-            candidate_fit = _fit_obb_in_axes(points, candidate_axes)
+            candidate_fit = _obb_fit_in_axes(points, candidate_axes)
 
             if candidate_fit.volume < best_fit.volume:
                 best_fit = candidate_fit
 
     return best_fit
+
+
+def obb_fit_approx(
+    points,
+    *,
+    angle_scales_deg=(15.0, 5.0, 1.0, 0.2),
+    trials_per_scale=64,
+    seed=None,
+):
+    """Fit the repository's approximate minimum-volume OBB for 3D points.
+
+    The current approximation pipeline reduces the input to convex-hull
+    vertices, builds a deterministic PCA OBB, then refines that frame with a
+    reproducible multi-scale random search.
+    """
+
+    hull_points = compute_convex_hull_points(points)
+    initial_fit = obb_fit_pca(hull_points)
+    return obb_refine_random_search(
+        hull_points,
+        initial_fit,
+        angle_scales_deg=angle_scales_deg,
+        trials_per_scale=trials_per_scale,
+        seed=seed,
+    )
+
+
+def box_corners_from_center_axes_radii(center, axes, radii) -> np.ndarray:
+    """Return orthogonal box corners from center, axes, and per-axis radii.
+
+    ``axes`` is a ``(3, 3)`` orthonormal frame stored as column vectors.  The
+    returned corners have shape ``(8, 3)``.
+    """
+    center = as_Vect(center, name="box center", dim=3)
+    axes = as_axes(axes, name="box axes")
+    radii = as_dimension_info(radii, name="box radii").astype(float)
+    if np.any(radii <= 0):
+        raise ValueError("`radii` must contain only positive values.")
+
+    local_corners = np.array(
+        [
+            [-radii[0], -radii[1], -radii[2]],
+            [radii[0], -radii[1], -radii[2]],
+            [-radii[0], radii[1], -radii[2]],
+            [-radii[0], -radii[1], radii[2]],
+            [radii[0], radii[1], -radii[2]],
+            [radii[0], -radii[1], radii[2]],
+            [-radii[0], radii[1], radii[2]],
+            [radii[0], radii[1], radii[2]],
+        ],
+        dtype=float,
+    )
+    return center + local_corners @ axes.T
 
 
 def canonicalize_axes(axes):
@@ -172,7 +234,50 @@ def canonicalize_axes(axes):
     return axes
 
 
-def _fit_obb_in_axes(points, axes):
+def axes_angle_changes_deg(axes, reference_axes, *, is_unsigned: bool = True):
+    """Return per-axis angle changes between two 3D orthonormal frames.
+
+    The axes are compared column by column.  When ``is_unsigned`` is true,
+    ``v`` and ``-v`` are treated as the same axis, which is useful for nematic
+    axes and eigenvector frames with sign ambiguity.
+    """
+
+    axes = as_axes(axes, name="axes")
+    reference_axes = as_axes(reference_axes, name="reference_axes")
+    cosines = np.sum(axes * reference_axes, axis=0)
+    if is_unsigned:
+        cosines = np.abs(cosines)
+    cosines = np.clip(cosines, -1.0, 1.0)
+    return np.degrees(np.arccos(cosines))
+
+
+def align_axes_to_reference(axes, reference_axes, *, is_right_handed: bool = True):
+    """Flip axes signs column-wise to stay close to a reference frame.
+
+    This handles the sign ambiguity of eigenvector frames and nematic axes.
+    Each axis column is flipped when its dot product with the corresponding
+    reference axis is negative.  When ``is_right_handed`` is true, the final
+    axis is flipped if needed so the returned frame is right-handed.
+    """
+
+    axes = as_axes(axes, name="axes", is_right_handed=False)
+    reference_axes = as_axes(
+        reference_axes,
+        name="reference_axes",
+        is_right_handed=False,
+    )
+
+    dots = np.sum(axes * reference_axes, axis=0)
+    signs = np.where(dots < 0, -1.0, 1.0)
+    aligned_axes = axes * signs
+
+    if is_right_handed and np.linalg.det(aligned_axes) < 0:
+        aligned_axes[:, -1] = -aligned_axes[:, -1]
+
+    return aligned_axes
+
+
+def _obb_fit_in_axes(points, axes):
     """Return the smallest OBB fit wrapping points in the supplied axes."""
 
     points = as_points(

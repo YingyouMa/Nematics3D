@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Literal, Mapping, TypeAlias
 import numpy as np
 import pyvista as pv
 
+from nematics3d.geometry import OBBFit
 from nematics3d.datatypes import (
     Number,
     UNSET,
@@ -16,8 +17,12 @@ from nematics3d.datatypes import (
     Vect,
     as_Number,
     as_Vect,
+    as_axes,
+    as_dimension_info,
+    as_points,
     as_str,
 )
+from nematics3d.grid import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import get_box_corners, rotation_matrix_from_vectors
 from .host_base import HostBase, OptsBase
@@ -814,6 +819,178 @@ def _polydata_to_box_points(polydata: pv.PolyData) -> np.ndarray:
     _, unique_idx = np.unique(rounded, axis=0, return_index=True)
     unique_points = points[np.sort(unique_idx)]
     return unique_points
+
+
+def bounds_minimal_wrapping_points(
+    points,
+    axes,
+    origin=None,
+    name: str | None = "minimal bounds",
+    min_lengths=None,
+) -> Bounds:
+    """Build the smallest ``Bounds`` wrapping points in a supplied axes frame.
+
+    ``Bounds`` requires positive side lengths, so degenerate dimensions are
+    floored by ``min_lengths`` or the module tolerance.
+    """
+    points = as_points(
+        points,
+        name="points used to build minimal wrapping bounds",
+        dim=3,
+        min_num=1,
+    )
+    axes = as_axes(axes, name="axes", atol=_DEF_TOL)
+
+    if origin is None:
+        origin = np.zeros(3, dtype=float)
+    else:
+        origin = as_Vect(
+            origin,
+            name="origin used to project points into the supplied axes",
+            dim=3,
+        )
+
+    if min_lengths is None:
+        min_lengths = np.full(3, _DEF_TOL, dtype=float)
+    else:
+        min_lengths = as_dimension_info(min_lengths, name="min_lengths").astype(float)
+        if np.any(min_lengths <= 0):
+            raise ValueError("`min_lengths` must contain only positive values.")
+
+    local_points = (points - origin) @ axes
+    local_min = np.min(local_points, axis=0)
+    local_max = np.max(local_points, axis=0)
+    local_center = 0.5 * (local_min + local_max)
+    lengths = np.maximum(local_max - local_min, min_lengths)
+    world_center = origin + axes @ local_center
+
+    return Bounds(
+        name=name,
+        opts=OptsBounds(
+            origin=world_center,
+            axis1=axes[:, 0],
+            axis2=axes[:, 1],
+            length1=lengths[0],
+            length2=lengths[1],
+            length3=lengths[2],
+            alignment="center",
+        ),
+    )
+
+
+def bounds_expanded(
+    bounds: Bounds,
+    expand_factors,
+    min_lengths=None,
+    name: str | None = "expanded bounds",
+) -> Bounds:
+    """Return a copy of bounds with side lengths expanded about its center."""
+    if not isinstance(bounds, Bounds):
+        raise TypeError("`bounds` must be a Bounds instance.")
+
+    expand_factors = np.asarray(expand_factors, dtype=float)
+    if expand_factors.shape != (3,):
+        raise ValueError(
+            f"Expected expand_factors to have shape (3,), got {expand_factors.shape}."
+        )
+    if np.any(expand_factors <= 0):
+        raise ValueError("`expand_factors` must contain only positive values.")
+
+    if min_lengths is None:
+        min_lengths = np.zeros(3, dtype=float)
+    else:
+        min_lengths = as_dimension_info(min_lengths, name="min_lengths").astype(float)
+        if np.any(min_lengths < 0):
+            raise ValueError("`min_lengths` cannot contain negative values.")
+
+    base_lengths = np.array(
+        [bounds.opts.length1, bounds.opts.length2, bounds.opts.length3],
+        dtype=float,
+    )
+    expanded_lengths = np.maximum(base_lengths * expand_factors, min_lengths)
+
+    return Bounds(
+        name=name,
+        opts=OptsBounds(
+            origin=bounds.opts.origin,
+            axis1=bounds.opts.axis1,
+            axis2=bounds.opts.axis2,
+            length1=expanded_lengths[0],
+            length2=expanded_lengths[1],
+            length3=expanded_lengths[2],
+            alignment=bounds.opts.alignment,
+        ),
+    )
+
+
+def bounds_sample_points(
+    bounds: Bounds,
+    spacing=1.0,
+    *,
+    is_return_local: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
+    """Generate fixed-spacing sample points inside a ``Bounds`` object."""
+    if not isinstance(bounds, Bounds):
+        raise TypeError("`bounds` must be a Bounds instance.")
+
+    spacing = as_dimension_info(spacing, name="spacing").astype(float)
+    if np.any(spacing <= 0):
+        raise ValueError("`spacing` must contain only positive values.")
+
+    axis1 = bounds.opts.axis1
+    axis2 = bounds.calc_axis2
+    axis3 = bounds.calc_axis3
+    axes = np.column_stack([axis1, axis2, axis3])
+
+    length1 = bounds.opts.length1
+    length2 = length1 if bounds.opts.length2 is None else bounds.opts.length2
+    length3 = length1 if bounds.opts.length3 is None else bounds.opts.length3
+    lengths = np.asarray([length1, length2, length3], dtype=float)
+
+    if bounds.opts.alignment == "center":
+        center = bounds.opts.origin
+    elif bounds.opts.alignment == "min_corner":
+        center = bounds.opts.origin + 0.5 * (
+            length1 * axis1 + length2 * axis2 + length3 * axis3
+        )
+    else:
+        raise ValueError(f"Unsupported bounds alignment {bounds.opts.alignment!r}.")
+
+    local_axes = []
+    for length, step in zip(lengths, spacing):
+        sample_count = max(2, int(np.floor(length / step)) + 1)
+        local_axes.append(np.linspace(-0.5 * length, 0.5 * length, sample_count))
+
+    mesh = np.meshgrid(*local_axes, indexing="ij")
+    local_points = np.column_stack([axis_values.ravel() for axis_values in mesh])
+    points = apply_linear_transform(
+        local_points,
+        transform=axes.T,
+        offset=center,
+    )
+
+    if is_return_local:
+        return points, local_points
+    return points
+
+
+def obb_bounds_from_fit(fit: OBBFit, name: str | None = "seed bounds") -> Bounds:
+    """Convert a pure OBB fit result into a repository ``Bounds`` object."""
+    if not isinstance(fit, OBBFit):
+        raise TypeError("`fit` must be an OBBFit returned by an OBB fitting helper.")
+
+    return Bounds(
+        name=name,
+        opts=OptsBounds(
+            origin=fit.center,
+            axis1=fit.axes[:, 0],
+            axis2=fit.axes[:, 1],
+            length1=fit.lengths[0],
+            length2=fit.lengths[1],
+            length3=fit.lengths[2],
+            alignment="center",
+        ),
+    )
 
 
 def as_bounds(input_data, name: str = "bounds") -> Bounds | None:

@@ -31,9 +31,8 @@ y_minus = 0.5 * DEFECT_SEPARATION
 
 # +1/2 defect below and -1/2 defect above.
 # The far field is along +x, and the +1/2 polarity points toward the -1/2 defect.
-theta_xy = (
-    0.5 * np.arctan2(y_grid - y_plus, x_grid - x_plus)
-    - 0.5 * np.arctan2(y_grid - y_minus, x_grid - x_minus)
+theta_xy = 0.5 * np.arctan2(y_grid - y_plus, x_grid - x_plus) - 0.5 * np.arctan2(
+    y_grid - y_minus, x_grid - x_minus
 )
 
 director_xy = np.stack(
@@ -98,7 +97,7 @@ plane = n3d.QPlane(
         spacing=4,
         size=NX - 1,
         alignment="center",
-        grid_offset=(0, 0, 0),
+        grid_offset=None,
         grid_transform=np.eye(3),
     ),
     bounds=qobj.calc_corners,
@@ -144,4 +143,6 @@ figure.pl.add_text(
 print(f"Q shape = {Q.shape}")
 print(f"director shape = {director.shape}")
 print(f"Output dir = {output_dir}")
-print("Global variables available: x, y, z, theta_xy, director_xy, director, S, Q, input_q, qobj, figure, plane")
+print(
+    "Global variables available: x, y, z, theta_xy, director_xy, director, S, Q, input_q, qobj, figure, plane"
+)
