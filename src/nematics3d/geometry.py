@@ -10,7 +10,7 @@ from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
 from .classes.result_base import ResultBase
-from .datatypes import Tensor, Vect, as_Vect, as_axes, as_points
+from .datatypes import Tensor, Vect, as_Vect, as_axes, as_dimension_info, as_points
 
 
 # ===========================================================================
@@ -179,6 +179,34 @@ def obb_fit_approx(
         trials_per_scale=trials_per_scale,
         seed=seed,
     )
+
+
+def box_corners_from_center_axes_radii(center, axes, radii) -> np.ndarray:
+    """Return orthogonal box corners from center, axes, and per-axis radii.
+
+    ``axes`` is a ``(3, 3)`` orthonormal frame stored as column vectors.  The
+    returned corners have shape ``(8, 3)``.
+    """
+    center = as_Vect(center, name="box center", dim=3)
+    axes = as_axes(axes, name="box axes")
+    radii = as_dimension_info(radii, name="box radii").astype(float)
+    if np.any(radii <= 0):
+        raise ValueError("`radii` must contain only positive values.")
+
+    local_corners = np.array(
+        [
+            [-radii[0], -radii[1], -radii[2]],
+            [radii[0], -radii[1], -radii[2]],
+            [-radii[0], radii[1], -radii[2]],
+            [-radii[0], -radii[1], radii[2]],
+            [radii[0], radii[1], -radii[2]],
+            [radii[0], -radii[1], radii[2]],
+            [-radii[0], radii[1], radii[2]],
+            [radii[0], radii[1], radii[2]],
+        ],
+        dtype=float,
+    )
+    return center + local_corners @ axes.T
 
 
 def canonicalize_axes(axes):

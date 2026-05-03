@@ -9,7 +9,7 @@ from nematics3d.classes.bounds import (
     bounds_sample_points,
     obb_bounds_from_fit,
 )
-from nematics3d.geometry import OBBFit
+from nematics3d.geometry import OBBFit, box_corners_from_center_axes_radii
 
 
 def _match_points_unordered(points_a, points_b, tol=1e-8):
@@ -121,6 +121,73 @@ def test_bounds_minimal_wrapping_points_floors_degenerate_lengths():
         ],
         [0.75, 0.75, 0.75],
     )
+
+
+def test_box_corners_from_center_axes_radii_builds_axis_aligned_box():
+    corners = box_corners_from_center_axes_radii(
+        center=(10.0, 20.0, 30.0),
+        axes=np.eye(3),
+        radii=(2.0, 3.0, 4.0),
+    )
+
+    assert corners.shape == (8, 3)
+    np.testing.assert_allclose(corners.min(axis=0), [8.0, 17.0, 26.0])
+    np.testing.assert_allclose(corners.max(axis=0), [12.0, 23.0, 34.0])
+
+
+def test_box_corners_from_center_axes_radii_uses_supplied_axes():
+    angle = np.deg2rad(30.0)
+    axes = np.array(
+        [
+            [np.cos(angle), -np.sin(angle), 0.0],
+            [np.sin(angle), np.cos(angle), 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    center = np.array([10.0, -3.0, 2.0])
+    radii = np.array([2.0, 1.5, 3.0])
+
+    corners = box_corners_from_center_axes_radii(center, axes, radii)
+    expected = (
+        center
+        + np.array(
+            [
+                [-2.0, -1.5, -3.0],
+                [2.0, -1.5, -3.0],
+                [-2.0, 1.5, -3.0],
+                [-2.0, -1.5, 3.0],
+                [2.0, 1.5, -3.0],
+                [2.0, -1.5, 3.0],
+                [-2.0, 1.5, 3.0],
+                [2.0, 1.5, 3.0],
+            ]
+        )
+        @ axes.T
+    )
+
+    np.testing.assert_allclose(corners, expected)
+
+
+def test_box_corners_from_center_axes_radii_validates_inputs():
+    with pytest.raises(ValueError, match="radii"):
+        box_corners_from_center_axes_radii(
+            center=(0.0, 0.0, 0.0),
+            axes=np.eye(3),
+            radii=(1.0, 0.0, 1.0),
+        )
+
+    with pytest.raises(ValueError, match="orthonormal"):
+        box_corners_from_center_axes_radii(
+            center=(0.0, 0.0, 0.0),
+            axes=np.array(
+                [
+                    [1.0, 1.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            ),
+            radii=(1.0, 1.0, 1.0),
+        )
 
 
 def test_bounds_expanded_scales_lengths_about_existing_center():
