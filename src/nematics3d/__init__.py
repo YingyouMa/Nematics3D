@@ -2,6 +2,7 @@ from .field import *
 from .grid import *
 from .principal_plane import *
 from .disclination import *
+from .quick import *
 
 # from .elastic import *
 # from .coarse import *

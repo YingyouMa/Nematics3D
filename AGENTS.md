@@ -22,6 +22,9 @@ editing are involved.
 
 ## Windows validation notes
 
+On Windows/PowerShell workspaces, follow the Windows search workflow in
+`nematics3d-repo-conventions`; prefer PowerShell-native search over `rg`.
+
 When checking Python syntax on Windows, remember that `python -m py_compile`
 writes `.pyc` files into `__pycache__`. If it fails with `Access Denied` or
 `Permission denied` while writing `__pycache__`, classify that as a cache/write
