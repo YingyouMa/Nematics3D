@@ -7,6 +7,7 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
+from nematics3d.datatypes import as_points
 from nematics3d.grid import apply_linear_transform
 from ..class_base import ClassBase
 from ...logging_decorator import logging_and_warning_decorator
@@ -93,7 +94,7 @@ class GridInterpolator(ClassBase):
         outside non-periodic dimensions before clipping.
         """
 
-        pts = np.asarray(points, dtype=float).copy()
+        pts = as_points(points, name="interpolation query points", dim=3)
         points_input = pts.copy()
 
         dataset = self.owner.owner

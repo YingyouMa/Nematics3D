@@ -75,6 +75,17 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
 
+    def test_dataset_core_grid_metadata_is_fixed_after_initialization(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+
+        with self.assertRaises(AttributeError):
+            dataset.shape = (3, 3, 3)
+        with self.assertRaises(AttributeError):
+            dataset.grid_offset = (1.0, 2.0, 3.0)
+
+        self.assertEqual(tuple(dataset.raw_shape), (2, 2, 2))
+        self.assertEqual(dataset.calc_grid.shape, (2, 2, 2, 3))
+
     def test_field_can_create_generic_interpolator_and_sample_world_points(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
@@ -95,6 +106,9 @@ class TestGridFieldDataset(unittest.TestCase):
 
         sampled = field.act_interpolate(np.array([[12.0, 23.0, 34.0]]))
         self.assertTrue(np.allclose(sampled, np.array([7.0])))
+
+        single_point_sampled = field.act_interpolate(np.array([12.0, 23.0, 34.0]))
+        self.assertTrue(np.allclose(single_point_sampled, np.array([7.0])))
 
         periodic_sampled = field.act_interpolate(
             np.array([[14.0, 23.0, 34.0]]),

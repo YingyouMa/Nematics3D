@@ -172,7 +172,11 @@ class GridFieldDataset(ClassBase):
         name: str = "grid field dataset",
         **kwargs,
     ) -> None:
-        super().__init__(name=name, name_replace="grid field dataset")
+        super().__init__(
+            name=name,
+            name_replace="grid field dataset",
+            is_fixed=True,
+        )
 
         if inputValue is None:
             inputValue = InputGridField()
