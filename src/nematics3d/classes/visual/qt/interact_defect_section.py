@@ -215,6 +215,7 @@ class InteractDefectSection(PanelBase):
             value_init=self.state["dr"],
             tick_to_value=log_size.tick_to_value,
             value_to_tick=log_size.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         log_arc_dist = LogTickMapper(
@@ -231,6 +232,7 @@ class InteractDefectSection(PanelBase):
             value_init=self.state["arc_dist"],
             tick_to_value=log_arc_dist.tick_to_value,
             value_to_tick=log_arc_dist.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         self.chk_use_arc_dist = QtWidgets.QCheckBox(
@@ -251,6 +253,7 @@ class InteractDefectSection(PanelBase):
             value_max=layers_max,
             value_init=int(self.state["layers"]),
             value_fmt="{:.0f}",
+            input_out_of_range="expand_max",
         )
 
         self.on_changed(0, is_commit=False)

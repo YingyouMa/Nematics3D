@@ -195,6 +195,7 @@ class InteractPlane(PanelBase):
             value_init=self.state["spacing"],
             tick_to_value=log_spacing.tick_to_value,
             value_to_tick=log_spacing.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         log_spacing_extra = LogTickMapper(
@@ -211,6 +212,7 @@ class InteractPlane(PanelBase):
             value_init=self.state["spacing_extra"],
             tick_to_value=log_spacing_extra.tick_to_value,
             value_to_tick=log_spacing_extra.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         self.chk_use_spacing_extra = QtWidgets.QCheckBox(
@@ -241,6 +243,7 @@ class InteractPlane(PanelBase):
             value_init=self.state["size"],
             tick_to_value=log_size.tick_to_value,
             value_to_tick=log_size.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         log_size_extra = LogTickMapper(
@@ -257,6 +260,7 @@ class InteractPlane(PanelBase):
             value_init=self.state["size_extra"],
             tick_to_value=log_size_extra.tick_to_value,
             value_to_tick=log_size_extra.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         self.chk_use_size_extra = QtWidgets.QCheckBox(

@@ -253,6 +253,7 @@ class InteractBounds(PanelBase):
                 value_init=value,
                 tick_to_value=mapper.tick_to_value,
                 value_to_tick=mapper.value_to_tick,
+                input_out_of_range="expand_max",
             )
 
         group_orient = QtWidgets.QGroupBox("Orientation", self)

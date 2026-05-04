@@ -112,6 +112,7 @@ class InteractGlyphBase(PanelBase):
                     value_init=1.0,
                     tick_to_value=log_mapper.tick_to_value,
                     value_to_tick=log_mapper.value_to_tick,
+                    input_out_of_range="expand_max",
                 )
                 self.lbl_radius = QtWidgets.QLabel(self.group_geometry)
                 self.gl_geometry.addWidget(self.lbl_radius)

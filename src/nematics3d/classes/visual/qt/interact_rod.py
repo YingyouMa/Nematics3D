@@ -36,6 +36,7 @@ class InteractRod(InteractGlyphBase):
             value_init=1.0,
             tick_to_value=log_mapper.tick_to_value,
             value_to_tick=log_mapper.value_to_tick,
+            input_out_of_range="expand_max",
         )
         self.lbl_length = QtWidgets.QLabel(parent)
         layout.addWidget(self.lbl_length)

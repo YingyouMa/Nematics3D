@@ -1,7 +1,7 @@
 from qtpy import QtWidgets, QtCore, QtGui
 from dataclasses import dataclass
 import datetime
-from typing import Callable, MutableMapping, Any
+from typing import Callable, Literal, MutableMapping, Any
 import math
 import numpy as np
 
@@ -14,23 +14,33 @@ from nematics3d.geometry import (
 from .ui_throttle import UIThrottle
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, weakref_slot=True)
 class SliderItem:
     slider: QtWidgets.QSlider
-    label: QtWidgets.QLabel
+    value_box: QtWidgets.QDoubleSpinBox
     tick_to_value: Callable[[int], float]
     value_to_tick: Callable[[float], int]
     state_key: str
-    value_min: int
-    value_max: int
+    value_min: float
+    value_max: float
     value_fmt: str = "{:.2f}"
+    input_out_of_range: Literal["clamp", "expand_max"] = "clamp"
+
+    @property
+    def label(self) -> QtWidgets.QDoubleSpinBox:
+        return self.value_box
 
     def get_value(self) -> float:
         return float(self.tick_to_value(int(self.slider.value())))
 
     def set_label(self, value: float | None = None) -> None:
         v = self.get_value() if value is None else float(value)
-        self.label.setText(self.value_fmt.format(v))
+        self.value_box.blockSignals(True)
+        try:
+            self._helper_extend_value_box_max(v)
+            self.value_box.setValue(v)
+        finally:
+            self.value_box.blockSignals(False)
 
     def sync_to_state(self, state: MutableMapping[str, Any]) -> float:
         v = self.get_value()
@@ -39,23 +49,58 @@ class SliderItem:
         return v
 
     def set_tick(self, value: float, *, is_block_signals: bool = True) -> None:
+        value = self._helper_normalize_input_value(float(value))
         tick = self.value_to_tick(value)
         if is_block_signals:
             self.slider.blockSignals(True)
         try:
-            tick_max = self.value_to_tick(float(self.value_max))
-            if tick > tick_max:
-                tick_max = int(tick * 1.2)
-                self.slider.setMaximum(tick_max)
+            self._helper_extend_slider_max(int(tick))
             self.slider.setValue(int(tick))
             self.set_label()
         finally:
             if is_block_signals:
                 self.slider.blockSignals(False)
 
+    def apply_value_box_edit(self) -> None:
+        value = self._helper_normalize_input_value(float(self.value_box.value()))
+        self.set_tick(value, is_block_signals=False)
+
     def set_enabled(self, enabled: bool) -> None:
         self.slider.setEnabled(bool(enabled))
-        self.label.setEnabled(bool(enabled))
+        self.value_box.setEnabled(bool(enabled))
+
+    def _helper_normalize_input_value(self, value: float) -> float:
+        value = max(float(self.value_min), float(value))
+        if value <= float(self.value_max):
+            return value
+        if self.input_out_of_range == "expand_max":
+            self.value_max = value
+            self._helper_extend_value_box_max(value)
+            return value
+        return float(self.value_max)
+
+    def _helper_extend_slider_max(self, tick: int) -> None:
+        if tick <= int(self.slider.maximum()):
+            return
+        tick_max = max(tick, int(math.ceil(tick * 1.2)))
+        self.slider.setMaximum(tick_max)
+
+    def _helper_extend_value_box_max(self, value: float) -> None:
+        if value <= float(self.value_box.maximum()):
+            return
+        value_max = max(value, abs(value) * 1.2)
+        self.value_box.setMaximum(float(value_max))
+
+
+def _helper_decimals_from_value_fmt(value_fmt: str) -> int:
+    marker = "{:."
+    if not value_fmt.startswith(marker) or not value_fmt.endswith("f}"):
+        return 6
+    raw = value_fmt[len(marker) : -2]
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 6
 
 
 def make_labeled_slider_row(
@@ -76,6 +121,7 @@ def make_labeled_slider_row(
     page_step: int = 10,
     tracking: bool = True,
     spacing: int = 8,
+    input_out_of_range: Literal["clamp", "expand_max"] = "clamp",
 ) -> SliderItem:
 
     tick_min = value_to_tick(value_min)
@@ -102,26 +148,34 @@ def make_labeled_slider_row(
     slider.setTracking(bool(tracking))
     h.addWidget(slider, 1)
 
-    # ---- value label ----
-    lab_val = QtWidgets.QLabel("", row_widget)
-    lab_val.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-    lab_val.setMinimumWidth(int(val_min_width))
-    h.addWidget(lab_val)
+    # ---- editable value box ----
+    value_box = QtWidgets.QDoubleSpinBox(row_widget)
+    value_box.setDecimals(_helper_decimals_from_value_fmt(value_fmt))
+    value_box.setKeyboardTracking(False)
+    value_box.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+    value_box.setMinimumWidth(int(val_min_width))
+    value_box_max = float(value_max)
+    if input_out_of_range == "expand_max":
+        value_box_max = max(value_box_max, abs(value_box_max) * 1000.0, 1.0e12)
+    value_box.setRange(float(value_min), value_box_max)
+    h.addWidget(value_box)
 
     # ---- init ----
     slider.setValue(int(tick_init))
 
     item = SliderItem(
         slider=slider,
-        label=lab_val,
+        value_box=value_box,
         tick_to_value=tick_to_value,
         value_to_tick=value_to_tick,
         state_key=(name if state_key is None else state_key),
         value_fmt=value_fmt,
         value_min=value_min,
         value_max=value_max,
+        input_out_of_range=input_out_of_range,
     )
     item.set_label()  # initialize label text
+    value_box.editingFinished.connect(item.apply_value_box_edit)
 
     layout.addWidget(row_widget)
     return item
@@ -187,7 +241,7 @@ class LogTickMapper:
     def tick_to_value(self, t: int) -> float:
         t = int(t)
         alpha = (t - self.tick_min) / float(self.tick_max - self.tick_min)
-        alpha = min(1.0, max(0.0, alpha))
+        alpha = max(0.0, alpha)
         log_min = math.log(self.value_min, self.base)
         log_max = math.log(self.value_max, self.base)
         log_v = log_min + alpha * (log_max - log_min)
@@ -195,7 +249,7 @@ class LogTickMapper:
 
     def value_to_tick(self, v: float) -> int:
         v = float(v)
-        v = min(self.value_max, max(self.value_min, v))
+        v = max(self.value_min, v)
         log_min = math.log(self.value_min, self.base)
         log_max = math.log(self.value_max, self.base)
         log_v = math.log(v, self.base)
@@ -360,6 +414,7 @@ class MovePointConsole:
             tick_to_value=step_map.tick_to_value,
             value_to_tick=step_map.value_to_tick,
             value_fmt=self.step_fmt,
+            input_out_of_range="expand_max",
         )
         # sync label/state once
         self.slider_step.sync_to_state(self.state)

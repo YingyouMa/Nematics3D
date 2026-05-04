@@ -36,6 +36,7 @@ class InteractVector(InteractGlyphBase):
             value_init=1.0,
             tick_to_value=log_mapper.tick_to_value,
             value_to_tick=log_mapper.value_to_tick,
+            input_out_of_range="expand_max",
         )
 
         self.state["tip_length_fraction"] = float(self.host.opts.tip_length_fraction)
