@@ -152,6 +152,7 @@ def make_labeled_slider_row(
     value_box = QtWidgets.QDoubleSpinBox(row_widget)
     value_box.setDecimals(_helper_decimals_from_value_fmt(value_fmt))
     value_box.setKeyboardTracking(False)
+    value_box.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
     value_box.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
     value_box.setMinimumWidth(int(val_min_width))
     value_box_max = float(value_max)
