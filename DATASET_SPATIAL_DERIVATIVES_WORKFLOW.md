@@ -99,7 +99,55 @@ grad_Q = dataset.act_gradient("Q", coord="physical")
 dataset.act_add_field("grad_Q", grad_Q)
 ```
 
-or by adding a future explicit derived-field API.
+When metadata should be preserved, attach it through the field `info` surface:
+
+```python
+grad_result = dataset.act_gradient("Q", coord="physical", is_result=True)
+dataset.act_add_field("grad_Q", grad_result.raw_values, info=grad_result.raw_info)
+```
+
+The preferred convenience form is:
+
+```python
+dataset.act_add_result_field("grad_Q", grad_result)
+```
+
+which stores `grad_result.raw_values` as the field payload and
+`grad_result.raw_info` as the field metadata.
+
+Field `info` is intentionally free-form provenance or metadata. Core numerical
+logic should not depend on its structure.
+
+## Result Metadata
+
+Derivative helpers may return an inspectable `ResultBase` dataclass when the
+caller asks for metadata explicitly:
+
+```python
+grad_result = dataset.act_gradient("Q", coord="physical", is_result=True)
+```
+
+The default return value remains a plain `np.ndarray` so chained calculations
+stay lightweight.
+
+The result object should keep the computed array in `raw_values`, not `values`,
+because `ResultBase` already exposes a dict-like `.values()` method. Metadata
+should live in `raw_info`, a payload-free `SpatialDerivativeInfo` result object
+that describes the immediate operation, including:
+
+- `operator`
+- `source`
+- `source_shape`
+- `coord`
+- `derivative_axis`
+- `component_axis`
+- `input_component_shape`
+- `output_shape`
+- `box_periodic_flag`
+- `grid_transform`
+- `grid_offset`
+- `stencil`
+- `edge_order`
 
 ## Boundary Handling
 
@@ -151,13 +199,42 @@ After the gradient helper is stable, common named operations can be layered on
 top:
 
 ```python
-dataset.act_divergence("v", coord="physical")
 dataset.act_curl("v", coord="physical")
+dataset.act_divergence("v", coord="physical")
 dataset.act_laplacian("S", coord="physical")
+dataset.act_symmetric_gradient("v", coord="physical")
+dataset.act_antisymmetric_gradient("v", coord="physical")
 ```
 
 These should reuse the generic gradient/derivative implementation and keep
 their tensor contractions explicit and well-tested.
+
+`act_symmetric_gradient()` and `act_antisymmetric_gradient()` are vector-field
+only. They split the vector gradient into symmetric and antisymmetric parts over
+the vector-component and derivative axes.
+
+`act_laplacian()` is scalar-only for now. Component-wise vector or tensor
+Laplacians should not be inferred silently; add an explicit API if that behavior
+is needed later.
+
+Component-wise Laplacians are exposed explicitly:
+
+```python
+dataset.act_componentwise_laplacian("n", coord="physical")
+```
+
+This preserves any trailing component axes and applies the scalar Laplacian to
+each component independently.
+
+`act_curl()` is vector-field only. Tensor-valued fields should use the
+tensor-specific curl helper so the tensor component axis convention is explicit:
+
+```python
+dataset.act_tensor_curl("T", vector_axis=-1, coord="physical")
+```
+
+`act_tensor_curl()` applies the vector curl along the selected length-3
+component axis and preserves any other trailing component axes.
 
 Advanced users can still consume the returned gradient arrays and apply their
 own `np.einsum()` expressions, but raw einsum strings should not be the primary
