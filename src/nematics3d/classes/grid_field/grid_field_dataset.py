@@ -15,7 +15,11 @@ from nematics3d.datatypes import (
 from ..bounds import as_bounds
 from ..class_base import ClassBase
 from ..registry_base import RegistryBase
-from ...grid import apply_linear_transform, generate_coordinate_grid
+from ...grid import (
+    apply_linear_transform,
+    generate_coordinate_grid,
+    is_grid_transform_identity,
+)
 from ...general import get_box_corners
 from .input_grid_field import InputGridField, as_grid_shape
 
@@ -221,6 +225,51 @@ class GridFieldDataset(ClassBase):
             )
         return field_shape
 
+    def _helper_as_field_values_on_grid(
+        self,
+        field_or_values,
+        *,
+        name: str = "field values",
+    ) -> np.ndarray:
+        """
+        Return numeric field values whose leading axes match this dataset grid.
+
+        `field_or_values` may be a registered field name/index, a `FieldData`
+        object owned by this dataset, or a temporary NumPy-like array. Temporary
+        arrays are not registered or cached.
+        """
+        if self.raw_shape is UNSET:
+            raise ValueError(
+                "Dataset shape must be known before spatial derivatives can be "
+                "computed. Add a field first or initialize the dataset with a "
+                "shape."
+            )
+
+        if isinstance(field_or_values, FieldData):
+            field = field_or_values
+            if field.owner is not self:
+                raise ValueError(
+                    "FieldData input must belong to this GridFieldDataset."
+                )
+            values = field.raw_values
+        elif (
+            field_or_values is None
+            or isinstance(field_or_values, str)
+            or isinstance(field_or_values, int)
+        ):
+            values = self.act_get_field(field_or_values).raw_values
+        else:
+            values = as_field_values(field_or_values, name=name)
+
+        field_shape = as_grid_shape(np.shape(values)[:3], name=f"{name} grid shape")
+        dataset_shape = as_grid_shape(self.raw_shape, name="dataset grid shape")
+        if field_shape != dataset_shape:
+            raise ValueError(
+                f"{name!r} leading grid shape must match the dataset grid shape. "
+                f"Dataset shape is {dataset_shape}; got {field_shape}."
+            )
+        return values
+
     # -------------------------------
     # Shared-grid geometry cache
     # -------------------------------
@@ -302,6 +351,135 @@ class GridFieldDataset(ClassBase):
         field.act_bind_relation_base("owner", self, is_weak=True)
         self.fields.act_register(field)
         return field
+
+    def act_gradient(
+        self,
+        field_or_values,
+        *,
+        coord: str = "physical",
+    ) -> np.ndarray:
+        """
+        Return the spatial gradient of a field on this dataset grid.
+
+        Finite differences are computed along the first three lattice/index
+        axes. The returned array has one additional final axis of length 3,
+        representing the derivative direction.
+        """
+        values = np.asarray(
+            self._helper_as_field_values_on_grid(
+                field_or_values,
+                name="gradient input values",
+            ),
+            dtype=float,
+        )
+        grad = np.empty(values.shape + (3,), dtype=float)
+
+        for axis, is_periodic in enumerate(self.raw_box_periodic_flag):
+            axis_size = values.shape[axis]
+            if axis_size == 1:
+                derivative = np.zeros_like(values, dtype=float)
+            elif is_periodic:
+                derivative = (
+                    np.roll(values, -1, axis=axis) - np.roll(values, 1, axis=axis)
+                ) / 2.0
+            else:
+                derivative = np.empty_like(values, dtype=float)
+
+                index_first = [slice(None)] * values.ndim
+                index_last = [slice(None)] * values.ndim
+                index_first[axis] = 0
+                index_last[axis] = axis_size - 1
+
+                index_next = [slice(None)] * values.ndim
+                index_prev = [slice(None)] * values.ndim
+                index_next[axis] = 1
+                index_prev[axis] = 0
+                derivative[tuple(index_first)] = (
+                    values[tuple(index_next)] - values[tuple(index_prev)]
+                )
+
+                index_next[axis] = axis_size - 1
+                index_prev[axis] = axis_size - 2
+                derivative[tuple(index_last)] = (
+                    values[tuple(index_next)] - values[tuple(index_prev)]
+                )
+
+                if axis_size > 2:
+                    index_mid = [slice(None)] * values.ndim
+                    index_next = [slice(None)] * values.ndim
+                    index_prev = [slice(None)] * values.ndim
+                    index_mid[axis] = slice(1, axis_size - 1)
+                    index_next[axis] = slice(2, axis_size)
+                    index_prev[axis] = slice(0, axis_size - 2)
+                    derivative[tuple(index_mid)] = (
+                        values[tuple(index_next)] - values[tuple(index_prev)]
+                    ) / 2.0
+
+            grad[..., axis] = derivative
+
+        if coord == "index":
+            return grad
+        if coord != "physical":
+            raise ValueError("coord must be either 'index' or 'physical'.")
+        if is_grid_transform_identity(self.raw_grid_transform):
+            return grad
+
+        transform_inv = np.linalg.inv(self.raw_grid_transform)
+        return np.einsum("...i,ij->...j", grad, transform_inv.T)
+
+    def act_derivative(
+        self,
+        field_or_values,
+        direction: str | int,
+        *,
+        coord: str = "physical",
+    ) -> np.ndarray:
+        """
+        Return one spatial derivative direction of a field on this dataset grid.
+
+        `direction` may be 0/1/2 or "x"/"y"/"z". The result is a slice of
+        `act_gradient(..., coord=coord)` along the final derivative axis.
+        """
+        direction_map = {"x": 0, "y": 1, "z": 2}
+        if isinstance(direction, str):
+            try:
+                direction_index = direction_map[direction.lower()]
+            except KeyError as exc:
+                raise ValueError(
+                    "direction must be one of 0, 1, 2, 'x', 'y', or 'z'."
+                ) from exc
+        elif isinstance(direction, int) and direction in (0, 1, 2):
+            direction_index = direction
+        else:
+            raise ValueError("direction must be one of 0, 1, 2, 'x', 'y', or 'z'.")
+
+        return self.act_gradient(field_or_values, coord=coord)[..., direction_index]
+
+    def act_divergence(
+        self,
+        field_or_values,
+        *,
+        coord: str = "physical",
+    ) -> np.ndarray:
+        """
+        Return the divergence of a vector field on this dataset grid.
+
+        The input field must have shape `(Nx, Ny, Nz, 3)`. The vector component
+        axis is contracted with the final derivative axis returned by
+        `act_gradient()`.
+        """
+        values = self._helper_as_field_values_on_grid(
+            field_or_values,
+            name="divergence input values",
+        )
+        if values.shape[3:] != (3,):
+            raise ValueError(
+                "divergence input values must be a vector field with shape "
+                f"{tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
+            )
+
+        grad = self.act_gradient(values, coord=coord)
+        return np.einsum("...ii->...", grad)
 
     def act_get_field(self, name: str | int | None):
         """Return one bound field by name or registry index."""

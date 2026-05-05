@@ -117,6 +117,167 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(periodic_sampled[0], np.array([3.0])))
         self.assertEqual(len(periodic_sampled[1]), 0)
 
+    def test_gradient_returns_index_derivatives_with_nonperiodic_boundaries(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 4, 3)))
+        i, j, k = np.indices((5, 4, 3), dtype=float)
+        values = i**2 + 2.0 * j + 3.0 * k
+        dataset.act_add_field("scalar", values)
+
+        grad = dataset.act_gradient("scalar", coord="index")
+
+        expected_di = np.zeros((5, 4, 3), dtype=float)
+        expected_di[0] = 1.0
+        expected_di[1] = 2.0
+        expected_di[2] = 4.0
+        expected_di[3] = 6.0
+        expected_di[4] = 7.0
+
+        self.assertEqual(grad.shape, (5, 4, 3, 3))
+        self.assertTrue(np.allclose(grad[..., 0], expected_di))
+        self.assertTrue(np.allclose(grad[..., 1], 2.0))
+        self.assertTrue(np.allclose(grad[..., 2], 3.0))
+
+    def test_gradient_uses_periodic_stencil_on_periodic_axes(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 2, 2), box_periodic_flag=(True, False, False)
+            )
+        )
+        values = np.broadcast_to(
+            np.arange(4, dtype=float).reshape(4, 1, 1),
+            (4, 2, 2),
+        )
+        dataset.act_add_field("scalar", values)
+
+        grad = dataset.act_gradient("scalar", coord="index")
+
+        self.assertTrue(np.allclose(grad[:, 0, 0, 0], np.array([-1.0, 1.0, 1.0, -1.0])))
+        self.assertTrue(np.allclose(grad[..., 1], 0.0))
+        self.assertTrue(np.allclose(grad[..., 2], 0.0))
+
+    def test_gradient_converts_derivative_axis_to_physical_coordinates(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(3, 4, 5),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = 4.0 * i + 6.0 * j + 8.0 * k
+        dataset.act_add_field("scalar", values)
+
+        grad = dataset.act_gradient("scalar")
+
+        self.assertTrue(np.allclose(grad[..., 0], 2.0))
+        self.assertTrue(np.allclose(grad[..., 1], 2.0))
+        self.assertTrue(np.allclose(grad[..., 2], 2.0))
+
+    def test_gradient_accepts_temporary_arrays_and_preserves_component_axes(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        values = np.zeros((3, 4, 5, 2), dtype=float)
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values[..., 0] = i
+        values[..., 1] = j + k
+
+        grad = dataset.act_gradient(values, coord="index")
+
+        self.assertEqual(grad.shape, (3, 4, 5, 2, 3))
+        self.assertTrue(np.allclose(grad[..., 0, 0], 1.0))
+        self.assertTrue(np.allclose(grad[..., 0, 1], 0.0))
+        self.assertTrue(np.allclose(grad[..., 0, 2], 0.0))
+        self.assertTrue(np.allclose(grad[..., 1, 0], 0.0))
+        self.assertTrue(np.allclose(grad[..., 1, 1], 1.0))
+        self.assertTrue(np.allclose(grad[..., 1, 2], 1.0))
+
+    def test_derivative_selects_one_gradient_direction(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = i + 2.0 * j + 3.0 * k
+        dataset.act_add_field("scalar", values)
+
+        d_dy = dataset.act_derivative("scalar", direction="y", coord="index")
+        d_dz = dataset.act_derivative("scalar", direction=2, coord="index")
+
+        self.assertTrue(np.allclose(d_dy, 2.0))
+        self.assertTrue(np.allclose(d_dz, 3.0))
+
+    def test_derivative_accepts_temporary_arrays_for_chained_expressions(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 4, 3)))
+        i, j, k = np.indices((5, 4, 3), dtype=float)
+        A = i**2
+        B = 2.0 + j * 0.0 + k * 0.0
+        dataset.act_add_field("A", A)
+        dataset.act_add_field("B", B)
+
+        dA_dx = dataset.act_derivative("A", direction="x", coord="index")
+        result = dataset.act_derivative(
+            dA_dx * dataset["B"].raw_values,
+            direction="x",
+            coord="index",
+        )
+
+        expected = np.zeros((5, 4, 3), dtype=float)
+        expected[0] = 2.0
+        expected[1] = 3.0
+        expected[2] = 4.0
+        expected[3] = 3.0
+        expected[4] = 2.0
+        self.assertTrue(np.allclose(result, expected))
+
+    def test_derivative_rejects_invalid_direction(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        dataset.act_add_field("scalar", np.zeros((3, 3, 3), dtype=float))
+
+        with self.assertRaises(ValueError):
+            dataset.act_derivative("scalar", direction="theta")
+
+    def test_divergence_contracts_vector_component_with_derivative_axis(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 3), dtype=float)
+        values[..., 0] = i
+        values[..., 1] = 2.0 * j
+        values[..., 2] = 3.0 * k
+        dataset.act_add_field("vector", values)
+
+        div = dataset.act_divergence("vector", coord="index")
+
+        self.assertEqual(div.shape, (3, 4, 5))
+        self.assertTrue(np.allclose(div, 6.0))
+
+    def test_divergence_uses_physical_coordinate_gradient(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(3, 4, 5),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 3), dtype=float)
+        values[..., 0] = 4.0 * i
+        values[..., 1] = 6.0 * j
+        values[..., 2] = 8.0 * k
+
+        div = dataset.act_divergence(values)
+
+        self.assertTrue(np.allclose(div, 6.0))
+
+    def test_divergence_accepts_temporary_vector_arrays(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        i, j, k = np.indices((3, 3, 3), dtype=float)
+        values = np.stack((i, j, k), axis=-1)
+
+        div = dataset.act_divergence(values, coord="index")
+
+        self.assertTrue(np.allclose(div, 3.0))
+
+    def test_divergence_rejects_non_vector_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        dataset.act_add_field("scalar", np.zeros((3, 3, 3), dtype=float))
+
+        with self.assertRaises(ValueError):
+            dataset.act_divergence("scalar")
+
 
 if __name__ == "__main__":
     unittest.main()
