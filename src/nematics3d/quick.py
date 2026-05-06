@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 from .classes.q_field_object import QFieldObject
@@ -50,6 +52,8 @@ def quick_visualize_Q(
     name="Q",
     grid_normal=(0, 0, 1),
     is_visualize_lines=True,
+    save_path=None,
+    is_off_screen=False,
 ):
     is_Q_input_provided = Q_input is not None and Q_input is not UNSET
     is_S_provided = S is not None and S is not UNSET
@@ -77,7 +81,7 @@ def quick_visualize_Q(
             window_length=params["smooth_window_length"],
         )
 
-    figure = PlotFigure()
+    figure = PlotFigure(is_off_screen=is_off_screen)
     if is_visualize_lines:
         q_obj.act_visualize_disclination_lines(
             figure=figure,
@@ -113,5 +117,10 @@ def quick_visualize_Q(
         n_radius=params["n_radius"],
         figure=figure,
     )
+
+    if save_path is not None:
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.act_savefig(save_path)
 
     return q_obj, figure
