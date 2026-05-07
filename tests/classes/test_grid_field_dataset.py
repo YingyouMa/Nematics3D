@@ -75,6 +75,15 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
 
+    def test_field_values_are_real_floating_lattice_fields(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        field = dataset.act_add_field("scalar", np.ones((2, 2, 2), dtype=int))
+
+        self.assertTrue(np.issubdtype(field.raw_values.dtype, np.floating))
+
+        with self.assertRaises(TypeError):
+            dataset.act_add_field("complex", np.ones((2, 2, 2), dtype=complex))
+
     def test_dataset_core_grid_metadata_is_fixed_after_initialization(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
 

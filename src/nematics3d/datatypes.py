@@ -627,6 +627,37 @@ def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag
 # - Custom feature vector per voxel: shape (Nx, Ny, Nz, D)
 GeneralField = np.ndarray
 
+
+def as_real_lattice_field(
+    input_data,
+    name: str = "field values",
+    *,
+    min_ndim: int = 3,
+) -> GeneralField:
+    """Convert input into a real-valued NumPy lattice field.
+
+    A lattice field must have at least ``min_ndim`` axes, contain numeric
+    real-valued data, and may hold scalar, vector, tensor, or feature-vector
+    data on trailing component axes. Integer-like data is accepted and converted
+    to floating point.
+    """
+    values = np.asarray(input_data)
+    if values.ndim < min_ndim:
+        raise ValueError(
+            f"{name!r} must have at least {min_ndim} lattice axes. "
+            f"Got shape {values.shape} instead."
+        )
+    if not np.issubdtype(values.dtype, np.number):
+        raise TypeError(f"{name!r} must contain numeric values. Got {values.dtype}.")
+    if np.iscomplexobj(values):
+        raise TypeError(
+            f"{name!r} must be real-valued; complex fields are unsupported."
+        )
+    if not np.issubdtype(values.dtype, np.floating):
+        values = values.astype(float, copy=False)
+    return values
+
+
 # -------------------------
 # Specialized field types (all are subtypes of GeneralField)
 # -------------------------
