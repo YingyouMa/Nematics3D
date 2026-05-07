@@ -2,14 +2,18 @@
 
 from .fourier import (
     FourierResult,
-    field_fourier,
-    field_fourier_filter,
-    field_inverse_fourier,
+    act_correlation,
+    act_filter,
+    act_fourier,
+    act_inverse,
+    act_mean_subtracted_values,
 )
 
 __all__ = [
     "FourierResult",
-    "field_fourier",
-    "field_fourier_filter",
-    "field_inverse_fourier",
+    "act_correlation",
+    "act_filter",
+    "act_fourier",
+    "act_inverse",
+    "act_mean_subtracted_values",
 ]

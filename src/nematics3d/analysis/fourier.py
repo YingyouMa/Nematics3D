@@ -15,7 +15,7 @@ from nematics3d.datatypes import as_real_lattice_field
 
 @dataclass(slots=True, frozen=True, repr=False)
 class FourierResult(ResultBase):
-    """Container returned by :func:`field_fourier`."""
+    """Container returned by :func:`act_fourier`."""
 
     __result_name__: ClassVar[str] = "Fourier transform"
 
@@ -24,28 +24,44 @@ class FourierResult(ResultBase):
     values_shape: tuple[int, ...]
     axes: tuple[int, ...]
     spacing: tuple[float, ...]
-    is_mean_subtracted: bool
 
-    def filter(
+    def act_filter(
         self,
         *,
         k_min: float | None = None,
         k_max: float | None = None,
     ) -> "FourierResult":
         """Return a copy with coefficients outside the requested k-band zeroed."""
-        return field_fourier_filter(self, k_min=k_min, k_max=k_max)
+        return act_filter(self, k_min=k_min, k_max=k_max)
 
-    def inverse(
+    def act_inverse(
         self,
         *,
         padding_num: int | Sequence[int] = 0,
     ) -> np.ndarray:
         """Invert this Fourier result, optionally padding for interpolation."""
-        return field_inverse_fourier(self, padding_num=padding_num)
+        return act_inverse(self, padding_num=padding_num)
 
-    def spectrum(self) -> np.ndarray:
+    def act_spectrum(self, *, is_normalized: bool = False) -> np.ndarray:
         """Return the Fourier power spectrum derived from this transform."""
-        return _spectrum_from_fourier(self)
+        return _spectrum_from_fourier(self, is_normalized=is_normalized)
+
+    def act_correlation(self) -> np.ndarray:
+        """Return the periodic autocorrelation from this Fourier result."""
+        return act_correlation(self)
+
+    def act_mean_subtracted_values(
+        self,
+        *,
+        mode: str = "spatial",
+        padding_num: int | Sequence[int] = 0,
+    ) -> np.ndarray:
+        """Return inverse-transformed values after subtracting a selected mean."""
+        return act_mean_subtracted_values(
+            self,
+            mode=mode,
+            padding_num=padding_num,
+        )
 
 
 def _as_axes_tuple(axes: int | Sequence[int]) -> tuple[int, ...]:
@@ -178,12 +194,10 @@ def _pad_rfft_axis(
     return np.pad(fft_values, pad_width, mode="constant")
 
 
-def field_fourier(
+def act_fourier(
     values,
     axes: int | Sequence[int],
     spacing: float | Sequence[float],
-    *,
-    is_subtract_mean: bool = True,
 ) -> FourierResult:
     """Compute a Fourier transform along lattice axes.
 
@@ -202,28 +216,25 @@ def field_fourier(
         Real-space spacing for each transformed lattice axis. A scalar applies
         the same spacing to every transformed axis; otherwise the sequence
         length must match ``axes``.
-    is_subtract_mean
-        If ``True``, subtract the spatial mean before the transform. For
-        component fields, each component has its own spatial mean removed.
 
     Returns
     -------
     FourierResult
-        Fourier transform result. Use ``result.spectrum()`` to derive a power
-        spectrum, ``result.filter()`` to filter coefficients, or
-        ``result.inverse()`` to inverse transform. This function uses
-        ``np.fft.rfftn`` for real-valued input, so the last transformed axis
-        uses ``np.fft.rfftfreq`` while earlier transformed axes use
-        ``np.fft.fftfreq``. The original ``values_shape`` is retained so later
-        inverse transforms can recover odd-length real-input axes.
+        Fourier transform result. Use ``result.act_spectrum()`` to derive a
+        power spectrum, ``result.act_filter()`` to filter coefficients,
+        ``result.act_inverse()`` to inverse transform,
+        ``result.act_correlation()`` to derive an autocorrelation, or
+        ``result.act_mean_subtracted_values()`` to derive mean-subtracted
+        real-space values. This function uses ``np.fft.rfftn`` for real-valued
+        input, so the last transformed axis uses ``np.fft.rfftfreq`` while
+        earlier transformed axes use ``np.fft.fftfreq``. The original
+        ``values_shape`` is retained so later inverse transforms can recover
+        odd-length real-input axes.
     """
     axes = _as_axes_tuple(axes)
     spacing = _as_spacing_tuple(spacing, axes)
     values = as_real_lattice_field(values, name="values")
     shape = values.shape
-
-    if is_subtract_mean:
-        values = values - values.mean(axis=(0, 1, 2), keepdims=True)
 
     fft_values = np.fft.rfftn(values, axes=axes)
     k_axes = _build_k_axes(shape, axes, spacing)
@@ -234,26 +245,59 @@ def field_fourier(
         values_shape=shape,
         axes=axes,
         spacing=spacing,
-        is_mean_subtracted=is_subtract_mean,
     )
 
 
-def _spectrum_from_fourier(fft_result: FourierResult) -> np.ndarray:
+def _transformed_sample_count(fft_result: FourierResult) -> int:
+    """Return the number of real-space samples in the transformed subspace."""
+    return int(np.prod([fft_result.values_shape[axis] for axis in fft_result.axes]))
+
+
+def _rfft_power_weights(fft_result: FourierResult) -> np.ndarray:
+    """Return one-sided rFFT weights for mean-square power accounting."""
+    rfft_axis = fft_result.axes[-1]
+    n = fft_result.values_shape[rfft_axis]
+    weights = np.ones(fft_result.fft_values.shape[rfft_axis], dtype=float)
+
+    if n % 2 == 0:
+        weights[1:-1] = 2.0
+    else:
+        weights[1:] = 2.0
+
+    weight_shape = [1] * fft_result.fft_values.ndim
+    weight_shape[rfft_axis] = weights.size
+    return weights.reshape(weight_shape)
+
+
+def _average_untransformed_spatial_axes(
+    values: np.ndarray,
+    fft_result: FourierResult,
+) -> np.ndarray:
+    """Average over spatial lattice axes not included in the transform."""
+    average_axes = tuple(axis for axis in (0, 1, 2) if axis not in fft_result.axes)
+    if average_axes:
+        return values.mean(axis=average_axes)
+    return values
+
+
+def _spectrum_from_fourier(
+    fft_result: FourierResult,
+    *,
+    is_normalized: bool = False,
+) -> np.ndarray:
     """Derive Fourier power from one Fourier transform result."""
     if not isinstance(fft_result, FourierResult):
         raise TypeError("`fft_result` must be a FourierResult.")
 
     power = np.abs(fft_result.fft_values) ** 2
-    average_axes = tuple(axis for axis in (0, 1, 2) if axis not in fft_result.axes)
-    if average_axes:
-        spectrum = power.mean(axis=average_axes)
-    else:
-        spectrum = power
+    if is_normalized:
+        sample_count = _transformed_sample_count(fft_result)
+        power = power * _rfft_power_weights(fft_result) / sample_count**2
 
-    return spectrum
+    return _average_untransformed_spatial_axes(power, fft_result)
 
 
-def field_inverse_fourier(
+def act_inverse(
     result: FourierResult,
     *,
     padding_num: int | Sequence[int] = 0,
@@ -263,7 +307,7 @@ def field_inverse_fourier(
     Parameters
     ----------
     result
-        Fourier result returned by ``field_fourier(...)``.
+        Fourier result returned by ``act_fourier(...)``.
     padding_num
         Number of extra real-space samples to add along each transformed axis
         before inverse transforming. A scalar applies to every transformed
@@ -273,9 +317,7 @@ def field_inverse_fourier(
     -------
     np.ndarray
         Inverse-transformed real-space field. If ``padding_num`` is positive,
-        the output is Fourier-interpolated on a denser periodic lattice. If
-        ``result.is_mean_subtracted`` is ``True``, the returned field is the
-        mean-subtracted field because the removed mean is not stored.
+        the output is Fourier-interpolated on a denser periodic lattice.
     """
     if not isinstance(result, FourierResult):
         raise TypeError("`result` must be a FourierResult.")
@@ -305,7 +347,63 @@ def field_inverse_fourier(
     return values * scale
 
 
-def field_fourier_filter(
+def act_correlation(result: FourierResult) -> np.ndarray:
+    """Return the periodic autocorrelation from a Fourier result.
+
+    The correlation is normalized as an average over the transformed lattice
+    axes, so lag zero is ``mean(values**2)`` over those axes. Spatial lattice
+    axes not included in the transform are averaged after the inverse
+    transform, matching ``act_spectrum(...)``.
+    """
+    if not isinstance(result, FourierResult):
+        raise TypeError("`result` must be a FourierResult.")
+
+    sample_count = _transformed_sample_count(result)
+    lengths = tuple(result.values_shape[axis] for axis in result.axes)
+    power = np.abs(result.fft_values) ** 2 / sample_count
+    correlation = np.fft.irfftn(power, s=lengths, axes=result.axes)
+
+    return _average_untransformed_spatial_axes(correlation, result)
+
+
+def act_mean_subtracted_values(
+    result: FourierResult,
+    *,
+    mode: str = "spatial",
+    padding_num: int | Sequence[int] = 0,
+) -> np.ndarray:
+    """Return inverse-transformed values with a selected mean removed.
+
+    Parameters
+    ----------
+    result
+        Fourier result returned by ``act_fourier(...)``.
+    mode
+        Mean-subtraction mode. ``"spatial"`` subtracts the mean over all three
+        lattice axes. ``"axes"`` subtracts the mean only over the axes
+        transformed by ``result``. Component axes are preserved in both modes.
+    padding_num
+        Optional Fourier interpolation padding passed to
+        ``act_inverse(...)`` before subtracting the mean.
+
+    Returns
+    -------
+    np.ndarray
+        Real-space values with the requested mean removed.
+    """
+    if not isinstance(result, FourierResult):
+        raise TypeError("`result` must be a FourierResult.")
+
+    if mode not in {"spatial", "axes"}:
+        raise ValueError("`mode` must be either 'spatial' or 'axes'.")
+
+    values = act_inverse(result, padding_num=padding_num)
+    mean_axes = (0, 1, 2) if mode == "spatial" else result.axes
+
+    return values - values.mean(axis=mean_axes, keepdims=True)
+
+
+def act_filter(
     result: FourierResult,
     *,
     k_min: float | None = None,
@@ -316,7 +414,7 @@ def field_fourier_filter(
     Parameters
     ----------
     result
-        Fourier result returned by ``field_fourier(...)``.
+        Fourier result returned by ``act_fourier(...)``.
     k_min
         Optional lower bound for retained angular wave-number magnitude.
     k_max

@@ -3,17 +3,18 @@ import pytest
 
 from nematics3d.analysis import (
     FourierResult,
-    field_fourier,
-    field_fourier_filter,
-    field_inverse_fourier,
+    act_correlation,
+    act_fourier,
+    act_filter,
+    act_inverse,
 )
 
 
-def test_field_fourier_spectrum_scalar_axis_returns_expected_shape_and_k():
+def test_act_fourier_spectrum_scalar_axis_returns_expected_shape_and_k():
     values = np.ones((8, 4, 3))
 
-    result = field_fourier(values, axes=0, spacing=0.5)
-    spectrum = result.spectrum()
+    result = act_fourier(values, axes=0, spacing=0.5)
+    spectrum = result.act_spectrum()
 
     assert result.axes == (0,)
     assert result.spacing == (0.5,)
@@ -22,35 +23,44 @@ def test_field_fourier_spectrum_scalar_axis_returns_expected_shape_and_k():
     np.testing.assert_allclose(result.k_axes[0], 2 * np.pi * np.fft.rfftfreq(8, 0.5))
 
 
-def test_field_fourier_spectrum_handles_components_in_parallel():
+def test_act_fourier_spectrum_handles_components_in_parallel():
     values = np.ones((8, 4, 3, 5))
 
-    spectrum = field_fourier(values, axes=0, spacing=1.0).spectrum()
+    spectrum = act_fourier(values, axes=0, spacing=1.0).act_spectrum()
 
     assert spectrum.shape == (5, 5)
 
 
-def test_field_fourier_fft_output_returns_coefficients():
+def test_act_fourier_normalized_spectrum_preserves_mean_square():
+    x = np.arange(8, dtype=float)
+    values = np.sin(2 * np.pi * x / 8)[:, None, None]
+
+    spectrum = act_fourier(values, axes=0, spacing=1.0).act_spectrum(
+        is_normalized=True,
+    )
+
+    np.testing.assert_allclose(spectrum.sum(axis=0), np.mean(values**2), atol=1e-12)
+
+
+def test_act_fourier_fft_output_returns_coefficients():
     values = np.ones((8, 4, 3))
 
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=0,
         spacing=1.0,
-        is_subtract_mean=False,
     )
 
     assert isinstance(result, FourierResult)
     assert result.fft_values.shape == (5, 4, 3)
     assert result.fft_values[0, 0, 0] == 8.0
-    assert result.is_mean_subtracted is False
 
 
-def test_field_fourier_multi_axis_returns_k_axes_in_transform_order():
+def test_act_fourier_multi_axis_returns_k_axes_in_transform_order():
     values = np.ones((8, 6, 4, 3))
 
-    result = field_fourier(values, axes=(0, 2), spacing=(0.5, 2.0))
-    spectrum = result.spectrum()
+    result = act_fourier(values, axes=(0, 2), spacing=(0.5, 2.0))
+    spectrum = result.act_spectrum()
 
     assert result.axes == (0, 2)
     assert spectrum.shape == (8, 3, 3)
@@ -58,36 +68,57 @@ def test_field_fourier_multi_axis_returns_k_axes_in_transform_order():
     np.testing.assert_allclose(result.k_axes[1], 2 * np.pi * np.fft.rfftfreq(4, 2.0))
 
 
-def test_field_fourier_subtracts_each_component_spatial_mean():
+def test_act_fourier_preserves_mean_by_default():
     values = np.ones((8, 4, 3, 2))
     values[..., 1] = 2.0
 
-    result = field_fourier(values, axes=0, spacing=1.0)
+    result = act_fourier(values, axes=0, spacing=1.0)
 
-    np.testing.assert_allclose(result.fft_values, 0.0)
-    assert result.is_mean_subtracted is True
+    assert result.fft_values[0, 0, 0, 0] == 8.0
+    assert result.fft_values[0, 0, 0, 1] == 16.0
 
 
-def test_field_fourier_rejects_complex_values():
+def test_fourier_result_mean_subtracted_values_supports_spatial_mode():
+    values = np.ones((4, 3, 2, 2))
+    values[..., 1] = 2.0
+    result = act_fourier(values, axes=0, spacing=1.0)
+
+    centered = result.act_mean_subtracted_values(mode="spatial")
+
+    np.testing.assert_allclose(centered, 0.0, atol=1e-12)
+
+
+def test_fourier_result_mean_subtracted_values_supports_axes_mode():
+    x = np.arange(4, dtype=float)[:, None, None]
+    y_offset = np.arange(3, dtype=float)[None, :, None]
+    values = x + y_offset
+    result = act_fourier(values, axes=0, spacing=1.0)
+
+    centered = result.act_mean_subtracted_values(mode="axes")
+    expected = values - values.mean(axis=0, keepdims=True)
+
+    np.testing.assert_allclose(centered, expected, atol=1e-12)
+
+
+def test_act_fourier_rejects_complex_values():
     values = np.ones((8, 4, 3), dtype=complex)
 
     with pytest.raises(TypeError, match="real-valued"):
-        field_fourier(values, axes=0, spacing=1.0)
+        act_fourier(values, axes=0, spacing=1.0)
 
 
-def test_field_fourier_filter_keeps_requested_k_band():
+def test_act_filter_keeps_requested_k_band():
     values = np.zeros((8, 4, 3))
     values[0, :, :] = 1.0
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=0,
         spacing=1.0,
-        is_subtract_mean=False,
     )
     k = result.k_axes[0]
 
-    filtered = field_fourier_filter(result, k_min=k[2] - 1e-12, k_max=k[2] + 1e-12)
-    filtered_method = result.filter(k_min=k[2] - 1e-12, k_max=k[2] + 1e-12)
+    filtered = act_filter(result, k_min=k[2] - 1e-12, k_max=k[2] + 1e-12)
+    filtered_method = result.act_filter(k_min=k[2] - 1e-12, k_max=k[2] + 1e-12)
 
     assert isinstance(filtered, FourierResult)
     assert filtered is not result
@@ -99,65 +130,79 @@ def test_field_fourier_filter_keeps_requested_k_band():
     np.testing.assert_allclose(filtered_method.fft_values, kept)
 
 
-def test_field_fourier_filter_broadcasts_over_untransformed_spatial_axes():
+def test_act_filter_broadcasts_over_untransformed_spatial_axes():
     values = np.zeros((8, 4, 3, 2))
     values[0, :, 0, :] = 1.0
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=(0, 2),
         spacing=(1.0, 1.0),
-        is_subtract_mean=False,
     )
 
-    filtered = field_fourier_filter(result, k_max=0.0)
+    filtered = act_filter(result, k_max=0.0)
 
     assert filtered.fft_values.shape == result.fft_values.shape
 
 
-def test_field_fourier_filter_without_bounds_returns_same_result():
-    result = field_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
+def test_act_filter_without_bounds_returns_same_result():
+    result = act_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
 
-    assert field_fourier_filter(result) is result
-    assert result.filter() is result
+    assert act_filter(result) is result
+    assert result.act_filter() is result
 
 
-def test_field_fourier_filter_rejects_invalid_bounds():
-    result = field_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
+def test_act_filter_rejects_invalid_bounds():
+    result = act_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
 
     with pytest.raises(ValueError, match="non-negative"):
-        field_fourier_filter(result, k_min=-1.0)
+        act_filter(result, k_min=-1.0)
     with pytest.raises(ValueError, match="less than or equal"):
-        field_fourier_filter(result, k_min=2.0, k_max=1.0)
+        act_filter(result, k_min=2.0, k_max=1.0)
 
 
-def test_field_inverse_fourier_recovers_unpadded_values():
+def test_act_inverse_recovers_unpadded_values():
     x = np.arange(8, dtype=float)
     values = np.sin(2 * np.pi * x / 8)[:, None, None]
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=0,
         spacing=1.0,
-        is_subtract_mean=False,
     )
 
-    recovered = field_inverse_fourier(result)
-    recovered_method = result.inverse()
+    recovered = act_inverse(result)
+    recovered_method = result.act_inverse()
 
     np.testing.assert_allclose(recovered, values, atol=1e-12)
     np.testing.assert_allclose(recovered_method, values, atol=1e-12)
 
 
-def test_field_inverse_fourier_padding_interpolates_shape_and_amplitude():
+def test_act_correlation_returns_periodic_autocorrelation():
     x = np.arange(8, dtype=float)
     values = np.sin(2 * np.pi * x / 8)[:, None, None]
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=0,
         spacing=1.0,
-        is_subtract_mean=False,
     )
 
-    interpolated = field_inverse_fourier(result, padding_num=8)
+    correlation = act_correlation(result)
+    correlation_method = result.act_correlation()
+    expected = 0.5 * np.cos(2 * np.pi * x / 8)[:, None, None]
+
+    np.testing.assert_allclose(correlation, expected, atol=1e-12)
+    np.testing.assert_allclose(correlation_method, expected, atol=1e-12)
+
+
+def test_act_inverse_padding_interpolates_shape_and_amplitude():
+    x = np.arange(8, dtype=float)
+    values = np.sin(2 * np.pi * x / 8)[:, None, None]
+    result = act_fourier(
+        values,
+        axes=0,
+        spacing=1.0,
+    )
+
+    interpolated = act_inverse(result, padding_num=8)
     expected_x = np.arange(16, dtype=float) * 8 / 16
     expected = np.sin(2 * np.pi * expected_x / 8)[:, None, None]
 
@@ -165,16 +210,15 @@ def test_field_inverse_fourier_padding_interpolates_shape_and_amplitude():
     np.testing.assert_allclose(interpolated, expected, atol=1e-12)
 
 
-def test_field_inverse_fourier_padding_supports_multi_axis_results():
+def test_act_inverse_padding_supports_multi_axis_results():
     values = np.ones((4, 3, 5, 2))
-    result = field_fourier(
+    result = act_fourier(
         values,
         axes=(0, 2),
         spacing=(1.0, 1.0),
-        is_subtract_mean=False,
     )
 
-    interpolated = field_inverse_fourier(result, padding_num=(2, 4))
+    interpolated = act_inverse(result, padding_num=(2, 4))
 
     assert interpolated.shape == (6, 3, 9, 2)
     np.testing.assert_allclose(interpolated, 1.0, atol=1e-12)
