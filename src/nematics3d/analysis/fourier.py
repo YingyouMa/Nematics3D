@@ -10,12 +10,12 @@ from typing import ClassVar
 import numpy as np
 
 from nematics3d.classes.result_base import ResultBase
-from nematics3d.datatypes import as_real_lattice_field, as_str
+from nematics3d.datatypes import as_real_lattice_field
 
 
 @dataclass(slots=True, frozen=True, repr=False)
 class FourierResult(ResultBase):
-    """Container returned by :func:`field_fourier` with ``output="fft"``."""
+    """Container returned by :func:`field_fourier`."""
 
     __result_name__: ClassVar[str] = "Fourier transform"
 
@@ -26,20 +26,26 @@ class FourierResult(ResultBase):
     spacing: tuple[float, ...]
     is_mean_subtracted: bool
 
+    def filter(
+        self,
+        *,
+        k_min: float | None = None,
+        k_max: float | None = None,
+    ) -> "FourierResult":
+        """Return a copy with coefficients outside the requested k-band zeroed."""
+        return field_fourier_filter(self, k_min=k_min, k_max=k_max)
 
-@dataclass(slots=True, frozen=True, repr=False)
-class SpectrumResult(ResultBase):
-    """Container returned by :func:`field_fourier` with ``output="spectrum"``."""
+    def inverse(
+        self,
+        *,
+        padding_num: int | Sequence[int] = 0,
+    ) -> np.ndarray:
+        """Invert this Fourier result, optionally padding for interpolation."""
+        return field_inverse_fourier(self, padding_num=padding_num)
 
-    __result_name__: ClassVar[str] = "Fourier spectrum"
-
-    k_axes: tuple[np.ndarray, ...]
-    spectrum: np.ndarray
-    values_shape: tuple[int, ...]
-    axes: tuple[int, ...]
-    spacing: tuple[float, ...]
-    is_mean_subtracted: bool
-    component_mode: str
+    def spectrum(self) -> np.ndarray:
+        """Return the Fourier power spectrum derived from this transform."""
+        return _spectrum_from_fourier(self)
 
 
 def _as_axes_tuple(axes: int | Sequence[int]) -> tuple[int, ...]:
@@ -172,14 +178,14 @@ def _pad_rfft_axis(
     return np.pad(fft_values, pad_width, mode="constant")
 
 
-def _compute_field_fft(
+def field_fourier(
     values,
     axes: int | Sequence[int],
     spacing: float | Sequence[float],
     *,
     is_subtract_mean: bool = True,
 ) -> FourierResult:
-    """Compute a real-input FFT along one or more lattice axes.
+    """Compute a Fourier transform along lattice axes.
 
     Parameters
     ----------
@@ -203,11 +209,13 @@ def _compute_field_fft(
     Returns
     -------
     FourierResult
-        Result object containing ``k_axes`` and complex ``fft_values``. This
-        function uses ``np.fft.rfftn`` for real-valued input, so the last
-        transformed axis uses ``np.fft.rfftfreq`` while earlier transformed
-        axes use ``np.fft.fftfreq``. The original ``values_shape`` is retained
-        so later inverse transforms can recover odd-length real-input axes.
+        Fourier transform result. Use ``result.spectrum()`` to derive a power
+        spectrum, ``result.filter()`` to filter coefficients, or
+        ``result.inverse()`` to inverse transform. This function uses
+        ``np.fft.rfftn`` for real-valued input, so the last transformed axis
+        uses ``np.fft.rfftfreq`` while earlier transformed axes use
+        ``np.fft.fftfreq``. The original ``values_shape`` is retained so later
+        inverse transforms can recover odd-length real-input axes.
     """
     axes = _as_axes_tuple(axes)
     spacing = _as_spacing_tuple(spacing, axes)
@@ -230,64 +238,10 @@ def _compute_field_fft(
     )
 
 
-def field_fourier(
-    values,
-    axes: int | Sequence[int],
-    spacing: float | Sequence[float],
-    *,
-    output: str = "spectrum",
-    is_subtract_mean: bool = True,
-    component_mode: str = "component",
-) -> FourierResult | SpectrumResult:
-    """Compute a Fourier transform or power spectrum along lattice axes.
-
-    Parameters
-    ----------
-    values
-        Real-valued lattice field. The first three dimensions are interpreted
-        as spatial lattice axes. Any trailing dimensions are treated as field
-        components and transformed in parallel.
-    axes
-        Lattice axis or axes to transform. Valid entries are ``0``, ``1``, and
-        ``2``. Multi-axis input must be ordered from low to high so ``spacing``
-        maps unambiguously to the transformed lattice axes. These are lattice
-        axes, not laboratory x/y/z directions.
-    spacing
-        Real-space spacing for each transformed lattice axis. A scalar applies
-        the same spacing to every transformed axis; otherwise the sequence
-        length must match ``axes``.
-    output
-        Selects the returned result. ``"spectrum"`` returns Fourier power.
-        ``"fft"`` returns complex Fourier coefficients.
-    is_subtract_mean
-        If ``True``, subtract the spatial mean before the transform. For
-        component fields, each component has its own spatial mean removed.
-    component_mode
-        Used only when ``output="spectrum"``. ``"component"`` keeps each
-        component spectrum. ``"sum"`` sums power over all trailing component
-        axes and returns one total spectrum.
-
-    Returns
-    -------
-    FourierResult or SpectrumResult
-        ``FourierResult`` is returned for ``output="fft"``. ``SpectrumResult``
-        is returned for ``output="spectrum"``.
-    """
-    output = as_str(output, name="output", pool=("spectrum", "fft"))
-    component_mode = as_str(
-        component_mode,
-        name="component_mode",
-        pool=("component", "sum"),
-    )
-    fft_result = _compute_field_fft(
-        values,
-        axes=axes,
-        spacing=spacing,
-        is_subtract_mean=is_subtract_mean,
-    )
-
-    if output == "fft":
-        return fft_result
+def _spectrum_from_fourier(fft_result: FourierResult) -> np.ndarray:
+    """Derive Fourier power from one Fourier transform result."""
+    if not isinstance(fft_result, FourierResult):
+        raise TypeError("`fft_result` must be a FourierResult.")
 
     power = np.abs(fft_result.fft_values) ** 2
     average_axes = tuple(axis for axis in (0, 1, 2) if axis not in fft_result.axes)
@@ -296,20 +250,7 @@ def field_fourier(
     else:
         spectrum = power
 
-    if component_mode == "sum":
-        component_axes = tuple(range(len(fft_result.axes), spectrum.ndim))
-        if component_axes:
-            spectrum = spectrum.sum(axis=component_axes)
-
-    return SpectrumResult(
-        k_axes=fft_result.k_axes,
-        spectrum=spectrum,
-        values_shape=fft_result.values_shape,
-        axes=fft_result.axes,
-        spacing=fft_result.spacing,
-        is_mean_subtracted=fft_result.is_mean_subtracted,
-        component_mode=component_mode,
-    )
+    return spectrum
 
 
 def field_inverse_fourier(
@@ -322,7 +263,7 @@ def field_inverse_fourier(
     Parameters
     ----------
     result
-        Fourier result returned by ``field_fourier(..., output="fft")``.
+        Fourier result returned by ``field_fourier(...)``.
     padding_num
         Number of extra real-space samples to add along each transformed axis
         before inverse transforming. A scalar applies to every transformed
@@ -375,7 +316,7 @@ def field_fourier_filter(
     Parameters
     ----------
     result
-        Fourier result returned by ``field_fourier(..., output="fft")``.
+        Fourier result returned by ``field_fourier(...)``.
     k_min
         Optional lower bound for retained angular wave-number magnitude.
     k_max

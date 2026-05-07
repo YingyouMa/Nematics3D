@@ -2,7 +2,6 @@
 
 from .fourier import (
     FourierResult,
-    SpectrumResult,
     field_fourier,
     field_fourier_filter,
     field_inverse_fourier,
@@ -10,7 +9,6 @@ from .fourier import (
 
 __all__ = [
     "FourierResult",
-    "SpectrumResult",
     "field_fourier",
     "field_fourier_filter",
     "field_inverse_fourier",
