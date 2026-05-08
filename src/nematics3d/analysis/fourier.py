@@ -10,6 +10,7 @@ from typing import ClassVar
 import numpy as np
 
 from nematics3d.classes.result_base import ResultBase
+from nematics3d.datatypes import as_Number
 from nematics3d.datatypes import as_real_lattice_field
 
 
@@ -18,6 +19,15 @@ class FourierResult(ResultBase):
     """Container returned by :func:`act_fourier`."""
 
     __result_name__: ClassVar[str] = "Fourier transform"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "k_axes": ("Angular wave-number coordinate arrays for the transformed axes."),
+        "fft_values": (
+            "Complex Fourier coefficients from np.fft.rfftn on the selected axes."
+        ),
+        "values_shape": "Shape of the original real-space lattice field.",
+        "axes": "Spatial lattice axes included in the Fourier transform.",
+        "spacing": "Real-space spacing associated with each transformed axis.",
+    }
 
     k_axes: tuple[np.ndarray, ...]
     fft_values: np.ndarray
@@ -46,7 +56,7 @@ class FourierResult(ResultBase):
         """Return the Fourier power spectrum derived from this transform."""
         return _spectrum_from_fourier(self, is_normalized=is_normalized)
 
-    def act_correlation(self) -> np.ndarray:
+    def act_correlation(self) -> "CorrelationResult":
         """Return the periodic autocorrelation from this Fourier result."""
         return act_correlation(self)
 
@@ -62,6 +72,107 @@ class FourierResult(ResultBase):
             mode=mode,
             padding_num=padding_num,
         )
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class CorrelationResult(ResultBase):
+    """Container returned by :func:`act_correlation`."""
+
+    __result_name__: ClassVar[str] = "Correlation"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "lag_axes": (
+            "Real-space periodic lag coordinate arrays for the correlation axes."
+        ),
+        "correlation_values": (
+            "Raw periodic autocorrelation values on the lag coordinate grid."
+        ),
+        "mean_values": (
+            "Full spatial mean of the original field, stored per trailing component."
+        ),
+        "values_shape": "Shape of the original real-space lattice field.",
+        "axes": "Spatial lattice axes represented as correlation lag axes.",
+        "spacing": "Real-space spacing associated with each correlation axis.",
+    }
+
+    lag_axes: tuple[np.ndarray, ...]
+    correlation_values: np.ndarray
+    mean_values: np.ndarray
+    values_shape: tuple[int, ...]
+    axes: tuple[int, ...]
+    spacing: tuple[float, ...]
+
+    def act_values(
+        self,
+        *,
+        is_subtract_mean: bool = False,
+        is_normalized: bool = False,
+    ) -> np.ndarray:
+        """Return correlation values with optional mean subtraction/normalization."""
+        return act_correlation_values(
+            self,
+            is_subtract_mean=is_subtract_mean,
+            is_normalized=is_normalized,
+        )
+
+    def act_distance(
+        self,
+        *,
+        is_subtract_mean: bool = False,
+        is_normalized: bool = False,
+        r_max: float | None = None,
+        bin_width: float | None = None,
+    ) -> "DistanceCorrelationResult":
+        """Return the radial distance-averaged correlation."""
+        return act_distance(
+            self,
+            is_subtract_mean=is_subtract_mean,
+            is_normalized=is_normalized,
+            r_max=r_max,
+            bin_width=bin_width,
+        )
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class DistanceCorrelationResult(ResultBase):
+    """Container returned by :func:`act_distance`."""
+
+    __result_name__: ClassVar[str] = "Distance correlation"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "r_values": "Radial lag distances used for the averaged correlation.",
+        "correlation_values": (
+            "Correlation values averaged over equal-distance points or radial bins."
+        ),
+        "std_values": (
+            "Standard deviation of correlation values inside each distance group."
+        ),
+        "anisotropy_values": (
+            "Relative angular variation std/rms inside each distance group; "
+            "larger values indicate stronger directional dependence."
+        ),
+        "count_values": "Number of lag-grid samples used in each distance group.",
+        "bin_edges": "Radial bin edges used for multi-dimensional correlations.",
+        "r_max": "Maximum radial lag distance included in the result.",
+        "bin_width": "Radial bin width used for multi-dimensional correlations.",
+        "values_shape": "Shape of the original real-space lattice field.",
+        "axes": "Spatial lattice axes represented as correlation lag axes.",
+        "spacing": "Real-space spacing associated with each correlation axis.",
+        "is_subtract_mean": "Whether the mean-squared contribution was subtracted.",
+        "is_normalized": "Whether correlation values were normalized by zero lag.",
+    }
+
+    r_values: np.ndarray
+    correlation_values: np.ndarray
+    std_values: np.ndarray
+    anisotropy_values: np.ndarray
+    count_values: np.ndarray
+    bin_edges: np.ndarray
+    r_max: float
+    bin_width: float
+    values_shape: tuple[int, ...]
+    axes: tuple[int, ...]
+    spacing: tuple[float, ...]
+    is_subtract_mean: bool
+    is_normalized: bool
 
 
 def _as_axes_tuple(axes: int | Sequence[int]) -> tuple[int, ...]:
@@ -154,6 +265,20 @@ def _build_k_axes(
             k = 2 * np.pi * np.fft.fftfreq(n, d=d)
         k_axes.append(k)
     return tuple(k_axes)
+
+
+def _build_lag_axes(
+    shape: Sequence[int],
+    axes: tuple[int, ...],
+    spacing: tuple[float, ...],
+) -> tuple[np.ndarray, ...]:
+    """Build real-space periodic lag arrays for the transformed axes."""
+    lag_axes = []
+    for i_axis, axis in enumerate(axes):
+        n = shape[axis]
+        d = spacing[i_axis]
+        lag_axes.append(np.fft.fftfreq(n) * n * d)
+    return tuple(lag_axes)
 
 
 def _pad_full_fft_axis(
@@ -347,7 +472,77 @@ def act_inverse(
     return values * scale
 
 
-def act_correlation(result: FourierResult) -> np.ndarray:
+def _normalize_correlation_values(
+    correlation_values: np.ndarray,
+    lag_ndim: int,
+) -> np.ndarray:
+    """Normalize correlation values by their zero-lag value."""
+    zero_lag_index = (0,) * lag_ndim + (slice(None),) * (
+        correlation_values.ndim - lag_ndim
+    )
+    zero_lag = correlation_values[zero_lag_index]
+    zero_lag_shape = (1,) * lag_ndim + zero_lag.shape
+    return correlation_values / zero_lag.reshape(zero_lag_shape)
+
+
+def _mean_values_from_fourier(result: FourierResult) -> np.ndarray:
+    """Compute the full spatial mean for each trailing field component."""
+    sample_count = _transformed_sample_count(result)
+    zero_index = [slice(None)] * result.fft_values.ndim
+    for axis in result.axes:
+        zero_index[axis] = 0
+
+    mean_values = result.fft_values[tuple(zero_index)].real / sample_count
+    remaining_spatial_axes = []
+    shifted_axis = 0
+    for axis in range(result.fft_values.ndim):
+        if axis in result.axes:
+            continue
+        if axis in (0, 1, 2):
+            remaining_spatial_axes.append(shifted_axis)
+        shifted_axis += 1
+
+    if remaining_spatial_axes:
+        mean_values = mean_values.mean(axis=tuple(remaining_spatial_axes))
+    return np.asarray(mean_values)
+
+
+def _subtract_correlation_mean(
+    correlation_values: np.ndarray,
+    mean_values: np.ndarray,
+    lag_ndim: int,
+) -> np.ndarray:
+    """Subtract the squared field mean from correlation values."""
+    mean_sq = np.asarray(mean_values) ** 2
+    mean_shape = (1,) * lag_ndim + mean_sq.shape
+    return correlation_values - mean_sq.reshape(mean_shape)
+
+
+def _correlation_values_from_fourier(result: FourierResult) -> np.ndarray:
+    """Compute averaged periodic autocorrelation values from Fourier power."""
+    sample_count = _transformed_sample_count(result)
+    lengths = tuple(result.values_shape[axis] for axis in result.axes)
+    power = np.abs(result.fft_values) ** 2 / sample_count
+    correlation = np.fft.irfftn(power, s=lengths, axes=result.axes)
+
+    return _average_untransformed_spatial_axes(correlation, result)
+
+
+def _correlation_result_from_fourier(
+    result: FourierResult,
+) -> CorrelationResult:
+    """Build a correlation result from one Fourier result."""
+    return CorrelationResult(
+        lag_axes=_build_lag_axes(result.values_shape, result.axes, result.spacing),
+        correlation_values=_correlation_values_from_fourier(result),
+        mean_values=_mean_values_from_fourier(result),
+        values_shape=result.values_shape,
+        axes=result.axes,
+        spacing=result.spacing,
+    )
+
+
+def act_correlation(result: FourierResult) -> CorrelationResult:
     """Return the periodic autocorrelation from a Fourier result.
 
     The correlation is normalized as an average over the transformed lattice
@@ -358,12 +553,247 @@ def act_correlation(result: FourierResult) -> np.ndarray:
     if not isinstance(result, FourierResult):
         raise TypeError("`result` must be a FourierResult.")
 
-    sample_count = _transformed_sample_count(result)
-    lengths = tuple(result.values_shape[axis] for axis in result.axes)
-    power = np.abs(result.fft_values) ** 2 / sample_count
-    correlation = np.fft.irfftn(power, s=lengths, axes=result.axes)
+    return _correlation_result_from_fourier(result)
 
-    return _average_untransformed_spatial_axes(correlation, result)
+
+def act_correlation_values(
+    result: CorrelationResult,
+    *,
+    is_subtract_mean: bool = False,
+    is_normalized: bool = False,
+) -> np.ndarray:
+    """Return correlation values with optional mean subtraction/normalization."""
+    if not isinstance(result, CorrelationResult):
+        raise TypeError("`result` must be a CorrelationResult.")
+
+    lag_ndim = len(result.lag_axes)
+    values = result.correlation_values
+    if is_subtract_mean:
+        values = _subtract_correlation_mean(values, result.mean_values, lag_ndim)
+    if is_normalized:
+        values = _normalize_correlation_values(values, lag_ndim)
+    return values
+
+
+def _as_distance_limits(
+    result: CorrelationResult,
+    *,
+    r_max: float | None,
+    bin_width: float | None,
+) -> tuple[float, float]:
+    """Validate radial averaging limits for a correlation result."""
+    axis_lengths = [
+        result.values_shape[axis] * spacing
+        for axis, spacing in zip(result.axes, result.spacing)
+    ]
+    default_r_max = min(axis_lengths) / 2.0
+    tiny = float(np.finfo(float).tiny)
+
+    if r_max is None:
+        r_max = default_r_max
+    else:
+        r_max = as_Number(
+            r_max,
+            name="r_max",
+            value_range=(tiny, default_r_max),
+        )
+        r_max = float(r_max)
+
+    if bin_width is None:
+        bin_width = min(min(result.spacing), r_max)
+    else:
+        bin_width = as_Number(
+            bin_width,
+            name="bin_width",
+            value_range=(tiny, r_max),
+        )
+        bin_width = float(bin_width)
+
+    return r_max, bin_width
+
+
+def _anisotropy_from_shell(shell_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return standard deviation and relative angular variation for one shell."""
+    std_values = shell_values.std(axis=0)
+    rms_values = np.sqrt(np.mean(shell_values**2, axis=0))
+    anisotropy_values = np.divide(
+        std_values,
+        rms_values,
+        out=np.zeros_like(std_values, dtype=float),
+        where=rms_values > 0,
+    )
+    return std_values, anisotropy_values
+
+
+def _average_distance_groups(
+    values: np.ndarray,
+    labels: np.ndarray,
+    group_num: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Average correlation values over precomputed radial distance groups."""
+    lag_ndim = labels.ndim
+    component_shape = values.shape[lag_ndim:]
+    flat_values = values.reshape(labels.size, *component_shape)
+    flat_labels = labels.ravel()
+
+    output_shape = (group_num,) + component_shape
+    correlation_values = np.empty(output_shape, dtype=float)
+    std_values = np.empty(output_shape, dtype=float)
+    anisotropy_values = np.empty(output_shape, dtype=float)
+    count_values = np.empty(group_num, dtype=int)
+
+    for i_group in range(group_num):
+        shell_values = flat_values[flat_labels == i_group]
+        count_values[i_group] = shell_values.shape[0]
+        if shell_values.size == 0:
+            correlation_values[i_group] = np.nan
+            std_values[i_group] = np.nan
+            anisotropy_values[i_group] = np.nan
+            continue
+
+        correlation_values[i_group] = shell_values.mean(axis=0)
+        std_values[i_group], anisotropy_values[i_group] = _anisotropy_from_shell(
+            shell_values,
+        )
+
+    return correlation_values, std_values, anisotropy_values, count_values
+
+
+def _distance_result_1d(
+    result: CorrelationResult,
+    values: np.ndarray,
+    *,
+    r_max: float,
+    bin_width: float,
+    is_subtract_mean: bool,
+    is_normalized: bool,
+) -> DistanceCorrelationResult:
+    """Build distance correlation for a one-dimensional lag axis."""
+    distances = np.abs(result.lag_axes[0])
+    is_included = distances <= r_max
+    r_values, labels = np.unique(distances[is_included], return_inverse=True)
+    label_grid = np.full(distances.shape, -1, dtype=int)
+    label_grid[is_included] = labels
+
+    correlation_values, std_values, anisotropy_values, count_values = (
+        _average_distance_groups(values, label_grid, len(r_values))
+    )
+
+    return DistanceCorrelationResult(
+        r_values=r_values,
+        correlation_values=correlation_values,
+        std_values=std_values,
+        anisotropy_values=anisotropy_values,
+        count_values=count_values,
+        bin_edges=np.array([], dtype=float),
+        r_max=r_max,
+        bin_width=bin_width,
+        values_shape=result.values_shape,
+        axes=result.axes,
+        spacing=result.spacing,
+        is_subtract_mean=is_subtract_mean,
+        is_normalized=is_normalized,
+    )
+
+
+def _distance_result_binned(
+    result: CorrelationResult,
+    values: np.ndarray,
+    *,
+    r_max: float,
+    bin_width: float,
+    is_subtract_mean: bool,
+    is_normalized: bool,
+) -> DistanceCorrelationResult:
+    """Build distance correlation by averaging over radial shells."""
+    lag_mesh = np.meshgrid(*result.lag_axes, indexing="ij")
+    distance_sq = np.zeros_like(lag_mesh[0], dtype=float)
+    for lag in lag_mesh:
+        distance_sq = distance_sq + lag**2
+    distances = np.sqrt(distance_sq)
+
+    bin_edges = np.arange(0.0, r_max + bin_width, bin_width)
+    if bin_edges[-1] < r_max:
+        bin_edges = np.append(bin_edges, r_max)
+    else:
+        bin_edges[-1] = r_max
+
+    group_num = len(bin_edges) - 1
+    labels = np.digitize(distances, bin_edges, right=False) - 1
+    labels[(distances == r_max) & (labels == group_num)] = group_num - 1
+    labels[(distances > r_max) | (labels < 0) | (labels >= group_num)] = -1
+
+    r_values = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    correlation_values, std_values, anisotropy_values, count_values = (
+        _average_distance_groups(values, labels, group_num)
+    )
+
+    return DistanceCorrelationResult(
+        r_values=r_values,
+        correlation_values=correlation_values,
+        std_values=std_values,
+        anisotropy_values=anisotropy_values,
+        count_values=count_values,
+        bin_edges=bin_edges,
+        r_max=r_max,
+        bin_width=bin_width,
+        values_shape=result.values_shape,
+        axes=result.axes,
+        spacing=result.spacing,
+        is_subtract_mean=is_subtract_mean,
+        is_normalized=is_normalized,
+    )
+
+
+def act_distance(
+    result: CorrelationResult,
+    *,
+    is_subtract_mean: bool = False,
+    is_normalized: bool = False,
+    r_max: float | None = None,
+    bin_width: float | None = None,
+) -> DistanceCorrelationResult:
+    """Return correlation averaged by radial lag distance.
+
+    One-dimensional correlations are grouped by exact non-negative distance,
+    combining positive and negative periodic lags. Multi-dimensional
+    correlations are averaged over circular or spherical radial bins.
+    ``anisotropy_values`` reports the relative angular variation in each
+    distance group as ``std / rms``; larger values indicate that the radial
+    average hides stronger direction dependence.
+    """
+    if not isinstance(result, CorrelationResult):
+        raise TypeError("`result` must be a CorrelationResult.")
+
+    r_max, bin_width = _as_distance_limits(
+        result,
+        r_max=r_max,
+        bin_width=bin_width,
+    )
+    values = act_correlation_values(
+        result,
+        is_subtract_mean=is_subtract_mean,
+        is_normalized=is_normalized,
+    )
+
+    if len(result.lag_axes) == 1:
+        return _distance_result_1d(
+            result,
+            values,
+            r_max=r_max,
+            bin_width=bin_width,
+            is_subtract_mean=is_subtract_mean,
+            is_normalized=is_normalized,
+        )
+
+    return _distance_result_binned(
+        result,
+        values,
+        r_max=r_max,
+        bin_width=bin_width,
+        is_subtract_mean=is_subtract_mean,
+        is_normalized=is_normalized,
+    )
 
 
 def act_mean_subtracted_values(

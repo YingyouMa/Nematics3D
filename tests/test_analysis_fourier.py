@@ -2,8 +2,12 @@ import numpy as np
 import pytest
 
 from nematics3d.analysis import (
+    CorrelationResult,
+    DistanceCorrelationResult,
     FourierResult,
     act_correlation,
+    act_correlation_values,
+    act_distance,
     act_fourier,
     act_filter,
     act_inverse,
@@ -54,6 +58,19 @@ def test_act_fourier_fft_output_returns_coefficients():
     assert isinstance(result, FourierResult)
     assert result.fft_values.shape == (5, 4, 3)
     assert result.fft_values[0, 0, 0] == 8.0
+
+
+def test_fourier_result_show_readable_attrs_returns_field_docs():
+    result = act_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
+
+    output = result.show_readable_attrs(is_return=True)
+
+    assert "- k_axes" in output
+    assert "Angular wave-number coordinate arrays" in output
+    assert "Angular wave-number coordinate arrays" in result.show_attr_doc(
+        "k_axes",
+        is_return=True,
+    )
 
 
 def test_act_fourier_multi_axis_returns_k_axes_in_transform_order():
@@ -189,8 +206,142 @@ def test_act_correlation_returns_periodic_autocorrelation():
     correlation_method = result.act_correlation()
     expected = 0.5 * np.cos(2 * np.pi * x / 8)[:, None, None]
 
-    np.testing.assert_allclose(correlation, expected, atol=1e-12)
-    np.testing.assert_allclose(correlation_method, expected, atol=1e-12)
+    assert isinstance(correlation, CorrelationResult)
+    output = correlation.show_readable_attrs(is_return=True)
+
+    assert "- lag_axes" in output
+    assert "Real-space periodic lag coordinate arrays" in output
+    assert "Real-space periodic lag coordinate arrays" in correlation.show_attr_doc(
+        "lag_axes",
+        is_return=True,
+    )
+    np.testing.assert_allclose(correlation.lag_axes[0], np.fft.fftfreq(8) * 8)
+    np.testing.assert_allclose(correlation.mean_values, 0.0, atol=1e-12)
+    np.testing.assert_allclose(correlation.correlation_values, expected, atol=1e-12)
+    np.testing.assert_allclose(
+        correlation_method.correlation_values,
+        expected,
+        atol=1e-12,
+    )
+
+
+def test_act_correlation_supports_mean_subtraction():
+    x = np.arange(8, dtype=float)
+    values = 3.0 + np.sin(2 * np.pi * x / 8)[:, None, None]
+    result = act_fourier(
+        values,
+        axes=0,
+        spacing=1.0,
+    )
+
+    correlation = act_correlation(result)
+    expected = 0.5 * np.cos(2 * np.pi * x / 8)[:, None, None]
+
+    np.testing.assert_allclose(
+        correlation.act_values(is_subtract_mean=True),
+        expected,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(
+        act_correlation_values(correlation, is_subtract_mean=True),
+        expected,
+        atol=1e-12,
+    )
+    np.testing.assert_allclose(correlation.mean_values, 3.0, atol=1e-12)
+
+
+def test_act_correlation_supports_normalization():
+    x = np.arange(8, dtype=float)
+    values = 2.0 * np.sin(2 * np.pi * x / 8)[:, None, None]
+    result = act_fourier(
+        values,
+        axes=0,
+        spacing=1.0,
+    )
+
+    correlation = act_correlation(result)
+    expected = np.cos(2 * np.pi * x / 8)[:, None, None]
+
+    np.testing.assert_allclose(
+        correlation.act_values(is_normalized=True),
+        expected,
+        atol=1e-12,
+    )
+
+
+def test_act_correlation_supports_mean_subtraction_and_normalization():
+    x = np.arange(8, dtype=float)
+    values = 3.0 + 2.0 * np.sin(2 * np.pi * x / 8)[:, None, None]
+    result = act_fourier(
+        values,
+        axes=0,
+        spacing=1.0,
+    )
+
+    correlation = result.act_correlation()
+    expected = np.cos(2 * np.pi * x / 8)[:, None, None]
+
+    np.testing.assert_allclose(
+        correlation.act_values(is_subtract_mean=True, is_normalized=True),
+        expected,
+        atol=1e-12,
+    )
+
+
+def test_act_distance_1d_groups_positive_and_negative_lags():
+    x = np.arange(8, dtype=float)
+    values = np.sin(2 * np.pi * x / 8)[:, None, None]
+    correlation = act_fourier(values, axes=0, spacing=1.0).act_correlation()
+
+    distance = act_distance(correlation)
+    distance_method = correlation.act_distance()
+    expected_r = np.arange(5, dtype=float)
+    expected_values = 0.5 * np.cos(2 * np.pi * expected_r / 8)[:, None, None]
+
+    assert isinstance(distance, DistanceCorrelationResult)
+    np.testing.assert_allclose(distance.r_values, expected_r)
+    np.testing.assert_allclose(distance.correlation_values, expected_values, atol=1e-12)
+    np.testing.assert_allclose(
+        distance_method.correlation_values,
+        expected_values,
+        atol=1e-12,
+    )
+    np.testing.assert_array_equal(distance.count_values, np.array([1, 2, 2, 2, 1]))
+    np.testing.assert_allclose(distance.anisotropy_values, 0.0, atol=1e-12)
+
+
+def test_act_distance_2d_averages_radial_bins_and_reports_anisotropy():
+    lag_axis = np.array([0.0, 1.0, -1.0])
+    lag_x, lag_y = np.meshgrid(lag_axis, lag_axis, indexing="ij")
+    correlation_values = lag_x**2 + lag_y**2
+    correlation = CorrelationResult(
+        lag_axes=(lag_axis, lag_axis),
+        correlation_values=correlation_values,
+        mean_values=np.array(0.0),
+        values_shape=(3, 3, 1),
+        axes=(0, 1),
+        spacing=(1.0, 1.0),
+    )
+
+    distance = correlation.act_distance(r_max=1.5, bin_width=1.0)
+
+    np.testing.assert_allclose(distance.r_values, np.array([0.5, 1.25]))
+    np.testing.assert_allclose(distance.correlation_values, np.array([0.0, 1.5]))
+    np.testing.assert_allclose(distance.std_values, np.array([0.0, 0.5]))
+    np.testing.assert_allclose(
+        distance.anisotropy_values,
+        np.array([0.0, 0.5 / np.sqrt(2.5)]),
+    )
+    np.testing.assert_array_equal(distance.count_values, np.array([1, 8]))
+
+
+def test_act_distance_validates_radius_and_bin_width():
+    correlation = act_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0).act_correlation()
+
+    with pytest.raises(ValueError, match="r_max"):
+        act_distance(correlation, r_max=5.0)
+    with pytest.raises(ValueError, match="bin_width"):
+        act_distance(correlation, r_max=2.0, bin_width=3.0)
 
 
 def test_act_inverse_padding_interpolates_shape_and_amplitude():
