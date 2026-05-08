@@ -6,6 +6,7 @@ from dataclasses import fields, is_dataclass
 from typing import Any, ClassVar
 
 from nematics3d.format import repr_field_line
+from nematics3d.logging_decorator import logging_and_warning_decorator
 
 
 class ResultBase:
@@ -17,6 +18,7 @@ class ResultBase:
     """
 
     __result_name__: ClassVar[str | None] = "result"
+    __field_docs__: ClassVar[dict[str, str]] = {}
 
     # -------------------------------
     # Field inspection
@@ -43,6 +45,39 @@ class ResultBase:
     def asdict(self) -> dict[str, Any]:
         """Return a shallow dictionary view of this result."""
         return {key: getattr(self, key) for key in self.keys()}
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_readable_attrs(self, is_return=False, is_desc=True, logger=None):
+        """Show readable result fields and optional field descriptions."""
+        docs = type(self).__field_docs__
+        keys = self.keys()
+        lines = []
+
+        if not keys:
+            lines.append("- <none>")
+        else:
+            for key in keys:
+                lines.append(f"- {key}")
+                if is_desc:
+                    lines.append(f"    {docs.get(key, '')}")
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_attr_doc(self, name: str, is_return=False, logger=None):
+        """Show the description for one readable result field."""
+        if name not in self:
+            raise KeyError(name)
+
+        doc = type(self).__field_docs__.get(name, "")
+        logger.info(doc)
+        if is_return:
+            return doc
+        return None
 
     # -------------------------------
     # Dict-like conveniences

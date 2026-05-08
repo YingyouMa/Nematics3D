@@ -562,6 +562,36 @@ class ClassBase:
         return None
 
     @logging_and_warning_decorator(start_finish_level=5)
+    def show_attr_doc(self, name: str, is_return=False, logger=None):
+        """Show the description for one registered readable attribute."""
+        name = as_str(name, name="Readable attribute name")
+        if name not in self.impl_attrs:
+            raw_name = f"raw_{name}"
+            if raw_name in self.impl_attrs:
+                name = raw_name
+            else:
+                raise AttributeError(
+                    f"Readable attribute {name!r} is not registered in "
+                    f"{type(self).__name__}.impl_attrs."
+                )
+
+        if self._helper_is_impl_attr(name):
+            raise AttributeError(
+                f"Attribute {name!r} is internal implementation metadata, "
+                "not a readable public attribute."
+            )
+
+        if self._helper_is_relation_attr(name):
+            doc = self._helper_get_relation_doc(name)
+        else:
+            doc = self.impl_attrs[name]["doc"]
+
+        logger.info(doc)
+        if is_return:
+            return doc
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
     def show_relations(self, is_return=False, logger=None):
         """Show currently bound relations and their descriptions."""
         lines = []
