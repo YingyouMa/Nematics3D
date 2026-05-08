@@ -79,6 +79,11 @@ class FourierResult(ResultBase):
         self,
         *,
         threshold: float = np.exp(-1),
+        fit_head_factor: float | None = None,
+        fit_tail_factor: float | None = 10.0,
+        max_iteration_num: int = 20,
+        fit_tolerance: float = 1e-3,
+        min_fit_point_num: int = 4,
     ):
         """Return the relaxation length estimated from this Fourier result."""
         if len(self.axes) != 1:
@@ -95,9 +100,8 @@ class FourierResult(ResultBase):
                 "averaging untransformed spatial axes."
             )
 
-        sample_num = self.values_shape[self.axes[0]]
-        max_lag_index = sample_num // 2
-        coordinate_axis = np.arange(max_lag_index + 1, dtype=float) * self.spacing[0]
+        max_lag_index = correlation_values.shape[0] // 2
+        coordinate_axis = np.abs(correlation_result.lag_axes[0][: max_lag_index + 1])
 
         # Local import avoids a module-level cycle between Fourier and
         # relaxation helpers while keeping the result method convenient.
@@ -107,6 +111,11 @@ class FourierResult(ResultBase):
             correlation_values[: max_lag_index + 1],
             coordinate_axis=coordinate_axis,
             threshold=threshold,
+            fit_head_factor=fit_head_factor,
+            fit_tail_factor=fit_tail_factor,
+            max_iteration_num=max_iteration_num,
+            fit_tolerance=fit_tolerance,
+            min_fit_point_num=min_fit_point_num,
         )
 
     def act_mean_subtracted_values(
