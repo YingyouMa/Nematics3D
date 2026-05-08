@@ -10,6 +10,7 @@ from typing import ClassVar
 import numpy as np
 
 from nematics3d.classes.result_base import ResultBase
+from nematics3d.datatypes import as_Number
 from nematics3d.datatypes import as_real_lattice_field
 
 
@@ -46,6 +47,21 @@ class FourierResult(ResultBase):
         """Return the Fourier power spectrum derived from this transform."""
         return _spectrum_from_fourier(self, is_normalized=is_normalized)
 
+    def act_radial_spectrum(
+        self,
+        *,
+        is_normalized: bool = False,
+        k_max: float | None = None,
+        bin_width: float | None = None,
+    ) -> "RadialSpectrumResult":
+        """Return the radial wave-number averaged Fourier power spectrum."""
+        return act_radial_spectrum(
+            self,
+            is_normalized=is_normalized,
+            k_max=k_max,
+            bin_width=bin_width,
+        )
+
     def act_correlation(self) -> np.ndarray:
         """Return the periodic autocorrelation from this Fourier result."""
         return act_correlation(self)
@@ -62,6 +78,26 @@ class FourierResult(ResultBase):
             mode=mode,
             padding_num=padding_num,
         )
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class RadialSpectrumResult(ResultBase):
+    """Container returned by :func:`act_radial_spectrum`."""
+
+    __result_name__: ClassVar[str] = "Radial Fourier spectrum"
+
+    k_values: np.ndarray
+    spectrum_values: np.ndarray
+    std_values: np.ndarray
+    anisotropy_values: np.ndarray
+    count_values: np.ndarray
+    bin_edges: np.ndarray
+    k_max: float
+    bin_width: float
+    values_shape: tuple[int, ...]
+    axes: tuple[int, ...]
+    spacing: tuple[float, ...]
+    is_normalized: bool
 
 
 def _as_axes_tuple(axes: int | Sequence[int]) -> tuple[int, ...]:
@@ -295,6 +331,230 @@ def _spectrum_from_fourier(
         power = power * _rfft_power_weights(fft_result) / sample_count**2
 
     return _average_untransformed_spatial_axes(power, fft_result)
+
+
+def _max_radial_k(result: FourierResult) -> float:
+    """Return the largest represented radial wave-number magnitude."""
+    return float(np.sqrt(sum(np.max(np.abs(k_axis)) ** 2 for k_axis in result.k_axes)))
+
+
+def _min_nonzero_k_step(result: FourierResult) -> float:
+    """Return the smallest non-zero wave-number spacing among transformed axes."""
+    steps = []
+    for k_axis in result.k_axes:
+        unique_abs_k = np.unique(np.abs(k_axis))
+        positive_abs_k = unique_abs_k[unique_abs_k > 0]
+        if positive_abs_k.size:
+            steps.append(float(np.min(positive_abs_k)))
+    if not steps:
+        return _max_radial_k(result)
+    return min(steps)
+
+
+def _as_radial_spectrum_limits(
+    result: FourierResult,
+    *,
+    k_max: float | None,
+    bin_width: float | None,
+) -> tuple[float, float]:
+    """Validate radial spectrum limits."""
+    max_k = _max_radial_k(result)
+    tiny = float(np.finfo(float).tiny)
+
+    if k_max is None:
+        k_max = max_k
+    else:
+        k_max = float(
+            as_Number(
+                k_max,
+                name="k_max",
+                value_range=(tiny, max_k),
+            )
+        )
+
+    if bin_width is None:
+        bin_width = min(_min_nonzero_k_step(result), k_max)
+    else:
+        bin_width = float(
+            as_Number(
+                bin_width,
+                name="bin_width",
+                value_range=(tiny, k_max),
+            )
+        )
+
+    return k_max, bin_width
+
+
+def _anisotropy_from_shell(shell_values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return standard deviation and relative angular variation for one shell."""
+    std_values = shell_values.std(axis=0)
+    rms_values = np.sqrt(np.mean(shell_values**2, axis=0))
+    anisotropy_values = np.divide(
+        std_values,
+        rms_values,
+        out=np.zeros_like(std_values, dtype=float),
+        where=rms_values > 0,
+    )
+    return std_values, anisotropy_values
+
+
+def _average_radial_groups(
+    values: np.ndarray,
+    labels: np.ndarray,
+    group_num: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Average values over precomputed radial groups."""
+    radial_ndim = labels.ndim
+    component_shape = values.shape[radial_ndim:]
+    flat_values = values.reshape(labels.size, *component_shape)
+    flat_labels = labels.ravel()
+
+    output_shape = (group_num,) + component_shape
+    average_values = np.empty(output_shape, dtype=float)
+    std_values = np.empty(output_shape, dtype=float)
+    anisotropy_values = np.empty(output_shape, dtype=float)
+    count_values = np.empty(group_num, dtype=int)
+
+    for i_group in range(group_num):
+        shell_values = flat_values[flat_labels == i_group]
+        count_values[i_group] = shell_values.shape[0]
+        if shell_values.size == 0:
+            average_values[i_group] = np.nan
+            std_values[i_group] = np.nan
+            anisotropy_values[i_group] = np.nan
+            continue
+
+        average_values[i_group] = shell_values.mean(axis=0)
+        std_values[i_group], anisotropy_values[i_group] = _anisotropy_from_shell(
+            shell_values,
+        )
+
+    return average_values, std_values, anisotropy_values, count_values
+
+
+def _radial_spectrum_result_1d(
+    result: FourierResult,
+    spectrum: np.ndarray,
+    *,
+    k_max: float,
+    bin_width: float,
+    is_normalized: bool,
+) -> RadialSpectrumResult:
+    """Build radial spectrum for a one-dimensional transform."""
+    k_abs = np.abs(result.k_axes[0])
+    is_included = k_abs <= k_max
+    k_values, labels = np.unique(k_abs[is_included], return_inverse=True)
+    label_grid = np.full(k_abs.shape, -1, dtype=int)
+    label_grid[is_included] = labels
+
+    spectrum_values, std_values, anisotropy_values, count_values = (
+        _average_radial_groups(spectrum, label_grid, len(k_values))
+    )
+
+    return RadialSpectrumResult(
+        k_values=k_values,
+        spectrum_values=spectrum_values,
+        std_values=std_values,
+        anisotropy_values=anisotropy_values,
+        count_values=count_values,
+        bin_edges=np.array([], dtype=float),
+        k_max=k_max,
+        bin_width=bin_width,
+        values_shape=result.values_shape,
+        axes=result.axes,
+        spacing=result.spacing,
+        is_normalized=is_normalized,
+    )
+
+
+def _radial_spectrum_result_binned(
+    result: FourierResult,
+    spectrum: np.ndarray,
+    *,
+    k_max: float,
+    bin_width: float,
+    is_normalized: bool,
+) -> RadialSpectrumResult:
+    """Build radial spectrum by averaging over wave-number shells."""
+    k_mesh = np.meshgrid(*result.k_axes, indexing="ij")
+    k_abs_sq = np.zeros_like(k_mesh[0], dtype=float)
+    for k in k_mesh:
+        k_abs_sq = k_abs_sq + k**2
+    k_abs = np.sqrt(k_abs_sq)
+
+    bin_edges = np.arange(0.0, k_max + bin_width, bin_width)
+    if bin_edges[-1] < k_max:
+        bin_edges = np.append(bin_edges, k_max)
+    else:
+        bin_edges[-1] = k_max
+
+    group_num = len(bin_edges) - 1
+    labels = np.digitize(k_abs, bin_edges, right=False) - 1
+    labels[(k_abs == k_max) & (labels == group_num)] = group_num - 1
+    labels[(k_abs > k_max) | (labels < 0) | (labels >= group_num)] = -1
+
+    k_values = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    spectrum_values, std_values, anisotropy_values, count_values = (
+        _average_radial_groups(spectrum, labels, group_num)
+    )
+
+    return RadialSpectrumResult(
+        k_values=k_values,
+        spectrum_values=spectrum_values,
+        std_values=std_values,
+        anisotropy_values=anisotropy_values,
+        count_values=count_values,
+        bin_edges=bin_edges,
+        k_max=k_max,
+        bin_width=bin_width,
+        values_shape=result.values_shape,
+        axes=result.axes,
+        spacing=result.spacing,
+        is_normalized=is_normalized,
+    )
+
+
+def act_radial_spectrum(
+    result: FourierResult,
+    *,
+    is_normalized: bool = False,
+    k_max: float | None = None,
+    bin_width: float | None = None,
+) -> RadialSpectrumResult:
+    """Return the Fourier power spectrum averaged by radial wave number.
+
+    One-dimensional spectra are grouped by exact non-negative ``|k|`` values.
+    Multi-dimensional spectra are averaged over circular or spherical
+    wave-number shells. ``anisotropy_values`` reports ``std / rms`` within
+    each shell, so larger values indicate stronger directional variation.
+    """
+    if not isinstance(result, FourierResult):
+        raise TypeError("`result` must be a FourierResult.")
+
+    k_max, bin_width = _as_radial_spectrum_limits(
+        result,
+        k_max=k_max,
+        bin_width=bin_width,
+    )
+    spectrum = _spectrum_from_fourier(result, is_normalized=is_normalized)
+
+    if len(result.k_axes) == 1:
+        return _radial_spectrum_result_1d(
+            result,
+            spectrum,
+            k_max=k_max,
+            bin_width=bin_width,
+            is_normalized=is_normalized,
+        )
+
+    return _radial_spectrum_result_binned(
+        result,
+        spectrum,
+        k_max=k_max,
+        bin_width=bin_width,
+        is_normalized=is_normalized,
+    )
 
 
 def act_inverse(

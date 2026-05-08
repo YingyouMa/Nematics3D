@@ -3,10 +3,12 @@ import pytest
 
 from nematics3d.analysis import (
     FourierResult,
+    RadialSpectrumResult,
     act_correlation,
     act_fourier,
     act_filter,
     act_inverse,
+    act_radial_spectrum,
 )
 
 
@@ -40,6 +42,71 @@ def test_act_fourier_normalized_spectrum_preserves_mean_square():
     )
 
     np.testing.assert_allclose(spectrum.sum(axis=0), np.mean(values**2), atol=1e-12)
+
+
+def test_act_radial_spectrum_1d_returns_non_negative_k():
+    values = np.zeros((8, 1, 1))
+    result = act_fourier(values, axes=0, spacing=1.0)
+    fft_values = np.array([1, 2, 3, 4, 5], dtype=complex)[:, None, None]
+    result = FourierResult(
+        k_axes=result.k_axes,
+        fft_values=fft_values,
+        values_shape=values.shape,
+        axes=result.axes,
+        spacing=result.spacing,
+    )
+
+    radial = act_radial_spectrum(result)
+    radial_method = result.act_radial_spectrum()
+
+    assert isinstance(radial, RadialSpectrumResult)
+    np.testing.assert_allclose(radial.k_values, result.k_axes[0])
+    np.testing.assert_allclose(radial.spectrum_values.ravel(), [1, 4, 9, 16, 25])
+    np.testing.assert_array_equal(radial.count_values, np.ones(5, dtype=int))
+    np.testing.assert_allclose(radial.anisotropy_values, 0.0)
+    np.testing.assert_allclose(
+        radial_method.spectrum_values,
+        radial.spectrum_values,
+    )
+
+
+def test_act_radial_spectrum_2d_averages_k_shells_and_reports_anisotropy():
+    values = np.zeros((3, 1, 3))
+    result = act_fourier(values, axes=(0, 2), spacing=(2 * np.pi / 3, 2 * np.pi / 3))
+    fft_values = np.zeros_like(result.fft_values)
+    fft_values[0, 0, 0] = 0.0
+    fft_values[1, 0, 0] = 1.0
+    fft_values[2, 0, 0] = 2.0
+    fft_values[0, 0, 1] = 3.0
+    result = FourierResult(
+        k_axes=result.k_axes,
+        fft_values=fft_values,
+        values_shape=values.shape,
+        axes=result.axes,
+        spacing=result.spacing,
+    )
+
+    radial = result.act_radial_spectrum(k_max=np.sqrt(2.0), bin_width=1.0)
+
+    np.testing.assert_allclose(
+        radial.k_values,
+        np.array([0.5, 0.5 * (1.0 + np.sqrt(2.0))]),
+    )
+    np.testing.assert_allclose(radial.spectrum_values, np.array([0.0, 14.0 / 5.0]))
+    np.testing.assert_allclose(
+        radial.anisotropy_values,
+        np.array([0.0, np.std([1.0, 4.0, 9.0, 0.0, 0.0]) / np.sqrt(98.0 / 5.0)]),
+    )
+    np.testing.assert_array_equal(radial.count_values, np.array([1, 5]))
+
+
+def test_act_radial_spectrum_validates_k_max_and_bin_width():
+    result = act_fourier(np.ones((8, 4, 3)), axes=0, spacing=1.0)
+
+    with pytest.raises(ValueError, match="k_max"):
+        act_radial_spectrum(result, k_max=10.0)
+    with pytest.raises(ValueError, match="bin_width"):
+        act_radial_spectrum(result, k_max=2.0, bin_width=3.0)
 
 
 def test_act_fourier_fft_output_returns_coefficients():
