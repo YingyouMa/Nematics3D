@@ -11,6 +11,7 @@ from .classes.visual.plot_figure import PlotFigure
 from .classes.visual.plot_sphere import OptsSphere, PlotSphere
 from .classes.visual.plot_tube import OptsTube
 from .datatypes import UNSET
+from .logging_decorator import logging_and_warning_decorator
 
 
 def _auto_quick_Q_visual_params(field, grid_normal):
@@ -44,6 +45,7 @@ def _auto_quick_Q_visual_params(field, grid_normal):
     }
 
 
+@logging_and_warning_decorator(start_finish_level=5)
 def quick_visualize_Q(
     S=UNSET,
     n=UNSET,
@@ -54,7 +56,16 @@ def quick_visualize_Q(
     is_visualize_lines=True,
     save_path=None,
     is_off_screen=False,
+    logger=None,
 ):
+    if is_off_screen and save_path is None:
+        logger.warning(
+            "quick_visualize_Q was called with is_off_screen=True but "
+            "save_path=None. No visible window or saved image will be produced, "
+            "so this call is ignored."
+        )
+        return None, None
+
     is_Q_provided = Q is not None and Q is not UNSET
     is_S_provided = S is not None and S is not UNSET
     is_n_provided = n is not None and n is not UNSET
