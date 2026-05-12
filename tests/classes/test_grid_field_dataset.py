@@ -58,7 +58,8 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_grid_index, expected_grid_index))
         self.assertTrue(np.allclose(dataset.calc_grid, expected_grid))
         self.assertTrue(np.allclose(dataset.calc_corners_index, expected_corners_index))
-        self.assertTrue(np.allclose(dataset.calc_corners.corners, expected_corners))
+        self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
+        self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
 
     def test_first_field_can_infer_dataset_shape_and_refresh_caches(self):
         dataset = GridFieldDataset()
@@ -74,6 +75,7 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(dataset.calc_grid.shape, (2, 3, 4, 3))
         self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
+        self.assertEqual(dataset.calc_corners.shape, (8, 3))
 
     def test_field_values_are_real_floating_lattice_fields(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))

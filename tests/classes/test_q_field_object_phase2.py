@@ -53,13 +53,14 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(tuple(q.dataset.raw_shape), shape)
         self.assertTrue(np.allclose(q.calc_grid, q.dataset.calc_grid))
         self.assertTrue(np.allclose(q.calc_grid_index, q.dataset.calc_grid_index))
+        self.assertTrue(np.allclose(q.calc_corners, q.dataset.calc_corners))
         self.assertTrue(
             np.allclose(
                 q.calc_box_size_periodic_index,
                 q.dataset.calc_box_size_periodic_index,
             )
         )
-        self.assertIs(q.calc_corners, q.dataset.calc_corners)
+        self.assertIs(q.calc_bounds, q.dataset.calc_bounds)
         self.assertEqual(tuple(q.raw_box_periodic_flag), (True, False, True))
         self.assertEqual(tuple(q.raw_grid_offset), grid_offset)
         self.assertTrue(np.allclose(q.raw_grid_transform, grid_transform))
@@ -99,7 +100,8 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(len(dataset.fields), 1)
         self.assertIs(dataset["Q"], field)
         self.assertTrue(np.allclose(q.calc_grid, dataset.calc_grid))
-        self.assertIs(q.calc_corners, dataset.calc_corners)
+        self.assertTrue(np.allclose(q.calc_corners, dataset.calc_corners))
+        self.assertIs(q.calc_bounds, dataset.calc_bounds)
         self.assertEqual(tuple(q.raw_box_periodic_flag), (False, True, False))
         self.assertEqual(tuple(q.raw_grid_offset), (1.0, 2.0, 3.0))
         self.assertTrue(np.allclose(q.raw_grid_transform, np.diag((1.5, 2.5, 3.5))))
