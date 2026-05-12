@@ -333,7 +333,7 @@ class PlotSphere(PlotGlyph):
 
         object.__setattr__(self, "calc_keep_index", None)
         self._helper_init_end()
-        self.act_set_interact_func(lambda: InteractSphere(self, self.fig).show())
+        self.act_set_interact_func(lambda: InteractSphere.show_once(self, self.fig))
 
     # ==================== OVERRIDE ====================
     # PlotSphere overrides PlotGlyph._helper_bound_coords because

@@ -555,6 +555,24 @@ class PanelBase(QtWidgets.QWidget):
     # Initialization
     # -------------------------------
 
+    @classmethod
+    def show_once(cls, *args, **kwargs):
+        """Show one panel unless the same figure already has it for this host."""
+        host = kwargs.get("host", args[0] if args else None)
+        figure = kwargs.get("figure", args[1] if len(args) >= 2 else None)
+        if figure is None and host is not None:
+            figure = getattr(host, "fig", None)
+
+        interacts = getattr(figure, "interacts", None) if figure is not None else None
+        if interacts is not None:
+            for panel in interacts:
+                if isinstance(panel, cls) and getattr(panel, "host", None) is host:
+                    return panel
+
+        panel = cls(*args, **kwargs)
+        panel.show()
+        return panel
+
     def __init__(
         self,
         host,

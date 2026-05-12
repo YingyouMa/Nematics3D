@@ -226,7 +226,7 @@ class PlotVector(PlotGlyph):
 
         from .qt.interact_vector import InteractVector
 
-        self.act_set_interact_func(lambda: InteractVector(self, self.fig).show())
+        self.act_set_interact_func(lambda: InteractVector.show_once(self, self.fig))
 
         self._helper_init_end()
 
@@ -550,12 +550,9 @@ class PlotVector(PlotGlyph):
         n_points_per_vector = sides + 2
         n_faces_per_vector = 2 * sides
 
-        ring_offsets = (
-            radius[:, None, None]
-            * (
-                cos_vals[None, :, None] * axis1[:, None, :]
-                + sin_vals[None, :, None] * axis2[:, None, :]
-            )
+        ring_offsets = radius[:, None, None] * (
+            cos_vals[None, :, None] * axis1[:, None, :]
+            + sin_vals[None, :, None] * axis2[:, None, :]
         )
         ring_points = base[:, None, :] + ring_offsets
 
@@ -627,9 +624,7 @@ class PlotVector(PlotGlyph):
             if any(name not in source.point_data for source in sources):
                 continue
             mesh.point_data[name] = np.concatenate(
-                [
-                    np.asarray(source.point_data[name]) for source in sources
-                ],
+                [np.asarray(source.point_data[name]) for source in sources],
                 axis=0,
             )
         return mesh
