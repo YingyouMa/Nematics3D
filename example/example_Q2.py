@@ -114,7 +114,7 @@ def quick_visualize_Q(
             ),
         )
 
-    q_obj.calc_corners.act_visualize(
+    q_obj.calc_bounds.act_visualize(
         figure=figure,
         opts=nematics3d.OptsTube(radius=params["extent_radius"]),
         is_reset_camera=False,

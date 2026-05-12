@@ -130,6 +130,10 @@ class GridFieldDataset(ClassBase):
             "kind": "calc",
         },
         "calc_corners": {
+            "doc": "Box corners in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_bounds": {
             "doc": "Bounds object describing the dataset box in real-space coordinates.",
             "kind": "calc",
         },
@@ -228,6 +232,7 @@ class GridFieldDataset(ClassBase):
             object.__setattr__(self, "calc_grid", UNSET)
             object.__setattr__(self, "calc_corners_index", UNSET)
             object.__setattr__(self, "calc_corners", UNSET)
+            object.__setattr__(self, "calc_bounds", UNSET)
             object.__setattr__(self, "calc_grid_spacing", UNSET)
             object.__setattr__(self, "calc_box_size_periodic_index", UNSET)
             return
@@ -259,7 +264,7 @@ class GridFieldDataset(ClassBase):
             transform=self.raw_grid_transform,
             offset=self.raw_grid_offset,
         )
-        corners = as_bounds(
+        bounds = as_bounds(
             corners_coord,
             name=f"Bounds of grid field dataset {self.name!r}",
         )
@@ -272,7 +277,8 @@ class GridFieldDataset(ClassBase):
         object.__setattr__(self, "calc_grid_index", grid_index)
         object.__setattr__(self, "calc_grid", grid)
         object.__setattr__(self, "calc_corners_index", corners_index)
-        object.__setattr__(self, "calc_corners", corners)
+        object.__setattr__(self, "calc_corners", corners_coord)
+        object.__setattr__(self, "calc_bounds", bounds)
         object.__setattr__(self, "calc_grid_spacing", grid_spacing)
 
     def act_add_field(

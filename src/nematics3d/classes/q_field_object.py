@@ -48,7 +48,7 @@
 #
 # Phase 1. Strengthen GridFieldDataset as the shared grid owner
 # - Add shared geometry/cache state to GridFieldDataset:
-#   calc_grid_index, calc_grid, calc_corners_index, calc_corners,
+#   calc_grid_index, calc_grid, calc_corners_index, calc_corners, calc_bounds,
 #   calc_box_size_periodic_index.
 # - Move the grid/bounds construction logic currently implemented here into the
 #   dataset layer, but keep QFieldObject behavior unchanged for callers.
@@ -77,7 +77,7 @@
 # - Update QInterpolator, plane helpers, and other grid-aware utilities to read
 #   grid geometry, bounds, and periodic information from GridFieldDataset.
 # - Keep QFieldObject convenience properties as compatibility facades, e.g.
-#   calc_grid -> self.dataset.calc_grid and calc_corners -> self.dataset.calc_corners.
+#   calc_grid -> self.dataset.calc_grid and calc_bounds -> self.dataset.calc_bounds.
 # - After this phase, QFieldObject should mainly provide Q-specific analysis,
 #   not generic grid infrastructure.
 #
@@ -274,7 +274,8 @@ class QFieldObject(ClassBase):
     - `objects` / `objs`: RegistryBase storing physical objects derived from this Q field.
     - `interpolator`: GridInterpolator used for off-grid sampling.
     - `calc_grid`: full real-space lattice coordinates of the Q field.
-    - `calc_corners`: Bounds object describing the Q-field box.
+    - `calc_corners`: real-space box corner coordinates.
+    - `calc_bounds`: Bounds object describing the Q-field box.
     - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
       in index and world coordinates.
 
@@ -363,6 +364,10 @@ class QFieldObject(ClassBase):
             "kind": "property",
         },
         "calc_corners": {
+            "doc": "Box corners in real-space coordinates.",
+            "kind": "property",
+        },
+        "calc_bounds": {
             "doc": "Bounds object describing the Q-field box in real-space coordinates.",
             "kind": "property",
         },
@@ -661,11 +666,11 @@ class QFieldObject(ClassBase):
         object.__setattr__(self, "raw_Q", field.raw_values)
         # Register the box bounds as a normal derived object so they show up in
         # the same object registry as other geometry derived from this Q field.
-        bounds = self.calc_corners
+        bounds = self.calc_bounds
         self.objs.act_register(bounds, is_contain_ok=True)
         logger.debug(
             f"Box corners in lattice-index units is {self.calc_corners_index}."
-            f"Box bounds in real-space coordinates is {self.calc_corners}."
+            f"Box bounds in real-space coordinates is {self.calc_bounds}."
         )
 
         if (not is_detect_defects) and is_classify_lines:
@@ -1002,14 +1007,14 @@ class QFieldObject(ClassBase):
         self, bounds=None, *, label: str = "plot", logger=None
     ):
         if bounds is None:
-            return self.calc_corners
+            return self.calc_bounds
 
         try:
             bounds_obj = as_bounds(bounds, name=f"{label} bounds")
         except (TypeError, ValueError):
             logger.exception("Check input.")
             logger.recovery("Use the default Q bounds instead.")
-            return self.calc_corners
+            return self.calc_bounds
 
         return bounds_obj
 
@@ -1641,8 +1646,13 @@ class QFieldObject(ClassBase):
 
     @property
     def calc_corners(self):
-        """Return the dataset-owned bounds object for this Q field."""
+        """Return the dataset-owned box corners in real-space coordinates."""
         return self.dataset.calc_corners
+
+    @property
+    def calc_bounds(self):
+        """Return the dataset-owned bounds object for this Q field."""
+        return self.dataset.calc_bounds
 
     @property
     def calc_box_size_periodic_index(self):
