@@ -19,4 +19,5 @@
 - Add a one-shot detailed info/summary printer for `SmoothedLine` and `SmoothedLineFunc` so users can inspect the full current smoothing, sampling, and cache state without manually checking many fields.
 - Add an optional anisotropy diagnostic to radial Fourier-spectrum averaging so the result can report whether the radial average is likely meaningful for the underlying spectrum.
 - Design a general ClassBase/HostBase policy for mutable ndarray outputs: derived `calc_`/`entity_` arrays and any opts-side arrays may need read-only views, defensive copies, or a documented convention so users cannot accidentally mutate internal caches in place.
+- Define a repository-wide convention for `as_*` normalizers that accept existing `ClassBase`/`HostBase` instances, such as `as_bounds()` and `as_plotfigure()`: decide whether fixedness flags like `is_fixed` / `is_fixed_opts` should be ignored, applied in place, copied into a new fixed object, or rejected when the input is already an object instance.
 
