@@ -102,6 +102,23 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(TypeError):
             dataset.act_add_field("complex", np.ones((2, 2, 2), dtype=complex))
 
+    def test_field_values_are_fixed_and_replace_creates_new_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        field = dataset.act_add_field("scalar", np.zeros((2, 2, 2)))
+
+        with self.assertRaises(AttributeError):
+            field.values = np.ones((2, 2, 2))
+
+        field_new = dataset.act_add_field(
+            "scalar",
+            np.ones((2, 2, 2)),
+            is_replace=True,
+        )
+
+        self.assertIsNot(field_new, field)
+        self.assertIs(dataset["scalar"], field_new)
+        self.assertTrue(np.allclose(field_new.raw_values, 1.0))
+
     def test_dataset_core_grid_metadata_is_fixed_after_initialization(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
 

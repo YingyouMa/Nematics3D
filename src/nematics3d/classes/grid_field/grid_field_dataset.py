@@ -63,7 +63,7 @@ class FieldData(ClassBase):
             self.__attr_defs__["raw_values"]["doc"],
         )
 
-        super().__init__(name=name, name_replace="field")
+        super().__init__(name=name, name_replace="field", is_fixed=True)
         object.__setattr__(self, "raw_values", values)
         object.__setattr__(self, "interpolator", None)
 
