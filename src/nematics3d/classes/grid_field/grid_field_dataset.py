@@ -267,6 +267,7 @@ class GridFieldDataset(ClassBase):
         bounds = as_bounds(
             corners_coord,
             name=f"Bounds of grid field dataset {self.name!r}",
+            is_fixed_opts=True,
         )
 
         object.__setattr__(

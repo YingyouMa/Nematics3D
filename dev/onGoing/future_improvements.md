@@ -18,4 +18,5 @@
 - Let `SmoothedLineFunc` optionally smooth its sampled values with the same smoothing parameters used by the paired `SmoothedLine`, so function sampling can stay visually and numerically consistent with the line itself.
 - Add a one-shot detailed info/summary printer for `SmoothedLine` and `SmoothedLineFunc` so users can inspect the full current smoothing, sampling, and cache state without manually checking many fields.
 - Add an optional anisotropy diagnostic to radial Fourier-spectrum averaging so the result can report whether the radial average is likely meaningful for the underlying spectrum.
+- Design a general ClassBase/HostBase policy for mutable ndarray outputs: derived `calc_`/`entity_` arrays and any opts-side arrays may need read-only views, defensive copies, or a documented convention so users cannot accidentally mutate internal caches in place.
 

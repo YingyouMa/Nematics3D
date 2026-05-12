@@ -61,6 +61,22 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
         self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
 
+    def test_dataset_bounds_opts_are_protected_but_copies_are_editable(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        bounds = dataset.calc_bounds
+        origin_before = bounds.opts.origin.copy()
+
+        bounds.act_commit(origin=(10.0, 20.0, 30.0))
+        bounds.opts.origin = (10.0, 20.0, 30.0)
+
+        self.assertTrue(np.allclose(bounds.opts.origin, origin_before))
+        self.assertTrue(set(type(bounds.opts).__attrs__) <= bounds.attrs_protected)
+
+        bounds_copy = bounds.act_copy()
+        bounds_copy.act_commit(origin=(10.0, 20.0, 30.0))
+
+        self.assertTrue(np.allclose(bounds_copy.opts.origin, (10.0, 20.0, 30.0)))
+
     def test_first_field_can_infer_dataset_shape_and_refresh_caches(self):
         dataset = GridFieldDataset()
         values = np.arange(2 * 3 * 4 * 5, dtype=float).reshape(2, 3, 4, 5)
