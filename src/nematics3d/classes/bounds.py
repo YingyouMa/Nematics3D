@@ -228,6 +228,7 @@ class Bounds(HostBase):
         name_replace: str = "bounds",
         opts: OptsBounds | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
+        is_fixed_opts: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -236,6 +237,7 @@ class Bounds(HostBase):
             opts_defaults_override,
             name=name,
             name_replace=name_replace,
+            is_fixed_opts=is_fixed_opts,
             **kwargs,
         )
 
@@ -542,8 +544,8 @@ class Bounds(HostBase):
         from .visual.qt.interact_bounds import InteractBounds
         from .visual.qt.interact_tube import InteractTube
 
-        InteractTube(tube, figure).show()
-        InteractBounds(self, figure).show()
+        InteractTube.show_once(tube, figure)
+        InteractBounds.show_once(self, figure)
 
     def act_visualize(
         self,
@@ -660,15 +662,14 @@ def _match_points_unordered(
     return True
 
 
-def _build_bounds_from_corner_edges(
+def _opts_bounds_from_corner_edges(
     origin: np.ndarray,
     edge1: np.ndarray,
     edge2: np.ndarray,
     edge3: np.ndarray,
-    name: str | None = None,
     *,
     is_preserve_axis_order: bool = True,
-) -> Bounds:
+) -> OptsBounds:
     axis1, length1 = _normalize_box_edge(edge1, name="edge1")
     axis2, length2 = _normalize_box_edge(edge2, name="edge2")
     axis3, length3 = _normalize_box_edge(edge3, name="edge3")
@@ -690,56 +691,49 @@ def _build_bounds_from_corner_edges(
         axis2, axis3 = axis3, axis2
         length2, length3 = length3, length2
 
-    return Bounds(
-        name=name,
-        opts=OptsBounds(
-            origin=origin,
-            axis1=axis1,
-            axis2=axis2,
-            length1=length1,
-            length2=length2,
-            length3=length3,
-            alignment="min_corner",
-        ),
+    return OptsBounds(
+        origin=origin,
+        axis1=axis1,
+        axis2=axis2,
+        length1=length1,
+        length2=length2,
+        length3=length3,
+        alignment="min_corner",
     )
 
 
-def _build_bounds_from_4_points(points: np.ndarray, name: str | None = None) -> Bounds:
+def _opts_bounds_from_4_points(points: np.ndarray) -> OptsBounds:
     origin = points[0]
     edge1 = points[1] - origin
     edge2 = points[2] - origin
     edge3 = points[3] - origin
-    return _build_bounds_from_corner_edges(
+    return _opts_bounds_from_corner_edges(
         origin,
         edge1,
         edge2,
         edge3,
-        name=name,
         is_preserve_axis_order=True,
     )
 
 
-def _build_bounds_from_bounds6(values: np.ndarray, name: str | None = None) -> Bounds:
+def _opts_bounds_from_bounds6(values: np.ndarray) -> OptsBounds:
     xmin, xmax, ymin, ymax, zmin, zmax = values.tolist()
     if not (xmax > xmin and ymax > ymin and zmax > zmin):
         raise ValueError(
             "Axis-aligned bounds must satisfy xmin<xmax, ymin<ymax, zmin<zmax."
         )
-    return Bounds(
-        name=name,
-        opts=OptsBounds(
-            origin=(xmin, ymin, zmin),
-            axis1=(1.0, 0.0, 0.0),
-            axis2=(0.0, 1.0, 0.0),
-            length1=xmax - xmin,
-            length2=ymax - ymin,
-            length3=zmax - zmin,
-            alignment="min_corner",
-        ),
+    return OptsBounds(
+        origin=(xmin, ymin, zmin),
+        axis1=(1.0, 0.0, 0.0),
+        axis2=(0.0, 1.0, 0.0),
+        length1=xmax - xmin,
+        length2=ymax - ymin,
+        length3=zmax - zmin,
+        alignment="min_corner",
     )
 
 
-def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> Bounds:
+def _opts_bounds_from_8_points(points: np.ndarray) -> OptsBounds:
     points = np.asarray(points, dtype=float)
     if points.shape != (8, 3):
         raise ValueError(f"Expected (8, 3) points for a box, got shape {points.shape}.")
@@ -794,12 +788,11 @@ def _build_bounds_from_8_points(points: np.ndarray, name: str | None = None) -> 
                         dtype=float,
                     )
                     if _match_points_unordered(expected, points):
-                        return _build_bounds_from_corner_edges(
+                        return _opts_bounds_from_corner_edges(
                             origin,
                             edge1,
                             edge2,
                             edge3,
-                            name=name,
                             is_preserve_axis_order=False,
                         )
 
@@ -993,7 +986,12 @@ def obb_bounds_from_fit(fit: OBBFit, name: str | None = "seed bounds") -> Bounds
     )
 
 
-def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
+def as_bounds(
+    input_data,
+    name: str = "bounds",
+    *,
+    is_fixed_opts: bool = False,
+) -> Bounds | None:
     """Convert supported box-like inputs to a ``Bounds`` instance."""
     if input_data is None:
         return None
@@ -1009,18 +1007,22 @@ def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
                 f"{len(unique_points)} unique points. Please convert this "
                 "geometry to BoundsGeneral instead."
             )
-        return _build_bounds_from_8_points(unique_points, name=name)
+        opts = _opts_bounds_from_8_points(unique_points)
+        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
 
     arr = np.asarray(input_data, dtype=float)
 
     if arr.ndim == 1 and arr.shape == (6,):
-        return _build_bounds_from_bounds6(arr, name=name)
+        opts = _opts_bounds_from_bounds6(arr)
+        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
 
     if arr.ndim == 2 and arr.shape == (4, 3):
-        return _build_bounds_from_4_points(arr, name=name)
+        opts = _opts_bounds_from_4_points(arr)
+        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
 
     if arr.ndim == 2 and arr.shape == (8, 3):
-        return _build_bounds_from_8_points(arr, name=name)
+        opts = _opts_bounds_from_8_points(arr)
+        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
 
     raise TypeError(
         f"{name!r} could not be converted to Bounds. Supported inputs are: None, Bounds, "

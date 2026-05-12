@@ -430,7 +430,7 @@ class PlotTube(PlotGlyph):
         self._helper_commit_line_index({"line_index": line_index})
 
         self._helper_init_end()
-        self.act_set_interact_func(lambda: InteractTube(self, self.fig).show())
+        self.act_set_interact_func(lambda: InteractTube.show_once(self, self.fig))
 
     # -------------------------------
     # Tube raw topology helpers

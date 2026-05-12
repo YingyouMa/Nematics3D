@@ -119,6 +119,14 @@ class TestClassBase(unittest.TestCase):
         self.assertEqual(obj.raw_label, "direct-update")
         self.assertEqual(CountingFieldBase.call_count, 2)
 
+    def test_show_attr_doc_returns_registered_doc(self):
+        obj = CountingFieldBase()
+
+        self.assertEqual(
+            obj.show_attr_doc("label", is_return=True),
+            "The label string for this instance.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -251,6 +251,21 @@ class OptsBase:
                 f"{list(type(self).__attrs__)}"
             )
 
+        if (not is_internal_key) and getattr(self, "impl_attr_flags", {}).get(
+            key, {}
+        ).get(
+            "is_protected",
+            False,
+        ):
+            try:
+                raise AttributeError(
+                    f"{key!r} is protected and could not be directly modified."
+                )
+            except AttributeError:
+                logger.exception("Invalid attr")
+                logger.recovery("Automatically ignore this attr")
+            return
+
         if value is UNSET:
             if is_functioning:
                 try:
@@ -328,7 +343,11 @@ class OptsBase:
                 value = defaults_dict.get(key, self.defaults_frozen.get(key, UNSET))
                 if (value is UNSET) and (not is_allow_unset):
                     raise KeyError(f"Missing default for field {key!r}.")
-                setattr(self, key, value)
+                validator = type(self).impl_validators.get(key)
+                if validator is not None:
+                    desc = f"{key!r}: {type(self).__attrs__[key]}"
+                    value = validator(value, desc)
+                object.__setattr__(self, key, value)
 
         object.__setattr__(self, "impl_is_functioning", True)
 
@@ -710,6 +729,7 @@ class HostBase(ClassBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
         name_replace: str = "unnamed",
+        is_fixed_opts: bool = False,
         **kwargs,
     ):
         # Initialize the ClassBase identity and base relation skeleton first.
@@ -753,6 +773,8 @@ class HostBase(ClassBase):
         object.__setattr__(self, "impl_sync_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_sync_func", {})
+        if is_fixed_opts:
+            self.act_register_protected_opts_all()
 
         # Apply any host-side raw/state initialization values that were
         # separated from the opts kwargs above.
@@ -1597,6 +1619,16 @@ class HostBase(ClassBase):
             is_enabled=False,
             attr_name="The name of attr to be unprotected",
         )
+
+    def act_register_protected_opts_all(self) -> None:
+        """Protect every public opts field from normal commit/setattr updates."""
+        for attr_name in type(self.opts).__attrs__:
+            self.opts.impl_attr_flags[attr_name]["is_protected"] = True
+
+    def act_unregister_protected_opts_all(self) -> None:
+        """Remove direct protection from every public opts field."""
+        for attr_name in type(self.opts).__attrs__:
+            self.opts.impl_attr_flags[attr_name]["is_protected"] = False
 
     @contextmanager
     def act_wrapped_update(self):

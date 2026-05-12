@@ -145,7 +145,7 @@ class VectorPlane(InterpolatePlane):
                 default_func()
             from .visual.qt.interact_plane import InteractPlane
 
-            InteractPlane(self, visual.fig).show()
+            InteractPlane.show_once(self, visual.fig)
 
         visual.act_set_interact_func(_interact)
 

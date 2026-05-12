@@ -60,26 +60,26 @@ def _auto_quick_Q_visual_params(field, grid_normal):
 def quick_visualize_Q(
     S=nematics3d.UNSET,
     n=nematics3d.UNSET,
-    Q_input=nematics3d.UNSET,
+    Q=nematics3d.UNSET,
     box_periodic_flag=False,
     name="Q",
     grid_normal=(0, 0, 1),
     is_visualize_lines=True,
 ):
     unset = nematics3d.UNSET
-    is_Q_input_provided = Q_input is not None and Q_input is not unset
+    is_Q_provided = Q is not None and Q is not unset
     is_S_provided = S is not None and S is not unset
     is_n_provided = n is not None and n is not unset
 
-    if not is_Q_input_provided and not is_n_provided:
-        raise ValueError("Provide `Q_input` or `n`.")
+    if not is_Q_provided and not is_n_provided:
+        raise ValueError("Provide `Q` or `n`.")
 
-    field_for_shape = Q_input if is_Q_input_provided else n
+    field_for_shape = Q if is_Q_provided else n
 
     params = _auto_quick_Q_visual_params(field_for_shape, grid_normal)
 
     q_obj = nematics3d.QFieldObject(
-        Q=Q_input if is_Q_input_provided else unset,
+        Q=Q if is_Q_provided else unset,
         S=S if is_S_provided else unset,
         n=n if is_n_provided else unset,
         box_periodic_flag=box_periodic_flag,
@@ -114,7 +114,7 @@ def quick_visualize_Q(
             ),
         )
 
-    q_obj.calc_corners.act_visualize(
+    q_obj.calc_bounds.act_visualize(
         figure=figure,
         opts=nematics3d.OptsTube(radius=params["extent_radius"]),
         is_reset_camera=False,

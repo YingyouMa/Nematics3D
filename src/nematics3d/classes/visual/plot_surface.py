@@ -346,7 +346,7 @@ class PlotSurface(PlotGlyph):
         )
 
         object.__setattr__(self, "calc_keep_index", None)
-        self.act_set_interact_func(lambda: InteractSurface(self, self.fig).show())
+        self.act_set_interact_func(lambda: InteractSurface.show_once(self, self.fig))
 
         self._helper_init_end()
 

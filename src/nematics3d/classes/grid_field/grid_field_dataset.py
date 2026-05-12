@@ -10,6 +10,7 @@ import numpy as np
 from nematics3d.datatypes import (
     UNSET,
     Unset,
+    as_real_lattice_field,
 )
 
 from ..bounds import as_bounds
@@ -23,19 +24,6 @@ from ...grid import (
 )
 from ...general import get_box_corners
 from .input_grid_field import InputGridField, as_grid_shape
-
-
-def as_field_values(value, name: str = "field values") -> np.ndarray:
-    """Convert field values to a numeric NumPy array."""
-    values = np.asarray(value)
-    if values.ndim < 3:
-        raise ValueError(
-            f"{name!r} must have at least three grid axes. "
-            f"Got shape {values.shape} instead."
-        )
-    if not np.issubdtype(values.dtype, np.number):
-        raise TypeError(f"{name!r} must contain numeric values. Got {values.dtype}.")
-    return values
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -81,7 +69,7 @@ class FieldData(ClassBase):
         },
         "raw_values": {
             "doc": "Field values with leading axes matching the dataset grid.",
-            "validator": as_field_values,
+            "validator": as_real_lattice_field,
         },
         "raw_info": {
             "doc": "Optional user-provided metadata or provenance for this field.",
@@ -111,7 +99,7 @@ class FieldData(ClassBase):
             self.__attr_defs__["raw_values"]["doc"],
         )
 
-        super().__init__(name=name, name_replace="field")
+        super().__init__(name=name, name_replace="field", is_fixed=True)
         object.__setattr__(self, "raw_values", values)
         object.__setattr__(self, "raw_info", info)
         object.__setattr__(self, "interpolator", None)
@@ -179,7 +167,15 @@ class GridFieldDataset(ClassBase):
             "kind": "calc",
         },
         "calc_corners": {
+            "doc": "Box corners in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_bounds": {
             "doc": "Bounds object describing the dataset box in real-space coordinates.",
+            "kind": "calc",
+        },
+        "calc_grid_spacing": {
+            "doc": "Real-space spacing along each lattice axis.",
             "kind": "calc",
         },
         "calc_box_size_periodic_index": {
@@ -296,7 +292,7 @@ class GridFieldDataset(ClassBase):
         ):
             values = self.act_get_field(field_or_values).raw_values
         else:
-            values = as_field_values(field_or_values, name=name)
+            values = as_real_lattice_field(field_or_values, name=name)
 
         field_shape = as_grid_shape(np.shape(values)[:3], name=f"{name} grid shape")
         dataset_shape = as_grid_shape(self.raw_shape, name="dataset grid shape")
@@ -400,10 +396,16 @@ class GridFieldDataset(ClassBase):
             object.__setattr__(self, "calc_grid", UNSET)
             object.__setattr__(self, "calc_corners_index", UNSET)
             object.__setattr__(self, "calc_corners", UNSET)
+            object.__setattr__(self, "calc_bounds", UNSET)
+            object.__setattr__(self, "calc_grid_spacing", UNSET)
             object.__setattr__(self, "calc_box_size_periodic_index", UNSET)
             return
 
         grid_shape = as_grid_shape(self.raw_shape, name="dataset grid shape")
+        if is_grid_transform_identity(self.raw_grid_transform):
+            grid_spacing = np.ones(3, dtype=float)
+        else:
+            grid_spacing = np.linalg.norm(self.raw_grid_transform, axis=0)
 
         box_size_periodic_index = np.zeros(3, dtype=float)
         for i, is_periodic in enumerate(self.raw_box_periodic_flag):
@@ -426,9 +428,10 @@ class GridFieldDataset(ClassBase):
             transform=self.raw_grid_transform,
             offset=self.raw_grid_offset,
         )
-        corners = as_bounds(
+        bounds = as_bounds(
             corners_coord,
             name=f"Bounds of grid field dataset {self.name!r}",
+            is_fixed_opts=True,
         )
 
         object.__setattr__(
@@ -439,7 +442,9 @@ class GridFieldDataset(ClassBase):
         object.__setattr__(self, "calc_grid_index", grid_index)
         object.__setattr__(self, "calc_grid", grid)
         object.__setattr__(self, "calc_corners_index", corners_index)
-        object.__setattr__(self, "calc_corners", corners)
+        object.__setattr__(self, "calc_corners", corners_coord)
+        object.__setattr__(self, "calc_bounds", bounds)
+        object.__setattr__(self, "calc_grid_spacing", grid_spacing)
 
     def act_add_field(
         self,
@@ -450,7 +455,7 @@ class GridFieldDataset(ClassBase):
         is_replace: bool = False,
     ) -> FieldData:
         """Validate and bind one physical field to this dataset."""
-        values = as_field_values(values, name=f"field {name!r} values")
+        values = as_real_lattice_field(values, name=f"field {name!r} values")
         self._helper_ensure_or_infer_shape(values)
 
         try:

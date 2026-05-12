@@ -60,7 +60,24 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_grid_index, expected_grid_index))
         self.assertTrue(np.allclose(dataset.calc_grid, expected_grid))
         self.assertTrue(np.allclose(dataset.calc_corners_index, expected_corners_index))
-        self.assertTrue(np.allclose(dataset.calc_corners.corners, expected_corners))
+        self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
+        self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
+
+    def test_dataset_bounds_opts_are_protected_but_copies_are_editable(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        bounds = dataset.calc_bounds
+        origin_before = bounds.opts.origin.copy()
+
+        bounds.act_commit(origin=(10.0, 20.0, 30.0))
+        bounds.opts.origin = (10.0, 20.0, 30.0)
+
+        self.assertTrue(np.allclose(bounds.opts.origin, origin_before))
+        self.assertTrue(set(type(bounds.opts).__attrs__) <= bounds.attrs_protected)
+
+        bounds_copy = bounds.act_copy()
+        bounds_copy.act_commit(origin=(10.0, 20.0, 30.0))
+
+        self.assertTrue(np.allclose(bounds_copy.opts.origin, (10.0, 20.0, 30.0)))
 
     def test_first_field_can_infer_dataset_shape_and_refresh_caches(self):
         dataset = GridFieldDataset()
@@ -76,6 +93,33 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(dataset.calc_grid.shape, (2, 3, 4, 3))
         self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
+        self.assertEqual(dataset.calc_corners.shape, (8, 3))
+
+    def test_field_values_are_real_floating_lattice_fields(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        field = dataset.act_add_field("scalar", np.ones((2, 2, 2), dtype=int))
+
+        self.assertTrue(np.issubdtype(field.raw_values.dtype, np.floating))
+
+        with self.assertRaises(TypeError):
+            dataset.act_add_field("complex", np.ones((2, 2, 2), dtype=complex))
+
+    def test_field_values_are_fixed_and_replace_creates_new_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        field = dataset.act_add_field("scalar", np.zeros((2, 2, 2)))
+
+        with self.assertRaises(AttributeError):
+            field.values = np.ones((2, 2, 2))
+
+        field_new = dataset.act_add_field(
+            "scalar",
+            np.ones((2, 2, 2)),
+            is_replace=True,
+        )
+
+        self.assertIsNot(field_new, field)
+        self.assertIs(dataset["scalar"], field_new)
+        self.assertTrue(np.allclose(field_new.raw_values, 1.0))
 
     def test_field_can_store_optional_user_info(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))

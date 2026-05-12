@@ -100,7 +100,7 @@ plane = n3d.QPlane(
         grid_offset=None,
         grid_transform=np.eye(3),
     ),
-    bounds=qobj.calc_corners,
+    bounds=qobj.calc_bounds,
 )
 
 plane.act_visualize_n(

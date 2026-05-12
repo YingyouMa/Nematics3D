@@ -171,10 +171,36 @@ def is_grid_transform_identity(transform) -> bool:
 
 
 def as_grid_transform(transform, name="grid_transform"):
-    """Validate a grid transform while preserving the identity sentinel."""
+    """Validate a right-handed orthogonal grid transform.
+
+    The transform columns are interpreted as lattice-basis vectors. They may
+    carry scale, but shear, reflections, and degenerate axes are not supported.
+    """
     if is_grid_transform_identity(transform):
         return transform
-    return as_Tensor(transform, (3, 3), name=name)
+
+    transform = as_Tensor(transform, (3, 3), name=name)
+    axis_lengths = np.linalg.norm(transform, axis=0)
+    if np.any(axis_lengths <= 1e-12):
+        raise ValueError(f"{name} must have three nonzero column vectors.")
+
+    gram = transform.T @ transform
+    off_diag = gram - np.diag(np.diag(gram))
+    scale_sq = max(float(np.max(axis_lengths) ** 2), 1.0)
+    if not np.allclose(off_diag, 0.0, atol=1e-8 * scale_sq):
+        raise ValueError(
+            f"{name} must define an orthogonal grid basis: its column vectors "
+            "may be scaled, but must be pairwise orthogonal."
+        )
+
+    det_scale = max(float(np.prod(axis_lengths)), 1.0)
+    if np.linalg.det(transform) <= 1e-12 * det_scale:
+        raise ValueError(
+            f"{name} must define a right-handed grid basis; reflections and "
+            "degenerate transforms are not supported."
+        )
+
+    return transform
 
 
 def apply_linear_transform(
