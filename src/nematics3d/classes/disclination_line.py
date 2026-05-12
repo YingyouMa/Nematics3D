@@ -1172,7 +1172,7 @@ class DisclinationLineSmoothPlot(HostBase):
         self.act_attach_enrich_kwargs_wrapped_task(
             "visual_coords", self._helper_enrich_kwargs_wrapped_visual
         )
-        tube.act_set_interact_func(lambda: InteractDisclinationLine(tube).show())
+        tube.act_set_interact_func(lambda: InteractDisclinationLine.show_once(tube))
 
     # -------------------------------
     # Wrapped-geometry resolution

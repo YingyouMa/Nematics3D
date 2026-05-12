@@ -542,8 +542,8 @@ class Bounds(HostBase):
         from .visual.qt.interact_bounds import InteractBounds
         from .visual.qt.interact_tube import InteractTube
 
-        InteractTube(tube, figure).show()
-        InteractBounds(self, figure).show()
+        InteractTube.show_once(tube, figure)
+        InteractBounds.show_once(self, figure)
 
     def act_visualize(
         self,

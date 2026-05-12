@@ -445,7 +445,7 @@ class PlotRod(PlotGlyph):
 
         object.__setattr__(self, "calc_keep_index", None)
 
-        self.act_set_interact_func(lambda: InteractRod(self, self.fig).show())
+        self.act_set_interact_func(lambda: InteractRod.show_once(self, self.fig))
 
         self._helper_init_end()
 

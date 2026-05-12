@@ -273,7 +273,7 @@ class QPlane(InterpolatePlane):
                 default_func()
             from .visual.qt.interact_plane import InteractPlane
 
-            InteractPlane(self, visual.fig).show()
+            InteractPlane.show_once(self, visual.fig)
 
         visual.act_set_interact_func(_interact)
 
@@ -285,7 +285,7 @@ class QPlane(InterpolatePlane):
                 default_func()
             from .visual.qt.interact_defect_section import InteractDefectSection
 
-            InteractDefectSection(self, visual.fig).show()
+            InteractDefectSection.show_once(self, visual.fig)
 
         visual.act_set_interact_func(_interact)
 
