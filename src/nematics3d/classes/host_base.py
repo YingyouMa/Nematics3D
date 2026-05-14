@@ -729,7 +729,6 @@ class HostBase(ClassBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
         name_replace: str = "unnamed",
-        is_fixed_opts: bool = False,
         **kwargs,
     ):
         # Initialize the ClassBase identity and base relation skeleton first.
@@ -773,8 +772,6 @@ class HostBase(ClassBase):
         object.__setattr__(self, "impl_sync_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_sync_func", {})
-        if is_fixed_opts:
-            self.act_register_protected_opts_all()
 
         # Apply any host-side raw/state initialization values that were
         # separated from the opts kwargs above.

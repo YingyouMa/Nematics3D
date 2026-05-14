@@ -228,7 +228,6 @@ class Bounds(HostBase):
         name_replace: str = "bounds",
         opts: OptsBounds | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
-        is_fixed_opts: bool = False,
         **kwargs,
     ):
         super().__init__(
@@ -237,7 +236,6 @@ class Bounds(HostBase):
             opts_defaults_override,
             name=name,
             name_replace=name_replace,
-            is_fixed_opts=is_fixed_opts,
             **kwargs,
         )
 
@@ -989,8 +987,6 @@ def obb_bounds_from_fit(fit: OBBFit, name: str | None = "seed bounds") -> Bounds
 def as_bounds(
     input_data,
     name: str = "bounds",
-    *,
-    is_fixed_opts: bool = False,
 ) -> Bounds | None:
     """Convert supported box-like inputs to a ``Bounds`` instance."""
     if input_data is None:
@@ -1008,21 +1004,21 @@ def as_bounds(
                 "geometry to BoundsGeneral instead."
             )
         opts = _opts_bounds_from_8_points(unique_points)
-        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
+        return Bounds(name=name, opts=opts)
 
     arr = np.asarray(input_data, dtype=float)
 
     if arr.ndim == 1 and arr.shape == (6,):
         opts = _opts_bounds_from_bounds6(arr)
-        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
+        return Bounds(name=name, opts=opts)
 
     if arr.ndim == 2 and arr.shape == (4, 3):
         opts = _opts_bounds_from_4_points(arr)
-        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
+        return Bounds(name=name, opts=opts)
 
     if arr.ndim == 2 and arr.shape == (8, 3):
         opts = _opts_bounds_from_8_points(arr)
-        return Bounds(name=name, opts=opts, is_fixed_opts=is_fixed_opts)
+        return Bounds(name=name, opts=opts)
 
     raise TypeError(
         f"{name!r} could not be converted to Bounds. Supported inputs are: None, Bounds, "

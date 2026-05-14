@@ -431,8 +431,8 @@ class GridFieldDataset(ClassBase):
         bounds = as_bounds(
             corners_coord,
             name=f"Bounds of grid field dataset {self.name!r}",
-            is_fixed_opts=True,
         )
+        bounds.act_register_protected_opts_all()
 
         object.__setattr__(
             self,

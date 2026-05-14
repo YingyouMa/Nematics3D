@@ -56,12 +56,11 @@ class DemoHost(HostBase):
 
     __slots__ = ("raw_level", "_theme")
 
-    def __init__(self, *, is_fixed_opts=False):
+    def __init__(self):
         super().__init__(
             opts_type=DemoOpts,
             name="demo",
             name_replace="demo",
-            is_fixed_opts=is_fixed_opts,
         )
         object.__setattr__(self, "raw_level", 1)
         object.__setattr__(self, "_theme", "light")
@@ -174,7 +173,8 @@ class TestHostBase(unittest.TestCase):
         self.assertIn("note", host.attrs_forbidden)
 
     def test_fixed_opts_protects_and_unprotects_all_opts_fields(self):
-        host = DemoHost(is_fixed_opts=True)
+        host = DemoHost()
+        host.act_register_protected_opts_all()
 
         host.act_commit(width=5)
         host.width = 6
