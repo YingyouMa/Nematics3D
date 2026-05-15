@@ -24,6 +24,37 @@ from nematics3d.classes.grid_field import (
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
+    def test_act_get_beta_interpolator_auto_smooths_and_matches_direct_beta(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-test")
+
+        self.assertEqual(len(q.lines), 1)
+        self.assertEqual(len(q.lines[0].smooths), 0)
+
+        beta_func = q.act_get_beta_interpolator(
+            index_line=0,
+            u_samples=np.array([0.0, 25.0, 50.0, 75.0], dtype=float),
+            smooth_kwargs={"window_length": 28},
+            name="beta-test-func",
+        )
+
+        smooth = q.lines[0].smooth
+        self.assertIsNotNone(smooth)
+        self.assertIs(beta_func.owner, smooth)
+
+        u_query = np.array([0.0, 25.0, 50.0, 75.0], dtype=float)
+        expected = np.array([smooth.act_calc_omega(u)["beta"] for u in u_query])
+
+        self.assertTrue(np.allclose(beta_func(u_query), expected, equal_nan=True))
+
     def test_legacy_init_builds_dataset_owned_q_field(self):
         shape = (2, 2, 2)
         n = np.zeros(shape + (3,), dtype=float)
