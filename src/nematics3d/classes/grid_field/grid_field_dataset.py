@@ -298,8 +298,16 @@ class GridFieldDataset(ClassBase):
             "raw_box_periodic_flag",
             inputValue.box_periodic_flag,
         )
-        object.__setattr__(self, "raw_grid_offset", inputValue.grid_offset)
-        object.__setattr__(self, "raw_grid_transform", inputValue.grid_transform)
+        object.__setattr__(
+            self,
+            "raw_grid_offset",
+            self._helper_readonly_grid_array_copy(inputValue.grid_offset),
+        )
+        object.__setattr__(
+            self,
+            "raw_grid_transform",
+            self._helper_readonly_grid_array_copy(inputValue.grid_transform),
+        )
         self._helper_refresh_grid_cache()
 
         registry = RegistryBase(
@@ -308,6 +316,15 @@ class GridFieldDataset(ClassBase):
         )
         self.act_bind_relation_base("fields", registry, is_weak=False)
         registry.act_bind_relation_base("owner", self, is_weak=True)
+
+    @staticmethod
+    def _helper_readonly_grid_array_copy(value):
+        """Return a read-only copy for mutable grid geometry arrays."""
+        if value is None or is_grid_transform_identity(value):
+            return value
+        value = np.asarray(value, dtype=float).copy()
+        value.setflags(write=False)
+        return value
 
     def _helper_ensure_or_infer_shape(
         self,
@@ -536,11 +553,8 @@ class GridFieldDataset(ClassBase):
         component_axis: int | None = None,
     ) -> SpatialDerivativeInfo:
         """Build payload-free metadata for an immediate derivative result."""
-        grid_offset = (
-            None
-            if self.raw_grid_offset is None
-            else np.asarray(self.raw_grid_offset).copy()
-        )
+        grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
+        grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
         return SpatialDerivativeInfo(
             operator=operator,
             source=source,
@@ -551,7 +565,7 @@ class GridFieldDataset(ClassBase):
             input_component_shape=source_shape[3:],
             output_shape=values.shape,
             box_periodic_flag=tuple(bool(flag) for flag in self.raw_box_periodic_flag),
-            grid_transform=self.raw_grid_transform,
+            grid_transform=grid_transform,
             grid_offset=grid_offset,
             stencil="centered difference with periodic wrapping or one-sided boundary",
             edge_order=1,
@@ -579,6 +593,31 @@ class GridFieldDataset(ClassBase):
             component_axis=component_axis,
         )
         return SpatialDerivativeResult(raw_values=values, raw_info=info)
+
+    def _helper_vector_gradient_split(
+        self,
+        field_or_values,
+        *,
+        coord: str,
+        name: str,
+    ) -> tuple[str | None, np.ndarray, np.ndarray, np.ndarray]:
+        """Return source, values, symmetric strain, and antisymmetric vorticity."""
+        source = self._helper_source_name_for_field_values(field_or_values)
+        values = self._helper_as_field_values_on_grid(
+            field_or_values,
+            name=name,
+        )
+        if values.shape[3:] != (3,):
+            raise ValueError(
+                f"{name} must be a vector field with shape "
+                f"{tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
+            )
+
+        grad = self.act_gradient(values, coord=coord)
+        grad_transposed = np.swapaxes(grad, -1, -2)
+        strain_rate = 0.5 * (grad + grad_transposed)
+        vorticity_tensor = 0.5 * (grad - grad_transposed)
+        return source, values, strain_rate, vorticity_tensor
 
     # -------------------------------
     # Shared-grid geometry cache
@@ -1208,83 +1247,70 @@ class GridFieldDataset(ClassBase):
             component_axis=component_axis,
         )
 
-    def act_symmetric_gradient(
+    def act_strain_rate_and_vorticity_tensor(
         self,
         field_or_values,
         *,
+        which: str = "both",
         coord: str = "physical",
         is_result: bool = False,
-    ) -> np.ndarray | SpatialDerivativeResult:
+    ) -> (
+        np.ndarray
+        | SpatialDerivativeResult
+        | tuple[np.ndarray, np.ndarray]
+        | tuple[SpatialDerivativeResult, SpatialDerivativeResult]
+    ):
         """
-        Return the symmetric part of a vector-field gradient.
+        Return strain-rate and vorticity tensors for a velocity field.
 
-        The input field must have shape `(Nx, Ny, Nz, 3)`. The returned tensor
-        is `0.5 * (grad_v + grad_v.T)` over the vector-component and derivative
-        axes.
+        The velocity input must have shape `(Nx, Ny, Nz, 3)`. Both outputs have
+        shape `(Nx, Ny, Nz, 3, 3)`. They are computed from one shared velocity
+        gradient so callers that need both tensors avoid duplicate finite
+        differences. `which` selects "both", "strain_rate", or
+        "vorticity_tensor".
         """
-        source = self._helper_source_name_for_field_values(field_or_values)
-        values = self._helper_as_field_values_on_grid(
-            field_or_values,
-            name="symmetric gradient input values",
-        )
-        if values.shape[3:] != (3,):
+        which = str(which)
+        if which not in ("both", "strain_rate", "vorticity_tensor"):
             raise ValueError(
-                "symmetric gradient input values must be a vector field with "
-                f"shape {tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
+                "which must be 'both', 'strain_rate', or 'vorticity_tensor'."
             )
 
-        grad = self.act_gradient(values, coord=coord)
-        symmetric = 0.5 * (grad + np.swapaxes(grad, -1, -2))
+        source, values, strain_rate, vorticity_tensor = (
+            self._helper_vector_gradient_split(
+                field_or_values,
+                coord=coord,
+                name="velocity gradient split input values",
+            )
+        )
 
         if not is_result:
-            return symmetric
-        return self._helper_spatial_derivative_result(
-            symmetric,
-            operator="symmetric_gradient",
+            if which == "strain_rate":
+                return strain_rate
+            if which == "vorticity_tensor":
+                return vorticity_tensor
+            return strain_rate, vorticity_tensor
+
+        strain_result = self._helper_spatial_derivative_result(
+            strain_rate,
+            operator="strain_rate",
             source=source,
             source_shape=values.shape,
             coord=coord,
             derivative_axis=None,
         )
-
-    def act_antisymmetric_gradient(
-        self,
-        field_or_values,
-        *,
-        coord: str = "physical",
-        is_result: bool = False,
-    ) -> np.ndarray | SpatialDerivativeResult:
-        """
-        Return the antisymmetric part of a vector-field gradient.
-
-        The input field must have shape `(Nx, Ny, Nz, 3)`. The returned tensor
-        is `0.5 * (grad_v - grad_v.T)` over the vector-component and derivative
-        axes.
-        """
-        source = self._helper_source_name_for_field_values(field_or_values)
-        values = self._helper_as_field_values_on_grid(
-            field_or_values,
-            name="antisymmetric gradient input values",
-        )
-        if values.shape[3:] != (3,):
-            raise ValueError(
-                "antisymmetric gradient input values must be a vector field "
-                f"with shape {tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
-            )
-
-        grad = self.act_gradient(values, coord=coord)
-        antisymmetric = 0.5 * (grad - np.swapaxes(grad, -1, -2))
-
-        if not is_result:
-            return antisymmetric
-        return self._helper_spatial_derivative_result(
-            antisymmetric,
-            operator="antisymmetric_gradient",
+        vorticity_result = self._helper_spatial_derivative_result(
+            vorticity_tensor,
+            operator="vorticity_tensor",
             source=source,
             source_shape=values.shape,
             coord=coord,
             derivative_axis=None,
         )
+        if which == "strain_rate":
+            return strain_result
+        if which == "vorticity_tensor":
+            return vorticity_result
+        return strain_result, vorticity_result
 
     def act_laplacian(
         self,

@@ -110,10 +110,12 @@ Current first-derivative centered stencils need:
 halo_width = 1
 ```
 
-Composed operators can need a larger effective halo. For example, the current
-Laplacian is implemented as a discrete composition of gradient and divergence,
-so chunked execution should treat it as requiring two derivative passes unless a
-direct second-derivative stencil is implemented later.
+Composed operators can need a larger effective halo. The current Laplacian uses
+direct second-derivative stencils for index coordinates and axis-aligned
+physical coordinates, so those paths need only the direct second-derivative
+halo. Non-diagonal physical transforms preserve mixed derivative contributions
+through composed physical derivatives and should be treated as a multi-pass
+operator for chunked execution.
 
 Future operators should declare or compute their required halo width rather than
 hard-coding it inside the block iterator.

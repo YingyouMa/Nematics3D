@@ -149,6 +149,29 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(tuple(dataset.raw_shape), (2, 2, 2))
         self.assertEqual(dataset.calc_grid.shape, (2, 2, 2, 3))
 
+    def test_dataset_grid_transform_parameters_are_readonly_snapshots(self):
+        grid_offset = np.array([1.0, 2.0, 3.0])
+        grid_transform = np.diag((2.0, 3.0, 4.0))
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 2, 2),
+                grid_offset=grid_offset,
+                grid_transform=grid_transform,
+            )
+        )
+
+        grid_offset[:] = 99.0
+        grid_transform[0, 0] = 99.0
+
+        self.assertTrue(np.allclose(dataset.raw_grid_offset, (1.0, 2.0, 3.0)))
+        self.assertTrue(
+            np.allclose(dataset.raw_grid_transform, np.diag((2.0, 3.0, 4.0)))
+        )
+        with self.assertRaises(ValueError):
+            dataset.raw_grid_offset[0] = 0.0
+        with self.assertRaises(ValueError):
+            dataset.raw_grid_transform[0, 0] = 0.0
+
     def test_field_can_create_generic_interpolator_and_sample_world_points(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
@@ -323,6 +346,25 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(result["raw_values"], result.raw_values))
         self.assertIn("operator", result.raw_info)
         self.assertNotIn("raw_values", result.raw_info)
+
+    def test_spatial_derivative_info_grid_transform_is_readonly_snapshot(self):
+        grid_transform = np.diag((2.0, 3.0, 4.0))
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(3, 4, 5),
+                grid_transform=grid_transform,
+            )
+        )
+        values = np.zeros((3, 4, 5), dtype=float)
+
+        result = dataset.act_gradient(values, is_result=True)
+        grid_transform[0, 0] = 99.0
+
+        self.assertTrue(
+            np.allclose(result.raw_info.grid_transform, np.diag((2.0, 3.0, 4.0)))
+        )
+        with self.assertRaises(ValueError):
+            result.raw_info.grid_transform[0, 0] = 0.0
 
     def test_spatial_derivative_result_can_be_registered_as_field_info(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
@@ -825,34 +867,34 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(result.raw_info.component_axis, 3)
         self.assertTrue(np.allclose(result.raw_values[..., 2, 0], 2.0))
 
-    def test_symmetric_and_antisymmetric_gradient_split_vector_gradient(self):
+    def test_strain_rate_and_vorticity_tensor_split_velocity_gradient_once(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
         i, j, k = np.indices((3, 4, 5), dtype=float)
         values = np.zeros((3, 4, 5, 3), dtype=float)
         values[..., 0] = j
-        values[..., 1] = 0.0 * i
+        values[..., 1] = 2.0 * i
+        values[..., 2] = k
         dataset.act_add_field("velocity", values)
 
-        symmetric = dataset.act_symmetric_gradient("velocity", coord="index")
-        antisymmetric = dataset.act_antisymmetric_gradient(
+        strain_rate, vorticity_tensor = dataset.act_strain_rate_and_vorticity_tensor(
             "velocity",
             coord="index",
         )
 
-        self.assertEqual(symmetric.shape, (3, 4, 5, 3, 3))
-        self.assertEqual(antisymmetric.shape, (3, 4, 5, 3, 3))
-        self.assertTrue(np.allclose(symmetric[..., 0, 1], 0.5))
-        self.assertTrue(np.allclose(symmetric[..., 1, 0], 0.5))
-        self.assertTrue(np.allclose(antisymmetric[..., 0, 1], 0.5))
-        self.assertTrue(np.allclose(antisymmetric[..., 1, 0], -0.5))
+        self.assertEqual(strain_rate.shape, (3, 4, 5, 3, 3))
+        self.assertEqual(vorticity_tensor.shape, (3, 4, 5, 3, 3))
         self.assertTrue(
             np.allclose(
-                symmetric + antisymmetric,
+                strain_rate + vorticity_tensor,
                 dataset.act_gradient("velocity", coord="index"),
             )
         )
+        self.assertTrue(np.allclose(strain_rate[..., 0, 1], 1.5))
+        self.assertTrue(np.allclose(strain_rate[..., 1, 0], 1.5))
+        self.assertTrue(np.allclose(vorticity_tensor[..., 0, 1], -0.5))
+        self.assertTrue(np.allclose(vorticity_tensor[..., 1, 0], 0.5))
 
-    def test_symmetric_gradient_uses_physical_coordinate_derivatives(self):
+    def test_strain_rate_and_vorticity_tensor_use_physical_coordinates(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
                 shape=(3, 4, 5),
@@ -860,44 +902,100 @@ class TestGridFieldDataset(unittest.TestCase):
             )
         )
         i, j, k = np.indices((3, 4, 5), dtype=float)
+        x = 2.0 * i
         y = 3.0 * j
+        z = 4.0 * k
         values = np.zeros((3, 4, 5, 3), dtype=float)
         values[..., 0] = y
+        values[..., 1] = 2.0 * x
+        values[..., 2] = z
 
-        symmetric = dataset.act_symmetric_gradient(values)
-        antisymmetric = dataset.act_antisymmetric_gradient(values)
+        strain_rate, vorticity_tensor = dataset.act_strain_rate_and_vorticity_tensor(
+            values
+        )
 
-        self.assertTrue(np.allclose(symmetric[..., 0, 1], 0.5))
-        self.assertTrue(np.allclose(symmetric[..., 1, 0], 0.5))
-        self.assertTrue(np.allclose(antisymmetric[..., 0, 1], 0.5))
-        self.assertTrue(np.allclose(antisymmetric[..., 1, 0], -0.5))
+        self.assertTrue(np.allclose(strain_rate[..., 0, 1], 1.5))
+        self.assertTrue(np.allclose(strain_rate[..., 1, 0], 1.5))
+        self.assertTrue(np.allclose(vorticity_tensor[..., 0, 1], -0.5))
+        self.assertTrue(np.allclose(vorticity_tensor[..., 1, 0], 0.5))
 
-    def test_symmetric_gradient_rejects_non_vector_field(self):
-        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
-        dataset.act_add_field("scalar", np.zeros((3, 3, 3), dtype=float))
-
-        with self.assertRaises(ValueError):
-            dataset.act_symmetric_gradient("scalar")
-
-    def test_antisymmetric_gradient_can_return_result_metadata(self):
+    def test_strain_rate_and_vorticity_tensor_can_return_result_metadata(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
         i, j, k = np.indices((3, 4, 5), dtype=float)
         values = np.zeros((3, 4, 5, 3), dtype=float)
         values[..., 0] = j
         dataset.act_add_field("velocity", values)
 
-        result = dataset.act_antisymmetric_gradient(
+        strain_result, vorticity_result = dataset.act_strain_rate_and_vorticity_tensor(
             "velocity",
             coord="index",
             is_result=True,
         )
 
+        self.assertIsInstance(strain_result, SpatialDerivativeResult)
+        self.assertIsInstance(vorticity_result, SpatialDerivativeResult)
+        self.assertEqual(strain_result.raw_info.operator, "strain_rate")
+        self.assertEqual(vorticity_result.raw_info.operator, "vorticity_tensor")
+        self.assertEqual(strain_result.raw_info.source, "velocity")
+        self.assertEqual(vorticity_result.raw_info.source, "velocity")
+        self.assertEqual(strain_result.raw_info.output_shape, (3, 4, 5, 3, 3))
+        self.assertEqual(vorticity_result.raw_info.output_shape, (3, 4, 5, 3, 3))
+
+    def test_strain_rate_and_vorticity_tensor_can_select_one_output(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 3), dtype=float)
+        values[..., 0] = j
+        values[..., 1] = 2.0 * i
+
+        strain_rate = dataset.act_strain_rate_and_vorticity_tensor(
+            values,
+            which="strain_rate",
+            coord="index",
+        )
+        vorticity_tensor = dataset.act_strain_rate_and_vorticity_tensor(
+            values,
+            which="vorticity_tensor",
+            coord="index",
+        )
+
+        self.assertEqual(strain_rate.shape, (3, 4, 5, 3, 3))
+        self.assertEqual(vorticity_tensor.shape, (3, 4, 5, 3, 3))
+        self.assertTrue(np.allclose(strain_rate[..., 0, 1], 1.5))
+        self.assertTrue(np.allclose(vorticity_tensor[..., 0, 1], -0.5))
+
+    def test_strain_rate_and_vorticity_tensor_can_select_one_result(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 3), dtype=float)
+        values[..., 0] = j
+        dataset.act_add_field("velocity", values)
+
+        result = dataset.act_strain_rate_and_vorticity_tensor(
+            "velocity",
+            which="vorticity_tensor",
+            coord="index",
+            is_result=True,
+        )
+
         self.assertIsInstance(result, SpatialDerivativeResult)
-        self.assertEqual(result.raw_info.operator, "antisymmetric_gradient")
+        self.assertEqual(result.raw_info.operator, "vorticity_tensor")
         self.assertEqual(result.raw_info.source, "velocity")
-        self.assertEqual(result.raw_info.source_shape, (3, 4, 5, 3))
         self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3, 3))
-        self.assertTrue(np.allclose(result.raw_values[..., 0, 1], 0.5))
+
+    def test_strain_rate_and_vorticity_tensor_rejects_non_vector_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        dataset.act_add_field("scalar", np.zeros((3, 3, 3), dtype=float))
+
+        with self.assertRaises(ValueError):
+            dataset.act_strain_rate_and_vorticity_tensor("scalar")
+
+    def test_strain_rate_and_vorticity_tensor_rejects_invalid_which(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        values = np.zeros((3, 3, 3, 3), dtype=float)
+
+        with self.assertRaises(ValueError):
+            dataset.act_strain_rate_and_vorticity_tensor(values, which="spin")
 
     def test_laplacian_returns_scalar_second_derivative_sum(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
