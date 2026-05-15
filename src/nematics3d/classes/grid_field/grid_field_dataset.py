@@ -13,6 +13,7 @@ from nematics3d.datatypes import (
     UNSET,
     Unset,
     as_real_lattice_field,
+    as_qfield9,
 )
 
 from ..bounds import as_bounds
@@ -1246,6 +1247,63 @@ class GridFieldDataset(ClassBase):
             derivative_axis=None,
             component_axis=component_axis,
         )
+
+    def act_elastic_deformation(
+        self,
+        field_or_values,
+        *,
+        coord: str = "physical",
+        is_return_scalar: bool = True,
+        is_return_vector: bool = True,
+    ) -> dict[str, np.ndarray]:
+        """
+        Return elastic deformation measures computed from a Q-tensor field.
+
+        The input must be one 3D Q field in either 5-component form
+        ``(Nx, Ny, Nz, 5)`` or full tensor form ``(Nx, Ny, Nz, 3, 3)``.
+        Spatial derivatives are obtained from ``act_gradient()`` and then
+        contracted with the original discrete formulas from the legacy elastic
+        helper without trimming boundary cells.
+        """
+        if not is_return_scalar and not is_return_vector:
+            raise ValueError(
+                "At least one elastic deformation output must be requested. "
+                "Set is_return_scalar and/or is_return_vector to True."
+            )
+
+        q_values = as_qfield9(
+            self._helper_as_field_values_on_grid(
+                field_or_values,
+                name="elastic deformation input values",
+            ),
+            name="elastic deformation input values",
+        )
+        grad_q = self.act_gradient(q_values, coord=coord)
+        diff_q = np.moveaxis(grad_q, -1, 3)
+
+        levi = np.zeros((3, 3, 3), dtype=float)
+        levi[0, 1, 2], levi[1, 2, 0], levi[2, 0, 1] = 1.0, 1.0, 1.0
+        levi[1, 0, 2], levi[2, 1, 0], levi[0, 2, 1] = -1.0, -1.0, -1.0
+
+        twist_linear = np.einsum("abc,...ad,...bcd->...", levi, q_values, diff_q)
+        temp1 = np.einsum("...ab,...aib->...i", q_values, diff_q)
+        temp2 = np.einsum("...ia,...bab->...i", q_values, diff_q)
+
+        result: dict[str, np.ndarray] = {}
+
+        if is_return_vector:
+            result["splay_vector"] = temp1 + 2.0 * temp2
+            result["twist_linear"] = twist_linear
+            result["bend_vector"] = -2.0 * temp1 - temp2
+
+        if is_return_scalar:
+            splay_vector = temp1 + 2.0 * temp2
+            bend_vector = -2.0 * temp1 - temp2
+            result["splay"] = np.sum(splay_vector * splay_vector, axis=-1)
+            result["twist"] = twist_linear * twist_linear
+            result["bend"] = np.sum(bend_vector * bend_vector, axis=-1)
+
+        return result
 
     def act_strain_rate_and_vorticity_tensor(
         self,

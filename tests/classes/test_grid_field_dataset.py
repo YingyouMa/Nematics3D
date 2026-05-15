@@ -997,6 +997,145 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(ValueError):
             dataset.act_strain_rate_and_vorticity_tensor(values, which="spin")
 
+    def test_elastic_deformation_returns_full_grid_outputs_for_q5_input(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 5, 6)))
+        i, j, k = np.indices((4, 5, 6), dtype=float)
+        q_values = np.zeros((4, 5, 6, 5), dtype=float)
+        q_values[..., 0] = i
+        q_values[..., 1] = j
+        q_values[..., 2] = k
+        q_values[..., 3] = i - 2.0 * j
+        q_values[..., 4] = 3.0 * k
+        dataset.act_add_field("Q", q_values)
+
+        result = dataset.act_elastic_deformation("Q", coord="index")
+
+        q_tensor = np.zeros((4, 5, 6, 3, 3), dtype=float)
+        q_tensor[..., 0, 0] = q_values[..., 0]
+        q_tensor[..., 0, 1] = q_values[..., 1]
+        q_tensor[..., 0, 2] = q_values[..., 2]
+        q_tensor[..., 1, 0] = q_values[..., 1]
+        q_tensor[..., 1, 1] = q_values[..., 3]
+        q_tensor[..., 1, 2] = q_values[..., 4]
+        q_tensor[..., 2, 0] = q_values[..., 2]
+        q_tensor[..., 2, 1] = q_values[..., 4]
+        q_tensor[..., 2, 2] = -q_values[..., 0] - q_values[..., 3]
+
+        diff_q = np.zeros((4, 5, 6, 3, 3, 3), dtype=float)
+        diff_q[..., 0, :, :] = np.gradient(q_tensor, axis=0)
+        diff_q[..., 1, :, :] = np.gradient(q_tensor, axis=1)
+        diff_q[..., 2, :, :] = np.gradient(q_tensor, axis=2)
+
+        levi = np.zeros((3, 3, 3), dtype=float)
+        levi[0, 1, 2], levi[1, 2, 0], levi[2, 0, 1] = 1.0, 1.0, 1.0
+        levi[1, 0, 2], levi[2, 1, 0], levi[0, 2, 1] = -1.0, -1.0, -1.0
+
+        twist_linear = np.einsum("abc,...ad,...bcd->...", levi, q_tensor, diff_q)
+        temp1 = np.einsum("...ab,...aib->...i", q_tensor, diff_q)
+        temp2 = np.einsum("...ia,...bab->...i", q_tensor, diff_q)
+        splay_vector = temp1 + 2.0 * temp2
+        bend_vector = -2.0 * temp1 - temp2
+
+        self.assertEqual(set(result), {
+            "splay_vector",
+            "twist_linear",
+            "bend_vector",
+            "splay",
+            "twist",
+            "bend",
+        })
+        self.assertEqual(result["splay_vector"].shape, (4, 5, 6, 3))
+        self.assertEqual(result["twist_linear"].shape, (4, 5, 6))
+        self.assertEqual(result["bend_vector"].shape, (4, 5, 6, 3))
+        self.assertEqual(result["splay"].shape, (4, 5, 6))
+        self.assertEqual(result["twist"].shape, (4, 5, 6))
+        self.assertEqual(result["bend"].shape, (4, 5, 6))
+        self.assertTrue(np.allclose(result["splay_vector"], splay_vector))
+        self.assertTrue(np.allclose(result["twist_linear"], twist_linear))
+        self.assertTrue(np.allclose(result["bend_vector"], bend_vector))
+        self.assertTrue(np.allclose(result["splay"], np.sum(splay_vector**2, axis=-1)))
+        self.assertTrue(np.allclose(result["twist"], twist_linear**2))
+        self.assertTrue(np.allclose(result["bend"], np.sum(bend_vector**2, axis=-1)))
+
+    def test_elastic_deformation_uses_physical_gradient_and_output_flags(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 4, 4),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        i, j, k = np.indices((4, 4, 4), dtype=float)
+        x = 2.0 * i
+        y = 3.0 * j
+        z = 4.0 * k
+
+        q_tensor = np.zeros((4, 4, 4, 3, 3), dtype=float)
+        q_tensor[..., 0, 0] = x + y
+        q_tensor[..., 0, 1] = y
+        q_tensor[..., 0, 2] = z
+        q_tensor[..., 1, 0] = y
+        q_tensor[..., 1, 1] = x - z
+        q_tensor[..., 1, 2] = x + z
+        q_tensor[..., 2, 0] = z
+        q_tensor[..., 2, 1] = x + z
+        q_tensor[..., 2, 2] = -q_tensor[..., 0, 0] - q_tensor[..., 1, 1]
+        dataset.act_add_field("Q", q_tensor)
+
+        vector_result = dataset.act_elastic_deformation(
+            "Q",
+            is_return_scalar=False,
+            is_return_vector=True,
+        )
+        scalar_result = dataset.act_elastic_deformation(
+            "Q",
+            is_return_scalar=True,
+            is_return_vector=False,
+        )
+
+        diff_q = np.zeros((4, 4, 4, 3, 3, 3), dtype=float)
+        spacing = (2.0, 3.0, 4.0)
+        diff_q[..., 0, :, :] = np.gradient(q_tensor, axis=0) / spacing[0]
+        diff_q[..., 1, :, :] = np.gradient(q_tensor, axis=1) / spacing[1]
+        diff_q[..., 2, :, :] = np.gradient(q_tensor, axis=2) / spacing[2]
+
+        levi = np.zeros((3, 3, 3), dtype=float)
+        levi[0, 1, 2], levi[1, 2, 0], levi[2, 0, 1] = 1.0, 1.0, 1.0
+        levi[1, 0, 2], levi[2, 1, 0], levi[0, 2, 1] = -1.0, -1.0, -1.0
+
+        twist_linear = np.einsum("abc,...ad,...bcd->...", levi, q_tensor, diff_q)
+        temp1 = np.einsum("...ab,...aib->...i", q_tensor, diff_q)
+        temp2 = np.einsum("...ia,...bab->...i", q_tensor, diff_q)
+        splay_vector = temp1 + 2.0 * temp2
+        bend_vector = -2.0 * temp1 - temp2
+
+        self.assertEqual(set(vector_result), {
+            "splay_vector",
+            "twist_linear",
+            "bend_vector",
+        })
+        self.assertEqual(set(scalar_result), {"splay", "twist", "bend"})
+        self.assertTrue(np.allclose(vector_result["splay_vector"], splay_vector))
+        self.assertTrue(np.allclose(vector_result["twist_linear"], twist_linear))
+        self.assertTrue(np.allclose(vector_result["bend_vector"], bend_vector))
+        self.assertTrue(
+            np.allclose(scalar_result["splay"], np.sum(splay_vector**2, axis=-1))
+        )
+        self.assertTrue(np.allclose(scalar_result["twist"], twist_linear**2))
+        self.assertTrue(
+            np.allclose(scalar_result["bend"], np.sum(bend_vector**2, axis=-1))
+        )
+
+    def test_elastic_deformation_requires_some_output(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        dataset.act_add_field("Q", np.zeros((2, 2, 2, 5), dtype=float))
+
+        with self.assertRaises(ValueError):
+            dataset.act_elastic_deformation(
+                "Q",
+                is_return_scalar=False,
+                is_return_vector=False,
+            )
+
     def test_laplacian_returns_scalar_second_derivative_sum(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
         i, j, k = np.indices((7, 7, 7), dtype=float)
