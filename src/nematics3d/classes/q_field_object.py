@@ -558,7 +558,7 @@ class QFieldObject(ClassBase):
                     "owner is a GridFieldDataset."
                 )
 
-            field.raw_values = as_qfield5(
+            q_values = as_qfield5(
                 field.raw_values,
                 name="attached Q field values",
             )
@@ -566,7 +566,7 @@ class QFieldObject(ClassBase):
             # Reconstruct S and n from the provided Q values so the rest of the
             # class can keep using the same readable surfaces regardless of how
             # this object was initialized.
-            object.__setattr__(self, "raw_Q", field.raw_values)
+            object.__setattr__(self, "raw_Q", q_values)
             temp_S, temp_n = Q_diagonalize(self.raw_Q)
             object.__setattr__(self, "raw_S", temp_S)
             object.__setattr__(self, "raw_n", temp_n)

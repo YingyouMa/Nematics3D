@@ -57,7 +57,11 @@ class DemoHost(HostBase):
     __slots__ = ("raw_level", "_theme")
 
     def __init__(self):
-        super().__init__(opts_type=DemoOpts, name="demo", name_replace="demo")
+        super().__init__(
+            opts_type=DemoOpts,
+            name="demo",
+            name_replace="demo",
+        )
         object.__setattr__(self, "raw_level", 1)
         object.__setattr__(self, "_theme", "light")
 
@@ -167,6 +171,24 @@ class TestHostBase(unittest.TestCase):
         self.assertEqual(host.note, "a")
         self.assertIn("note", host.attrs_protected)
         self.assertIn("note", host.attrs_forbidden)
+
+    def test_fixed_opts_protects_and_unprotects_all_opts_fields(self):
+        host = DemoHost()
+        host.act_register_protected_opts_all()
+
+        host.act_commit(width=5)
+        host.width = 6
+        host.opts.width = 7
+
+        self.assertEqual(host.opts.width, 1)
+        self.assertIn("tag", host.attrs_protected)
+        self.assertIn("width", host.attrs_protected)
+
+        host.act_unregister_protected_opts_all()
+        host.act_commit(width=5)
+
+        self.assertEqual(host.opts.width, 5)
+        self.assertNotIn("width", host.attrs_protected)
 
     def test_show_modifiable_attrs_excludes_forbidden_extra_attr(self):
         host = DemoHost()
