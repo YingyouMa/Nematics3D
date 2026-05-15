@@ -343,11 +343,7 @@ class OptsBase:
                 value = defaults_dict.get(key, self.defaults_frozen.get(key, UNSET))
                 if (value is UNSET) and (not is_allow_unset):
                     raise KeyError(f"Missing default for field {key!r}.")
-                validator = type(self).impl_validators.get(key)
-                if validator is not None:
-                    desc = f"{key!r}: {type(self).__attrs__[key]}"
-                    value = validator(value, desc)
-                object.__setattr__(self, key, value)
+                setattr(self, key, value)
 
         object.__setattr__(self, "impl_is_functioning", True)
 
