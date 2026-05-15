@@ -686,7 +686,9 @@ def check_Sn(
             )
         if is_norm:
             norms = np.linalg.norm(data, axis=-1, keepdims=True)
-            data = data / norms
+            normalized = np.zeros_like(data)
+            np.divide(data, norms, out=normalized, where=norms > 0)
+            data = normalized
     elif datatype == "S":
         if is_3d_strict and len(shape) != 3:
             raise ValueError(
