@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, fields, replace
-from typing import Any, ClassVar, Mapping
+from pathlib import Path
+from typing import Any, ClassVar, Iterator, Mapping
 
 import numpy as np
 
@@ -53,8 +55,74 @@ class SpatialDerivativeResult(ResultBase):
 
     __result_name__: ClassVar[str] = "dataset spatial derivative result"
 
-    raw_values: np.ndarray
+    raw_values: np.ndarray | None
     raw_info: SpatialDerivativeInfo
+    raw_path: str | None = None
+
+    def _helper_load_values_from_path(self) -> np.ndarray:
+        """Load derivative values from the saved array path."""
+        if self.raw_path is None:
+            raise ValueError("No in-memory values or saved path are available.")
+        return np.load(self.raw_path, allow_pickle=False)
+
+    def act_save_values(
+        self,
+        path,
+        *,
+        is_release: bool = False,
+        is_overwrite: bool = False,
+    ) -> SpatialDerivativeResult:
+        """
+        Save result values to a local ``.npy`` file.
+
+        When ``is_release`` is true, the returned result keeps only the saved
+        path and releases the in-memory array reference.
+        """
+        save_path = Path(path)
+        if save_path.suffix != ".npy":
+            save_path = Path(f"{save_path}.npy")
+        if save_path.exists() and not is_overwrite:
+            raise FileExistsError(f"Derivative result path already exists: {save_path}")
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        values = self.raw_values
+        if values is None:
+            values = self._helper_load_values_from_path()
+        np.save(save_path, values)
+
+        raw_values = None if is_release else self.raw_values
+        return replace(self, raw_values=raw_values, raw_path=str(save_path))
+
+    def act_release_values(self) -> SpatialDerivativeResult:
+        """Return a copy without the in-memory array reference."""
+        if self.raw_path is None:
+            raise ValueError("Cannot release derivative values before saving them.")
+        return replace(self, raw_values=None)
+
+    def act_load_values(self) -> SpatialDerivativeResult:
+        """Return a copy with values loaded into memory."""
+        if self.raw_values is not None:
+            return self
+        return replace(self, raw_values=self._helper_load_values_from_path())
+
+    @contextmanager
+    def act_with_values(self) -> Iterator[np.ndarray]:
+        """
+        Temporarily expose derivative values.
+
+        If values are already in memory, the existing array is yielded. If only
+        ``raw_path`` is available, values are loaded for the ``with`` block and
+        the temporary reference is dropped when the block exits.
+        """
+        if self.raw_values is not None:
+            yield self.raw_values
+            return
+
+        values = self._helper_load_values_from_path()
+        try:
+            yield values
+        finally:
+            del values
 
 
 class FieldData(ClassBase):
@@ -329,6 +397,133 @@ class GridFieldDataset(ClassBase):
             return direction
         raise ValueError("direction must be one of 0, 1, 2, 'x', 'y', or 'z'.")
 
+    def _helper_first_derivative_index(
+        self,
+        values: np.ndarray,
+        axis: int,
+    ) -> np.ndarray:
+        """Return the first derivative along one lattice/index axis."""
+        axis_size = values.shape[axis]
+        if axis_size == 1:
+            return np.zeros_like(values, dtype=float)
+
+        if self.raw_box_periodic_flag[axis]:
+            return (
+                np.roll(values, -1, axis=axis) - np.roll(values, 1, axis=axis)
+            ) / 2.0
+
+        derivative = np.empty_like(values, dtype=float)
+
+        index_first = [slice(None)] * values.ndim
+        index_last = [slice(None)] * values.ndim
+        index_first[axis] = 0
+        index_last[axis] = axis_size - 1
+
+        index_next = [slice(None)] * values.ndim
+        index_prev = [slice(None)] * values.ndim
+        index_next[axis] = 1
+        index_prev[axis] = 0
+        derivative[tuple(index_first)] = (
+            values[tuple(index_next)] - values[tuple(index_prev)]
+        )
+
+        index_next[axis] = axis_size - 1
+        index_prev[axis] = axis_size - 2
+        derivative[tuple(index_last)] = (
+            values[tuple(index_next)] - values[tuple(index_prev)]
+        )
+
+        if axis_size > 2:
+            index_mid = [slice(None)] * values.ndim
+            index_next = [slice(None)] * values.ndim
+            index_prev = [slice(None)] * values.ndim
+            index_mid[axis] = slice(1, axis_size - 1)
+            index_next[axis] = slice(2, axis_size)
+            index_prev[axis] = slice(0, axis_size - 2)
+            derivative[tuple(index_mid)] = (
+                values[tuple(index_next)] - values[tuple(index_prev)]
+            ) / 2.0
+
+        return derivative
+
+    def _helper_second_derivative_index(
+        self,
+        values: np.ndarray,
+        axis: int,
+    ) -> np.ndarray:
+        """Return the second derivative along one lattice/index axis."""
+        axis_size = values.shape[axis]
+        if axis_size < 3:
+            return np.zeros_like(values, dtype=float)
+
+        if self.raw_box_periodic_flag[axis]:
+            return (
+                np.roll(values, -1, axis=axis)
+                - 2.0 * values
+                + np.roll(values, 1, axis=axis)
+            )
+
+        derivative = np.empty_like(values, dtype=float)
+
+        index_first = [slice(None)] * values.ndim
+        index_last = [slice(None)] * values.ndim
+        index_first[axis] = 0
+        index_last[axis] = axis_size - 1
+
+        index_0 = [slice(None)] * values.ndim
+        index_1 = [slice(None)] * values.ndim
+        index_2 = [slice(None)] * values.ndim
+        index_0[axis] = 0
+        index_1[axis] = 1
+        index_2[axis] = 2
+        derivative[tuple(index_first)] = (
+            values[tuple(index_0)]
+            - 2.0 * values[tuple(index_1)]
+            + values[tuple(index_2)]
+        )
+
+        index_0[axis] = axis_size - 3
+        index_1[axis] = axis_size - 2
+        index_2[axis] = axis_size - 1
+        derivative[tuple(index_last)] = (
+            values[tuple(index_0)]
+            - 2.0 * values[tuple(index_1)]
+            + values[tuple(index_2)]
+        )
+
+        if axis_size > 2:
+            index_mid = [slice(None)] * values.ndim
+            index_prev = [slice(None)] * values.ndim
+            index_next = [slice(None)] * values.ndim
+            index_mid[axis] = slice(1, axis_size - 1)
+            index_prev[axis] = slice(0, axis_size - 2)
+            index_next[axis] = slice(2, axis_size)
+            derivative[tuple(index_mid)] = (
+                values[tuple(index_next)]
+                - 2.0 * values[tuple(index_mid)]
+                + values[tuple(index_prev)]
+            )
+
+        return derivative
+
+    def _helper_physical_direction_weights(self, direction_index: int) -> np.ndarray:
+        """Return index-derivative weights for one physical derivative axis."""
+        if is_grid_transform_identity(self.raw_grid_transform):
+            weights = np.zeros(3, dtype=float)
+            weights[direction_index] = 1.0
+            return weights
+        transform_inv = np.linalg.inv(self.raw_grid_transform)
+        return transform_inv.T[:, direction_index]
+
+    def _helper_is_diagonal_grid_transform(self) -> bool:
+        """Return whether physical axes align with lattice axes."""
+        if is_grid_transform_identity(self.raw_grid_transform):
+            return True
+        transform = np.asarray(self.raw_grid_transform, dtype=float)
+        off_diag = transform.copy()
+        np.fill_diagonal(off_diag, 0.0)
+        return bool(np.allclose(off_diag, 0.0))
+
     def _helper_spatial_derivative_info(
         self,
         values: np.ndarray,
@@ -487,27 +682,30 @@ class GridFieldDataset(ClassBase):
         """
         Register a spatial derivative result as a field with payload-free info.
 
-        This stores `result.raw_values` as the field values and
+        This stores the result values as the field payload and
         `result.raw_info` as the field info, avoiding duplication of the result
-        payload inside metadata.
+        payload inside metadata. Released results are loaded temporarily from
+        `result.raw_path` through `act_with_values()`.
         """
         if not isinstance(result, SpatialDerivativeResult):
             raise TypeError(
                 "result must be a SpatialDerivativeResult returned by a "
                 "dataset spatial derivative helper."
             )
-        return self.act_add_field(
-            name,
-            result.raw_values,
-            info=result.raw_info,
-            is_replace=is_replace,
-        )
+        with result.act_with_values() as values:
+            return self.act_add_field(
+                name,
+                values,
+                info=result.raw_info,
+                is_replace=is_replace,
+            )
 
     def act_gradient(
         self,
         field_or_values,
         *,
         coord: str = "physical",
+        is_norm: bool = False,
         is_result: bool = False,
     ) -> np.ndarray | SpatialDerivativeResult:
         """
@@ -515,7 +713,8 @@ class GridFieldDataset(ClassBase):
 
         Finite differences are computed along the first three lattice/index
         axes. The returned array has one additional final axis of length 3,
-        representing the derivative direction.
+        representing the derivative direction. When ``is_norm`` is true, return
+        the gradient norm instead, preserving any trailing component axes.
         """
         source = self._helper_source_name_for_field_values(field_or_values)
         values = np.asarray(
@@ -526,49 +725,40 @@ class GridFieldDataset(ClassBase):
             dtype=float,
         )
         source_shape = values.shape
+
+        if is_norm:
+            norm_squared = np.zeros_like(values, dtype=float)
+            if coord == "index":
+                for axis in range(3):
+                    derivative = self._helper_first_derivative_index(values, axis)
+                    norm_squared += derivative * derivative
+            elif coord == "physical":
+                for direction in range(3):
+                    derivative = self.act_derivative(
+                        values,
+                        direction=direction,
+                        coord=coord,
+                    )
+                    norm_squared += derivative * derivative
+            else:
+                raise ValueError("coord must be either 'index' or 'physical'.")
+            result_values = np.sqrt(norm_squared)
+
+            if not is_result:
+                return result_values
+            return self._helper_spatial_derivative_result(
+                result_values,
+                operator="gradient_norm",
+                source=source,
+                source_shape=source_shape,
+                coord=coord,
+                derivative_axis=None,
+            )
+
         grad = np.empty(values.shape + (3,), dtype=float)
 
-        for axis, is_periodic in enumerate(self.raw_box_periodic_flag):
-            axis_size = values.shape[axis]
-            if axis_size == 1:
-                derivative = np.zeros_like(values, dtype=float)
-            elif is_periodic:
-                derivative = (
-                    np.roll(values, -1, axis=axis) - np.roll(values, 1, axis=axis)
-                ) / 2.0
-            else:
-                derivative = np.empty_like(values, dtype=float)
-
-                index_first = [slice(None)] * values.ndim
-                index_last = [slice(None)] * values.ndim
-                index_first[axis] = 0
-                index_last[axis] = axis_size - 1
-
-                index_next = [slice(None)] * values.ndim
-                index_prev = [slice(None)] * values.ndim
-                index_next[axis] = 1
-                index_prev[axis] = 0
-                derivative[tuple(index_first)] = (
-                    values[tuple(index_next)] - values[tuple(index_prev)]
-                )
-
-                index_next[axis] = axis_size - 1
-                index_prev[axis] = axis_size - 2
-                derivative[tuple(index_last)] = (
-                    values[tuple(index_next)] - values[tuple(index_prev)]
-                )
-
-                if axis_size > 2:
-                    index_mid = [slice(None)] * values.ndim
-                    index_next = [slice(None)] * values.ndim
-                    index_prev = [slice(None)] * values.ndim
-                    index_mid[axis] = slice(1, axis_size - 1)
-                    index_next[axis] = slice(2, axis_size)
-                    index_prev[axis] = slice(0, axis_size - 2)
-                    derivative[tuple(index_mid)] = (
-                        values[tuple(index_next)] - values[tuple(index_prev)]
-                    ) / 2.0
-
+        for axis in range(3):
+            derivative = self._helper_first_derivative_index(values, axis)
             grad[..., axis] = derivative
 
         if coord == "index":
@@ -604,24 +794,99 @@ class GridFieldDataset(ClassBase):
         """
         Return one spatial derivative direction of a field on this dataset grid.
 
-        `direction` may be 0/1/2 or "x"/"y"/"z". The result is a slice of
-        `act_gradient(..., coord=coord)` along the final derivative axis.
+        `direction` may be 0/1/2 or "x"/"y"/"z". Only the requested derivative
+        direction is evaluated, avoiding the full gradient allocation.
         """
         direction_index = self._helper_as_direction_index(direction)
-        gradient = self.act_gradient(field_or_values, coord=coord)
-        values = gradient[..., direction_index]
+        source_values = np.asarray(
+            self._helper_as_field_values_on_grid(
+                field_or_values,
+                name="derivative input values",
+            ),
+            dtype=float,
+        )
+
+        if coord == "index":
+            values = self._helper_first_derivative_index(
+                source_values,
+                direction_index,
+            )
+        elif coord == "physical":
+            weights = self._helper_physical_direction_weights(direction_index)
+            values = np.zeros_like(source_values, dtype=float)
+            for axis, weight in enumerate(weights):
+                if weight != 0.0:
+                    values += weight * self._helper_first_derivative_index(
+                        source_values,
+                        axis,
+                    )
+        else:
+            raise ValueError("coord must be either 'index' or 'physical'.")
 
         if not is_result:
             return values
-        source_values = self._helper_as_field_values_on_grid(
-            field_or_values,
-            name="derivative input values",
-        )
         return self._helper_spatial_derivative_result(
             values,
             operator="derivative",
             source=self._helper_source_name_for_field_values(field_or_values),
             source_shape=np.shape(source_values),
+            coord=coord,
+            derivative_axis=direction_index,
+        )
+
+    def act_second_derivative(
+        self,
+        field_or_values,
+        direction: str | int,
+        *,
+        coord: str = "physical",
+        is_result: bool = False,
+    ) -> np.ndarray | SpatialDerivativeResult:
+        """
+        Return one repeated second derivative of a field on this dataset grid.
+
+        This computes ``d2 / d direction**2``. In physical coordinates, the
+        implementation follows the same repeated-direction semantics as
+        ``act_derivative(act_derivative(...))``.
+        """
+        direction_index = self._helper_as_direction_index(direction)
+        values = np.asarray(
+            self._helper_as_field_values_on_grid(
+                field_or_values,
+                name="second derivative input values",
+            ),
+            dtype=float,
+        )
+
+        if coord == "index":
+            second = self._helper_second_derivative_index(values, direction_index)
+        elif coord == "physical":
+            if is_grid_transform_identity(self.raw_grid_transform):
+                second = self._helper_second_derivative_index(
+                    values,
+                    direction_index,
+                )
+            else:
+                first = self.act_derivative(
+                    values,
+                    direction=direction_index,
+                    coord=coord,
+                )
+                second = self.act_derivative(
+                    first,
+                    direction=direction_index,
+                    coord=coord,
+                )
+        else:
+            raise ValueError("coord must be either 'index' or 'physical'.")
+
+        if not is_result:
+            return second
+        return self._helper_spatial_derivative_result(
+            second,
+            operator="second_derivative",
+            source=self._helper_source_name_for_field_values(field_or_values),
+            source_shape=values.shape,
             coord=coord,
             derivative_axis=direction_index,
         )
@@ -637,8 +902,7 @@ class GridFieldDataset(ClassBase):
         Return the divergence of a vector field on this dataset grid.
 
         The input field must have shape `(Nx, Ny, Nz, 3)`. The vector component
-        axis is contracted with the final derivative axis returned by
-        `act_gradient()`.
+        axis is contracted with the derivative direction.
         """
         values = self._helper_as_field_values_on_grid(
             field_or_values,
@@ -650,14 +914,144 @@ class GridFieldDataset(ClassBase):
                 f"{tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
             )
 
-        grad = self.act_gradient(values, coord=coord)
-        div = np.einsum("...ii->...", grad)
+        div = np.zeros(values.shape[:3], dtype=float)
+        for direction in range(3):
+            div += self.act_derivative(
+                values[..., direction],
+                direction=direction,
+                coord=coord,
+            )
 
         if not is_result:
             return div
         return self._helper_spatial_derivative_result(
             div,
             operator="divergence",
+            source=self._helper_source_name_for_field_values(field_or_values),
+            source_shape=values.shape,
+            coord=coord,
+            derivative_axis=None,
+        )
+
+    def act_tensor_divergence(
+        self,
+        field_or_values,
+        *,
+        vector_axis: int = -1,
+        coord: str = "physical",
+        is_result: bool = False,
+    ) -> np.ndarray | SpatialDerivativeResult:
+        """
+        Return the divergence over one length-3 component axis of a tensor field.
+
+        `vector_axis` selects the component axis contracted with the derivative
+        direction. Other trailing component axes are preserved.
+        """
+        source = self._helper_source_name_for_field_values(field_or_values)
+        values = self._helper_as_field_values_on_grid(
+            field_or_values,
+            name="tensor divergence input values",
+        )
+        component_axis = vector_axis
+        if component_axis < 0:
+            component_axis += values.ndim
+        if component_axis < 3 or component_axis >= values.ndim:
+            raise ValueError(
+                "vector_axis must select a trailing component axis, not one of "
+                "the first three spatial grid axes."
+            )
+        if values.shape[component_axis] != 3:
+            raise ValueError(
+                "tensor divergence vector_axis must have length 3. "
+                f"Axis {vector_axis!r} has length {values.shape[component_axis]} "
+                f"for input shape {values.shape}."
+            )
+
+        values_moved = np.moveaxis(values, component_axis, -1)
+        div = np.zeros(values_moved.shape[:-1], dtype=float)
+        for direction in range(3):
+            div += self.act_derivative(
+                values_moved[..., direction],
+                direction=direction,
+                coord=coord,
+            )
+
+        if not is_result:
+            return div
+        return self._helper_spatial_derivative_result(
+            div,
+            operator="tensor_divergence",
+            source=source,
+            source_shape=values.shape,
+            coord=coord,
+            derivative_axis=None,
+            component_axis=component_axis,
+        )
+
+    def act_directional_derivative(
+        self,
+        field_or_values,
+        direction,
+        *,
+        coord: str = "physical",
+        is_normalize: bool = False,
+        is_result: bool = False,
+    ) -> np.ndarray | SpatialDerivativeResult:
+        """
+        Return the derivative along a supplied direction vector.
+
+        `direction` is interpreted in the same coordinate mode requested by
+        `coord`. A single length-3 vector applies globally; an array with
+        trailing length-3 axis can provide a spatially varying direction.
+        """
+        values = self._helper_as_field_values_on_grid(
+            field_or_values,
+            name="directional derivative input values",
+        )
+        direction_values = np.asarray(direction, dtype=float)
+        if direction_values.shape == (3,):
+            direction_values = np.broadcast_to(
+                direction_values,
+                values.shape[:3] + (3,),
+            )
+        elif direction_values.shape[-1:] != (3,):
+            raise ValueError(
+                "direction must be a length-3 vector or an array whose final "
+                "axis has length 3."
+            )
+        else:
+            expected_shape = values.shape[:3] + (3,)
+            if direction_values.shape != expected_shape:
+                raise ValueError(
+                    "spatially varying direction must have shape "
+                    f"{expected_shape}. Got {direction_values.shape}."
+                )
+
+        if is_normalize:
+            norms = np.linalg.norm(direction_values, axis=-1, keepdims=True)
+            if np.any(norms == 0.0):
+                raise ValueError("direction cannot contain zero vectors.")
+            direction_values = direction_values / norms
+
+        extra_component_axes = values.ndim - 3
+        direction_expanded = direction_values
+        for _ in range(extra_component_axes):
+            direction_expanded = np.expand_dims(direction_expanded, axis=-2)
+
+        directional = np.zeros_like(values, dtype=float)
+        for direction_index in range(3):
+            weight = direction_expanded[..., direction_index]
+            directional += weight * self.act_derivative(
+                values,
+                direction=direction_index,
+                coord=coord,
+            )
+
+        if not is_result:
+            return directional
+        return self._helper_spatial_derivative_result(
+            directional,
+            operator="directional_derivative",
             source=self._helper_source_name_for_field_values(field_or_values),
             source_shape=values.shape,
             coord=coord,
@@ -696,11 +1090,34 @@ class GridFieldDataset(ClassBase):
                 f"{tuple(self.raw_shape)} + (3,). Got shape {values.shape}."
             )
 
-        grad = self.act_gradient(values, coord=coord)
         curl = np.empty_like(values, dtype=float)
-        curl[..., 0] = grad[..., 2, 1] - grad[..., 1, 2]
-        curl[..., 1] = grad[..., 0, 2] - grad[..., 2, 0]
-        curl[..., 2] = grad[..., 1, 0] - grad[..., 0, 1]
+        curl[..., 0] = self.act_derivative(
+            values[..., 2],
+            direction=1,
+            coord=coord,
+        ) - self.act_derivative(
+            values[..., 1],
+            direction=2,
+            coord=coord,
+        )
+        curl[..., 1] = self.act_derivative(
+            values[..., 0],
+            direction=2,
+            coord=coord,
+        ) - self.act_derivative(
+            values[..., 2],
+            direction=0,
+            coord=coord,
+        )
+        curl[..., 2] = self.act_derivative(
+            values[..., 1],
+            direction=0,
+            coord=coord,
+        ) - self.act_derivative(
+            values[..., 0],
+            direction=1,
+            coord=coord,
+        )
 
         if not is_result:
             return curl
@@ -749,11 +1166,34 @@ class GridFieldDataset(ClassBase):
             )
 
         values_moved = np.moveaxis(values, component_axis, -1)
-        grad = self.act_gradient(values_moved, coord=coord)
         curl_moved = np.empty_like(values_moved, dtype=float)
-        curl_moved[..., 0] = grad[..., 2, 1] - grad[..., 1, 2]
-        curl_moved[..., 1] = grad[..., 0, 2] - grad[..., 2, 0]
-        curl_moved[..., 2] = grad[..., 1, 0] - grad[..., 0, 1]
+        curl_moved[..., 0] = self.act_derivative(
+            values_moved[..., 2],
+            direction=1,
+            coord=coord,
+        ) - self.act_derivative(
+            values_moved[..., 1],
+            direction=2,
+            coord=coord,
+        )
+        curl_moved[..., 1] = self.act_derivative(
+            values_moved[..., 0],
+            direction=2,
+            coord=coord,
+        ) - self.act_derivative(
+            values_moved[..., 2],
+            direction=0,
+            coord=coord,
+        )
+        curl_moved[..., 2] = self.act_derivative(
+            values_moved[..., 1],
+            direction=0,
+            coord=coord,
+        ) - self.act_derivative(
+            values_moved[..., 0],
+            direction=1,
+            coord=coord,
+        )
         curl = np.moveaxis(curl_moved, -1, component_axis)
 
         if not is_result:
@@ -858,9 +1298,10 @@ class GridFieldDataset(ClassBase):
 
         The input field must have shape `(Nx, Ny, Nz)`. Component-wise
         Laplacians for vector or tensor fields are intentionally not inferred by
-        this helper. This is the discrete composition of `act_gradient()` and
-        `act_divergence()`, so one-sided boundary stencils affect one additional
-        layer of points near non-periodic boundaries.
+        this helper. Direct second-derivative stencils are used for index
+        coordinates and for physical coordinates whose axes align with lattice
+        axes. Non-diagonal physical transforms fall back to repeated physical
+        derivatives so mixed second-derivative contributions are preserved.
         """
         source = self._helper_source_name_for_field_values(field_or_values)
         values = self._helper_as_field_values_on_grid(
@@ -881,8 +1322,33 @@ class GridFieldDataset(ClassBase):
                 f"{dataset_shape}. Got shape {values.shape}."
             )
 
-        grad = self.act_gradient(values, coord=coord)
-        laplacian = self.act_divergence(grad, coord=coord)
+        if coord == "index":
+            axis_weights = np.ones(3, dtype=float)
+        elif coord == "physical" and self._helper_is_diagonal_grid_transform():
+            axis_weights = 1.0 / np.asarray(self.calc_grid_spacing, dtype=float) ** 2
+        elif coord == "physical":
+            grad = self.act_gradient(values, coord=coord)
+            laplacian = self.act_divergence(grad, coord=coord)
+
+            if not is_result:
+                return laplacian
+            return self._helper_spatial_derivative_result(
+                laplacian,
+                operator="laplacian",
+                source=source,
+                source_shape=values.shape,
+                coord=coord,
+                derivative_axis=None,
+            )
+        else:
+            raise ValueError("coord must be either 'index' or 'physical'.")
+
+        laplacian = np.zeros_like(values, dtype=float)
+        for direction, weight in enumerate(axis_weights):
+            laplacian += weight * self._helper_second_derivative_index(
+                values,
+                direction,
+            )
 
         if not is_result:
             return laplacian
@@ -915,17 +1381,42 @@ class GridFieldDataset(ClassBase):
             name="component-wise laplacian input values",
         )
 
-        laplacian = np.zeros_like(values, dtype=float)
-        for direction in range(3):
-            first_derivative = self.act_derivative(
-                values,
-                direction=direction,
+        if coord == "index":
+            axis_weights = np.ones(3, dtype=float)
+        elif coord == "physical" and self._helper_is_diagonal_grid_transform():
+            axis_weights = 1.0 / np.asarray(self.calc_grid_spacing, dtype=float) ** 2
+        elif coord == "physical":
+            laplacian = np.zeros_like(values, dtype=float)
+            for direction in range(3):
+                first_derivative = self.act_derivative(
+                    values,
+                    direction=direction,
+                    coord=coord,
+                )
+                laplacian += self.act_derivative(
+                    first_derivative,
+                    direction=direction,
+                    coord=coord,
+                )
+
+            if not is_result:
+                return laplacian
+            return self._helper_spatial_derivative_result(
+                laplacian,
+                operator="componentwise_laplacian",
+                source=source,
+                source_shape=values.shape,
                 coord=coord,
+                derivative_axis=None,
             )
-            laplacian += self.act_derivative(
-                first_derivative,
-                direction=direction,
-                coord=coord,
+        else:
+            raise ValueError("coord must be either 'index' or 'physical'.")
+
+        laplacian = np.zeros_like(values, dtype=float)
+        for direction, weight in enumerate(axis_weights):
+            laplacian += weight * self._helper_second_derivative_index(
+                values,
+                direction,
             )
 
         if not is_result:

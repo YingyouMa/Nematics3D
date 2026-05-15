@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import tempfile
 import types
 import unittest
 
@@ -251,6 +252,44 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(grad[..., 1, 1], 1.0))
         self.assertTrue(np.allclose(grad[..., 1, 2], 1.0))
 
+    def test_gradient_can_return_norm_without_derivative_axis(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = i + 2.0 * j + 2.0 * k
+
+        grad_norm = dataset.act_gradient(values, coord="index", is_norm=True)
+
+        self.assertEqual(grad_norm.shape, (3, 4, 5))
+        self.assertTrue(np.allclose(grad_norm, 3.0))
+
+    def test_gradient_norm_preserves_component_axes(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 2), dtype=float)
+        values[..., 0] = i + 2.0 * j
+        values[..., 1] = 2.0 * j + 3.0 * k
+
+        grad = dataset.act_gradient(values, coord="index")
+        grad_norm = dataset.act_gradient(values, coord="index", is_norm=True)
+
+        self.assertEqual(grad_norm.shape, (3, 4, 5, 2))
+        self.assertTrue(np.allclose(grad_norm, np.linalg.norm(grad, axis=-1)))
+
+    def test_gradient_norm_can_return_result_metadata(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        dataset.act_add_field("scalar", i + j + k)
+
+        result = dataset.act_gradient(
+            "scalar", coord="index", is_norm=True, is_result=True
+        )
+
+        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertEqual(result.raw_info.operator, "gradient_norm")
+        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
+        self.assertTrue(np.allclose(result.raw_values, np.sqrt(3.0)))
+
     def test_gradient_can_return_spatial_derivative_result_metadata(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
@@ -317,6 +356,46 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertIsNot(field.raw_info, result)
         self.assertTrue(np.allclose(field.raw_values, result.raw_values))
 
+    def test_spatial_derivative_result_can_save_release_and_read_with_context(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        dataset.act_add_field("scalar", i + j + k)
+        result = dataset.act_gradient("scalar", coord="index", is_result=True)
+        expected = result.raw_values.copy()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            saved = result.act_save_values(
+                Path(tmp_dir) / "grad_scalar",
+                is_release=True,
+            )
+
+            self.assertIsNone(saved.raw_values)
+            self.assertTrue(saved.raw_path.endswith(".npy"))
+            self.assertTrue(Path(saved.raw_path).exists())
+
+            with saved.act_with_values() as loaded:
+                self.assertTrue(np.allclose(loaded, expected))
+
+            loaded_result = saved.act_load_values()
+            self.assertTrue(np.allclose(loaded_result.raw_values, expected))
+
+    def test_result_field_registration_loads_released_saved_values(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        dataset.act_add_field("scalar", i + j + k)
+        result = dataset.act_gradient("scalar", coord="index", is_result=True)
+        expected = result.raw_values.copy()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            saved = result.act_save_values(
+                Path(tmp_dir) / "grad_scalar.npy",
+                is_release=True,
+            )
+            field = dataset.act_add_result_field("grad_scalar", saved)
+
+        self.assertTrue(np.allclose(field.raw_values, expected))
+        self.assertIs(field.raw_info, result.raw_info)
+
     def test_result_field_registration_supports_replace(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
         i, j, k = np.indices((3, 4, 5), dtype=float)
@@ -359,6 +438,38 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(d_dx, 1.0))
         self.assertTrue(np.allclose(d_dy, 2.0))
         self.assertTrue(np.allclose(d_dz, 3.0))
+
+    def test_derivative_matches_gradient_slice_for_rotated_physical_grid(self):
+        grid_transform = np.array(
+            [
+                [0.0, -2.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(5, 5, 5),
+                grid_transform=grid_transform,
+            )
+        )
+        i, j, k = np.indices((5, 5, 5), dtype=float)
+        x = 3.0 * j
+        y = -2.0 * i
+        z = 4.0 * k
+        values = 7.0 * x + 11.0 * y + 13.0 * z
+
+        grad = dataset.act_gradient(values)
+        d_dx = dataset.act_derivative(values, direction="x")
+        d_dy = dataset.act_derivative(values, direction="y")
+        d_dz = dataset.act_derivative(values, direction="z")
+
+        self.assertTrue(np.allclose(d_dx, grad[..., 0]))
+        self.assertTrue(np.allclose(d_dy, grad[..., 1]))
+        self.assertTrue(np.allclose(d_dz, grad[..., 2]))
+        self.assertTrue(np.allclose(grad[1:-1, 1:-1, 1:-1, 0], 7.0))
+        self.assertTrue(np.allclose(grad[1:-1, 1:-1, 1:-1, 1], 11.0))
+        self.assertTrue(np.allclose(grad[1:-1, 1:-1, 1:-1, 2], 13.0))
 
     def test_derivative_accepts_temporary_arrays_for_chained_expressions(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 4, 3)))
@@ -410,6 +521,38 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5))
         self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
+
+    def test_second_derivative_returns_repeated_direction_derivative(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
+        i, j, k = np.indices((7, 7, 7), dtype=float)
+        values = 2.0 * i**2 + 3.0 * j**2 + 4.0 * k**2
+
+        d2_dx2 = dataset.act_second_derivative(values, direction="x", coord="index")
+        d2_dy2 = dataset.act_second_derivative(values, direction="y", coord="index")
+        d2_dz2 = dataset.act_second_derivative(values, direction="z", coord="index")
+
+        self.assertTrue(np.allclose(d2_dx2, 4.0))
+        self.assertTrue(np.allclose(d2_dy2, 6.0))
+        self.assertTrue(np.allclose(d2_dz2, 8.0))
+
+    def test_second_derivative_can_return_result_metadata(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
+        i, j, k = np.indices((7, 7, 7), dtype=float)
+        values = i**2 + j + k
+        dataset.act_add_field("scalar", values)
+
+        result = dataset.act_second_derivative(
+            "scalar",
+            direction="x",
+            coord="index",
+            is_result=True,
+        )
+
+        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertEqual(result.raw_info.operator, "second_derivative")
+        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.derivative_axis, 0)
+        self.assertTrue(np.allclose(result.raw_values, 2.0))
 
     def test_divergence_contracts_vector_component_with_derivative_axis(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
@@ -473,6 +616,76 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(result.raw_info.input_component_shape, (3,))
         self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
+
+    def test_tensor_divergence_contracts_selected_component_axis(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 3, 2), dtype=float)
+        values[..., 0, 0] = i
+        values[..., 1, 0] = 2.0 * j
+        values[..., 2, 0] = 3.0 * k
+        values[..., 0, 1] = 4.0 * i
+        values[..., 1, 1] = 5.0 * j
+        values[..., 2, 1] = 6.0 * k
+
+        div = dataset.act_tensor_divergence(
+            values,
+            vector_axis=-2,
+            coord="index",
+        )
+
+        self.assertEqual(div.shape, (3, 4, 5, 2))
+        self.assertTrue(np.allclose(div[..., 0], 6.0))
+        self.assertTrue(np.allclose(div[..., 1], 15.0))
+
+    def test_tensor_divergence_can_return_result_metadata(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
+        i, j, k = np.indices((3, 3, 3), dtype=float)
+        values = np.stack((i, j, k), axis=-1)
+        dataset.act_add_field("vector", values)
+
+        result = dataset.act_tensor_divergence(
+            "vector",
+            coord="index",
+            is_result=True,
+        )
+
+        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertEqual(result.raw_info.operator, "tensor_divergence")
+        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.component_axis, 3)
+        self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
+        self.assertTrue(np.allclose(result.raw_values, 3.0))
+
+    def test_directional_derivative_projects_gradient_onto_direction(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = i + 2.0 * j + 3.0 * k
+
+        directional = dataset.act_directional_derivative(
+            values,
+            direction=(1.0, 1.0, 0.0),
+            coord="index",
+        )
+
+        self.assertTrue(np.allclose(directional, 3.0))
+
+    def test_directional_derivative_preserves_component_axes(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
+        i, j, k = np.indices((3, 4, 5), dtype=float)
+        values = np.zeros((3, 4, 5, 2), dtype=float)
+        values[..., 0] = i + j
+        values[..., 1] = 2.0 * j + 3.0 * k
+
+        directional = dataset.act_directional_derivative(
+            values,
+            direction=(0.0, 1.0, 0.0),
+            coord="index",
+        )
+
+        self.assertEqual(directional.shape, (3, 4, 5, 2))
+        self.assertTrue(np.allclose(directional[..., 0], 1.0))
+        self.assertTrue(np.allclose(directional[..., 1], 2.0))
 
     def test_curl_returns_vector_field_rotation(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
@@ -706,6 +919,30 @@ class TestGridFieldDataset(unittest.TestCase):
         )
         i, j, k = np.indices((7, 7, 7), dtype=float)
         values = (2.0 * i) ** 2 + (3.0 * j) ** 2 + (4.0 * k) ** 2
+
+        laplacian = dataset.act_laplacian(values)
+
+        self.assertTrue(np.allclose(laplacian[2:-2, 2:-2, 2:-2], 6.0))
+
+    def test_laplacian_uses_physical_spacing_on_rotated_grid(self):
+        grid_transform = np.array(
+            [
+                [0.0, -2.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(7, 7, 7),
+                grid_transform=grid_transform,
+            )
+        )
+        i, j, k = np.indices((7, 7, 7), dtype=float)
+        x = 3.0 * j
+        y = -2.0 * i
+        z = 4.0 * k
+        values = x**2 + y**2 + z**2
 
         laplacian = dataset.act_laplacian(values)
 

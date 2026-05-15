@@ -236,6 +236,12 @@ dataset.act_tensor_curl("T", vector_axis=-1, coord="physical")
 `act_tensor_curl()` applies the vector curl along the selected length-3
 component axis and preserves any other trailing component axes.
 
+`act_laplacian()` and `act_componentwise_laplacian()` use direct second
+derivative stencils along each lattice axis for index coordinates and for
+physical coordinates whose axes align with lattice axes. For non-diagonal
+physical transforms, they fall back to repeated physical derivatives so mixed
+second-derivative contributions are preserved.
+
 Advanced users can still consume the returned gradient arrays and apply their
 own `np.einsum()` expressions, but raw einsum strings should not be the primary
 user-facing API.
