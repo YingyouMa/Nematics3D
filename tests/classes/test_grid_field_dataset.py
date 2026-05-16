@@ -17,6 +17,7 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.grid_field import (
+    GaussianSmoothResult,
     GridFieldDataset,
     GridInterpolator,
     InputGridField,
@@ -1135,6 +1136,175 @@ class TestGridFieldDataset(unittest.TestCase):
                 is_return_scalar=False,
                 is_return_vector=False,
             )
+
+    def test_gaussian_smooth_preserves_constant_field(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(5, 6, 7),
+                box_periodic_flag=(True, False, True),
+            )
+        )
+        values = np.full((5, 6, 7), 3.5, dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=1.2, coord="index")
+
+        self.assertEqual(smoothed.shape, values.shape)
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_sigma_zero_returns_original_values(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 5, 6)))
+        i, j, k = np.indices((4, 5, 6), dtype=float)
+        values = i + 2.0 * j + 3.0 * k
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=0.0, coord="index")
+
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_wraps_periodic_boundaries(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(5, 3, 3),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.zeros((5, 3, 3), dtype=float)
+        values[0, 1, 1] = 1.0
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=(1.0, 0.0, 0.0),
+            coord="index",
+            truncate=2.0,
+        )
+
+        self.assertGreater(smoothed[4, 1, 1], 0.0)
+        self.assertTrue(np.allclose(smoothed[:, 0, :], 0.0))
+        self.assertTrue(np.allclose(smoothed[:, 2, :], 0.0))
+
+    def test_gaussian_smooth_uses_physical_spacing(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(7, 3, 3),
+                grid_transform=np.diag((2.0, 1.0, 1.0)),
+            )
+        )
+        values = np.zeros((7, 3, 3), dtype=float)
+        values[3, 1, 1] = 1.0
+
+        smoothed_physical = dataset.act_gaussian_smooth(
+            values,
+            sigma=2.0,
+            coord="physical",
+        )
+        smoothed_index = dataset.act_gaussian_smooth(
+            values,
+            sigma=(1.0, 2.0, 2.0),
+            coord="index",
+        )
+
+        self.assertTrue(np.allclose(smoothed_physical, smoothed_index))
+
+    def test_gaussian_smooth_can_return_result_metadata(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 5, 6),
+                box_periodic_flag=(True, False, False),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        values = np.zeros((4, 5, 6), dtype=float)
+        dataset.act_add_field("scalar", values)
+
+        result = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=2.0,
+            coord="physical",
+            is_result=True,
+        )
+
+        self.assertIsInstance(result, GaussianSmoothResult)
+        self.assertEqual(result.raw_info.operator, "gaussian_smooth")
+        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.coord, "physical")
+        self.assertEqual(result.raw_info.source_shape, (4, 5, 6))
+        self.assertEqual(result.raw_info.output_shape, (4, 5, 6))
+        self.assertEqual(result.raw_info.sigma, (2.0, 2.0, 2.0))
+        self.assertEqual(result.raw_info.sigma_index, (1.0, 2.0 / 3.0, 0.5))
+        self.assertEqual(result.raw_info.boundary, ("wrap", "reflect", "reflect"))
+
+    def test_gaussian_smooth_preserves_trailing_component_axes(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5, 2), dtype=float)
+        values[2, 2, 2, 0] = 1.0
+        values[2, 2, 2, 1] = 2.0
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=1.0, coord="index")
+
+        self.assertEqual(smoothed.shape, values.shape)
+        ratio = smoothed[..., 1] / 2.0
+        self.assertTrue(np.allclose(smoothed[..., 0], ratio))
+
+    def test_gaussian_smooth_supports_anisotropic_sigma(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(9, 9, 9)))
+        values = np.zeros((9, 9, 9), dtype=float)
+        values[4, 4, 4] = 1.0
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=(2.0, 0.5, 0.5),
+            coord="index",
+        )
+
+        self.assertGreater(smoothed[3, 4, 4], smoothed[4, 3, 4])
+        self.assertGreater(smoothed[5, 4, 4], smoothed[4, 5, 4])
+
+    def test_gaussian_smooth_result_can_be_registered_as_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        dataset.act_add_field("scalar", values)
+
+        result = dataset.act_gaussian_smooth("scalar", sigma=1.0, is_result=True)
+        field = dataset.act_add_result_field("scalar_smooth", result)
+
+        self.assertIs(field, dataset["scalar_smooth"])
+        self.assertIs(field.raw_info, result.raw_info)
+        self.assertTrue(np.allclose(field.raw_values, result.raw_values))
+
+    def test_gaussian_smooth_result_can_save_release_and_load(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        result = dataset.act_gaussian_smooth(values, sigma=1.0, is_result=True)
+        expected = result.raw_values.copy()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            saved = result.act_save_values(
+                Path(tmp_dir) / "gaussian_smooth",
+                is_release=True,
+            )
+
+            self.assertIsNone(saved.raw_values)
+            self.assertTrue(saved.raw_path.endswith(".npy"))
+            with saved.act_with_values() as loaded:
+                self.assertTrue(np.allclose(loaded, expected))
+
+            loaded_result = saved.act_load_values()
+            self.assertTrue(np.allclose(loaded_result.raw_values, expected))
+
+    def test_gaussian_smooth_registered_field_can_feed_gradient(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
+        values = np.zeros((7, 7, 7), dtype=float)
+        values[3, 3, 3] = 1.0
+        dataset.act_add_field("scalar", values)
+
+        smooth_result = dataset.act_gaussian_smooth("scalar", sigma=1.0, is_result=True)
+        dataset.act_add_result_field("scalar_smooth", smooth_result)
+        grad = dataset.act_gradient("scalar_smooth", coord="index")
+
+        self.assertEqual(grad.shape, (7, 7, 7, 3))
+        self.assertTrue(np.all(np.isfinite(grad)))
+        self.assertTrue(np.allclose(grad[3, 3, 3], 0.0, atol=1e-12))
 
     def test_laplacian_returns_scalar_second_derivative_sum(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))

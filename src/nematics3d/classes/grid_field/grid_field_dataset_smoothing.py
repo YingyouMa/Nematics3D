@@ -1,0 +1,416 @@
+"""Gaussian smoothing helpers for ``GridFieldDataset``."""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from pathlib import Path
+from typing import ClassVar, Iterator
+
+import numpy as np
+
+from nematics3d.datatypes import as_Number, as_str
+
+from ..result_base import ResultBase
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class GaussianSmoothInfo(ResultBase):
+    """Payload-free metadata for a dataset Gaussian smoothing operation."""
+
+    __result_name__: ClassVar[str] = "dataset Gaussian smoothing metadata"
+
+    operator: str
+    source: str | None
+    source_shape: tuple[int, ...]
+    coord: str
+    sigma: tuple[float, float, float]
+    sigma_index: tuple[float, float, float]
+    truncate: float
+    boundary: tuple[str, str, str]
+    input_component_shape: tuple[int, ...]
+    output_shape: tuple[int, ...]
+    box_periodic_flag: tuple[bool, bool, bool]
+    grid_transform: object
+    grid_offset: np.ndarray | None
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class GaussianSmoothResult(ResultBase):
+    """Inspectable result for a dataset Gaussian smoothing operation."""
+
+    __result_name__: ClassVar[str] = "dataset Gaussian smoothing result"
+
+    raw_values: np.ndarray | None
+    raw_info: GaussianSmoothInfo
+    raw_path: str | None = None
+
+    def _helper_load_values_from_path(self) -> np.ndarray:
+        """Load smoothed values from the saved array path."""
+        if self.raw_path is None:
+            raise ValueError("No in-memory values or saved path are available.")
+        return np.load(self.raw_path, allow_pickle=False)
+
+    def act_save_values(
+        self,
+        path,
+        *,
+        is_release: bool = False,
+        is_overwrite: bool = False,
+    ) -> GaussianSmoothResult:
+        """
+        Save result values to a local ``.npy`` file.
+
+        When ``is_release`` is true, the returned result keeps only the saved
+        path and releases the in-memory array reference.
+        """
+        save_path = Path(path)
+        if save_path.suffix != ".npy":
+            save_path = Path(f"{save_path}.npy")
+        if save_path.exists() and not is_overwrite:
+            raise FileExistsError(
+                f"Gaussian smoothing result path already exists: {save_path}"
+            )
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        values = self.raw_values
+        if values is None:
+            values = self._helper_load_values_from_path()
+        np.save(save_path, values)
+
+        raw_values = None if is_release else self.raw_values
+        return replace(self, raw_values=raw_values, raw_path=str(save_path))
+
+    def act_release_values(self) -> GaussianSmoothResult:
+        """Return a copy without the in-memory array reference."""
+        if self.raw_path is None:
+            raise ValueError(
+                "Cannot release Gaussian smoothing values before saving them."
+            )
+        return replace(self, raw_values=None)
+
+    def act_load_values(self) -> GaussianSmoothResult:
+        """Return a copy with values loaded into memory."""
+        if self.raw_values is not None:
+            return self
+        return replace(self, raw_values=self._helper_load_values_from_path())
+
+    @contextmanager
+    def act_with_values(self) -> Iterator[np.ndarray]:
+        """
+        Temporarily expose smoothed values.
+
+        If values are already in memory, the existing array is yielded. If only
+        ``raw_path`` is available, values are loaded for the ``with`` block and
+        the temporary reference is dropped when the block exits.
+        """
+        if self.raw_values is not None:
+            yield self.raw_values
+            return
+
+        values = self._helper_load_values_from_path()
+        try:
+            yield values
+        finally:
+            del values
+
+
+def _helper_as_gaussian_sigma_3(
+    self,
+    sigma,
+    *,
+    coord: str,
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return user-space and index-space Gaussian widths as length-3 tuples."""
+    coord = as_str(
+        coord,
+        name="Gaussian smoothing coordinate system",
+        pool=("physical", "index"),
+    )
+    sigma_name = "Gaussian smoothing sigma"
+
+    if isinstance(sigma, (tuple, list, np.ndarray)):
+        sigma_array = np.asarray(sigma, dtype=float)
+        if sigma_array.shape != (3,):
+            raise ValueError(
+                f"{sigma_name} must be a scalar or a length-3 sequence. "
+                f"Got shape {sigma_array.shape}."
+            )
+        sigma_user = tuple(
+            float(
+                as_Number(
+                    value,
+                    name=f"{sigma_name} axis {axis}",
+                    value_range=(0.0, np.inf),
+                )
+            )
+            for axis, value in enumerate(sigma_array)
+        )
+    else:
+        sigma_scalar = float(
+            as_Number(
+                sigma,
+                name=sigma_name,
+                value_range=(0.0, np.inf),
+            )
+        )
+        sigma_user = (sigma_scalar, sigma_scalar, sigma_scalar)
+
+    if coord == "index":
+        return sigma_user, sigma_user
+
+    spacing = np.asarray(self.calc_grid_spacing, dtype=float)
+    sigma_index = tuple(float(value / step) for value, step in zip(sigma_user, spacing))
+    return sigma_user, sigma_index
+
+
+def _helper_as_gaussian_boundary_mode(
+    self,
+    boundary: str = "auto",
+) -> tuple[str, str, str]:
+    """Return per-axis boundary modes for Gaussian smoothing."""
+    boundary = as_str(
+        boundary,
+        name="Gaussian smoothing boundary mode",
+        pool=("auto", "wrap", "reflect"),
+    )
+    if boundary == "auto":
+        return tuple(
+            "wrap" if is_periodic else "reflect"
+            for is_periodic in self.raw_box_periodic_flag
+        )
+    return (boundary, boundary, boundary)
+
+
+def _helper_gaussian_smooth_info(
+    self,
+    values: np.ndarray,
+    *,
+    source: str | None,
+    source_shape: tuple[int, ...],
+    coord: str,
+    sigma: tuple[float, float, float],
+    sigma_index: tuple[float, float, float],
+    truncate: float,
+    boundary: tuple[str, str, str],
+) -> GaussianSmoothInfo:
+    """Build payload-free metadata for an immediate Gaussian smoothing result."""
+    grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
+    grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
+    return GaussianSmoothInfo(
+        operator="gaussian_smooth",
+        source=source,
+        source_shape=source_shape,
+        coord=coord,
+        sigma=sigma,
+        sigma_index=sigma_index,
+        truncate=truncate,
+        boundary=boundary,
+        input_component_shape=source_shape[3:],
+        output_shape=values.shape,
+        box_periodic_flag=tuple(bool(flag) for flag in self.raw_box_periodic_flag),
+        grid_transform=grid_transform,
+        grid_offset=grid_offset,
+    )
+
+
+def _helper_gaussian_smooth_result(
+    self,
+    values: np.ndarray,
+    *,
+    source: str | None,
+    source_shape: tuple[int, ...],
+    coord: str,
+    sigma: tuple[float, float, float],
+    sigma_index: tuple[float, float, float],
+    truncate: float,
+    boundary: tuple[str, str, str],
+) -> GaussianSmoothResult:
+    """Build an immediate Gaussian smoothing result plus payload-free metadata."""
+    info = _helper_gaussian_smooth_info(
+        self,
+        values,
+        source=source,
+        source_shape=source_shape,
+        coord=coord,
+        sigma=sigma,
+        sigma_index=sigma_index,
+        truncate=truncate,
+        boundary=boundary,
+    )
+    return GaussianSmoothResult(raw_values=values, raw_info=info)
+
+
+def _helper_gaussian_kernel_radius(
+    self,
+    sigma_axis: float,
+    *,
+    truncate: float,
+) -> int:
+    """Return the truncated half-width of one Gaussian kernel axis."""
+    del self
+    if sigma_axis <= 0.0:
+        return 0
+    return int(np.ceil(truncate * sigma_axis))
+
+
+def _helper_build_gaussian_kernel_1d(
+    self,
+    sigma_axis: float,
+    *,
+    truncate: float,
+) -> np.ndarray:
+    """Return one normalized 1D Gaussian kernel."""
+    radius = self._helper_gaussian_kernel_radius(
+        sigma_axis,
+        truncate=truncate,
+    )
+    if radius == 0:
+        return np.array([1.0], dtype=float)
+
+    offsets = np.arange(-radius, radius + 1, dtype=float)
+    kernel = np.exp(-0.5 * (offsets / sigma_axis) ** 2)
+    kernel_sum = float(np.sum(kernel))
+    if kernel_sum <= 0.0:
+        return np.array([1.0], dtype=float)
+    return kernel / kernel_sum
+
+
+def _helper_pad_for_gaussian_axis(
+    self,
+    values: np.ndarray,
+    *,
+    axis: int,
+    radius: int,
+    mode: str,
+) -> np.ndarray:
+    """Return values padded only along one requested axis."""
+    del self
+    if radius <= 0:
+        return values
+
+    pad_width = [(0, 0)] * values.ndim
+    pad_width[axis] = (radius, radius)
+    return np.pad(values, pad_width, mode=mode)
+
+
+def _helper_convolve_gaussian_axis(
+    self,
+    values: np.ndarray,
+    *,
+    kernel: np.ndarray,
+    axis: int,
+    mode: str,
+) -> np.ndarray:
+    """Return one-axis Gaussian convolution with boundary handling."""
+    if kernel.ndim != 1:
+        raise ValueError("Gaussian convolution kernel must be one-dimensional.")
+    if kernel.size == 1:
+        return values.copy()
+
+    radius = kernel.size // 2
+    padded = self._helper_pad_for_gaussian_axis(
+        values,
+        axis=axis,
+        radius=radius,
+        mode=mode,
+    )
+    result = np.zeros_like(values, dtype=float)
+
+    base_slices = [slice(None)] * padded.ndim
+    axis_length = values.shape[axis]
+    for offset, weight in enumerate(kernel):
+        shifted_slices = list(base_slices)
+        shifted_slices[axis] = slice(offset, offset + axis_length)
+        result += float(weight) * padded[tuple(shifted_slices)]
+
+    return result
+
+
+def _helper_gaussian_smooth_values(
+    self,
+    values: np.ndarray,
+    *,
+    sigma_index: tuple[float, float, float],
+    truncate: float,
+    boundary: tuple[str, str, str],
+) -> np.ndarray:
+    """Return Gaussian-smoothed values via separable real-space convolution."""
+    result = np.asarray(values, dtype=float)
+    for axis, (sigma_axis, boundary_mode) in enumerate(zip(sigma_index, boundary)):
+        kernel = self._helper_build_gaussian_kernel_1d(
+            sigma_axis,
+            truncate=truncate,
+        )
+        result = self._helper_convolve_gaussian_axis(
+            result,
+            kernel=kernel,
+            axis=axis,
+            mode=boundary_mode,
+        )
+    return result
+
+
+def act_gaussian_smooth(
+    self,
+    field_or_values,
+    sigma,
+    *,
+    coord: str = "physical",
+    truncate: float | None = None,
+    boundary: str = "auto",
+    is_result: bool = False,
+) -> np.ndarray | GaussianSmoothResult:
+    """
+    Return Gaussian-smoothed field values on this dataset grid.
+
+    This first implementation step freezes the public API, input
+    normalization rules, and metadata/result workflow. The smoothing kernel
+    application itself is added in a later step.
+    """
+    source = self._helper_source_name_for_field_values(field_or_values)
+    values = np.asarray(
+        self._helper_as_field_values_on_grid(
+            field_or_values,
+            name="Gaussian smoothing input values",
+        ),
+        dtype=float,
+    )
+    source_shape = values.shape
+    coord = as_str(
+        coord,
+        name="Gaussian smoothing coordinate system",
+        pool=("physical", "index"),
+    )
+    sigma_user, sigma_index = self._helper_as_gaussian_sigma_3(sigma, coord=coord)
+    if truncate is None:
+        truncate_value = 4.0
+    else:
+        truncate_value = float(
+            as_Number(
+                truncate,
+                name="Gaussian smoothing truncate",
+                value_range=(0.0, np.inf),
+            )
+        )
+    boundary_modes = self._helper_as_gaussian_boundary_mode(boundary)
+
+    smoothed_values = self._helper_gaussian_smooth_values(
+        values,
+        sigma_index=sigma_index,
+        truncate=truncate_value,
+        boundary=boundary_modes,
+    )
+
+    if not is_result:
+        return smoothed_values
+    return self._helper_gaussian_smooth_result(
+        smoothed_values,
+        source=source,
+        source_shape=source_shape,
+        coord=coord,
+        sigma=sigma_user,
+        sigma_index=sigma_index,
+        truncate=truncate_value,
+        boundary=boundary_modes,
+    )
