@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass, replace
-from pathlib import Path
-from typing import ClassVar, Iterator
+from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 
 from nematics3d.datatypes import as_qfield9
 
+from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
 from ...grid import is_grid_transform_identity
 from .input_grid_field import as_grid_shape
@@ -23,94 +22,17 @@ class SpatialDerivativeInfo(ResultBase):
     __result_name__: ClassVar[str] = "dataset spatial derivative metadata"
 
     operator: str
-    source: str | None
+    source_name: str | None
     source_shape: tuple[int, ...]
-    coord: str
+    coord_type: str
     derivative_axis: int | None
     component_axis: int | None
     input_component_shape: tuple[int, ...]
-    output_shape: tuple[int, ...]
     box_periodic_flag: tuple[bool, bool, bool]
     grid_transform: object
     grid_offset: np.ndarray | None
     stencil: str
     edge_order: int
-
-
-@dataclass(slots=True, frozen=True, repr=False)
-class SpatialDerivativeResult(ResultBase):
-    """Inspectable result for a dataset spatial-derivative operation."""
-
-    __result_name__: ClassVar[str] = "dataset spatial derivative result"
-
-    raw_values: np.ndarray | None
-    raw_info: SpatialDerivativeInfo
-    raw_path: str | None = None
-
-    def _helper_load_values_from_path(self) -> np.ndarray:
-        """Load derivative values from the saved array path."""
-        if self.raw_path is None:
-            raise ValueError("No in-memory values or saved path are available.")
-        return np.load(self.raw_path, allow_pickle=False)
-
-    def act_save_values(
-        self,
-        path,
-        *,
-        is_release: bool = False,
-        is_overwrite: bool = False,
-    ) -> SpatialDerivativeResult:
-        """
-        Save result values to a local ``.npy`` file.
-
-        When ``is_release`` is true, the returned result keeps only the saved
-        path and releases the in-memory array reference.
-        """
-        save_path = Path(path)
-        if save_path.suffix != ".npy":
-            save_path = Path(f"{save_path}.npy")
-        if save_path.exists() and not is_overwrite:
-            raise FileExistsError(f"Derivative result path already exists: {save_path}")
-
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        values = self.raw_values
-        if values is None:
-            values = self._helper_load_values_from_path()
-        np.save(save_path, values)
-
-        raw_values = None if is_release else self.raw_values
-        return replace(self, raw_values=raw_values, raw_path=str(save_path))
-
-    def act_release_values(self) -> SpatialDerivativeResult:
-        """Return a copy without the in-memory array reference."""
-        if self.raw_path is None:
-            raise ValueError("Cannot release derivative values before saving them.")
-        return replace(self, raw_values=None)
-
-    def act_load_values(self) -> SpatialDerivativeResult:
-        """Return a copy with values loaded into memory."""
-        if self.raw_values is not None:
-            return self
-        return replace(self, raw_values=self._helper_load_values_from_path())
-
-    @contextmanager
-    def act_with_values(self) -> Iterator[np.ndarray]:
-        """
-        Temporarily expose derivative values.
-
-        If values are already in memory, the existing array is yielded. If only
-        ``raw_path`` is available, values are loaded for the ``with`` block and
-        the temporary reference is dropped when the block exits.
-        """
-        if self.raw_values is not None:
-            yield self.raw_values
-            return
-
-        values = self._helper_load_values_from_path()
-        try:
-            yield values
-        finally:
-            del values
 
 
 def _helper_first_derivative_index(
@@ -256,13 +178,12 @@ def _helper_spatial_derivative_info(
     grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
     return SpatialDerivativeInfo(
         operator=operator,
-        source=source,
+        source_name=source,
         source_shape=source_shape,
-        coord=coord,
+        coord_type=coord,
         derivative_axis=derivative_axis,
         component_axis=component_axis,
         input_component_shape=source_shape[3:],
-        output_shape=values.shape,
         box_periodic_flag=tuple(bool(flag) for flag in self.raw_box_periodic_flag),
         grid_transform=grid_transform,
         grid_offset=grid_offset,
@@ -281,8 +202,8 @@ def _helper_spatial_derivative_result(
     coord: str,
     derivative_axis: int | None,
     component_axis: int | None = None,
-) -> SpatialDerivativeResult:
-    """Build an immediate derivative result plus payload-free metadata."""
+) -> NpyArrayPayload[SpatialDerivativeInfo]:
+    """Build an immediate derivative payload plus metadata."""
     info = self._helper_spatial_derivative_info(
         values,
         operator=operator,
@@ -292,7 +213,7 @@ def _helper_spatial_derivative_result(
         derivative_axis=derivative_axis,
         component_axis=component_axis,
     )
-    return SpatialDerivativeResult(raw_values=values, raw_info=info)
+    return NpyArrayPayload(raw_values=values, raw_info=info)
 
 
 def _helper_vector_gradient_split(
@@ -328,7 +249,7 @@ def act_gradient(
     coord: str = "physical",
     is_norm: bool = False,
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the spatial gradient of a field on this dataset grid.
 
@@ -412,7 +333,7 @@ def act_derivative(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return one spatial derivative direction of a field on this dataset grid.
 
@@ -464,7 +385,7 @@ def act_second_derivative(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return one repeated second derivative of a field on this dataset grid.
 
@@ -521,7 +442,7 @@ def act_divergence(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the divergence of a vector field on this dataset grid.
 
@@ -565,7 +486,7 @@ def act_tensor_divergence(
     vector_axis: int = -1,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the divergence over one length-3 component axis of a tensor field.
 
@@ -622,7 +543,7 @@ def act_directional_derivative(
     coord: str = "physical",
     is_normalize: bool = False,
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the derivative along a supplied direction vector.
 
@@ -691,7 +612,7 @@ def act_curl(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the curl of a vector field on this dataset grid.
 
@@ -763,7 +684,7 @@ def act_tensor_curl(
     vector_axis: int = -1,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the curl along one length-3 component axis of a tensor field.
 
@@ -902,9 +823,12 @@ def act_strain_rate_and_vorticity_tensor(
     is_result: bool = False,
 ) -> (
     np.ndarray
-    | SpatialDerivativeResult
+    | NpyArrayPayload[SpatialDerivativeInfo]
     | tuple[np.ndarray, np.ndarray]
-    | tuple[SpatialDerivativeResult, SpatialDerivativeResult]
+    | tuple[
+        NpyArrayPayload[SpatialDerivativeInfo],
+        NpyArrayPayload[SpatialDerivativeInfo],
+    ]
 ):
     """
     Return strain-rate and vorticity tensors for a velocity field.
@@ -963,7 +887,7 @@ def act_laplacian(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the scalar Laplacian of a field on this dataset grid.
 
@@ -1039,7 +963,7 @@ def act_componentwise_laplacian(
     *,
     coord: str = "physical",
     is_result: bool = False,
-) -> np.ndarray | SpatialDerivativeResult:
+) -> np.ndarray | NpyArrayPayload[SpatialDerivativeInfo]:
     """
     Return the component-wise Laplacian of a field on this dataset grid.
 

@@ -17,13 +17,12 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.grid_field import (
-    GaussianSmoothResult,
     GridFieldDataset,
     GridInterpolator,
     InputGridField,
     SpatialDerivativeInfo,
-    SpatialDerivativeResult,
 )
+from nematics3d.classes.npy_array_payload import NpyArrayPayload
 from nematics3d.datatypes import UNSET
 from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
@@ -308,10 +307,9 @@ class TestGridFieldDataset(unittest.TestCase):
             "scalar", coord="index", is_norm=True, is_result=True
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "gradient_norm")
-        self.assertEqual(result.raw_info.source, "scalar")
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertTrue(np.allclose(result.raw_values, np.sqrt(3.0)))
 
     def test_gradient_can_return_spatial_derivative_result_metadata(self):
@@ -329,15 +327,14 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_gradient("scalar", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertIsInstance(result.raw_info, SpatialDerivativeInfo)
         self.assertEqual(result.raw_info.operator, "gradient")
-        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5))
-        self.assertEqual(result.raw_info.coord, "physical")
+        self.assertEqual(result.raw_info.coord_type, "physical")
         self.assertIsNone(result.raw_info.derivative_axis)
         self.assertEqual(result.raw_info.input_component_shape, ())
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3))
         self.assertEqual(result.raw_info.box_periodic_flag, (True, False, True))
         self.assertEqual(result.raw_info.edge_order, 1)
         self.assertTrue(
@@ -382,7 +379,7 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertIs(field.raw_info, result.raw_info)
         self.assertEqual(field.raw_info.operator, "gradient")
-        self.assertEqual(field.raw_info.source, "scalar")
+        self.assertEqual(field.raw_info.source_name, "scalar")
         self.assertTrue(np.allclose(field.raw_values, result.raw_values))
 
     def test_spatial_derivative_result_can_be_registered_with_convenience_method(self):
@@ -556,13 +553,12 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "derivative")
-        self.assertIsNone(result.raw_info.source)
-        self.assertEqual(result.raw_info.coord, "index")
+        self.assertIsNone(result.raw_info.source_name)
+        self.assertEqual(result.raw_info.coord_type, "index")
         self.assertEqual(result.raw_info.derivative_axis, 2)
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_second_derivative_returns_repeated_direction_derivative(self):
@@ -591,9 +587,9 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "second_derivative")
-        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertEqual(result.raw_info.derivative_axis, 0)
         self.assertTrue(np.allclose(result.raw_values, 2.0))
 
@@ -652,12 +648,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_divergence("vector", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "divergence")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.source_shape, (3, 3, 3, 3))
         self.assertEqual(result.raw_info.input_component_shape, (3,))
-        self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_tensor_divergence_contracts_selected_component_axis(self):
@@ -693,11 +688,10 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "tensor_divergence")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.component_axis, 3)
-        self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_directional_derivative_projects_gradient_onto_direction(self):
@@ -796,12 +790,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_curl("vector", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "curl")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5, 3))
         self.assertEqual(result.raw_info.input_component_shape, (3,))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3))
         self.assertTrue(np.allclose(result.raw_values[..., 2], 2.0))
 
     def test_tensor_curl_applies_curl_along_default_last_axis(self):
@@ -860,11 +853,10 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "tensor_curl")
-        self.assertEqual(result.raw_info.source, "tensor")
+        self.assertEqual(result.raw_info.source_name, "tensor")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5, 3, 2))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3, 2))
         self.assertEqual(result.raw_info.component_axis, 3)
         self.assertTrue(np.allclose(result.raw_values[..., 2, 0], 2.0))
 
@@ -933,14 +925,12 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(strain_result, SpatialDerivativeResult)
-        self.assertIsInstance(vorticity_result, SpatialDerivativeResult)
+        self.assertIsInstance(strain_result, NpyArrayPayload)
+        self.assertIsInstance(vorticity_result, NpyArrayPayload)
         self.assertEqual(strain_result.raw_info.operator, "strain_rate")
         self.assertEqual(vorticity_result.raw_info.operator, "vorticity_tensor")
-        self.assertEqual(strain_result.raw_info.source, "velocity")
-        self.assertEqual(vorticity_result.raw_info.source, "velocity")
-        self.assertEqual(strain_result.raw_info.output_shape, (3, 4, 5, 3, 3))
-        self.assertEqual(vorticity_result.raw_info.output_shape, (3, 4, 5, 3, 3))
+        self.assertEqual(strain_result.raw_info.source_name, "velocity")
+        self.assertEqual(vorticity_result.raw_info.source_name, "velocity")
 
     def test_strain_rate_and_vorticity_tensor_can_select_one_output(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
@@ -979,10 +969,9 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "vorticity_tensor")
-        self.assertEqual(result.raw_info.source, "velocity")
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3, 3))
+        self.assertEqual(result.raw_info.source_name, "velocity")
 
     def test_strain_rate_and_vorticity_tensor_rejects_non_vector_field(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
@@ -1222,12 +1211,11 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, GaussianSmoothResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "gaussian_smooth")
-        self.assertEqual(result.raw_info.source, "scalar")
-        self.assertEqual(result.raw_info.coord, "physical")
+        self.assertEqual(result.raw_info.source_name, "scalar")
+        self.assertEqual(result.raw_info.coord_type, "physical")
         self.assertEqual(result.raw_info.source_shape, (4, 5, 6))
-        self.assertEqual(result.raw_info.output_shape, (4, 5, 6))
         self.assertEqual(result.raw_info.sigma, (2.0, 2.0, 2.0))
         self.assertEqual(result.raw_info.sigma_index, (1.0, 2.0 / 3.0, 0.5))
         self.assertEqual(result.raw_info.boundary, ("wrap", "reflect", "reflect"))
@@ -1379,12 +1367,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_laplacian("scalar", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "laplacian")
-        self.assertEqual(result.raw_info.source, "scalar")
-        self.assertEqual(result.raw_info.coord, "index")
+        self.assertEqual(result.raw_info.source_name, "scalar")
+        self.assertEqual(result.raw_info.coord_type, "index")
         self.assertEqual(result.raw_info.source_shape, (7, 7, 7))
-        self.assertEqual(result.raw_info.output_shape, (7, 7, 7))
         self.assertIsNone(result.raw_info.derivative_axis)
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2], 6.0))
 
@@ -1447,12 +1434,11 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "componentwise_laplacian")
-        self.assertEqual(result.raw_info.source, "field")
+        self.assertEqual(result.raw_info.source_name, "field")
         self.assertEqual(result.raw_info.source_shape, (7, 7, 7, 2))
         self.assertEqual(result.raw_info.input_component_shape, (2,))
-        self.assertEqual(result.raw_info.output_shape, (7, 7, 7, 2))
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2, 0], 6.0))
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2, 1], 0.0))
 

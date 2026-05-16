@@ -21,6 +21,7 @@ from ...grid import (
     generate_coordinate_grid,
     is_grid_transform_identity,
 )
+from ..npy_array_payload import NpyArrayPayload
 from ...general import get_box_corners
 from .input_grid_field import InputGridField, as_grid_shape
 
@@ -409,7 +410,7 @@ class GridFieldDataset(ClassBase):
     def act_add_result_field(
         self,
         name: str,
-        result: SpatialDerivativeResult | GaussianSmoothResult,
+        result: NpyArrayPayload,
         *,
         is_replace: bool = False,
     ) -> FieldData:
@@ -421,7 +422,7 @@ class GridFieldDataset(ClassBase):
         payload inside metadata. Released results are loaded temporarily from
         `result.raw_path` through `act_with_values()`.
         """
-        if not isinstance(result, (SpatialDerivativeResult, GaussianSmoothResult)):
+        if not isinstance(result, NpyArrayPayload):
             raise TypeError(
                 "result must be a dataset result returned by a supported "
                 "dataset operator helper."
@@ -445,7 +446,6 @@ class GridFieldDataset(ClassBase):
 
 from .grid_field_dataset_derivatives import (  # noqa: E402
     SpatialDerivativeInfo,
-    SpatialDerivativeResult,
     _helper_first_derivative_index,
     _helper_is_diagonal_grid_transform,
     _helper_physical_direction_weights,
@@ -468,7 +468,6 @@ from .grid_field_dataset_derivatives import (  # noqa: E402
 )
 from .grid_field_dataset_smoothing import (  # noqa: E402
     GaussianSmoothInfo,
-    GaussianSmoothResult,
     _helper_as_gaussian_boundary_mode,
     _helper_as_gaussian_sigma_3,
     _helper_build_gaussian_kernel_1d,
