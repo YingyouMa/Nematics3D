@@ -364,9 +364,10 @@ def act_gaussian_smooth(
     """
     Return Gaussian-smoothed field values on this dataset grid.
 
-    This first implementation step freezes the public API, input
-    normalization rules, and metadata/result workflow. The smoothing kernel
-    application itself is added in a later step.
+    The smoothing is applied by separable real-space Gaussian convolution
+    along the first three lattice axes. Inputs are normalized onto the
+    dataset grid, and callers may request either the smoothed values directly
+    or a ``GaussianSmoothResult`` carrying payload-free metadata.
     """
     source = self._helper_source_name_for_field_values(field_or_values)
     values = np.asarray(
