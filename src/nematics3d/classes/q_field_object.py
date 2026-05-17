@@ -1625,6 +1625,114 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
+    def act_get_beta_interpolator(
+        self,
+        index_line: int,
+        index_smooth: int = -1,
+        u_samples: np.ndarray | None = None,
+        smooth_if_missing: bool = True,
+        smooth_kwargs: Mapping[str, Any] | None = None,
+        name: str | None = None,
+        opts_grid: OptsPlaneGridPolar | None = None,
+        opts_grid_defaults_override: Mapping[str, Any] | None = None,
+        **omega_kwargs,
+    ):
+        """
+        Build a sampled interpolator for beta along one disclination line.
+
+        This helper resolves one line from `self.lines[index_line]`, ensures a
+        smoothed version is available, samples
+        ``smooth.act_calc_omega(u_percent)["beta"]`` on `u_samples`, and
+        returns the resulting sampled line function.
+
+        Parameters
+        ----------
+        index_line
+            Index of the classified disclination line in `self.lines`.
+        index_smooth
+            Index of the smoothed version under that line. Defaults to `-1`,
+            the latest smoothed version.
+        u_samples
+            Sample positions in normalized line-parameter percent. If omitted,
+            a default grid is chosen from the smoothing mode.
+        smooth_if_missing
+            Whether to create a smoothed version automatically when the target
+            line has none yet.
+        smooth_kwargs
+            Keyword arguments forwarded to `line.act_smooth(...)` when
+            `smooth_if_missing=True` and no cached smooth exists.
+        name
+            Optional registry name for the returned sampled line function.
+        opts_grid
+            Optional polar-grid options forwarded into `act_calc_omega(...)`.
+        opts_grid_defaults_override
+            Optional polar-grid default overrides forwarded into
+            `act_calc_omega(...)`.
+        **omega_kwargs
+            Additional keyword arguments forwarded into `act_calc_omega(...)`.
+        """
+        try:
+            line = self.lines[index_line]
+        except IndexError as exc:
+            raise IndexError(
+                f"Invalid index_line={index_line!r}; "
+                f"there are {len(self.lines)} disclination lines."
+            ) from exc
+
+        smooth_kwargs = {} if smooth_kwargs is None else dict(smooth_kwargs)
+        smooths = line.smooths
+
+        if not smooths:
+            if not smooth_if_missing:
+                raise ValueError(
+                    f"Disclination line {index_line!r} has no smoothed versions. "
+                    "Call `act_smooth()` on the line, `act_lines_smooth()` on "
+                    "the Q-field object, or set `smooth_if_missing=True`."
+                )
+
+            if "min_line_length" not in smooth_kwargs:
+                smooth_kwargs["min_line_length"] = (
+                    self.default_miminum_line_length_smooth
+                )
+            if (
+                "window_length" not in smooth_kwargs
+                and "window_ratio" not in smooth_kwargs
+            ):
+                smooth_kwargs["window_length"] = self.default_smooth_window_length
+
+            smooth = line.act_smooth(**smooth_kwargs)
+        else:
+            try:
+                smooth = smooths[index_smooth]
+            except IndexError as exc:
+                raise IndexError(
+                    f"Invalid index_smooth={index_smooth!r} for line "
+                    f"{index_line!r}; there are {len(smooths)} smoothed versions."
+                ) from exc
+
+        if u_samples is None:
+            if smooth.opts.mode == "wrap":
+                u_samples = np.arange(0, 100, 5, dtype=float)
+            else:
+                u_samples = np.linspace(0, 100, 21, dtype=float)
+
+        if name is None:
+            name = f"beta_line_{index_line}_smooth_{index_smooth}"
+
+        def beta_func(u_percent):
+            return smooth.act_calc_omega(
+                u_percent,
+                opts_grid=opts_grid,
+                opts_grid_defaults_override=opts_grid_defaults_override,
+                **omega_kwargs,
+            )["beta"]
+
+        return smooth.act_create_linefunc(
+            func=beta_func,
+            u_samples=u_samples,
+            name=name,
+        )
+
     # -------------------------------
     # Readable properties and array-style access
     # -------------------------------
