@@ -426,11 +426,13 @@ def act_gaussian_smooth(
             boundary=boundary_modes,
         )
     else:
-        weighted_values = (
-            values * weights_values[..., None]
-            if values.ndim > 3
-            else (values * weights_values)
-        )
+        if values.ndim > 3:
+            weights_expanded = weights_values.reshape(
+                weights_values.shape + (1,) * (values.ndim - 3)
+            )
+        else:
+            weights_expanded = weights_values
+        weighted_values = values * weights_expanded
         smoothed_weighted_values = self._helper_gaussian_smooth_values(
             weighted_values,
             sigma_index=sigma_index,
@@ -446,8 +448,12 @@ def act_gaussian_smooth(
         smoothed_values = values.copy()
         valid = smoothed_weights > weights_floor_value
         if values.ndim > 3:
+            valid_weights = smoothed_weights[valid].reshape((np.count_nonzero(valid),))
+            valid_weights = valid_weights.reshape(
+                valid_weights.shape + (1,) * (values.ndim - 3)
+            )
             smoothed_values[valid, ...] = (
-                smoothed_weighted_values[valid, ...] / smoothed_weights[valid, None]
+                smoothed_weighted_values[valid, ...] / valid_weights
             )
         else:
             smoothed_values[valid] = (

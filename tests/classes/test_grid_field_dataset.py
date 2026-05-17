@@ -1435,6 +1435,34 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.all(np.isfinite(smoothed)))
         self.assertTrue(np.allclose(smoothed[..., 1], 2.0 * smoothed[..., 0]))
 
+    def test_gaussian_smooth_weights_support_tensor_fields_with_two_component_axes(
+        self,
+    ):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5, 3, 3), dtype=float)
+        values[2, 2, 2] = np.array(
+            [
+                [1.0, 2.0, 3.0],
+                [2.0, 4.0, 6.0],
+                [3.0, 6.0, 9.0],
+            ],
+            dtype=float,
+        )
+        weights = np.full((5, 5, 5), 0.5, dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+        )
+
+        self.assertEqual(smoothed.shape, values.shape)
+        self.assertTrue(np.all(np.isfinite(smoothed)))
+        self.assertTrue(np.allclose(smoothed[..., 1, 1], 4.0 * smoothed[..., 0, 0]))
+        self.assertTrue(np.allclose(smoothed[..., 2, 2], 9.0 * smoothed[..., 0, 0]))
+        self.assertTrue(np.allclose(smoothed[..., 0, 1], 2.0 * smoothed[..., 0, 0]))
+
     def test_gaussian_smooth_rejects_weights_outside_unit_interval(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
         values = np.zeros((4, 4, 4), dtype=float)
