@@ -470,6 +470,7 @@ from .grid_field_dataset_smoothing import (  # noqa: E402
     GaussianSmoothInfo,
     _helper_as_gaussian_boundary_mode,
     _helper_as_gaussian_sigma_3,
+    _helper_as_gaussian_weights,
     _helper_build_gaussian_kernel_1d,
     _helper_convolve_gaussian_axis,
     _helper_gaussian_kernel_radius,
@@ -490,6 +491,7 @@ GridFieldDataset._helper_vector_gradient_split = _helper_vector_gradient_split
 
 GridFieldDataset._helper_as_gaussian_sigma_3 = _helper_as_gaussian_sigma_3
 GridFieldDataset._helper_as_gaussian_boundary_mode = _helper_as_gaussian_boundary_mode
+GridFieldDataset._helper_as_gaussian_weights = _helper_as_gaussian_weights
 GridFieldDataset._helper_gaussian_kernel_radius = _helper_gaussian_kernel_radius
 GridFieldDataset._helper_build_gaussian_kernel_1d = _helper_build_gaussian_kernel_1d
 GridFieldDataset._helper_pad_for_gaussian_axis = _helper_pad_for_gaussian_axis

@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from nematics3d.datatypes import as_Number, as_str
+from nematics3d.datatypes import as_Number, as_real_lattice_field, as_str
 
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
@@ -37,7 +37,7 @@ class GaussianSmoothInfo(ResultBase):
             "Gaussian width converted into lattice-index units for the actual "
             "separable convolution."
         ),
-        "truncate": ( 
+        "truncate": (
             "Kernel cutoff radius in units of sigma, used to truncate each 1D "
             "Gaussian."
         ),
@@ -58,6 +58,14 @@ class GaussianSmoothInfo(ResultBase):
         "grid_offset": (
             "Read-only snapshot of the dataset grid offset used for this result."
         ),
+        "weights_source_name": (
+            "Registered weight-field name when weighted smoothing used a dataset "
+            "field; None for direct-array weights or unweighted smoothing."
+        ),
+        "weights_floor": (
+            "Minimum smoothed weight treated as valid for weighted normalization; "
+            "None for unweighted smoothing."
+        ),
     }
 
     operator: str
@@ -72,6 +80,8 @@ class GaussianSmoothInfo(ResultBase):
     box_periodic_flag: tuple[bool, bool, bool]
     grid_transform: object
     grid_offset: np.ndarray | None
+    weights_source_name: str | None
+    weights_floor: float | None
 
 
 def _helper_as_gaussian_sigma_3(
@@ -152,6 +162,8 @@ def _helper_gaussian_smooth_info(
     sigma_index: tuple[float, float, float],
     truncate: float,
     boundary: tuple[str, str, str],
+    weights_source_name: str | None,
+    weights_floor: float | None,
 ) -> GaussianSmoothInfo:
     """Build payload-free metadata for an immediate Gaussian smoothing result."""
     grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
@@ -169,6 +181,8 @@ def _helper_gaussian_smooth_info(
         box_periodic_flag=tuple(bool(flag) for flag in self.raw_box_periodic_flag),
         grid_transform=grid_transform,
         grid_offset=grid_offset,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor,
     )
 
 
@@ -183,6 +197,8 @@ def _helper_gaussian_smooth_result(
     sigma_index: tuple[float, float, float],
     truncate: float,
     boundary: tuple[str, str, str],
+    weights_source_name: str | None,
+    weights_floor: float | None,
 ) -> NpyArrayPayload[GaussianSmoothInfo]:
     """Build an immediate Gaussian smoothing payload plus metadata."""
     info = _helper_gaussian_smooth_info(
@@ -195,8 +211,37 @@ def _helper_gaussian_smooth_result(
         sigma_index=sigma_index,
         truncate=truncate,
         boundary=boundary,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor,
     )
     return NpyArrayPayload(raw_values=values, raw_info=info)
+
+
+def _helper_as_gaussian_weights(
+    self,
+    weights,
+) -> tuple[np.ndarray, str | None, tuple[int, ...]]:
+    """Return validated per-voxel weights for weighted Gaussian smoothing."""
+    weights_source_name = self._helper_source_name_for_field_values(weights)
+    weights_values = as_real_lattice_field(
+        self._helper_as_field_values_on_grid(
+            weights,
+            name="Gaussian smoothing weights",
+        ),
+        name="Gaussian smoothing weights",
+        min_ndim=3,
+        is_finite=True,
+        value_range=(0.0, 1.0),
+        bounded=False,
+    )
+    dataset_shape = tuple(np.asarray(self.raw_shape, dtype=int).tolist())
+    if weights_values.shape != dataset_shape:
+        raise ValueError(
+            "Gaussian smoothing weights must be a scalar field whose shape "
+            "exactly matches the dataset grid shape. "
+            f"Dataset shape is {dataset_shape}; got {weights_values.shape}."
+        )
+    return weights_values, weights_source_name, weights_values.shape
 
 
 def _helper_gaussian_kernel_radius(
@@ -315,6 +360,8 @@ def act_gaussian_smooth(
     sigma,
     *,
     coord: str = "physical",
+    weights=None,
+    weights_floor: float = 1e-12,
     truncate: float | None = None,
     boundary: str = "auto",
     is_result: bool = False,
@@ -345,6 +392,20 @@ def act_gaussian_smooth(
         sigma,
         coord=coord_type,
     )
+    weights_values = None
+    weights_source_name = None
+    weights_floor_value = None
+    if weights is not None:
+        weights_values, weights_source_name, _ = self._helper_as_gaussian_weights(
+            weights
+        )
+        weights_floor_value = float(
+            as_Number(
+                weights_floor,
+                name="Gaussian smoothing weights_floor",
+                value_range=(0.0, np.inf),
+            )
+        )
     if truncate is None:
         truncate_value = 4.0
     else:
@@ -357,12 +418,41 @@ def act_gaussian_smooth(
         )
     boundary_modes = self._helper_as_gaussian_boundary_mode(boundary)
 
-    smoothed_values = self._helper_gaussian_smooth_values(
-        values,
-        sigma_index=sigma_index,
-        truncate=truncate_value,
-        boundary=boundary_modes,
-    )
+    if weights_values is None:
+        smoothed_values = self._helper_gaussian_smooth_values(
+            values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+    else:
+        weighted_values = (
+            values * weights_values[..., None]
+            if values.ndim > 3
+            else (values * weights_values)
+        )
+        smoothed_weighted_values = self._helper_gaussian_smooth_values(
+            weighted_values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+        smoothed_weights = self._helper_gaussian_smooth_values(
+            weights_values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+        smoothed_values = values.copy()
+        valid = smoothed_weights > weights_floor_value
+        if values.ndim > 3:
+            smoothed_values[valid, ...] = (
+                smoothed_weighted_values[valid, ...] / smoothed_weights[valid, None]
+            )
+        else:
+            smoothed_values[valid] = (
+                smoothed_weighted_values[valid] / smoothed_weights[valid]
+            )
 
     if not is_result:
         return smoothed_values
@@ -375,4 +465,6 @@ def act_gaussian_smooth(
         sigma_index=sigma_index,
         truncate=truncate_value,
         boundary=boundary_modes,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor_value,
     )

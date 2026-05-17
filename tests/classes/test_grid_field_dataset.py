@@ -23,12 +23,69 @@ from nematics3d.classes.grid_field import (
     SpatialDerivativeInfo,
 )
 from nematics3d.classes.npy_array_payload import NpyArrayPayload
-from nematics3d.datatypes import UNSET
+from nematics3d.datatypes import UNSET, as_real_lattice_field, as_value_range
 from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
 
 
 class TestGridFieldDataset(unittest.TestCase):
+    def test_as_value_range_normalizes_two_number_interval(self):
+        lo, hi = as_value_range([0, 1])
+
+        self.assertEqual(lo, 0.0)
+        self.assertEqual(hi, 1.0)
+
+    def test_as_value_range_rejects_bad_shape(self):
+        with self.assertRaises(TypeError):
+            as_value_range([0, 1, 2])
+
+    def test_as_value_range_rejects_non_increasing_interval(self):
+        with self.assertRaises(ValueError):
+            as_value_range((1.0, 1.0))
+
+    def test_as_value_range_allows_infinite_upper_bound(self):
+        lo, hi = as_value_range((1e-12, np.inf))
+
+        self.assertEqual(lo, 1e-12)
+        self.assertEqual(hi, np.inf)
+
+    def test_as_real_lattice_field_can_require_finite_values(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+        values[0, 0, 0] = np.inf
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, is_finite=True)
+
+    def test_as_real_lattice_field_can_enforce_value_range(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+        values[0, 0, 0] = -0.1
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, value_range=(0.0, 1.0))
+
+    def test_as_real_lattice_field_can_clip_when_bounded(self):
+        values = np.array(
+            [[[-1.0, 0.5], [1.5, 2.0]], [[0.25, 0.75], [0.0, 1.0]]],
+            dtype=float,
+        )
+
+        clipped = as_real_lattice_field(
+            values,
+            value_range=(0.0, 1.0),
+            bounded=True,
+        )
+
+        self.assertTrue(np.all(clipped >= 0.0))
+        self.assertTrue(np.all(clipped <= 1.0))
+        self.assertEqual(float(clipped[0, 0, 0]), 0.0)
+        self.assertEqual(float(clipped[0, 1, 0]), 1.0)
+
+    def test_as_real_lattice_field_rejects_non_increasing_value_range(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, value_range=(1.0, 1.0))
+
     def test_dataset_builds_shared_grid_cache_from_explicit_shape(self):
         input_value = InputGridField(
             shape=(2, 3, 4),
@@ -1026,14 +1083,17 @@ class TestGridFieldDataset(unittest.TestCase):
         splay_vector = temp1 + 2.0 * temp2
         bend_vector = -2.0 * temp1 - temp2
 
-        self.assertEqual(set(result), {
-            "splay_vector",
-            "twist_linear",
-            "bend_vector",
-            "splay",
-            "twist",
-            "bend",
-        })
+        self.assertEqual(
+            set(result),
+            {
+                "splay_vector",
+                "twist_linear",
+                "bend_vector",
+                "splay",
+                "twist",
+                "bend",
+            },
+        )
         self.assertEqual(result["splay_vector"].shape, (4, 5, 6, 3))
         self.assertEqual(result["twist_linear"].shape, (4, 5, 6))
         self.assertEqual(result["bend_vector"].shape, (4, 5, 6, 3))
@@ -1098,11 +1158,14 @@ class TestGridFieldDataset(unittest.TestCase):
         splay_vector = temp1 + 2.0 * temp2
         bend_vector = -2.0 * temp1 - temp2
 
-        self.assertEqual(set(vector_result), {
-            "splay_vector",
-            "twist_linear",
-            "bend_vector",
-        })
+        self.assertEqual(
+            set(vector_result),
+            {
+                "splay_vector",
+                "twist_linear",
+                "bend_vector",
+            },
+        )
         self.assertEqual(set(scalar_result), {"splay", "twist", "bend"})
         self.assertTrue(np.allclose(vector_result["splay_vector"], splay_vector))
         self.assertTrue(np.allclose(vector_result["twist_linear"], twist_linear))
@@ -1219,6 +1282,8 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(result.raw_info.sigma, (2.0, 2.0, 2.0))
         self.assertEqual(result.raw_info.sigma_index, (1.0, 2.0 / 3.0, 0.5))
         self.assertEqual(result.raw_info.boundary, ("wrap", "reflect", "reflect"))
+        self.assertIsNone(result.raw_info.weights_source_name)
+        self.assertIsNone(result.raw_info.weights_floor)
 
     def test_gaussian_smooth_preserves_trailing_component_axes(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
@@ -1293,6 +1358,137 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(grad.shape, (7, 7, 7, 3))
         self.assertTrue(np.all(np.isfinite(grad)))
         self.assertTrue(np.allclose(grad[3, 3, 3], 0.0, atol=1e-12))
+
+    def test_gaussian_smooth_all_zero_weights_preserve_original_values(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 4.0
+        weights = np.zeros((5, 5, 5), dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+        )
+
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_weights_can_come_from_registered_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        weights = np.ones((5, 5, 5), dtype=float)
+        dataset.act_add_field("scalar", values)
+        dataset.act_add_field("mask", weights)
+
+        result = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=1.0,
+            coord="index",
+            weights="mask",
+            is_result=True,
+        )
+
+        self.assertEqual(result.raw_info.weights_source_name, "mask")
+        self.assertEqual(result.raw_info.weights_floor, 1e-12)
+        expected = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=1.0,
+            coord="index",
+            is_result=False,
+        )
+        self.assertTrue(np.allclose(result.raw_values, expected))
+
+    def test_gaussian_smooth_weights_floor_can_be_customized(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        weights = np.ones((5, 5, 5), dtype=float)
+
+        result = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+            weights_floor=1e-8,
+            is_result=True,
+        )
+
+        self.assertEqual(result.raw_info.weights_floor, 1e-8)
+
+    def test_gaussian_smooth_weights_accept_soft_values_between_zero_and_one(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5, 2), dtype=float)
+        values[2, 2, 2, 0] = 1.0
+        values[2, 2, 2, 1] = 2.0
+        weights = np.full((5, 5, 5), 0.5, dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+        )
+
+        self.assertEqual(smoothed.shape, values.shape)
+        self.assertTrue(np.all(np.isfinite(smoothed)))
+        self.assertTrue(np.allclose(smoothed[..., 1], 2.0 * smoothed[..., 0]))
+
+    def test_gaussian_smooth_rejects_weights_outside_unit_interval(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+        weights[0, 0, 0] = 1.5
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
+
+    def test_gaussian_smooth_rejects_negative_weights_floor(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+                weights_floor=-1.0,
+            )
+
+    def test_gaussian_smooth_rejects_nonfinite_weights(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+        weights[0, 0, 0] = np.nan
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
+
+    def test_gaussian_smooth_rejects_non_scalar_weight_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.zeros((4, 4, 4, 2), dtype=float)
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
 
     def test_laplacian_returns_scalar_second_derivative_sum(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
