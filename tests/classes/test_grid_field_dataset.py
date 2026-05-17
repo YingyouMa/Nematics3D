@@ -21,14 +21,71 @@ from nematics3d.classes.grid_field import (
     GridInterpolator,
     InputGridField,
     SpatialDerivativeInfo,
-    SpatialDerivativeResult,
 )
-from nematics3d.datatypes import UNSET
+from nematics3d.classes.npy_array_payload import NpyArrayPayload
+from nematics3d.datatypes import UNSET, as_real_lattice_field, as_value_range
 from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
 from nematics3d.general import get_box_corners
 
 
 class TestGridFieldDataset(unittest.TestCase):
+    def test_as_value_range_normalizes_two_number_interval(self):
+        lo, hi = as_value_range([0, 1])
+
+        self.assertEqual(lo, 0.0)
+        self.assertEqual(hi, 1.0)
+
+    def test_as_value_range_rejects_bad_shape(self):
+        with self.assertRaises(TypeError):
+            as_value_range([0, 1, 2])
+
+    def test_as_value_range_rejects_non_increasing_interval(self):
+        with self.assertRaises(ValueError):
+            as_value_range((1.0, 1.0))
+
+    def test_as_value_range_allows_infinite_upper_bound(self):
+        lo, hi = as_value_range((1e-12, np.inf))
+
+        self.assertEqual(lo, 1e-12)
+        self.assertEqual(hi, np.inf)
+
+    def test_as_real_lattice_field_can_require_finite_values(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+        values[0, 0, 0] = np.inf
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, is_finite=True)
+
+    def test_as_real_lattice_field_can_enforce_value_range(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+        values[0, 0, 0] = -0.1
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, value_range=(0.0, 1.0))
+
+    def test_as_real_lattice_field_can_clip_when_bounded(self):
+        values = np.array(
+            [[[-1.0, 0.5], [1.5, 2.0]], [[0.25, 0.75], [0.0, 1.0]]],
+            dtype=float,
+        )
+
+        clipped = as_real_lattice_field(
+            values,
+            value_range=(0.0, 1.0),
+            bounded=True,
+        )
+
+        self.assertTrue(np.all(clipped >= 0.0))
+        self.assertTrue(np.all(clipped <= 1.0))
+        self.assertEqual(float(clipped[0, 0, 0]), 0.0)
+        self.assertEqual(float(clipped[0, 1, 0]), 1.0)
+
+    def test_as_real_lattice_field_rejects_non_increasing_value_range(self):
+        values = np.zeros((2, 2, 2), dtype=float)
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, value_range=(1.0, 1.0))
+
     def test_dataset_builds_shared_grid_cache_from_explicit_shape(self):
         input_value = InputGridField(
             shape=(2, 3, 4),
@@ -307,10 +364,9 @@ class TestGridFieldDataset(unittest.TestCase):
             "scalar", coord="index", is_norm=True, is_result=True
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "gradient_norm")
-        self.assertEqual(result.raw_info.source, "scalar")
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertTrue(np.allclose(result.raw_values, np.sqrt(3.0)))
 
     def test_gradient_can_return_spatial_derivative_result_metadata(self):
@@ -328,15 +384,14 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_gradient("scalar", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertIsInstance(result.raw_info, SpatialDerivativeInfo)
         self.assertEqual(result.raw_info.operator, "gradient")
-        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5))
-        self.assertEqual(result.raw_info.coord, "physical")
+        self.assertEqual(result.raw_info.coord_type, "physical")
         self.assertIsNone(result.raw_info.derivative_axis)
         self.assertEqual(result.raw_info.input_component_shape, ())
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3))
         self.assertEqual(result.raw_info.box_periodic_flag, (True, False, True))
         self.assertEqual(result.raw_info.edge_order, 1)
         self.assertTrue(
@@ -381,7 +436,7 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertIs(field.raw_info, result.raw_info)
         self.assertEqual(field.raw_info.operator, "gradient")
-        self.assertEqual(field.raw_info.source, "scalar")
+        self.assertEqual(field.raw_info.source_name, "scalar")
         self.assertTrue(np.allclose(field.raw_values, result.raw_values))
 
     def test_spatial_derivative_result_can_be_registered_with_convenience_method(self):
@@ -555,13 +610,12 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "derivative")
-        self.assertIsNone(result.raw_info.source)
-        self.assertEqual(result.raw_info.coord, "index")
+        self.assertIsNone(result.raw_info.source_name)
+        self.assertEqual(result.raw_info.coord_type, "index")
         self.assertEqual(result.raw_info.derivative_axis, 2)
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_second_derivative_returns_repeated_direction_derivative(self):
@@ -590,9 +644,9 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "second_derivative")
-        self.assertEqual(result.raw_info.source, "scalar")
+        self.assertEqual(result.raw_info.source_name, "scalar")
         self.assertEqual(result.raw_info.derivative_axis, 0)
         self.assertTrue(np.allclose(result.raw_values, 2.0))
 
@@ -651,12 +705,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_divergence("vector", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "divergence")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.source_shape, (3, 3, 3, 3))
         self.assertEqual(result.raw_info.input_component_shape, (3,))
-        self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_tensor_divergence_contracts_selected_component_axis(self):
@@ -692,11 +745,10 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "tensor_divergence")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.component_axis, 3)
-        self.assertEqual(result.raw_info.output_shape, (3, 3, 3))
         self.assertTrue(np.allclose(result.raw_values, 3.0))
 
     def test_directional_derivative_projects_gradient_onto_direction(self):
@@ -795,12 +847,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_curl("vector", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "curl")
-        self.assertEqual(result.raw_info.source, "vector")
+        self.assertEqual(result.raw_info.source_name, "vector")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5, 3))
         self.assertEqual(result.raw_info.input_component_shape, (3,))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3))
         self.assertTrue(np.allclose(result.raw_values[..., 2], 2.0))
 
     def test_tensor_curl_applies_curl_along_default_last_axis(self):
@@ -859,11 +910,10 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "tensor_curl")
-        self.assertEqual(result.raw_info.source, "tensor")
+        self.assertEqual(result.raw_info.source_name, "tensor")
         self.assertEqual(result.raw_info.source_shape, (3, 4, 5, 3, 2))
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3, 2))
         self.assertEqual(result.raw_info.component_axis, 3)
         self.assertTrue(np.allclose(result.raw_values[..., 2, 0], 2.0))
 
@@ -932,14 +982,12 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(strain_result, SpatialDerivativeResult)
-        self.assertIsInstance(vorticity_result, SpatialDerivativeResult)
+        self.assertIsInstance(strain_result, NpyArrayPayload)
+        self.assertIsInstance(vorticity_result, NpyArrayPayload)
         self.assertEqual(strain_result.raw_info.operator, "strain_rate")
         self.assertEqual(vorticity_result.raw_info.operator, "vorticity_tensor")
-        self.assertEqual(strain_result.raw_info.source, "velocity")
-        self.assertEqual(vorticity_result.raw_info.source, "velocity")
-        self.assertEqual(strain_result.raw_info.output_shape, (3, 4, 5, 3, 3))
-        self.assertEqual(vorticity_result.raw_info.output_shape, (3, 4, 5, 3, 3))
+        self.assertEqual(strain_result.raw_info.source_name, "velocity")
+        self.assertEqual(vorticity_result.raw_info.source_name, "velocity")
 
     def test_strain_rate_and_vorticity_tensor_can_select_one_output(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
@@ -978,10 +1026,9 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "vorticity_tensor")
-        self.assertEqual(result.raw_info.source, "velocity")
-        self.assertEqual(result.raw_info.output_shape, (3, 4, 5, 3, 3))
+        self.assertEqual(result.raw_info.source_name, "velocity")
 
     def test_strain_rate_and_vorticity_tensor_rejects_non_vector_field(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
@@ -996,6 +1043,452 @@ class TestGridFieldDataset(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             dataset.act_strain_rate_and_vorticity_tensor(values, which="spin")
+
+    def test_elastic_deformation_returns_full_grid_outputs_for_q5_input(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 5, 6)))
+        i, j, k = np.indices((4, 5, 6), dtype=float)
+        q_values = np.zeros((4, 5, 6, 5), dtype=float)
+        q_values[..., 0] = i
+        q_values[..., 1] = j
+        q_values[..., 2] = k
+        q_values[..., 3] = i - 2.0 * j
+        q_values[..., 4] = 3.0 * k
+        dataset.act_add_field("Q", q_values)
+
+        result = dataset.act_elastic_deformation("Q", coord="index")
+
+        q_tensor = np.zeros((4, 5, 6, 3, 3), dtype=float)
+        q_tensor[..., 0, 0] = q_values[..., 0]
+        q_tensor[..., 0, 1] = q_values[..., 1]
+        q_tensor[..., 0, 2] = q_values[..., 2]
+        q_tensor[..., 1, 0] = q_values[..., 1]
+        q_tensor[..., 1, 1] = q_values[..., 3]
+        q_tensor[..., 1, 2] = q_values[..., 4]
+        q_tensor[..., 2, 0] = q_values[..., 2]
+        q_tensor[..., 2, 1] = q_values[..., 4]
+        q_tensor[..., 2, 2] = -q_values[..., 0] - q_values[..., 3]
+
+        diff_q = np.zeros((4, 5, 6, 3, 3, 3), dtype=float)
+        diff_q[..., 0, :, :] = np.gradient(q_tensor, axis=0)
+        diff_q[..., 1, :, :] = np.gradient(q_tensor, axis=1)
+        diff_q[..., 2, :, :] = np.gradient(q_tensor, axis=2)
+
+        levi = np.zeros((3, 3, 3), dtype=float)
+        levi[0, 1, 2], levi[1, 2, 0], levi[2, 0, 1] = 1.0, 1.0, 1.0
+        levi[1, 0, 2], levi[2, 1, 0], levi[0, 2, 1] = -1.0, -1.0, -1.0
+
+        twist_linear = np.einsum("abc,...ad,...bcd->...", levi, q_tensor, diff_q)
+        temp1 = np.einsum("...ab,...aib->...i", q_tensor, diff_q)
+        temp2 = np.einsum("...ia,...bab->...i", q_tensor, diff_q)
+        splay_vector = temp1 + 2.0 * temp2
+        bend_vector = -2.0 * temp1 - temp2
+
+        self.assertEqual(
+            set(result),
+            {
+                "splay_vector",
+                "twist_linear",
+                "bend_vector",
+                "splay",
+                "twist",
+                "bend",
+            },
+        )
+        self.assertEqual(result["splay_vector"].shape, (4, 5, 6, 3))
+        self.assertEqual(result["twist_linear"].shape, (4, 5, 6))
+        self.assertEqual(result["bend_vector"].shape, (4, 5, 6, 3))
+        self.assertEqual(result["splay"].shape, (4, 5, 6))
+        self.assertEqual(result["twist"].shape, (4, 5, 6))
+        self.assertEqual(result["bend"].shape, (4, 5, 6))
+        self.assertTrue(np.allclose(result["splay_vector"], splay_vector))
+        self.assertTrue(np.allclose(result["twist_linear"], twist_linear))
+        self.assertTrue(np.allclose(result["bend_vector"], bend_vector))
+        self.assertTrue(np.allclose(result["splay"], np.sum(splay_vector**2, axis=-1)))
+        self.assertTrue(np.allclose(result["twist"], twist_linear**2))
+        self.assertTrue(np.allclose(result["bend"], np.sum(bend_vector**2, axis=-1)))
+
+    def test_elastic_deformation_uses_physical_gradient_and_output_flags(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 4, 4),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        i, j, k = np.indices((4, 4, 4), dtype=float)
+        x = 2.0 * i
+        y = 3.0 * j
+        z = 4.0 * k
+
+        q_tensor = np.zeros((4, 4, 4, 3, 3), dtype=float)
+        q_tensor[..., 0, 0] = x + y
+        q_tensor[..., 0, 1] = y
+        q_tensor[..., 0, 2] = z
+        q_tensor[..., 1, 0] = y
+        q_tensor[..., 1, 1] = x - z
+        q_tensor[..., 1, 2] = x + z
+        q_tensor[..., 2, 0] = z
+        q_tensor[..., 2, 1] = x + z
+        q_tensor[..., 2, 2] = -q_tensor[..., 0, 0] - q_tensor[..., 1, 1]
+        dataset.act_add_field("Q", q_tensor)
+
+        vector_result = dataset.act_elastic_deformation(
+            "Q",
+            is_return_scalar=False,
+            is_return_vector=True,
+        )
+        scalar_result = dataset.act_elastic_deformation(
+            "Q",
+            is_return_scalar=True,
+            is_return_vector=False,
+        )
+
+        diff_q = np.zeros((4, 4, 4, 3, 3, 3), dtype=float)
+        spacing = (2.0, 3.0, 4.0)
+        diff_q[..., 0, :, :] = np.gradient(q_tensor, axis=0) / spacing[0]
+        diff_q[..., 1, :, :] = np.gradient(q_tensor, axis=1) / spacing[1]
+        diff_q[..., 2, :, :] = np.gradient(q_tensor, axis=2) / spacing[2]
+
+        levi = np.zeros((3, 3, 3), dtype=float)
+        levi[0, 1, 2], levi[1, 2, 0], levi[2, 0, 1] = 1.0, 1.0, 1.0
+        levi[1, 0, 2], levi[2, 1, 0], levi[0, 2, 1] = -1.0, -1.0, -1.0
+
+        twist_linear = np.einsum("abc,...ad,...bcd->...", levi, q_tensor, diff_q)
+        temp1 = np.einsum("...ab,...aib->...i", q_tensor, diff_q)
+        temp2 = np.einsum("...ia,...bab->...i", q_tensor, diff_q)
+        splay_vector = temp1 + 2.0 * temp2
+        bend_vector = -2.0 * temp1 - temp2
+
+        self.assertEqual(
+            set(vector_result),
+            {
+                "splay_vector",
+                "twist_linear",
+                "bend_vector",
+            },
+        )
+        self.assertEqual(set(scalar_result), {"splay", "twist", "bend"})
+        self.assertTrue(np.allclose(vector_result["splay_vector"], splay_vector))
+        self.assertTrue(np.allclose(vector_result["twist_linear"], twist_linear))
+        self.assertTrue(np.allclose(vector_result["bend_vector"], bend_vector))
+        self.assertTrue(
+            np.allclose(scalar_result["splay"], np.sum(splay_vector**2, axis=-1))
+        )
+        self.assertTrue(np.allclose(scalar_result["twist"], twist_linear**2))
+        self.assertTrue(
+            np.allclose(scalar_result["bend"], np.sum(bend_vector**2, axis=-1))
+        )
+
+    def test_elastic_deformation_requires_some_output(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        dataset.act_add_field("Q", np.zeros((2, 2, 2, 5), dtype=float))
+
+        with self.assertRaises(ValueError):
+            dataset.act_elastic_deformation(
+                "Q",
+                is_return_scalar=False,
+                is_return_vector=False,
+            )
+
+    def test_gaussian_smooth_preserves_constant_field(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(5, 6, 7),
+                box_periodic_flag=(True, False, True),
+            )
+        )
+        values = np.full((5, 6, 7), 3.5, dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=1.2, coord="index")
+
+        self.assertEqual(smoothed.shape, values.shape)
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_sigma_zero_returns_original_values(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 5, 6)))
+        i, j, k = np.indices((4, 5, 6), dtype=float)
+        values = i + 2.0 * j + 3.0 * k
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=0.0, coord="index")
+
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_wraps_periodic_boundaries(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(5, 3, 3),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.zeros((5, 3, 3), dtype=float)
+        values[0, 1, 1] = 1.0
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=(1.0, 0.0, 0.0),
+            coord="index",
+            truncate=2.0,
+        )
+
+        self.assertGreater(smoothed[4, 1, 1], 0.0)
+        self.assertTrue(np.allclose(smoothed[:, 0, :], 0.0))
+        self.assertTrue(np.allclose(smoothed[:, 2, :], 0.0))
+
+    def test_gaussian_smooth_uses_physical_spacing(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(7, 3, 3),
+                grid_transform=np.diag((2.0, 1.0, 1.0)),
+            )
+        )
+        values = np.zeros((7, 3, 3), dtype=float)
+        values[3, 1, 1] = 1.0
+
+        smoothed_physical = dataset.act_gaussian_smooth(
+            values,
+            sigma=2.0,
+            coord="physical",
+        )
+        smoothed_index = dataset.act_gaussian_smooth(
+            values,
+            sigma=(1.0, 2.0, 2.0),
+            coord="index",
+        )
+
+        self.assertTrue(np.allclose(smoothed_physical, smoothed_index))
+
+    def test_gaussian_smooth_can_return_result_metadata(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 5, 6),
+                box_periodic_flag=(True, False, False),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
+        values = np.zeros((4, 5, 6), dtype=float)
+        dataset.act_add_field("scalar", values)
+
+        result = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=2.0,
+            coord="physical",
+            is_result=True,
+        )
+
+        self.assertIsInstance(result, NpyArrayPayload)
+        self.assertEqual(result.raw_info.operator, "gaussian_smooth")
+        self.assertEqual(result.raw_info.source_name, "scalar")
+        self.assertEqual(result.raw_info.coord_type, "physical")
+        self.assertEqual(result.raw_info.source_shape, (4, 5, 6))
+        self.assertEqual(result.raw_info.sigma, (2.0, 2.0, 2.0))
+        self.assertEqual(result.raw_info.sigma_index, (1.0, 2.0 / 3.0, 0.5))
+        self.assertEqual(result.raw_info.boundary, ("wrap", "reflect", "reflect"))
+        self.assertIsNone(result.raw_info.weights_source_name)
+        self.assertIsNone(result.raw_info.weights_floor)
+
+    def test_gaussian_smooth_preserves_trailing_component_axes(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5, 2), dtype=float)
+        values[2, 2, 2, 0] = 1.0
+        values[2, 2, 2, 1] = 2.0
+
+        smoothed = dataset.act_gaussian_smooth(values, sigma=1.0, coord="index")
+
+        self.assertEqual(smoothed.shape, values.shape)
+        ratio = smoothed[..., 1] / 2.0
+        self.assertTrue(np.allclose(smoothed[..., 0], ratio))
+
+    def test_gaussian_smooth_supports_anisotropic_sigma(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(9, 9, 9)))
+        values = np.zeros((9, 9, 9), dtype=float)
+        values[4, 4, 4] = 1.0
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=(2.0, 0.5, 0.5),
+            coord="index",
+        )
+
+        self.assertGreater(smoothed[3, 4, 4], smoothed[4, 3, 4])
+        self.assertGreater(smoothed[5, 4, 4], smoothed[4, 5, 4])
+
+    def test_gaussian_smooth_result_can_be_registered_as_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        dataset.act_add_field("scalar", values)
+
+        result = dataset.act_gaussian_smooth("scalar", sigma=1.0, is_result=True)
+        field = dataset.act_add_result_field("scalar_smooth", result)
+
+        self.assertIs(field, dataset["scalar_smooth"])
+        self.assertIs(field.raw_info, result.raw_info)
+        self.assertTrue(np.allclose(field.raw_values, result.raw_values))
+
+    def test_gaussian_smooth_result_can_save_release_and_load(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        result = dataset.act_gaussian_smooth(values, sigma=1.0, is_result=True)
+        expected = result.raw_values.copy()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            saved = result.act_save_values(
+                Path(tmp_dir) / "gaussian_smooth",
+                is_release=True,
+            )
+
+            self.assertIsNone(saved.raw_values)
+            self.assertTrue(saved.raw_path.endswith(".npy"))
+            with saved.act_with_values() as loaded:
+                self.assertTrue(np.allclose(loaded, expected))
+
+            loaded_result = saved.act_load_values()
+            self.assertTrue(np.allclose(loaded_result.raw_values, expected))
+
+    def test_gaussian_smooth_registered_field_can_feed_gradient(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
+        values = np.zeros((7, 7, 7), dtype=float)
+        values[3, 3, 3] = 1.0
+        dataset.act_add_field("scalar", values)
+
+        smooth_result = dataset.act_gaussian_smooth("scalar", sigma=1.0, is_result=True)
+        dataset.act_add_result_field("scalar_smooth", smooth_result)
+        grad = dataset.act_gradient("scalar_smooth", coord="index")
+
+        self.assertEqual(grad.shape, (7, 7, 7, 3))
+        self.assertTrue(np.all(np.isfinite(grad)))
+        self.assertTrue(np.allclose(grad[3, 3, 3], 0.0, atol=1e-12))
+
+    def test_gaussian_smooth_all_zero_weights_preserve_original_values(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 4.0
+        weights = np.zeros((5, 5, 5), dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+        )
+
+        self.assertTrue(np.allclose(smoothed, values))
+
+    def test_gaussian_smooth_weights_can_come_from_registered_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        weights = np.ones((5, 5, 5), dtype=float)
+        dataset.act_add_field("scalar", values)
+        dataset.act_add_field("mask", weights)
+
+        result = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=1.0,
+            coord="index",
+            weights="mask",
+            is_result=True,
+        )
+
+        self.assertEqual(result.raw_info.weights_source_name, "mask")
+        self.assertEqual(result.raw_info.weights_floor, 1e-12)
+        expected = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=1.0,
+            coord="index",
+            is_result=False,
+        )
+        self.assertTrue(np.allclose(result.raw_values, expected))
+
+    def test_gaussian_smooth_weights_floor_can_be_customized(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 1.0
+        weights = np.ones((5, 5, 5), dtype=float)
+
+        result = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+            weights_floor=1e-8,
+            is_result=True,
+        )
+
+        self.assertEqual(result.raw_info.weights_floor, 1e-8)
+
+    def test_gaussian_smooth_weights_accept_soft_values_between_zero_and_one(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = np.zeros((5, 5, 5, 2), dtype=float)
+        values[2, 2, 2, 0] = 1.0
+        values[2, 2, 2, 1] = 2.0
+        weights = np.full((5, 5, 5), 0.5, dtype=float)
+
+        smoothed = dataset.act_gaussian_smooth(
+            values,
+            sigma=1.0,
+            coord="index",
+            weights=weights,
+        )
+
+        self.assertEqual(smoothed.shape, values.shape)
+        self.assertTrue(np.all(np.isfinite(smoothed)))
+        self.assertTrue(np.allclose(smoothed[..., 1], 2.0 * smoothed[..., 0]))
+
+    def test_gaussian_smooth_rejects_weights_outside_unit_interval(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+        weights[0, 0, 0] = 1.5
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
+
+    def test_gaussian_smooth_rejects_negative_weights_floor(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+                weights_floor=-1.0,
+            )
+
+    def test_gaussian_smooth_rejects_nonfinite_weights(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.ones((4, 4, 4), dtype=float)
+        weights[0, 0, 0] = np.nan
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
+
+    def test_gaussian_smooth_rejects_non_scalar_weight_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
+        values = np.zeros((4, 4, 4), dtype=float)
+        weights = np.zeros((4, 4, 4, 2), dtype=float)
+
+        with self.assertRaises(ValueError):
+            dataset.act_gaussian_smooth(
+                values,
+                sigma=1.0,
+                coord="index",
+                weights=weights,
+            )
 
     def test_laplacian_returns_scalar_second_derivative_sum(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
@@ -1070,12 +1563,11 @@ class TestGridFieldDataset(unittest.TestCase):
 
         result = dataset.act_laplacian("scalar", coord="index", is_result=True)
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "laplacian")
-        self.assertEqual(result.raw_info.source, "scalar")
-        self.assertEqual(result.raw_info.coord, "index")
+        self.assertEqual(result.raw_info.source_name, "scalar")
+        self.assertEqual(result.raw_info.coord_type, "index")
         self.assertEqual(result.raw_info.source_shape, (7, 7, 7))
-        self.assertEqual(result.raw_info.output_shape, (7, 7, 7))
         self.assertIsNone(result.raw_info.derivative_axis)
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2], 6.0))
 
@@ -1138,12 +1630,11 @@ class TestGridFieldDataset(unittest.TestCase):
             is_result=True,
         )
 
-        self.assertIsInstance(result, SpatialDerivativeResult)
+        self.assertIsInstance(result, NpyArrayPayload)
         self.assertEqual(result.raw_info.operator, "componentwise_laplacian")
-        self.assertEqual(result.raw_info.source, "field")
+        self.assertEqual(result.raw_info.source_name, "field")
         self.assertEqual(result.raw_info.source_shape, (7, 7, 7, 2))
         self.assertEqual(result.raw_info.input_component_shape, (2,))
-        self.assertEqual(result.raw_info.output_shape, (7, 7, 7, 2))
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2, 0], 6.0))
         self.assertTrue(np.allclose(result.raw_values[2:-2, 2:-2, 2:-2, 1], 0.0))
 
