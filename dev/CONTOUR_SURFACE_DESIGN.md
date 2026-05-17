@@ -192,6 +192,32 @@ Reasoning:
 - the middle layer is one per-level surface object
 - the bottom layer is purely visual
 
+## Implemented So Far
+
+The current branch now has a working first implementation of all three layers:
+
+- `src/nematics3d/classes/contour_surface.py`
+- `src/nematics3d/classes/visual/plot_contour_surface.py`
+
+Current implemented behavior:
+
+- `ContourSurfaceSet` validates one real 3D scalar field and shared grid metadata
+- `ContourSurfaceSet` creates one `ContourSurface` per unique input level
+- `ContourSurfaceSet.calc_levels` is a read-only property derived from the current child-surface levels
+- `ContourSurface` stores one mutable `raw_level` and one cached extracted mesh
+- `ContourSurface.act_extract()` extracts one contour mesh with PyVista from the owner field
+- extraction is done in index space and then mapped into physical space using `grid_transform` and `grid_offset`
+- `ContourSurface.act_set_level(...)` immediately updates the level and re-extracts the mesh
+- `PlotContourSurface` is implemented as a new `PlotGlyph` subclass specialized for already-extracted contour meshes
+- `PlotContourSurface` owns figure/actor/opts state but reads geometry from its `ContourSurface` owner
+- when a `ContourSurface` updates its mesh, attached `PlotContourSurface` wrappers auto-refresh through a lightweight sync callback
+
+Current practical interpretation of the three layers:
+
+- top layer owns the field and the family of contour objects
+- middle layer owns one contour level plus one extracted mesh cache
+- bottom layer owns display state only and should not reimplement contour extraction
+
 ## Current Open Questions
 
 - whether `ContourSurfaceSet` should auto-create visuals by default

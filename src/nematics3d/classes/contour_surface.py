@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Mapping
+from typing import Any, Callable, ClassVar, Mapping
 
 import numpy as np
 import pyvista as pv
@@ -51,6 +51,9 @@ class ContourSurface(ClassBase):
             "doc": "Cached extracted contour mesh stored as PyVista PolyData.",
             "kind": "entity",
         },
+        "impl_sync_func": {
+            "doc": "Internal sync callbacks triggered after contour mesh updates.",
+        },
         "mesh": {
             "doc": "Read-only: extracted contour mesh, if already cached.",
             "kind": "property",
@@ -61,7 +64,7 @@ class ContourSurface(ClassBase):
         },
     }
 
-    __slots__ = ("raw_level", "calc_surface_index", "entity_mesh_cache")
+    __slots__ = ("raw_level", "calc_surface_index", "entity_mesh_cache", "impl_sync_func")
 
     def __init__(
         self,
@@ -86,6 +89,7 @@ class ContourSurface(ClassBase):
         )
         object.__setattr__(self, "calc_surface_index", int(surface_index))
         object.__setattr__(self, "entity_mesh_cache", None)
+        object.__setattr__(self, "impl_sync_func", {})
         self.act_bind_relation_base(
             "owner",
             owner,
@@ -112,11 +116,41 @@ class ContourSurface(ClassBase):
             raise RuntimeError("Cannot extract a contour mesh without a live owner.")
         mesh = owner._helper_extract_contour_mesh(self.raw_level)
         object.__setattr__(self, "entity_mesh_cache", mesh)
+        self._helper_trigger_sync_batch(
+            mesh=mesh,
+            level=float(self.raw_level),
+            source=self,
+            event="mesh_updated",
+        )
         return mesh
 
     def act_clear_mesh_cache(self):
         """Drop the cached contour mesh for this surface."""
         object.__setattr__(self, "entity_mesh_cache", None)
+
+    def act_attach_sync_task(self, name: str, func: Callable) -> None:
+        """Register one post-update sync callback on this contour surface."""
+        if not callable(func):
+            raise TypeError(f"The sync task {name!r} must be callable.")
+        self.impl_sync_func[str(name)] = func
+
+    def act_detach_sync_task(self, name: str) -> None:
+        """Detach one registered contour-surface sync callback."""
+        self.impl_sync_func.pop(str(name), None)
+
+    def _helper_trigger_sync_batch(self, **kwargs) -> None:
+        """Run all registered sync callbacks with the merged sync payload."""
+        for func in tuple(self.impl_sync_func.values()):
+            try:
+                func(**kwargs)
+            except (
+                TypeError,
+                ValueError,
+                KeyError,
+                AttributeError,
+                RuntimeError,
+            ):
+                continue
 
     def act_set_level(self, level: float) -> float:
         """Update the contour level and immediately refresh the cached mesh."""
