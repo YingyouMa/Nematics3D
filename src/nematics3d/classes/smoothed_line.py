@@ -918,7 +918,8 @@ class SmoothedLineFunc(ClassBase):
         "raw_func": {
             "doc": (
                 "Numerical sampling function mapping one u_percent to a value "
-                "or a (value, metric) pair."
+                "or a (value, metric) / (value, metric, payload_samples) / "
+                "(value, metric, payload_samples, payload_shared) tuple."
             ),
             "validator": lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
         },
@@ -949,6 +950,14 @@ class SmoothedLineFunc(ClassBase):
         },
         "calc_metrics": {
             "doc": "Per-sample metrics returned by the numerical function, or None if unavailable.",
+            "kind": "calc",
+        },
+        "calc_payload_samples": {
+            "doc": "Per-sample payload objects returned by the numerical function, or None if unavailable.",
+            "kind": "calc",
+        },
+        "calc_payload_shared": {
+            "doc": "Shared payload returned for the full sampled function, or None if unavailable.",
             "kind": "calc",
         },
         "entity_interpolator": {
@@ -1086,6 +1095,8 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(self, "impl_owner_opts_snapshot", None)
         object.__setattr__(self, "calc_values", None)
         object.__setattr__(self, "calc_metrics", None)
+        object.__setattr__(self, "calc_payload_samples", None)
+        object.__setattr__(self, "calc_payload_shared", None)
         object.__setattr__(self, "entity_interpolator", None)
 
         self.act_bind_relation_base("owner", owner, is_weak=True)
@@ -1232,19 +1243,43 @@ class SmoothedLineFunc(ClassBase):
 
         values = []
         metrics = []
+        payload_samples = []
         is_has_metric = False
+        is_has_payload_samples = False
+        payload_shared = None
+        is_has_payload_shared = False
         for u in self.raw_u_samples:
             sample_result = self.raw_func(float(u), **self.raw_func_kwargs)
-            if isinstance(sample_result, tuple) and len(sample_result) == 2:
+            if isinstance(sample_result, tuple) and len(sample_result) == 4:
+                value, metric, payload_sample, payload_shared_i = sample_result
+            elif isinstance(sample_result, tuple) and len(sample_result) == 3:
+                value, metric, payload_sample = sample_result
+                payload_shared_i = None
+            elif isinstance(sample_result, tuple) and len(sample_result) == 2:
                 value, metric = sample_result
+                payload_sample = None
+                payload_shared_i = None
             else:
-                value, metric = sample_result, None
+                value, metric, payload_sample, payload_shared_i = sample_result, None, None, None
             values.append(np.asarray(value))
             metrics.append(metric)
+            payload_samples.append(payload_sample)
             is_has_metric = is_has_metric or (metric is not None)
+            is_has_payload_samples = is_has_payload_samples or (payload_sample is not None)
+            if payload_shared_i is not None:
+                if not is_has_payload_shared:
+                    payload_shared = payload_shared_i
+                    is_has_payload_shared = True
+                elif payload_shared != payload_shared_i:
+                    raise ValueError(
+                        "Shared payload returned by `raw_func` must remain identical "
+                        "across all sampled `u_percent` values."
+                    )
 
         values = np.stack(values, axis=0)
         metrics = metrics if is_has_metric else None
+        payload_samples = payload_samples if is_has_payload_samples else None
+        payload_shared = payload_shared if is_has_payload_shared else None
 
         opts_snapshot = self._helper_get_owner_opts_snapshot(owner)
         mode = self._helper_get_owner_linefunc_mode_from(opts_snapshot)
@@ -1259,6 +1294,8 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(self, "impl_owner_opts_snapshot", dict(opts_snapshot))
         object.__setattr__(self, "calc_values", values_smooth)
         object.__setattr__(self, "calc_metrics", metrics)
+        object.__setattr__(self, "calc_payload_samples", payload_samples)
+        object.__setattr__(self, "calc_payload_shared", payload_shared)
         object.__setattr__(self, "entity_interpolator", interpolator)
         return self
 

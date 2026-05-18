@@ -151,7 +151,6 @@ from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine
 from .class_base import ClassBase
 
-
 @dataclass(slots=True)
 class InputQ:
     """
@@ -1625,25 +1624,29 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
+    @logging_and_warning_decorator()
     def act_get_beta_interpolator(
         self,
         index_line: int,
         index_smooth: int = -1,
         u_samples: np.ndarray | None = None,
         smooth_if_missing: bool = True,
-        smooth_kwargs: Mapping[str, Any] | None = None,
+        opts_smooth: OptsSmooth | None = None,
         name: str | None = None,
         opts_grid: OptsPlaneGridPolar | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
-        **omega_kwargs,
+        logger=None,
+        **kwargs,
     ):
         """
         Build a sampled interpolator for beta along one disclination line.
 
         This helper resolves one line from `self.lines[index_line]`, ensures a
         smoothed version is available, samples
-        ``smooth.act_calc_omega(u_percent)["beta"]`` on `u_samples`, and
-        returns the resulting sampled line function.
+        ``smooth.act_calc_omega(u_percent).beta`` on `u_samples`, and returns
+        the resulting sampled line function. The omega/grid sampling arguments
+        are stored on the returned line function under `raw_func_kwargs`, so
+        later `act_refresh(...)` calls can resample with the same settings.
 
         Parameters
         ----------
@@ -1658,9 +1661,9 @@ class QFieldObject(ClassBase):
         smooth_if_missing
             Whether to create a smoothed version automatically when the target
             line has none yet.
-        smooth_kwargs
-            Keyword arguments forwarded to `line.act_smooth(...)` when
-            `smooth_if_missing=True` and no cached smooth exists.
+        opts_smooth
+            Optional smoothing opts used only when `smooth_if_missing=True`
+            and no cached smooth exists yet.
         name
             Optional registry name for the returned sampled line function.
         opts_grid
@@ -1668,9 +1671,12 @@ class QFieldObject(ClassBase):
         opts_grid_defaults_override
             Optional polar-grid default overrides forwarded into
             `act_calc_omega(...)`.
-        **omega_kwargs
-            Additional keyword arguments forwarded into `act_calc_omega(...)`.
+        **kwargs
+            Keyword overrides merged into `opts_smooth` and `opts_grid` using
+            the prefixes `smooth_` and `grid_`.
         """
+        is_input_opts_smooth = opts_smooth is not None
+        is_input_smooth_kwargs = any(key.startswith("smooth_") for key in kwargs)
         try:
             line = self.lines[index_line]
         except IndexError as exc:
@@ -1679,7 +1685,21 @@ class QFieldObject(ClassBase):
                 f"there are {len(self.lines)} disclination lines."
             ) from exc
 
-        smooth_kwargs = {} if smooth_kwargs is None else dict(smooth_kwargs)
+        if opts_smooth is None:
+            opts_smooth = OptsSmooth()
+        if opts_grid is None:
+            opts_grid = OptsPlaneGridPolar()
+
+        merge = merge_opts_all(
+            {
+                "smooth_": opts_smooth,
+                "grid_": opts_grid,
+            },
+            kwargs,
+            type(self).__name__,
+        )
+        opts_smooth = merge["smooth_"]
+        opts_grid = merge["grid_"]
         smooths = line.smooths
 
         if not smooths:
@@ -1690,18 +1710,30 @@ class QFieldObject(ClassBase):
                     "the Q-field object, or set `smooth_if_missing=True`."
                 )
 
-            if "min_line_length" not in smooth_kwargs:
-                smooth_kwargs["min_line_length"] = (
-                    self.default_miminum_line_length_smooth
+            if opts_smooth.min_line_length is UNSET:
+                opts_smooth = replace(
+                    opts_smooth,
+                    min_line_length=self.default_miminum_line_length_smooth,
                 )
             if (
-                "window_length" not in smooth_kwargs
-                and "window_ratio" not in smooth_kwargs
+                opts_smooth.window_length is UNSET
+                and opts_smooth.window_ratio is UNSET
             ):
-                smooth_kwargs["window_length"] = self.default_smooth_window_length
+                opts_smooth = replace(
+                    opts_smooth,
+                    window_length=self.default_smooth_window_length,
+                )
 
-            smooth = line.act_smooth(**smooth_kwargs)
+            smooth = line.act_smooth(opts=opts_smooth)
         else:
+            if is_input_opts_smooth or is_input_smooth_kwargs:
+                logger.warning(
+                    "Smoothing inputs (`opts_smooth` / `smooth_*`) are ignored "
+                    f"for `act_get_beta_interpolator()` on line {index_line!r} "
+                    "because cached smoothed versions already exist. Select one "
+                    "with `index_smooth`, or clear/create smoothing explicitly "
+                    "before building the beta interpolator."
+                )
             try:
                 smooth = smooths[index_smooth]
             except IndexError as exc:
@@ -1709,28 +1741,16 @@ class QFieldObject(ClassBase):
                     f"Invalid index_smooth={index_smooth!r} for line "
                     f"{index_line!r}; there are {len(smooths)} smoothed versions."
                 ) from exc
-
-        if u_samples is None:
-            if smooth.opts.mode == "wrap":
-                u_samples = np.arange(0, 100, 5, dtype=float)
-            else:
-                u_samples = np.linspace(0, 100, 21, dtype=float)
+        index_smooth_actual = line.smooths.index(smooth)
 
         if name is None:
-            name = f"beta_line_{index_line}_smooth_{index_smooth}"
+            name = f"beta_line_{index_line}_smooth_{index_smooth_actual}"
 
-        def beta_func(u_percent):
-            return smooth.act_calc_omega(
-                u_percent,
-                opts_grid=opts_grid,
-                opts_grid_defaults_override=opts_grid_defaults_override,
-                **omega_kwargs,
-            )["beta"]
-
-        return smooth.act_create_linefunc(
-            func=beta_func,
+        return smooth.act_add_beta_interpolator(
             u_samples=u_samples,
             name=name,
+            opts_grid=opts_grid,
+            opts_grid_defaults_override=opts_grid_defaults_override,
         )
 
     # -------------------------------

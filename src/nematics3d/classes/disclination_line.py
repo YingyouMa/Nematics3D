@@ -49,6 +49,34 @@ from .visual.qt.interact_disclination_line import InteractDisclinationLine
 # extra attr
 
 
+def _helper_sample_beta_from_smooth(
+    u_percent: float,
+    *,
+    smooth,
+    opts_grid: OptsPlaneGridPolar | None = None,
+    opts_grid_defaults_override: Mapping[str, Any] | None = None,
+    **grid_kwargs,
+) -> tuple[float, dict[str, Any], dict[str, np.ndarray], dict[str, Any]]:
+    """Evaluate beta and return per-sample plus shared diagnostics."""
+    result = smooth.act_calc_omega(
+        u_percent,
+        opts_grid=opts_grid,
+        opts_grid_defaults_override=opts_grid_defaults_override,
+        **grid_kwargs,
+    )
+    tangent = np.asarray(smooth.act_calc_tangent(u_percent), dtype=float)
+    payload_sample = {
+        "omega": np.asarray(result.omega, dtype=float),
+        "tangent": tangent,
+    }
+    payload_shared = {
+        "R": result.R,
+        "num_directors": result.num_directors,
+        "layer": result.layer,
+    }
+    return result.beta, dict(result.metric), payload_sample, payload_shared
+
+
 @dataclass(slots=True, frozen=True, repr=False)
 class DefectSectionOmegaResult(OmegaResult):
     """Inspectable omega result for one local defect-line section."""
@@ -736,6 +764,56 @@ class DisclinationLineSmooth(SmoothedLine):
         if visual is None:
             return None
         return visual.wrapped
+
+    @logging_and_warning_decorator()
+    def act_add_beta_interpolator(
+        self,
+        u_samples: np.ndarray | None = None,
+        name: str | None = None,
+        opts_grid: OptsPlaneGridPolar | None = None,
+        opts_grid_defaults_override: Mapping[str, Any] | None = None,
+        logger=None,
+        **kwargs,
+    ):
+        """Create and register a beta line function on this smoothed line."""
+        del logger
+        if opts_grid is None:
+            opts_grid = OptsPlaneGridPolar()
+
+        merge = merge_opts_all(
+            {
+                "grid_": opts_grid,
+            },
+            kwargs,
+            type(self).__name__,
+        )
+        opts_grid = merge["grid_"]
+
+        if u_samples is None:
+            if self.opts.mode == "wrap":
+                u_samples = np.arange(0, 100, 5, dtype=float)
+            else:
+                u_samples = np.linspace(0, 100, 21, dtype=float)
+
+        if name is None:
+            index_smooth = -1
+            if self.owner is not None:
+                try:
+                    index_smooth = self.owner.smooths.index(self)
+                except ValueError:
+                    index_smooth = -1
+            name = f"beta_smooth_{index_smooth}"
+
+        return self.act_create_linefunc(
+            func=_helper_sample_beta_from_smooth,
+            u_samples=u_samples,
+            func_kwargs={
+                "smooth": self,
+                "opts_grid": opts_grid,
+                "opts_grid_defaults_override": opts_grid_defaults_override,
+            },
+            name=name,
+        )
 
     # ==================== OVERRIDE ====================
     # DisclinationLineSmooth overrides SmoothedLine._helper_resolve_coords

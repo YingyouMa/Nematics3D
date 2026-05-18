@@ -21,7 +21,11 @@ from nematics3d.classes.grid_field import (
     GridInterpolator,
     InputGridField,
 )
-from nematics3d.classes.disclination_line import DefectSectionOmegaResult
+from nematics3d.classes.plane_grid_polar import OptsPlaneGridPolar
+from nematics3d.classes.disclination_line import (
+    DefectSectionOmegaResult,
+    _helper_sample_beta_from_smooth,
+)
 from nematics3d.classes.q_plane import OmegaResult
 
 
@@ -44,7 +48,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         beta_func = q.act_get_beta_interpolator(
             index_line=0,
             u_samples=np.array([0.0, 25.0, 50.0, 75.0], dtype=float),
-            smooth_kwargs={"window_length": 28},
+            smooth_window_length=28,
             name="beta-test-func",
         )
 
@@ -56,6 +60,70 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         expected = np.array([smooth.act_calc_omega(u)["beta"] for u in u_query])
 
         self.assertTrue(np.allclose(beta_func(u_query), expected, equal_nan=True))
+        self.assertIs(beta_func.raw_func_kwargs["smooth"], smooth)
+        self.assertIsNotNone(beta_func.calc_metrics)
+        self.assertIsNotNone(beta_func.calc_payload_samples)
+        self.assertIsNotNone(beta_func.calc_payload_shared)
+        self.assertEqual(
+            len(beta_func.calc_payload_samples), len(beta_func.raw_u_samples)
+        )
+        self.assertIsInstance(beta_func.calc_metrics[0], dict)
+        self.assertIn("omega", beta_func.calc_payload_samples[0])
+        self.assertIn("tangent", beta_func.calc_payload_samples[0])
+        self.assertIn("R", beta_func.calc_payload_shared)
+        self.assertIn("num_directors", beta_func.calc_payload_shared)
+        self.assertIn("layer", beta_func.calc_payload_shared)
+
+    def test_act_get_beta_interpolator_stores_omega_grid_kwargs_on_linefunc(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-grid-kwargs")
+        opts_grid = OptsPlaneGridPolar(dr=0.4, layers=8)
+        beta_func = q.act_get_beta_interpolator(
+            index_line=0,
+            u_samples=np.array([0.0, 50.0], dtype=float),
+            smooth_window_length=28,
+            opts_grid=opts_grid,
+            grid_arc_dist=0.5,
+        )
+
+        self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
+        self.assertIsInstance(beta_func.raw_func_kwargs["opts_grid"], OptsPlaneGridPolar)
+        self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].dr, 0.4)
+        self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
+        self.assertIn("smooth", beta_func.raw_func_kwargs)
+        self.assertEqual(beta_func.name, "beta_line_0_smooth_0")
+
+    def test_smoothed_line_act_add_beta_interpolator_builds_linefunc_directly(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-smooth-direct")
+        q.act_lines_smooth(window_length=28)
+        smooth = q.lines[0].smooth
+
+        beta_func = smooth.act_add_beta_interpolator(
+            u_samples=np.array([0.0, 50.0], dtype=float),
+            grid_arc_dist=0.5,
+        )
+
+        self.assertIs(beta_func.owner, smooth)
+        self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
+        self.assertEqual(beta_func.name, "beta_smooth_0")
+        self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
 
     def test_act_calc_omega_returns_result_base_objects(self):
         data_path = (
