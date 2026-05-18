@@ -15,6 +15,7 @@
 - Add a scene-state snapshot workflow so the current interactive figure/object state can be saved and restored later as a named checkpoint.
 - Add console commands for direct save/load of the current scene state so interactive sessions can checkpoint and restore without leaving the console.
 - Add an opt-in state on `SmoothedLineFunc` for automatic refresh so it can resample itself whenever the paired `SmoothedLine` updates its smoothing opts.
+- Fix the synchronization contract between `SmoothedLine` and `SmoothedLineFunc`: when the owner line geometry or cached smoothing result changes, existing line functions should become stale in a visible way or refresh automatically instead of silently keeping old sampled/interpolated values.
 - Let `SmoothedLineFunc` optionally smooth its sampled values with the same smoothing parameters used by the paired `SmoothedLine`, so function sampling can stay visually and numerically consistent with the line itself.
 - Add a one-shot detailed info/summary printer for `SmoothedLine` and `SmoothedLineFunc` so users can inspect the full current smoothing, sampling, and cache state without manually checking many fields.
 - Add an optional anisotropy diagnostic to radial Fourier-spectrum averaging so the result can report whether the radial average is likely meaningful for the underlying spectrum.
