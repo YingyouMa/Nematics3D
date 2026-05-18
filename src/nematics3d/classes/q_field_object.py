@@ -1630,7 +1630,7 @@ class QFieldObject(ClassBase):
         index_line: int,
         index_smooth: int = -1,
         u_samples: np.ndarray | None = None,
-        smooth_if_missing: bool = True,
+        is_new_smooth: bool = False,
         opts_smooth: OptsSmooth | None = None,
         name: str | None = None,
         opts_grid: OptsPlaneGridPolar | None = None,
@@ -1658,12 +1658,13 @@ class QFieldObject(ClassBase):
         u_samples
             Sample positions in normalized line-parameter percent. If omitted,
             a default grid is chosen from the smoothing mode.
-        smooth_if_missing
-            Whether to create a smoothed version automatically when the target
-            line has none yet.
+        is_new_smooth
+            Whether to create a new smoothed-line object before building the
+            beta interpolator. If False, the method uses an existing cached
+            smooth selected by `index_smooth`, and raises an error when none
+            exists.
         opts_smooth
-            Optional smoothing opts used only when `smooth_if_missing=True`
-            and no cached smooth exists yet.
+            Optional smoothing opts used only when `is_new_smooth=True`.
         name
             Optional registry name for the returned sampled line function.
         opts_grid
@@ -1702,14 +1703,7 @@ class QFieldObject(ClassBase):
         opts_grid = merge["grid_"]
         smooths = line.smooths
 
-        if not smooths:
-            if not smooth_if_missing:
-                raise ValueError(
-                    f"Disclination line {index_line!r} has no smoothed versions. "
-                    "Call `act_smooth()` on the line, `act_lines_smooth()` on "
-                    "the Q-field object, or set `smooth_if_missing=True`."
-                )
-
+        if is_new_smooth:
             if opts_smooth.min_line_length is UNSET:
                 opts_smooth = replace(
                     opts_smooth,
@@ -1726,13 +1720,20 @@ class QFieldObject(ClassBase):
 
             smooth = line.act_smooth(opts=opts_smooth)
         else:
+            if not smooths:
+                raise ValueError(
+                    f"Disclination line {index_line!r} has no smoothed versions. "
+                    "Call `act_smooth()` on the line, `act_lines_smooth()` on "
+                    "the Q-field object, or set `is_new_smooth=True`."
+                )
             if is_input_opts_smooth or is_input_smooth_kwargs:
                 logger.warning(
                     "Smoothing inputs (`opts_smooth` / `smooth_*`) are ignored "
                     f"for `act_get_beta_interpolator()` on line {index_line!r} "
-                    "because cached smoothed versions already exist. Select one "
-                    "with `index_smooth`, or clear/create smoothing explicitly "
-                    "before building the beta interpolator."
+                    "because `is_new_smooth=False` reuses an existing cached "
+                    "smooth. Select one with `index_smooth`, or set "
+                    "`is_new_smooth=True` to create a fresh smooth before "
+                    "building the beta interpolator."
                 )
             try:
                 smooth = smooths[index_smooth]

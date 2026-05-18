@@ -30,7 +30,7 @@ from nematics3d.classes.q_plane import OmegaResult
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
-    def test_act_get_beta_interpolator_auto_smooths_and_matches_direct_beta(self):
+    def test_act_get_beta_interpolator_new_smooth_matches_direct_beta(self):
         data_path = (
             Path(__file__).resolve().parents[1]
             / "disclination"
@@ -47,6 +47,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
         beta_func = q.act_get_beta_interpolator(
             index_line=0,
+            is_new_smooth=True,
             u_samples=np.array([0.0, 25.0, 50.0, 75.0], dtype=float),
             smooth_window_length=28,
             name="beta-test-func",
@@ -74,6 +75,24 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIn("num_directors", beta_func.calc_payload_shared)
         self.assertIn("layer", beta_func.calc_payload_shared)
 
+    def test_act_get_beta_interpolator_requires_existing_smooth_when_not_new(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-no-smooth")
+
+        with self.assertRaisesRegex(ValueError, "is_new_smooth=True"):
+            q.act_get_beta_interpolator(
+                index_line=0,
+                u_samples=np.array([0.0, 50.0], dtype=float),
+            )
+
     def test_act_get_beta_interpolator_stores_omega_grid_kwargs_on_linefunc(self):
         data_path = (
             Path(__file__).resolve().parents[1]
@@ -88,6 +107,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         opts_grid = OptsPlaneGridPolar(dr=0.4, layers=8)
         beta_func = q.act_get_beta_interpolator(
             index_line=0,
+            is_new_smooth=True,
             u_samples=np.array([0.0, 50.0], dtype=float),
             smooth_window_length=28,
             opts_grid=opts_grid,
@@ -100,6 +120,31 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
         self.assertIn("smooth", beta_func.raw_func_kwargs)
         self.assertEqual(beta_func.name, "beta_line_0_smooth_0")
+
+    def test_act_get_beta_interpolator_new_smooth_appends_even_when_cached_exists(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-force-new")
+        q.act_lines_smooth(window_length=28)
+        self.assertEqual(len(q.lines[0].smooths), 1)
+
+        beta_func = q.act_get_beta_interpolator(
+            index_line=0,
+            is_new_smooth=True,
+            u_samples=np.array([0.0, 50.0], dtype=float),
+            smooth_window_length=31,
+        )
+
+        self.assertEqual(len(q.lines[0].smooths), 2)
+        self.assertIs(beta_func.owner, q.lines[0].smooths[-1])
+        self.assertEqual(beta_func.name, "beta_line_0_smooth_1")
 
     def test_smoothed_line_act_add_beta_interpolator_builds_linefunc_directly(self):
         data_path = (
@@ -124,6 +169,27 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
         self.assertEqual(beta_func.name, "beta_smooth_0")
         self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
+
+    def test_smoothed_line_act_add_beta_interpolator_wrap_drops_100_endpoint(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-wrap-endpoint")
+        q.act_lines_smooth(window_length=28)
+        smooth = q.lines[0].smooth
+        object.__setattr__(smooth.owner, "calc_end2end_kind", "loop")
+
+        beta_func = smooth.act_add_beta_interpolator(
+            u_samples=np.array([0.0, 25.0, 50.0, 100.0], dtype=float),
+        )
+
+        self.assertTrue(np.allclose(beta_func.raw_u_samples, np.array([0.0, 25.0, 50.0])))
 
     def test_act_calc_omega_returns_result_base_objects(self):
         data_path = (

@@ -1042,6 +1042,23 @@ class SmoothedLineFunc(ClassBase):
         )
         return opts_snapshot
 
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_normalize_u_samples_for_mode(self, u_samples, mode, logger=None):
+        """Normalize user-facing u-sample endpoint duplication for wrap mode."""
+        u_samples = self._helper_validate_u_samples(
+            u_samples,
+            name=type(self).__attr_defs__["raw_u_samples"]["doc"],
+        )
+        if mode == "wrap" and len(u_samples) >= 2:
+            if np.isclose(u_samples[0], 0.0) and np.isclose(u_samples[-1], 100.0):
+                logger.warning(
+                    "wrap mode treats `u_percent=0` and `u_percent=100` as the "
+                    "same point. Automatically removing the `100` endpoint from "
+                    "the sampled line function."
+                )
+                u_samples = u_samples[:-1]
+        return u_samples
+
     # -------------------------------
     # Initialization
     # -------------------------------
@@ -1206,20 +1223,31 @@ class SmoothedLineFunc(ClassBase):
         func_kwargs: Mapping[str, Any] | None = None,
         logger=None,
     ):
-        del logger
         owner = self.owner
         if owner is None:
             raise RuntimeError(
                 "Cannot refresh a SmoothedLineFunc without a live owner."
             )
 
+        opts_snapshot = self._helper_get_owner_opts_snapshot(owner)
+        mode = self._helper_get_owner_linefunc_mode_from(opts_snapshot)
+
         if u_samples is not None:
             object.__setattr__(
                 self,
                 "raw_u_samples",
-                self._helper_validate_u_samples(
+                self._helper_normalize_u_samples_for_mode(
                     u_samples,
-                    name=type(self).__attr_defs__["raw_u_samples"]["doc"],
+                    mode,
+                ),
+            )
+        else:
+            object.__setattr__(
+                self,
+                "raw_u_samples",
+                self._helper_normalize_u_samples_for_mode(
+                    self.raw_u_samples,
+                    mode,
                 ),
             )
         if func is not None:
@@ -1281,8 +1309,6 @@ class SmoothedLineFunc(ClassBase):
         payload_samples = payload_samples if is_has_payload_samples else None
         payload_shared = payload_shared if is_has_payload_shared else None
 
-        opts_snapshot = self._helper_get_owner_opts_snapshot(owner)
-        mode = self._helper_get_owner_linefunc_mode_from(opts_snapshot)
         interpolator, values_smooth = linefunc_build_smoothed_interpolator(
             self.raw_u_samples,
             values,

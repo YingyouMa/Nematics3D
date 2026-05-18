@@ -765,18 +765,15 @@ class DisclinationLineSmooth(SmoothedLine):
             return None
         return visual.wrapped
 
-    @logging_and_warning_decorator()
     def act_add_beta_interpolator(
         self,
         u_samples: np.ndarray | None = None,
         name: str | None = None,
         opts_grid: OptsPlaneGridPolar | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
-        logger=None,
         **kwargs,
     ):
         """Create and register a beta line function on this smoothed line."""
-        del logger
         if opts_grid is None:
             opts_grid = OptsPlaneGridPolar()
 
@@ -944,9 +941,25 @@ class DisclinationLineSmooth(SmoothedLine):
         is_smooth: bool = True,
         opts_tube: OptsTube | None = None,
         opts_tube_defaults_override: Mapping[str, Any] | None = None,
+        is_replace: bool = False,
         **kwargs,
     ):
-        """Create and bind one PlotTube-based visualization wrapper."""
+        """
+        Create or replace the one managed visualization wrapper for this line.
+
+        Stale remembered wrappers are discarded automatically. If a live
+        wrapper is still attached to a live figure, this method refuses to
+        overwrite it unless `is_replace=True`.
+        """
+        visual_old = self._helper_resolve_current_visual()
+        if visual_old is not None:
+            if not is_replace:
+                raise RuntimeError(
+                    f"DisclinationLineSmooth {self.name!r} already has a live visualization. "
+                    "Pass is_replace=True to replace it."
+                )
+            visual_old.act_remove()
+
         tube = DisclinationLineSmoothPlot(
             self,
             is_smooth=is_smooth,
@@ -960,6 +973,47 @@ class DisclinationLineSmooth(SmoothedLine):
         self.act_bind_relation_base("visual", tube, is_weak=False)
 
         return tube
+
+    def _helper_resolve_current_visual(self):
+        """
+        Return the currently managed live visualization wrapper for this line.
+
+        The disclination workflow stores one high-level wrapper relation on the
+        smoothed line, but the actual live/died state is determined by the
+        wrapped `PlotTube`. If the wrapped tube or its hosting figure has
+        already disappeared, the stale wrapper chain is detached and `None` is
+        returned.
+        """
+        visual = self.visual
+        if visual is None:
+            return None
+
+        wrapped = getattr(visual, "wrapped", None)
+        if wrapped is None:
+            if getattr(visual, "owner", None) is self:
+                visual.act_unbind_relation_base("owner")
+            self.act_unbind_relation_base("visual")
+            return None
+
+        fig = getattr(wrapped, "fig", None)
+        if fig is None:
+            if wrapped.wrapper is visual:
+                wrapped.act_unbind_wrapper()
+            if getattr(visual, "owner", None) is self:
+                visual.act_unbind_relation_base("owner")
+            self.act_unbind_relation_base("visual")
+            return None
+
+        if not fig.is_alive:
+            if wrapped.wrapper is visual:
+                wrapped.act_unbind_wrapper()
+            wrapped.act_unbind_relation_base("fig")
+            if getattr(visual, "owner", None) is self:
+                visual.act_unbind_relation_base("owner")
+            self.act_unbind_relation_base("visual")
+            return None
+
+        return visual
 
     def act_cross_section(self, x_param, **kwargs):
         """Build one local polar cross-section along this smoothed line."""
@@ -1348,6 +1402,25 @@ class DisclinationLineSmoothPlot(HostBase):
             )
 
         return line_coords, line_index
+
+    def act_remove(self):
+        """
+        Remove the wrapped tube glyph and detach this wrapper from its owner.
+
+        After removal, both the owner-side `visual` relation and the internal
+        wrapped/wrapper links are cleared so the wrapper no longer counts as the
+        managed visualization of the smoothed line.
+        """
+        owner = self.owner
+        wrapped = self.wrapped
+        if wrapped is not None:
+            wrapped.act_remove()
+            if wrapped.wrapper is self:
+                wrapped.act_unbind_wrapper()
+        if owner is not None and getattr(owner, "visual", None) is self:
+            owner.act_unbind_relation_base("visual")
+        if owner is not None and getattr(self, "owner", None) is owner:
+            self.act_unbind_relation_base("owner")
 
     def _helper_enrich_kwargs_wrapped_visual(self, host=None, kwargs=None):
         del host, kwargs
