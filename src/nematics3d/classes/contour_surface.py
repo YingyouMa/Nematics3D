@@ -241,10 +241,6 @@ class ContourSurfaceSet(ClassBase):
             "doc": "Read-only: current contour levels in the current surface order.",
             "kind": "property",
         },
-        "surface": {
-            "doc": "Read-only: latest contour surface in this set, if any.",
-            "kind": "property",
-        },
     }
 
     __slots__ = (
@@ -270,7 +266,11 @@ class ContourSurfaceSet(ClassBase):
             name_replace="contour-surface-set",
             is_fixed=True,
         )
-        values_use = self._helper_as_scalar_values_3d(values)
+        values_use = as_real_lattice_field(
+            values,
+            name="Contour-surface field values",
+            extra_ndim=0,
+        )
         shape = as_grid_shape(values_use.shape, name="Contour-surface grid shape")
         grid_info = InputGridField(
             shape=shape,
@@ -316,25 +316,6 @@ class ContourSurfaceSet(ClassBase):
     def calc_levels(self) -> tuple[float, ...]:
         """Return the current contour levels in the current surface order."""
         return tuple(surface.raw_level for surface in self.surfaces)
-
-    @property
-    def surface(self) -> ContourSurface | None:
-        """Return the latest contour surface, if any."""
-        if not self.surfaces:
-            return None
-        return self.surfaces[-1]
-
-    def _helper_as_scalar_values_3d(self, values) -> np.ndarray:
-        """Validate and return one strict 3D scalar field."""
-        values = as_real_lattice_field(values, name="Contour-surface field values")
-        shape = np.shape(values)
-        if len(shape) != 3:
-            raise ValueError(
-                "Contour-surface field values must have strict shape "
-                f"(Nx, Ny, Nz). Got {shape} instead."
-            )
-        as_grid_shape(shape, name="Contour-surface field shape")
-        return np.asarray(values, dtype=float)
 
     @staticmethod
     def _helper_readonly_grid_array_copy(value):

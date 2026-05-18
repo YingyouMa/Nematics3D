@@ -86,6 +86,32 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(ValueError):
             as_real_lattice_field(values, value_range=(1.0, 1.0))
 
+    def test_as_real_lattice_field_can_require_exact_extra_ndim(self):
+        values = np.zeros((2, 3, 4, 5), dtype=float)
+
+        validated = as_real_lattice_field(values, extra_ndim=1)
+
+        self.assertEqual(validated.shape, (2, 3, 4, 5))
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, extra_ndim=0)
+
+    def test_as_real_lattice_field_can_require_exact_shape(self):
+        values = np.zeros((2, 3, 4), dtype=float)
+
+        validated = as_real_lattice_field(values, shape=(2, 3, 4))
+
+        self.assertEqual(validated.shape, (2, 3, 4))
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values, shape=(2, 3, 5))
+
+    def test_as_real_lattice_field_rejects_empty_axes(self):
+        values = np.zeros((2, 3, 0), dtype=float)
+
+        with self.assertRaises(ValueError):
+            as_real_lattice_field(values)
+
     def test_dataset_builds_shared_grid_cache_from_explicit_shape(self):
         input_value = InputGridField(
             shape=(2, 3, 4),

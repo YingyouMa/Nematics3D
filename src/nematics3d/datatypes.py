@@ -632,24 +632,49 @@ def as_real_lattice_field(
     input_data,
     name: str = "field values",
     *,
-    min_ndim: int = 3,
+    extra_ndim: int | None = None,
+    shape: tuple[int, ...] | None = None,
     is_finite: bool = True,
     value_range=None,
     bounded: bool = False,
 ) -> GeneralField:
     """Convert input into a real-valued NumPy lattice field.
 
-    A lattice field must have at least ``min_ndim`` axes, contain numeric
-    real-valued data, and may hold scalar, vector, tensor, or feature-vector
-    data on trailing component axes. Integer-like data is accepted and converted
-    to floating point. Optionally require finite values and enforce or clip a
-    global numeric interval.
+    A lattice field must contain at least three lattice axes, contain numeric
+    real-valued data, and may optionally be constrained to an exact trailing
+    component rank through ``extra_ndim``. Integer-like data is accepted and
+    converted to floating point. Optionally require finite values, enforce or
+    clip a global numeric interval, or require one exact array shape.
     """
     values = np.asarray(input_data)
-    if values.ndim < min_ndim:
+    if values.ndim < 3:
         raise ValueError(
-            f"{name!r} must have at least {min_ndim} lattice axes. "
+            f"{name!r} must have at least 3 lattice axes. "
             f"Got shape {values.shape} instead."
+        )
+    if extra_ndim is not None:
+        extra_ndim = int(as_Number(extra_ndim, name=f"{name} extra_ndim", is_int=True))
+        if extra_ndim < 0:
+            raise ValueError(
+                f"{name!r} extra_ndim must be non-negative. Got {extra_ndim}."
+            )
+        expected_ndim = 3 + extra_ndim
+        if values.ndim != expected_ndim:
+            raise ValueError(
+                f"{name!r} must have shape (Nx, Ny, Nz)"
+                f"{', ...' if extra_ndim > 0 else ''} with exactly {extra_ndim} "
+                f"extra dimension{'s' if extra_ndim != 1 else ''}. "
+                f"Got shape {values.shape} instead."
+            )
+    if shape is not None:
+        shape = tuple(int(v) for v in shape)
+        if values.shape != shape:
+            raise ValueError(
+                f"{name!r} must have shape {shape}. Got shape {values.shape} instead."
+            )
+    if any(int(dim) <= 0 for dim in values.shape):
+        raise ValueError(
+            f"{name!r} must not contain empty axes. Got shape {values.shape} instead."
         )
     if not np.issubdtype(values.dtype, np.number):
         raise TypeError(f"{name!r} must contain numeric values. Got {values.dtype}.")

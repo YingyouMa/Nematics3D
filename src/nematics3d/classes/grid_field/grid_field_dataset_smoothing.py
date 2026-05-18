@@ -229,7 +229,7 @@ def _helper_as_gaussian_weights(
             name="Gaussian smoothing weights",
         ),
         name="Gaussian smoothing weights",
-        min_ndim=3,
+        extra_ndim=0,
         is_finite=True,
         value_range=(0.0, 1.0),
         bounded=False,
