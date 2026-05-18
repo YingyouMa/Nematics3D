@@ -40,6 +40,22 @@ Number = numbers.Real
 NumericInput = Union[Number, Sequence[Number]]
 
 
+def as_value_range(value_range, *, name: str = "value_range") -> tuple[float, float]:
+    """Validate and normalize a closed numeric interval."""
+    value_range_arr = np.asarray(value_range, dtype=float)
+    if value_range_arr.shape != (2,):
+        raise TypeError(
+            f"{name!r} must contain exactly two numbers. "
+            f"Got shape {value_range_arr.shape}."
+        )
+    lo, hi = map(float, value_range_arr)
+    if np.isnan(lo) or np.isnan(hi):
+        raise ValueError(f"{name!r} must not contain NaN. Got {value_range!r}.")
+    if hi <= lo:
+        raise ValueError(f"{name!r} must be strictly increasing. Got {value_range!r}.")
+    return lo, hi
+
+
 @logging_and_warning_decorator(start_finish_level=5)
 def as_Number(
     input_data,
@@ -73,23 +89,7 @@ def as_Number(
         # --- Validate value_range itself (recover by ignoring range if malformed) ---
         if value_range is not None:
             try:
-                value_range_arr = np.asarray(value_range)
-
-                if (
-                    len(value_range_arr) != 2
-                    or not isinstance(value_range_arr[0], numbers.Real)
-                    or not isinstance(value_range_arr[1], numbers.Real)
-                ):
-                    raise TypeError(
-                        f"value_range must be a tuple/list of two numbers, got {value_range!r}"
-                    )
-
-                lo, hi = value_range_arr
-                if hi <= lo:
-                    raise ValueError(
-                        f"value_range must be strictly increasing, got {value_range!r}"
-                    )
-
+                lo, hi = as_value_range(value_range, name=f"{name} value_range")
             except Exception as e:
                 logger.exception(
                     f"Invalid value_range for {name!r}: {value_range!r}. Reason: {e}"
@@ -633,13 +633,17 @@ def as_real_lattice_field(
     name: str = "field values",
     *,
     min_ndim: int = 3,
+    is_finite: bool = True,
+    value_range=None,
+    bounded: bool = False,
 ) -> GeneralField:
     """Convert input into a real-valued NumPy lattice field.
 
     A lattice field must have at least ``min_ndim`` axes, contain numeric
     real-valued data, and may hold scalar, vector, tensor, or feature-vector
     data on trailing component axes. Integer-like data is accepted and converted
-    to floating point.
+    to floating point. Optionally require finite values and enforce or clip a
+    global numeric interval.
     """
     values = np.asarray(input_data)
     if values.ndim < min_ndim:
@@ -653,8 +657,25 @@ def as_real_lattice_field(
         raise TypeError(
             f"{name!r} must be real-valued; complex fields are unsupported."
         )
-    if not np.issubdtype(values.dtype, np.floating):
-        values = values.astype(float, copy=False)
+    values = values.astype(float, copy=False)
+
+    if is_finite and not np.all(np.isfinite(values)):
+        raise ValueError(f"{name!r} must be finite everywhere.")
+
+    if value_range is not None:
+        lo, hi = as_value_range(value_range, name=f"{name} value_range")
+        below = values < lo
+        above = values > hi
+        if np.any(below) or np.any(above):
+            if not bounded:
+                value_min = float(np.nanmin(values))
+                value_max = float(np.nanmax(values))
+                raise ValueError(
+                    f"{name!r} must stay within [{lo}, {hi}]. "
+                    f"Got value range [{value_min}, {value_max}]."
+                )
+            values = np.clip(values, lo, hi)
+
     return values
 
 
@@ -686,7 +707,9 @@ def check_Sn(
             )
         if is_norm:
             norms = np.linalg.norm(data, axis=-1, keepdims=True)
-            data = data / norms
+            normalized = np.zeros_like(data)
+            np.divide(data, norms, out=normalized, where=norms > 0)
+            data = normalized
     elif datatype == "S":
         if is_3d_strict and len(shape) != 3:
             raise ValueError(

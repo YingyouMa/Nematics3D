@@ -303,12 +303,13 @@ def align_stack(stack):
 
     dots = np.einsum("...i,...i->...", stack[:-1], stack[1:])
 
-    flips = np.ones(stack.shape[:-1])
-    flips[1:] = np.where(dots < 0, -1, 1)
+    flips = np.ones(stack.shape[:-1], dtype=np.int8)
+    flips[1:] = np.where(dots < 0, -1, 1).astype(np.int8, copy=False)
 
     acc_flips = np.cumprod(flips, axis=0)
 
-    return stack * acc_flips[..., np.newaxis]
+    stack *= acc_flips[..., np.newaxis].astype(stack.dtype, copy=False)
+    return stack
 
 
 def n_color_immerse(n: nField) -> List[Tuple]:

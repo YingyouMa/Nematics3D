@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from dataclasses import dataclass, replace
-from pathlib import Path
-from typing import ClassVar, Iterator
+from dataclasses import dataclass
+from typing import ClassVar
 
 import numpy as np
 
-from nematics3d.datatypes import as_Number, as_str
+from nematics3d.datatypes import as_Number, as_real_lattice_field, as_str
 
+from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
 
 
@@ -19,100 +18,70 @@ class GaussianSmoothInfo(ResultBase):
     """Payload-free metadata for a dataset Gaussian smoothing operation."""
 
     __result_name__: ClassVar[str] = "dataset Gaussian smoothing metadata"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "operator": "Name of the dataset operator that produced this result.",
+        "source_name": (
+            "Registered source field name when the smoothing input came from the "
+            "dataset; None for direct array inputs."
+        ),
+        "source_shape": (
+            "Shape of the original input values before smoothing, including any "
+            "trailing component axes."
+        ),
+        "coord_type": (
+            "Coordinate system used to interpret the user-facing sigma values: "
+            "'physical' or 'index'."
+        ),
+        "sigma": "User-requested Gaussian width along the three dataset axes.",
+        "sigma_index": (
+            "Gaussian width converted into lattice-index units for the actual "
+            "separable convolution."
+        ),
+        "truncate": (
+            "Kernel cutoff radius in units of sigma, used to truncate each 1D "
+            "Gaussian."
+        ),
+        "boundary": (
+            "Per-axis boundary modes applied during convolution, for example "
+            "'wrap' or 'reflect'."
+        ),
+        "input_component_shape": (
+            "Trailing non-spatial component shape of the input field; empty for "
+            "scalar fields."
+        ),
+        "box_periodic_flag": (
+            "Dataset periodic-boundary flags along the three lattice axes."
+        ),
+        "grid_transform": (
+            "Read-only snapshot of the dataset grid transform used for this result."
+        ),
+        "grid_offset": (
+            "Read-only snapshot of the dataset grid offset used for this result."
+        ),
+        "weights_source_name": (
+            "Registered weight-field name when weighted smoothing used a dataset "
+            "field; None for direct-array weights or unweighted smoothing."
+        ),
+        "weights_floor": (
+            "Minimum smoothed weight treated as valid for weighted normalization; "
+            "None for unweighted smoothing."
+        ),
+    }
 
     operator: str
-    source: str | None
+    source_name: str | None
     source_shape: tuple[int, ...]
-    coord: str
+    coord_type: str
     sigma: tuple[float, float, float]
     sigma_index: tuple[float, float, float]
     truncate: float
     boundary: tuple[str, str, str]
     input_component_shape: tuple[int, ...]
-    output_shape: tuple[int, ...]
     box_periodic_flag: tuple[bool, bool, bool]
     grid_transform: object
     grid_offset: np.ndarray | None
-
-
-@dataclass(slots=True, frozen=True, repr=False)
-class GaussianSmoothResult(ResultBase):
-    """Inspectable result for a dataset Gaussian smoothing operation."""
-
-    __result_name__: ClassVar[str] = "dataset Gaussian smoothing result"
-
-    raw_values: np.ndarray | None
-    raw_info: GaussianSmoothInfo
-    raw_path: str | None = None
-
-    def _helper_load_values_from_path(self) -> np.ndarray:
-        """Load smoothed values from the saved array path."""
-        if self.raw_path is None:
-            raise ValueError("No in-memory values or saved path are available.")
-        return np.load(self.raw_path, allow_pickle=False)
-
-    def act_save_values(
-        self,
-        path,
-        *,
-        is_release: bool = False,
-        is_overwrite: bool = False,
-    ) -> GaussianSmoothResult:
-        """
-        Save result values to a local ``.npy`` file.
-
-        When ``is_release`` is true, the returned result keeps only the saved
-        path and releases the in-memory array reference.
-        """
-        save_path = Path(path)
-        if save_path.suffix != ".npy":
-            save_path = Path(f"{save_path}.npy")
-        if save_path.exists() and not is_overwrite:
-            raise FileExistsError(
-                f"Gaussian smoothing result path already exists: {save_path}"
-            )
-
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        values = self.raw_values
-        if values is None:
-            values = self._helper_load_values_from_path()
-        np.save(save_path, values)
-
-        raw_values = None if is_release else self.raw_values
-        return replace(self, raw_values=raw_values, raw_path=str(save_path))
-
-    def act_release_values(self) -> GaussianSmoothResult:
-        """Return a copy without the in-memory array reference."""
-        if self.raw_path is None:
-            raise ValueError(
-                "Cannot release Gaussian smoothing values before saving them."
-            )
-        return replace(self, raw_values=None)
-
-    def act_load_values(self) -> GaussianSmoothResult:
-        """Return a copy with values loaded into memory."""
-        if self.raw_values is not None:
-            return self
-        return replace(self, raw_values=self._helper_load_values_from_path())
-
-    @contextmanager
-    def act_with_values(self) -> Iterator[np.ndarray]:
-        """
-        Temporarily expose smoothed values.
-
-        If values are already in memory, the existing array is yielded. If only
-        ``raw_path`` is available, values are loaded for the ``with`` block and
-        the temporary reference is dropped when the block exits.
-        """
-        if self.raw_values is not None:
-            yield self.raw_values
-            return
-
-        values = self._helper_load_values_from_path()
-        try:
-            yield values
-        finally:
-            del values
+    weights_source_name: str | None
+    weights_floor: float | None
 
 
 def _helper_as_gaussian_sigma_3(
@@ -186,31 +155,34 @@ def _helper_gaussian_smooth_info(
     self,
     values: np.ndarray,
     *,
-    source: str | None,
+    source_name: str | None,
     source_shape: tuple[int, ...],
-    coord: str,
+    coord_type: str,
     sigma: tuple[float, float, float],
     sigma_index: tuple[float, float, float],
     truncate: float,
     boundary: tuple[str, str, str],
+    weights_source_name: str | None,
+    weights_floor: float | None,
 ) -> GaussianSmoothInfo:
     """Build payload-free metadata for an immediate Gaussian smoothing result."""
     grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
     grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
     return GaussianSmoothInfo(
         operator="gaussian_smooth",
-        source=source,
+        source_name=source_name,
         source_shape=source_shape,
-        coord=coord,
+        coord_type=coord_type,
         sigma=sigma,
         sigma_index=sigma_index,
         truncate=truncate,
         boundary=boundary,
         input_component_shape=source_shape[3:],
-        output_shape=values.shape,
         box_periodic_flag=tuple(bool(flag) for flag in self.raw_box_periodic_flag),
         grid_transform=grid_transform,
         grid_offset=grid_offset,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor,
     )
 
 
@@ -218,27 +190,58 @@ def _helper_gaussian_smooth_result(
     self,
     values: np.ndarray,
     *,
-    source: str | None,
+    source_name: str | None,
     source_shape: tuple[int, ...],
-    coord: str,
+    coord_type: str,
     sigma: tuple[float, float, float],
     sigma_index: tuple[float, float, float],
     truncate: float,
     boundary: tuple[str, str, str],
-) -> GaussianSmoothResult:
-    """Build an immediate Gaussian smoothing result plus payload-free metadata."""
+    weights_source_name: str | None,
+    weights_floor: float | None,
+) -> NpyArrayPayload[GaussianSmoothInfo]:
+    """Build an immediate Gaussian smoothing payload plus metadata."""
     info = _helper_gaussian_smooth_info(
         self,
         values,
-        source=source,
+        source_name=source_name,
         source_shape=source_shape,
-        coord=coord,
+        coord_type=coord_type,
         sigma=sigma,
         sigma_index=sigma_index,
         truncate=truncate,
         boundary=boundary,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor,
     )
-    return GaussianSmoothResult(raw_values=values, raw_info=info)
+    return NpyArrayPayload(raw_values=values, raw_info=info)
+
+
+def _helper_as_gaussian_weights(
+    self,
+    weights,
+) -> tuple[np.ndarray, str | None, tuple[int, ...]]:
+    """Return validated per-voxel weights for weighted Gaussian smoothing."""
+    weights_source_name = self._helper_source_name_for_field_values(weights)
+    weights_values = as_real_lattice_field(
+        self._helper_as_field_values_on_grid(
+            weights,
+            name="Gaussian smoothing weights",
+        ),
+        name="Gaussian smoothing weights",
+        min_ndim=3,
+        is_finite=True,
+        value_range=(0.0, 1.0),
+        bounded=False,
+    )
+    dataset_shape = tuple(np.asarray(self.raw_shape, dtype=int).tolist())
+    if weights_values.shape != dataset_shape:
+        raise ValueError(
+            "Gaussian smoothing weights must be a scalar field whose shape "
+            "exactly matches the dataset grid shape. "
+            f"Dataset shape is {dataset_shape}; got {weights_values.shape}."
+        )
+    return weights_values, weights_source_name, weights_values.shape
 
 
 def _helper_gaussian_kernel_radius(
@@ -357,18 +360,21 @@ def act_gaussian_smooth(
     sigma,
     *,
     coord: str = "physical",
+    weights=None,
+    weights_floor: float = 1e-12,
     truncate: float | None = None,
     boundary: str = "auto",
     is_result: bool = False,
-) -> np.ndarray | GaussianSmoothResult:
+) -> np.ndarray | NpyArrayPayload[GaussianSmoothInfo]:
     """
     Return Gaussian-smoothed field values on this dataset grid.
 
-    This first implementation step freezes the public API, input
-    normalization rules, and metadata/result workflow. The smoothing kernel
-    application itself is added in a later step.
+    The smoothing is applied by separable real-space Gaussian convolution
+    along the first three lattice axes. Inputs are normalized onto the
+    dataset grid, and callers may request either the smoothed values directly
+    or an ``NpyArrayPayload`` carrying payload-free metadata.
     """
-    source = self._helper_source_name_for_field_values(field_or_values)
+    source_name = self._helper_source_name_for_field_values(field_or_values)
     values = np.asarray(
         self._helper_as_field_values_on_grid(
             field_or_values,
@@ -377,12 +383,29 @@ def act_gaussian_smooth(
         dtype=float,
     )
     source_shape = values.shape
-    coord = as_str(
+    coord_type = as_str(
         coord,
         name="Gaussian smoothing coordinate system",
         pool=("physical", "index"),
     )
-    sigma_user, sigma_index = self._helper_as_gaussian_sigma_3(sigma, coord=coord)
+    sigma_user, sigma_index = self._helper_as_gaussian_sigma_3(
+        sigma,
+        coord=coord_type,
+    )
+    weights_values = None
+    weights_source_name = None
+    weights_floor_value = None
+    if weights is not None:
+        weights_values, weights_source_name, _ = self._helper_as_gaussian_weights(
+            weights
+        )
+        weights_floor_value = float(
+            as_Number(
+                weights_floor,
+                name="Gaussian smoothing weights_floor",
+                value_range=(0.0, np.inf),
+            )
+        )
     if truncate is None:
         truncate_value = 4.0
     else:
@@ -395,22 +418,59 @@ def act_gaussian_smooth(
         )
     boundary_modes = self._helper_as_gaussian_boundary_mode(boundary)
 
-    smoothed_values = self._helper_gaussian_smooth_values(
-        values,
-        sigma_index=sigma_index,
-        truncate=truncate_value,
-        boundary=boundary_modes,
-    )
+    if weights_values is None:
+        smoothed_values = self._helper_gaussian_smooth_values(
+            values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+    else:
+        if values.ndim > 3:
+            weights_expanded = weights_values.reshape(
+                weights_values.shape + (1,) * (values.ndim - 3)
+            )
+        else:
+            weights_expanded = weights_values
+        weighted_values = values * weights_expanded
+        smoothed_weighted_values = self._helper_gaussian_smooth_values(
+            weighted_values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+        smoothed_weights = self._helper_gaussian_smooth_values(
+            weights_values,
+            sigma_index=sigma_index,
+            truncate=truncate_value,
+            boundary=boundary_modes,
+        )
+        smoothed_values = values.copy()
+        valid = smoothed_weights > weights_floor_value
+        if values.ndim > 3:
+            valid_weights = smoothed_weights[valid].reshape((np.count_nonzero(valid),))
+            valid_weights = valid_weights.reshape(
+                valid_weights.shape + (1,) * (values.ndim - 3)
+            )
+            smoothed_values[valid, ...] = (
+                smoothed_weighted_values[valid, ...] / valid_weights
+            )
+        else:
+            smoothed_values[valid] = (
+                smoothed_weighted_values[valid] / smoothed_weights[valid]
+            )
 
     if not is_result:
         return smoothed_values
     return self._helper_gaussian_smooth_result(
         smoothed_values,
-        source=source,
+        source_name=source_name,
         source_shape=source_shape,
-        coord=coord,
+        coord_type=coord_type,
         sigma=sigma_user,
         sigma_index=sigma_index,
         truncate=truncate_value,
         boundary=boundary_modes,
+        weights_source_name=weights_source_name,
+        weights_floor=weights_floor_value,
     )
