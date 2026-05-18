@@ -165,6 +165,31 @@ class ContourSurface(ClassBase):
             self.act_extract(is_overwrite=True)
         return level_value
 
+    def act_plot(
+        self,
+        *,
+        figure=None,
+        opts=None,
+        bounds=None,
+        name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        is_extract: bool = True,
+        **kwargs,
+    ):
+        """Create one PlotContourSurface bound to this contour surface."""
+        from .visual.plot_contour_surface import PlotContourSurface
+
+        return PlotContourSurface(
+            surface=self,
+            figure=figure,
+            opts=opts,
+            bounds=bounds,
+            name=name,
+            opts_defaults_override=opts_defaults_override,
+            is_extract=is_extract,
+            **kwargs,
+        )
+
     def __repr__(self) -> str:
         cls_name = type(self).__name__
         return (
@@ -475,6 +500,100 @@ class ContourSurfaceSet(ClassBase):
         return tuple(
             surface.act_extract(is_overwrite=is_overwrite) for surface in self.surfaces
         )
+
+    def act_plot_surface(
+        self,
+        index: int,
+        *,
+        figure=None,
+        opts=None,
+        bounds=None,
+        name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        is_extract: bool = True,
+        **kwargs,
+    ):
+        """Create one PlotContourSurface from the surface at one insertion index."""
+        return self.act_get_surface(index).act_plot(
+            figure=figure,
+            opts=opts,
+            bounds=bounds,
+            name=name,
+            opts_defaults_override=opts_defaults_override,
+            is_extract=is_extract,
+            **kwargs,
+        )
+
+    def act_plot_surface_by_name(
+        self,
+        name: str,
+        *,
+        figure=None,
+        opts=None,
+        bounds=None,
+        plot_name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        is_extract: bool = True,
+        **kwargs,
+    ):
+        """Create one PlotContourSurface from the surface with one registered name."""
+        return self.act_get_surface_by_name(name).act_plot(
+            figure=figure,
+            opts=opts,
+            bounds=bounds,
+            name=plot_name,
+            opts_defaults_override=opts_defaults_override,
+            is_extract=is_extract,
+            **kwargs,
+        )
+
+    def act_plot_surface_by_level(
+        self,
+        level: float,
+        *,
+        figure=None,
+        opts=None,
+        bounds=None,
+        name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        is_extract: bool = True,
+        **kwargs,
+    ):
+        """Create one PlotContourSurface from the surface at one exact contour level."""
+        return self.act_get_surface_by_level(level).act_plot(
+            figure=figure,
+            opts=opts,
+            bounds=bounds,
+            name=name,
+            opts_defaults_override=opts_defaults_override,
+            is_extract=is_extract,
+            **kwargs,
+        )
+
+    def act_plot_all(
+        self,
+        *,
+        figure=None,
+        opts=None,
+        bounds=None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        is_extract: bool = True,
+        **kwargs,
+    ):
+        """Create PlotContourSurface wrappers for every stored contour surface."""
+        visuals = []
+        for surface in self.surfaces:
+            visuals.append(
+                surface.act_plot(
+                    figure=figure,
+                    opts=opts,
+                    bounds=bounds,
+                    opts_defaults_override=opts_defaults_override,
+                    is_extract=is_extract,
+                    **kwargs,
+                )
+            )
+        return tuple(visuals)
 
     def _helper_remove_surface(self, surface: ContourSurface) -> ContourSurface:
         """Remove one resolved contour surface and rebuild the child collection."""
