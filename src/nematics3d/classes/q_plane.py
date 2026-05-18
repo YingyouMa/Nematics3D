@@ -1,6 +1,7 @@
 """Q-tensor interpolation on plane grids with director and defect visualizations."""
 
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Any, ClassVar, Mapping
 
 import numpy as np
@@ -27,10 +28,33 @@ from .grid_field import GridInterpolator
 from .opts import merge_opts_all
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
+from .result_base import ResultBase
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
 from .visual.plot_surface import OptsSurface, PlotSurface
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class OmegaResult(ResultBase):
+    """Inspectable result returned by `QPlanePolar.act_calc_omega()`."""
+
+    __result_name__: ClassVar[str] = "local omega"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "omega": "Estimated average in-plane rotation axis on the selected polar ring.",
+        "metric": "Quality metrics and defect-domain flags returned by the omega fit.",
+        "layer": "Polar ring layer index used for the omega evaluation.",
+        "num_directors": "Number of sampled directors used on the selected ring.",
+        "R": "Physical ring radius associated with the selected layer.",
+        "opts": "Frozen copy of the polar-grid opts used to generate the section.",
+    }
+
+    omega: np.ndarray
+    metric: dict[str, Any]
+    layer: int
+    num_directors: int
+    R: float
+    opts: OptsPlaneGridPolar
 
 
 # QPlane extends InterpolatePlane with Q-tensor-specific post-processing and
@@ -880,16 +904,14 @@ class QPlanePolar(QPlane):
                 f"Defects are detected inside or on omega layer {layer} (R={radius})."
             )
 
-        result = {
-            "omega": omega,
-            "metric": {
+        return OmegaResult(
+            omega=omega,
+            metric={
                 **metric,
                 **metric_flags,
             },
-            "layer": layer,
-            "num_directors": int(len(directors)),
-            "R": radius,
-            "opts": deepcopy(plane_grid.opts),
-        }
-
-        return result
+            layer=layer,
+            num_directors=int(len(directors)),
+            R=radius,
+            opts=deepcopy(plane_grid.opts),
+        )

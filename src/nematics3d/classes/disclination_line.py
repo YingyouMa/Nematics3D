@@ -41,12 +41,29 @@ from ..general import find_plane_normal
 from .class_base import ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
-from .q_plane import QPlanePolar
+from .q_plane import OmegaResult, QPlanePolar
 from .registry_base import RegistryBase
 from .visual.qt.interact_disclination_line import InteractDisclinationLine
 
 
 # extra attr
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class DefectSectionOmegaResult(OmegaResult):
+    """Inspectable omega result for one local defect-line section."""
+
+    __result_name__: ClassVar[str] = "defect-section omega"
+    __field_docs__: ClassVar[dict[str, str]] = {
+        **OmegaResult.__field_docs__,
+        "beta": "Tilt angle in degrees between the line tangent and the fitted omega axis.",
+        "u_percent": "Normalized line parameter used to choose the local section.",
+        "position": "Wrapped real-space section origin used for the polar grid.",
+    }
+
+    beta: float
+    u_percent: float
+    position: np.ndarray
 
 
 @dataclass(slots=True)
@@ -991,11 +1008,17 @@ class DisclinationLineSmooth(SmoothedLine):
             cos_beta = float(np.clip(cos_beta, -1.0, 1.0))
             beta = float(np.degrees(np.arccos(cos_beta)))
 
-        result["beta"] = beta
-        result["u_percent"] = float(u_percent)
-        result["position"] = origin
-
-        return result
+        return DefectSectionOmegaResult(
+            omega=result.omega,
+            metric=result.metric,
+            layer=result.layer,
+            num_directors=result.num_directors,
+            R=result.R,
+            opts=result.opts,
+            beta=beta,
+            u_percent=float(u_percent),
+            position=origin,
+        )
 
 
 @dataclass(slots=True, repr=False)

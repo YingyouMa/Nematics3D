@@ -21,6 +21,8 @@ from nematics3d.classes.grid_field import (
     GridInterpolator,
     InputGridField,
 )
+from nematics3d.classes.disclination_line import DefectSectionOmegaResult
+from nematics3d.classes.q_plane import OmegaResult
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
@@ -54,6 +56,27 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         expected = np.array([smooth.act_calc_omega(u)["beta"] for u in u_query])
 
         self.assertTrue(np.allclose(beta_func(u_query), expected, equal_nan=True))
+
+    def test_act_calc_omega_returns_result_base_objects(self):
+        data_path = (
+            Path(__file__).resolve().parents[1]
+            / "disclination"
+            / "beta"
+            / "Q_1630.npy"
+        )
+        q_data = np.load(data_path)[0]
+        q_data = q_data[168:185, 5:32, 10:35]
+
+        q = QFieldObject(Q=q_data, name="beta-result-test")
+        q.act_lines_smooth(window_length=28)
+        smooth = q.lines[0].smooth
+
+        section_result = smooth.act_calc_omega(5.0)
+        self.assertIsInstance(section_result, DefectSectionOmegaResult)
+        self.assertIsInstance(section_result, OmegaResult)
+        self.assertTrue("beta" in section_result)
+        self.assertTrue("omega" in section_result)
+        self.assertTrue(np.isfinite(section_result["beta"]) or np.isnan(section_result["beta"]))
 
     def test_legacy_init_builds_dataset_owned_q_field(self):
         shape = (2, 2, 2)
