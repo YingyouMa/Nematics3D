@@ -88,6 +88,35 @@ class TestContourSurface(unittest.TestCase):
         contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1,))
         surface = contour[0]
         visual_old = mock.Mock(name="visual_old")
+        visual_old.fig = mock.Mock(is_alive=True)
+        visual_new = mock.Mock(name="visual_new")
+        surface.act_bind_relation_base("visual", visual_old, is_weak=False)
+
+        with mock.patch(
+            "nematics3d.classes.visual.plot_contour_surface.PlotContourSurface",
+            return_value=visual_new,
+        ):
+            returned = surface.act_plot(is_replace=True)
+
+        visual_old.act_remove.assert_called_once_with()
+        self.assertIs(returned, visual_new)
+        self.assertIs(surface.visual, visual_new)
+
+    def test_surface_plot_rejects_existing_live_visual_without_replace(self):
+        contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1,))
+        surface = contour[0]
+        visual_old = mock.Mock(name="visual_old")
+        visual_old.fig = mock.Mock(is_alive=True)
+        surface.act_bind_relation_base("visual", visual_old, is_weak=False)
+
+        with self.assertRaises(RuntimeError):
+            surface.act_plot()
+
+    def test_surface_plot_clears_stale_visual_without_replace(self):
+        contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1,))
+        surface = contour[0]
+        visual_old = mock.Mock(name="visual_old")
+        visual_old.fig = None
         visual_new = mock.Mock(name="visual_new")
         surface.act_bind_relation_base("visual", visual_old, is_weak=False)
 
@@ -97,6 +126,6 @@ class TestContourSurface(unittest.TestCase):
         ):
             returned = surface.act_plot()
 
-        visual_old.act_remove.assert_called_once_with()
+        visual_old.act_remove.assert_not_called()
         self.assertIs(returned, visual_new)
         self.assertIs(surface.visual, visual_new)

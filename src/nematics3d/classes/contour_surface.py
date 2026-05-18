@@ -177,6 +177,41 @@ class ContourSurface(ClassBase):
             self.act_extract(is_overwrite=True)
         return level_value
 
+    def _helper_resolve_current_visual(self):
+        """
+        Return the currently managed live visual for this surface.
+
+        This helper enforces the single-visual contract used by contour
+        surfaces. If the remembered visual no longer belongs to any figure, or
+        its figure backend has already died, the stale owner/figure/sync links
+        are cleared and `None` is returned.
+        """
+        visual = self.visual
+        if visual is None:
+            return None
+
+        fig = getattr(visual, "fig", None)
+        if fig is None:
+            sync_name = getattr(visual, "impl_owner_sync_name", None)
+            if sync_name is not None:
+                self.act_detach_sync_task(sync_name)
+            if getattr(visual, "owner", None) is self:
+                visual.act_unbind_relation_base("owner")
+            self.act_unbind_relation_base("visual")
+            return None
+
+        if not fig.is_alive:
+            sync_name = getattr(visual, "impl_owner_sync_name", None)
+            if sync_name is not None:
+                self.act_detach_sync_task(sync_name)
+            if getattr(visual, "owner", None) is self:
+                visual.act_unbind_relation_base("owner")
+            visual.act_unbind_relation_base("fig")
+            self.act_unbind_relation_base("visual")
+            return None
+
+        return visual
+
     def act_plot(
         self,
         *,
@@ -186,13 +221,25 @@ class ContourSurface(ClassBase):
         name: str | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         is_extract: bool = True,
+        is_replace: bool = False,
         **kwargs,
     ):
-        """Create one PlotContourSurface bound to this contour surface."""
+        """
+        Create or replace the one managed contour visualization for this surface.
+
+        Stale remembered visuals are discarded automatically. If a live visual
+        still exists, this method refuses to overwrite it unless
+        `is_replace=True`.
+        """
         from .visual.plot_contour_surface import PlotContourSurface
 
-        visual_old = self.visual
+        visual_old = self._helper_resolve_current_visual()
         if visual_old is not None:
+            if not is_replace:
+                raise RuntimeError(
+                    f"ContourSurface {self.name!r} already has a live visualization. "
+                    "Pass is_replace=True to replace it."
+                )
             visual_old.act_remove()
 
         visual = PlotContourSurface(

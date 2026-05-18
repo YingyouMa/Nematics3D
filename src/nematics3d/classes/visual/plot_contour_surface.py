@@ -201,7 +201,13 @@ class PlotContourSurface(PlotGlyph):
         self.act_refresh_mesh(is_extract=False)
 
     def act_remove(self):
-        """Detach the owner sync callback, then remove the glyph from the figure."""
+        """
+        Detach owner sync state, then remove this glyph from its figure.
+
+        Contour surfaces manage at most one live visual. Removing the plot
+        therefore also clears the owner-side `visual` relation when this object
+        is still the registered visual.
+        """
         owner = self.owner
         if owner is not None:
             owner.act_detach_sync_task(self.impl_owner_sync_name)
