@@ -1010,6 +1010,7 @@ class PlotGlyph(HostBase):
         self._helper_clear_live_actor()
         if figure is not None:
             figure.act_unregister(self, is_missing_ok=True)
+        self.act_unbind_relation_base("fig")
 
     # ------------------------------------------------------------------
     # Commit Pipeline

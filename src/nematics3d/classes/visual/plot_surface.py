@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 import pyvista as pv
 
+from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
 from ..bounds import BoundsData
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
@@ -113,9 +114,49 @@ class OptsSurface(OptsGlyph):
     ... )
     """
 
+    is_show_edges: bool | Unset = UNSET
+    edge_color: tuple[float, float, float] | Unset = UNSET
+    line_width: float | Unset = UNSET
+    style: str | Unset = UNSET
+
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsGlyph.__attrs__),
+        "is_show_edges": "Whether triangle edges should be rendered on the surface mesh.",
+        "edge_color": "Edge color used when is_show_edges is enabled.",
+        "line_width": "Displayed edge line width.",
+        "style": "Mesh representation style: 'surface' or 'wireframe'.",
+    }
+
+    impl_validators: ClassVar[Mapping[str, Any]] = {
+        **dict(OptsGlyph.impl_validators),
+        "is_show_edges": lambda v, d: as_bool(v, name=d),
+        "edge_color": lambda v, d: as_ColorRGB(v, name=d),
+        "line_width": lambda v, d: as_Number(
+            v,
+            name=d,
+            value_range=(0.0, np.inf),
+        ),
+        "style": lambda v, d: as_str(v, name=d, pool=("surface", "wireframe")),
+    }
+
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
-        {**dict(OptsGlyph.impl_defaults_frozen), "ambient": 0.5}
+        {
+            **dict(OptsGlyph.impl_defaults_frozen),
+            "ambient": 0.5,
+            "is_show_edges": False,
+            "edge_color": (0.0, 0.0, 0.0),
+            "line_width": 1.0,
+            "style": "surface",
+        }
     )
+
+    impl_actor_attr: ClassVar[Mapping[str, str]] = {
+        **dict(OptsGlyph.impl_actor_attr),
+        "is_show_edges": "prop.show_edges",
+        "edge_color": "prop.edge_color",
+        "line_width": "prop.line_width",
+        "style": "prop.style",
+    }
 
 
 class PlotSurface(PlotGlyph):

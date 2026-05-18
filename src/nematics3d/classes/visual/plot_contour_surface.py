@@ -20,22 +20,22 @@ from .plot_figure import FigureData
 class OptsContourSurface(OptsGlyph):
     """Visual configuration object for ``PlotContourSurface``."""
 
-    show_edges: bool | Unset = UNSET
+    is_show_edges: bool | Unset = UNSET
     edge_color: tuple[float, float, float] | Unset = UNSET
     line_width: float | Unset = UNSET
     style: str | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsGlyph.__attrs__),
-        "show_edges": "Whether triangle edges should be rendered on the contour mesh.",
-        "edge_color": "Edge color used when show_edges is enabled.",
+        "is_show_edges": "Whether triangle edges should be rendered on the contour mesh.",
+        "edge_color": "Edge color used when is_show_edges is enabled.",
         "line_width": "Displayed edge line width.",
         "style": "Mesh representation style: 'surface' or 'wireframe'.",
     }
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsGlyph.impl_validators),
-        "show_edges": lambda v, d: as_bool(v, name=d),
+        "is_show_edges": lambda v, d: as_bool(v, name=d),
         "edge_color": lambda v, d: as_ColorRGB(v, name=d),
         "line_width": lambda v, d: as_Number(
             v,
@@ -49,7 +49,7 @@ class OptsContourSurface(OptsGlyph):
         {
             **dict(OptsGlyph.impl_defaults_frozen),
             "ambient": 0.5,
-            "show_edges": False,
+            "is_show_edges": False,
             "edge_color": (0.0, 0.0, 0.0),
             "line_width": 1.0,
             "style": "surface",
@@ -58,7 +58,7 @@ class OptsContourSurface(OptsGlyph):
 
     impl_actor_attr: ClassVar[Mapping[str, str]] = {
         **dict(OptsGlyph.impl_actor_attr),
-        "show_edges": "prop.show_edges",
+        "is_show_edges": "prop.show_edges",
         "edge_color": "prop.edge_color",
         "line_width": "prop.line_width",
         "style": "prop.style",
@@ -205,4 +205,6 @@ class PlotContourSurface(PlotGlyph):
         owner = self.owner
         if owner is not None:
             owner.act_detach_sync_task(self.impl_owner_sync_name)
+            if getattr(owner, "visual", None) is self:
+                owner.act_unbind_relation_base("visual")
         super().act_remove()

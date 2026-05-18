@@ -11,7 +11,11 @@ from nematics3d.datatypes import as_qfield9
 
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
-from ...grid import is_grid_transform_identity
+from ...grid import (
+    as_readonly_grid_offset,
+    as_readonly_grid_transform,
+    is_grid_transform_identity,
+)
 from .input_grid_field import as_grid_shape
 
 
@@ -174,8 +178,8 @@ def _helper_spatial_derivative_info(
     component_axis: int | None = None,
 ) -> SpatialDerivativeInfo:
     """Build payload-free metadata for an immediate derivative result."""
-    grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
-    grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
+    grid_offset = as_readonly_grid_offset(self.raw_grid_offset)
+    grid_transform = as_readonly_grid_transform(self.raw_grid_transform)
     return SpatialDerivativeInfo(
         operator=operator,
         source_name=source,

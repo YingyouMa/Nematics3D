@@ -12,15 +12,19 @@ from nematics3d.datatypes import (
     Tensor,
     Vect,
     as_Number,
+    as_bool,
+    as_readonly_array,
     as_real_lattice_field,
 )
 from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
     apply_linear_transform,
-    is_grid_transform_identity,
+    as_readonly_grid_offset,
+    as_readonly_grid_transform,
 )
 
 from .class_base import ClassBase
+from .bounds import as_bounds
 from .grid_field.input_grid_field import InputGridField, as_grid_shape
 from .registry_base import RegistryBase
 
@@ -50,6 +54,14 @@ class ContourSurface(ClassBase):
         "entity_mesh_cache": {
             "doc": "Cached extracted contour mesh stored as PyVista PolyData.",
             "kind": "entity",
+        },
+        "visual": {
+            "doc": "The one-to-one contour visual currently associated with this surface.",
+            "kind": "relation",
+            "is_weak_by_default": False,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
         },
         "impl_sync_func": {
             "doc": "Internal sync callbacks triggered after contour mesh updates.",
@@ -179,7 +191,11 @@ class ContourSurface(ClassBase):
         """Create one PlotContourSurface bound to this contour surface."""
         from .visual.plot_contour_surface import PlotContourSurface
 
-        return PlotContourSurface(
+        visual_old = self.visual
+        if visual_old is not None:
+            visual_old.act_remove()
+
+        visual = PlotContourSurface(
             surface=self,
             figure=figure,
             opts=opts,
@@ -189,6 +205,8 @@ class ContourSurface(ClassBase):
             is_extract=is_extract,
             **kwargs,
         )
+        self.act_bind_relation_base("visual", visual, is_weak=False)
+        return visual
 
     def __repr__(self) -> str:
         cls_name = type(self).__name__
@@ -225,6 +243,20 @@ class ContourSurfaceSet(ClassBase):
         "raw_grid_transform": {
             "doc": "Grid transform matrix mapping lattice indices into real space.",
         },
+        "bounds": {
+            "doc": "Optional shared bounds used as the default clipping context for contour visuals.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "impl_visual_default": {
+            "doc": "Stored default visual option overrides used when contour plots are created.",
+        },
+        "impl_plot_opts_defaults_override": {
+            "doc": "Stored default opts-default overrides forwarded to contour plot creation.",
+        },
         "surface_registry": {
             "doc": "Registry storing the contour surfaces owned by this set.",
             "kind": "relation",
@@ -249,6 +281,8 @@ class ContourSurfaceSet(ClassBase):
         "raw_box_periodic_flag",
         "raw_grid_offset",
         "raw_grid_transform",
+        "impl_visual_default",
+        "impl_plot_opts_defaults_override",
     )
 
     def __init__(
@@ -260,6 +294,11 @@ class ContourSurfaceSet(ClassBase):
         grid_offset: Vect(3) | None = None,
         grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY,
         box_periodic_flag: DimensionFlagInput = False,
+        bounds=None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        visual_default: Mapping[str, Any] | None = None,
+        figure=None,
+        is_plot: bool = False,
     ):
         super().__init__(
             name=name,
@@ -278,8 +317,23 @@ class ContourSurfaceSet(ClassBase):
             grid_offset=grid_offset,
             grid_transform=grid_transform,
         )
+        if visual_default is None:
+            visual_default_use = {}
+        elif isinstance(visual_default, Mapping):
+            visual_default_use = dict(visual_default)
+        else:
+            raise TypeError(
+                "`visual_default` must be a mapping of plot option overrides."
+            )
+        if (
+            opts_defaults_override is not None
+            and not isinstance(opts_defaults_override, Mapping)
+        ):
+            raise TypeError(
+                "`opts_defaults_override` must be a mapping of default opts overrides."
+            )
 
-        object.__setattr__(self, "raw_values", values_use)
+        object.__setattr__(self, "raw_values", as_readonly_array(values_use, dtype=float))
         object.__setattr__(self, "impl_init_levels", self._helper_as_levels(levels))
         object.__setattr__(
             self,
@@ -289,13 +343,27 @@ class ContourSurfaceSet(ClassBase):
         object.__setattr__(
             self,
             "raw_grid_offset",
-            self._helper_readonly_grid_array_copy(grid_info.grid_offset),
+            as_readonly_grid_offset(grid_info.grid_offset),
         )
         object.__setattr__(
             self,
             "raw_grid_transform",
-            self._helper_readonly_grid_array_copy(grid_info.grid_transform),
+            as_readonly_grid_transform(grid_info.grid_transform),
         )
+        object.__setattr__(self, "impl_visual_default", visual_default_use)
+        object.__setattr__(
+            self,
+            "impl_plot_opts_defaults_override",
+            None
+            if opts_defaults_override is None
+            else dict(opts_defaults_override),
+        )
+        if bounds is not None:
+            self.act_bind_relation_base(
+                "bounds",
+                as_bounds(bounds, name="Contour-surface shared bounds"),
+                is_weak=True,
+            )
 
         registry = RegistryBase(
             name=f"{self.name} surfaces",
@@ -303,6 +371,8 @@ class ContourSurfaceSet(ClassBase):
         )
         self.act_bind_relation_base("surface_registry", registry, is_weak=False)
         self._helper_build_surfaces()
+        if as_bool(is_plot, name="Whether to create contour visuals immediately"):
+            self.act_plot_all(figure=figure)
 
     @property
     def surfaces(self) -> tuple[ContourSurface, ...]:
@@ -316,15 +386,6 @@ class ContourSurfaceSet(ClassBase):
     def calc_levels(self) -> tuple[float, ...]:
         """Return the current contour levels in the current surface order."""
         return tuple(surface.raw_level for surface in self.surfaces)
-
-    @staticmethod
-    def _helper_readonly_grid_array_copy(value):
-        """Return a read-only copy for mutable grid geometry arrays."""
-        if value is None or is_grid_transform_identity(value):
-            return value
-        value = np.asarray(value, dtype=float).copy()
-        value.setflags(write=False)
-        return value
 
     def _helper_as_levels(self, levels) -> tuple[float, ...]:
         """Validate contour levels and preserve the first-seen user order."""
@@ -351,6 +412,24 @@ class ContourSurfaceSet(ClassBase):
     def _helper_make_surface_name(self, level: float, surface_index: int) -> str:
         """Return one default child-surface name."""
         return f"{self.name}_level_{surface_index}_{level:g}"
+
+    def _helper_merge_visual_plot_kwargs(self, opts, kwargs):
+        """Merge stored contour-visual defaults when no explicit opts object is passed."""
+        if opts is not None:
+            return dict(kwargs)
+        merged = dict(self.impl_visual_default)
+        merged.update(dict(kwargs))
+        return merged
+
+    def _helper_resolve_plot_bounds(self, bounds):
+        """Return explicit plot bounds or the set-level shared bounds when omitted."""
+        return self.bounds if bounds is None else bounds
+
+    def _helper_resolve_plot_opts_defaults_override(self, opts_defaults_override):
+        """Return explicit or stored opts-default overrides for contour visuals."""
+        if opts_defaults_override is None:
+            return self.impl_plot_opts_defaults_override
+        return opts_defaults_override
 
     def _helper_update_surface_name(self, surface: ContourSurface) -> str:
         """Refresh one child-surface name from its current level and index."""
@@ -444,17 +523,19 @@ class ContourSurfaceSet(ClassBase):
                 return surface
         raise KeyError(f"No contour surface with level {level_value!r} exists.")
 
-    def act_refresh(self, *, values=None, levels=None):
-        """Return a refreshed contour-surface set from updated values or levels."""
-        values_use = self.raw_values if values is None else values
+    def act_refresh(self, *, levels=None):
+        """Return a refreshed contour-surface set on the same scalar field."""
         levels_use = self.calc_levels if levels is None else levels
         return type(self)(
-            values_use,
+            self.raw_values,
             levels_use,
             name=self.name,
             grid_offset=self.raw_grid_offset,
             grid_transform=self.raw_grid_transform,
             box_periodic_flag=self.raw_box_periodic_flag,
+            bounds=self.bounds,
+            opts_defaults_override=self.impl_plot_opts_defaults_override,
+            visual_default=self.impl_visual_default,
         )
 
     def act_extract_surface(self, index: int, *, is_overwrite: bool = False):
@@ -482,6 +563,33 @@ class ContourSurfaceSet(ClassBase):
             surface.act_extract(is_overwrite=is_overwrite) for surface in self.surfaces
         )
 
+    def act_add_surface(self, level: float, *, name: str | None = None):
+        """Add one new contour surface at the end of the current family."""
+        level_value = _as_contour_level(level, name="Contour surface level")
+        try:
+            self.act_get_surface_by_level(level_value)
+        except KeyError:
+            pass
+        else:
+            raise ValueError(
+                f"A contour surface with level {level_value!r} already exists."
+            )
+
+        surface_index = len(self.surfaces)
+        surface = ContourSurface(
+            level_value,
+            owner=self,
+            surface_index=surface_index,
+            name=(
+                self._helper_make_surface_name(level_value, surface_index)
+                if name is None
+                else name
+            ),
+        )
+        self.surface_registry.act_register(surface)
+        self._helper_normalize_surface_order()
+        return surface
+
     def act_plot_surface(
         self,
         index: int,
@@ -495,14 +603,19 @@ class ContourSurfaceSet(ClassBase):
         **kwargs,
     ):
         """Create one PlotContourSurface from the surface at one insertion index."""
+        bounds_use = self._helper_resolve_plot_bounds(bounds)
+        opts_defaults_override_use = self._helper_resolve_plot_opts_defaults_override(
+            opts_defaults_override
+        )
+        kwargs_use = self._helper_merge_visual_plot_kwargs(opts, kwargs)
         return self.act_get_surface(index).act_plot(
             figure=figure,
             opts=opts,
-            bounds=bounds,
+            bounds=bounds_use,
             name=name,
-            opts_defaults_override=opts_defaults_override,
+            opts_defaults_override=opts_defaults_override_use,
             is_extract=is_extract,
-            **kwargs,
+            **kwargs_use,
         )
 
     def act_plot_surface_by_name(
@@ -518,14 +631,19 @@ class ContourSurfaceSet(ClassBase):
         **kwargs,
     ):
         """Create one PlotContourSurface from the surface with one registered name."""
+        bounds_use = self._helper_resolve_plot_bounds(bounds)
+        opts_defaults_override_use = self._helper_resolve_plot_opts_defaults_override(
+            opts_defaults_override
+        )
+        kwargs_use = self._helper_merge_visual_plot_kwargs(opts, kwargs)
         return self.act_get_surface_by_name(name).act_plot(
             figure=figure,
             opts=opts,
-            bounds=bounds,
+            bounds=bounds_use,
             name=plot_name,
-            opts_defaults_override=opts_defaults_override,
+            opts_defaults_override=opts_defaults_override_use,
             is_extract=is_extract,
-            **kwargs,
+            **kwargs_use,
         )
 
     def act_plot_surface_by_level(
@@ -541,14 +659,19 @@ class ContourSurfaceSet(ClassBase):
         **kwargs,
     ):
         """Create one PlotContourSurface from the surface at one exact contour level."""
+        bounds_use = self._helper_resolve_plot_bounds(bounds)
+        opts_defaults_override_use = self._helper_resolve_plot_opts_defaults_override(
+            opts_defaults_override
+        )
+        kwargs_use = self._helper_merge_visual_plot_kwargs(opts, kwargs)
         return self.act_get_surface_by_level(level).act_plot(
             figure=figure,
             opts=opts,
-            bounds=bounds,
+            bounds=bounds_use,
             name=name,
-            opts_defaults_override=opts_defaults_override,
+            opts_defaults_override=opts_defaults_override_use,
             is_extract=is_extract,
-            **kwargs,
+            **kwargs_use,
         )
 
     def act_plot_all(
@@ -562,16 +685,21 @@ class ContourSurfaceSet(ClassBase):
         **kwargs,
     ):
         """Create PlotContourSurface wrappers for every stored contour surface."""
+        bounds_use = self._helper_resolve_plot_bounds(bounds)
+        opts_defaults_override_use = self._helper_resolve_plot_opts_defaults_override(
+            opts_defaults_override
+        )
+        kwargs_use = self._helper_merge_visual_plot_kwargs(opts, kwargs)
         visuals = []
         for surface in self.surfaces:
             visuals.append(
                 surface.act_plot(
                     figure=figure,
                     opts=opts,
-                    bounds=bounds,
-                    opts_defaults_override=opts_defaults_override,
+                    bounds=bounds_use,
+                    opts_defaults_override=opts_defaults_override_use,
                     is_extract=is_extract,
-                    **kwargs,
+                    **kwargs_use,
                 )
             )
         return tuple(visuals)

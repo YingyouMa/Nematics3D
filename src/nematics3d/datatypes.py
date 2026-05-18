@@ -56,11 +56,22 @@ def as_value_range(value_range, *, name: str = "value_range") -> tuple[float, fl
     return lo, hi
 
 
+def as_readonly_array(input_data, *, dtype=float, copy: bool = True) -> np.ndarray:
+    """Return one NumPy array view/copy with write access disabled."""
+    values = np.asarray(input_data, dtype=dtype)
+    if copy:
+        values = values.copy()
+    values.setflags(write=False)
+    return values
+
+
 @logging_and_warning_decorator(start_finish_level=5)
 def as_Number(
     input_data,
     name="input data",
     is_int=False,
+    is_nan_ok=True,
+    is_inf_ok=True,
     value_range=None,
     bounded=False,
     replace=None,
@@ -83,6 +94,12 @@ def as_Number(
         else:
             if not isinstance(input_data, numbers.Real):
                 raise TypeError(f"{name!r} must be a number. Got {input_data} instead.")
+
+        if not is_nan_ok and np.isnan(input_data):
+            raise ValueError(f"{name!r} must not be NaN.")
+
+        if not is_inf_ok and np.isinf(input_data):
+            raise ValueError(f"{name!r} must be finite. Got {input_data}.")
 
         lo = hi = None
 

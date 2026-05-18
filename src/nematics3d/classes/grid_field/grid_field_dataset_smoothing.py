@@ -7,7 +7,12 @@ from typing import ClassVar
 
 import numpy as np
 
-from nematics3d.datatypes import as_Number, as_real_lattice_field, as_str
+from nematics3d.datatypes import (
+    as_Number,
+    as_real_lattice_field,
+    as_str,
+)
+from ...grid import as_readonly_grid_offset, as_readonly_grid_transform
 
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
@@ -166,8 +171,8 @@ def _helper_gaussian_smooth_info(
     weights_floor: float | None,
 ) -> GaussianSmoothInfo:
     """Build payload-free metadata for an immediate Gaussian smoothing result."""
-    grid_offset = self._helper_readonly_grid_array_copy(self.raw_grid_offset)
-    grid_transform = self._helper_readonly_grid_array_copy(self.raw_grid_transform)
+    grid_offset = as_readonly_grid_offset(self.raw_grid_offset)
+    grid_transform = as_readonly_grid_transform(self.raw_grid_transform)
     return GaussianSmoothInfo(
         operator="gaussian_smooth",
         source_name=source_name,

@@ -9,6 +9,7 @@ import numpy as np
 from .datatypes import (
     DimensionPeriodicInput,
     Vect,
+    as_readonly_array,
     as_Tensor,
     as_Vect,
     as_dimension_info,
@@ -201,6 +202,20 @@ def as_grid_transform(transform, name="grid_transform"):
         )
 
     return transform
+
+
+def as_readonly_grid_offset(offset):
+    """Return one read-only grid offset array, preserving ``None``."""
+    if offset is None:
+        return None
+    return as_readonly_array(offset, dtype=float)
+
+
+def as_readonly_grid_transform(transform):
+    """Return one read-only grid transform array, preserving identity."""
+    if is_grid_transform_identity(transform):
+        return transform
+    return as_readonly_array(transform, dtype=float)
 
 
 def apply_linear_transform(

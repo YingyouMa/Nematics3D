@@ -808,6 +808,8 @@ class PlotFigure(HostBase):
     def act_unregister(self, term, is_missing_ok=False):
         """Unregister a drawable term from this figure glyph registry."""
         self.glyphs.act_unregister(term, is_missing_ok=is_missing_ok)
+        if getattr(term, "fig", None) is self:
+            term.act_unbind_relation_base("fig")
 
     def __call__(self):
         """Return the registered glyph objects as a tuple."""

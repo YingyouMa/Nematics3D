@@ -23,8 +23,20 @@ from nematics3d.classes.grid_field import (
     SpatialDerivativeInfo,
 )
 from nematics3d.classes.npy_array_payload import NpyArrayPayload
-from nematics3d.datatypes import UNSET, as_real_lattice_field, as_value_range
-from nematics3d.grid import apply_linear_transform, generate_coordinate_grid
+from nematics3d.datatypes import (
+    UNSET,
+    as_Number,
+    as_readonly_array,
+    as_real_lattice_field,
+    as_value_range,
+)
+from nematics3d.grid import (
+    GRID_TRANSFORM_IDENTITY,
+    apply_linear_transform,
+    as_readonly_grid_offset,
+    as_readonly_grid_transform,
+    generate_coordinate_grid,
+)
 from nematics3d.general import get_box_corners
 
 
@@ -48,6 +60,37 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertEqual(lo, 1e-12)
         self.assertEqual(hi, np.inf)
+
+    def test_as_number_defaults_still_allow_nan_and_inf(self):
+        self.assertTrue(np.isnan(as_Number(np.nan)))
+        self.assertEqual(as_Number(np.inf), np.inf)
+
+    def test_as_number_can_reject_nan(self):
+        with self.assertRaises(ValueError):
+            as_Number(np.nan, is_nan_ok=False)
+
+    def test_as_number_can_reject_inf(self):
+        with self.assertRaises(ValueError):
+            as_Number(np.inf, is_inf_ok=False)
+
+    def test_as_readonly_array_returns_readonly_copy(self):
+        source = np.array([1.0, 2.0, 3.0], dtype=float)
+
+        frozen = as_readonly_array(source, dtype=float)
+
+        self.assertFalse(frozen.flags.writeable)
+        self.assertTrue(np.allclose(frozen, source))
+        source[0] = 10.0
+        self.assertEqual(float(frozen[0]), 1.0)
+
+    def test_as_readonly_grid_offset_preserves_none(self):
+        self.assertIsNone(as_readonly_grid_offset(None))
+
+    def test_as_readonly_grid_transform_preserves_identity_sentinel(self):
+        self.assertIs(
+            as_readonly_grid_transform(GRID_TRANSFORM_IDENTITY),
+            GRID_TRANSFORM_IDENTITY,
+        )
 
     def test_as_real_lattice_field_can_require_finite_values(self):
         values = np.zeros((2, 2, 2), dtype=float)

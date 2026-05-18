@@ -18,6 +18,8 @@ from ..class_base import ClassBase
 from ..registry_base import RegistryBase
 from ...grid import (
     apply_linear_transform,
+    as_readonly_grid_offset,
+    as_readonly_grid_transform,
     generate_coordinate_grid,
     is_grid_transform_identity,
 )
@@ -202,12 +204,12 @@ class GridFieldDataset(ClassBase):
         object.__setattr__(
             self,
             "raw_grid_offset",
-            self._helper_readonly_grid_array_copy(inputValue.grid_offset),
+            as_readonly_grid_offset(inputValue.grid_offset),
         )
         object.__setattr__(
             self,
             "raw_grid_transform",
-            self._helper_readonly_grid_array_copy(inputValue.grid_transform),
+            as_readonly_grid_transform(inputValue.grid_transform),
         )
         self._helper_refresh_grid_cache()
 
@@ -217,15 +219,6 @@ class GridFieldDataset(ClassBase):
         )
         self.act_bind_relation_base("fields", registry, is_weak=False)
         registry.act_bind_relation_base("owner", self, is_weak=True)
-
-    @staticmethod
-    def _helper_readonly_grid_array_copy(value):
-        """Return a read-only copy for mutable grid geometry arrays."""
-        if value is None or is_grid_transform_identity(value):
-            return value
-        value = np.asarray(value, dtype=float).copy()
-        value.setflags(write=False)
-        return value
 
     def _helper_ensure_or_infer_shape(
         self,
