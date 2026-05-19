@@ -82,8 +82,10 @@ class OptsPlaneGrid(OptsBase):
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
         "normal": lambda v, d: as_Vect(v, name=d, is_norm=True),
-        "spacing": lambda v, d: as_Number(v, name=d),
-        "spacing_extra": lambda v, d: None if v is None else as_Number(v, name=d),
+        "spacing": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "spacing_extra": lambda v, d: (
+            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+        ),
         "size": lambda v, d: as_Number(v, name=d),
         "size_extra": lambda v, d: None if v is None else as_Number(v, name=d),
         "origin": lambda v, d: as_Vect(v, name=d),
