@@ -268,7 +268,17 @@ class PlaneGridPolar(HostBase):
 
         if theta0_axis is not None:
             dot_product = normal @ theta0_axis
-            if not np.isclose(dot_product, 0, atol=1e-8):
+            if np.isclose(abs(dot_product), 1.0, atol=1e-8):
+                old_theta0_axis = theta0_axis.copy()
+                theta0_axis = None
+                if self.impl_is_warn_orthogonal:
+                    logger.warning(
+                        f"Invalid geometry: theta0_axis is collinear with normal "
+                        f"(dot product: {dot_product:.4e}). Ignore original "
+                        f"theta0_axis {old_theta0_axis} and fall back to the "
+                        f"automatic reference axis for normal {normal}."
+                    )
+            elif not np.isclose(dot_product, 0, atol=1e-8):
                 old_theta0_axis = theta0_axis.copy()
                 theta0_axis = theta0_axis - dot_product * normal
                 theta0_axis /= np.linalg.norm(theta0_axis)
@@ -280,7 +290,7 @@ class PlaneGridPolar(HostBase):
                         f"defined by normal {normal}. New orthonormal "
                         f"theta0_axis: {theta0_axis}."
                     )
-        else:
+        if theta0_axis is None:
             rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
             theta0_axis = rotation_matrix @ np.array([1, 0, 0])
             logger.debug(

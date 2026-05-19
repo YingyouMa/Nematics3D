@@ -296,7 +296,17 @@ class PlaneGrid(HostBase):
 
         if axis1 is not None:
             dot_product = normal @ axis1
-            if not np.isclose(dot_product, 0, atol=1e-8):
+            if np.isclose(abs(dot_product), 1.0, atol=1e-8):
+                old_axis1 = axis1.copy()
+                axis1 = None
+                if self.impl_is_warn_orthogonal:
+                    logger.warning(
+                        f"Invalid geometry: axis1 is collinear with normal "
+                        f"(dot product: {dot_product:.4e}). Ignore original axis1 "
+                        f"{old_axis1} and fall back to the automatic reference "
+                        f"axis for normal {normal}."
+                    )
+            elif not np.isclose(dot_product, 0, atol=1e-8):
                 old_axis1 = axis1.copy()
                 axis1 = axis1 - dot_product * normal
                 axis1 /= np.linalg.norm(axis1)
@@ -307,7 +317,7 @@ class PlaneGrid(HostBase):
                         f"axis1 {old_axis1} onto the plane defined by normal "
                         f"{normal}. New orthonormal axis1: {axis1}."
                     )
-        else:
+        if axis1 is None:
             rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
             axis1 = rotation_matrix @ np.array([1, 0, 0])
             logger.debug(
