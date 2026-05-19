@@ -138,5 +138,5 @@ Nx, Ny, Nz = 32, 64, 64
 S_input = S[:Nx, :Ny, :Nz]
 n_input = n[:Nx, :Ny, :Nz]
 Q, figure = quick_visualize_Q(
-    S_input, n_input, box_periodic_flag=False, is_visualize_lines=False
+    S_input, n_input, box_periodic_flag=False, is_visualize_lines=True
 )
