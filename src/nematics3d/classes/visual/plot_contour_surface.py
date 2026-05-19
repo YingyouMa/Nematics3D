@@ -14,6 +14,7 @@ from ..bounds import BoundsData
 from ..contour_surface import ContourSurface
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
+from .qt.interact_contour_surface import InteractContourSurface
 
 
 @dataclass(slots=True, repr=False)
@@ -149,6 +150,9 @@ class PlotContourSurface(PlotGlyph):
         surface.act_attach_sync_task(
             self.impl_owner_sync_name,
             self._sync_from_owner_surface,
+        )
+        self.act_set_interact_func(
+            lambda: InteractContourSurface.show_once(self, self.fig)
         )
 
         self._helper_init_end()
