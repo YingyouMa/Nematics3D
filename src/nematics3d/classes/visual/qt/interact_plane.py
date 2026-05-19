@@ -20,6 +20,79 @@ from ..plot_sphere import PlotSphere
 
 
 class InteractPlane(PanelBase):
+    def _make_vector_input_panel(
+        self,
+        *,
+        parent,
+        layout,
+        title,
+        button_text,
+        values,
+        commit_callback,
+    ):
+        button = QtWidgets.QPushButton(button_text, parent)
+        layout.addWidget(button)
+
+        panel = QtWidgets.QWidget(parent)
+        panel_layout = QtWidgets.QHBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(6)
+        panel.hide()
+
+        panel_layout.addWidget(QtWidgets.QLabel(f"{title}:", panel))
+        inputs = []
+        for value in np.asarray(values, dtype=float):
+            box = QtWidgets.QDoubleSpinBox(panel)
+            box.setDecimals(6)
+            box.setKeyboardTracking(False)
+            box.setRange(-1.0e12, 1.0e12)
+            box.setValue(float(value))
+            panel_layout.addWidget(box)
+            inputs.append(box)
+
+        btn_apply = QtWidgets.QPushButton("Apply", panel)
+        panel_layout.addWidget(btn_apply)
+        layout.addWidget(panel)
+
+        button.clicked.connect(lambda: panel.setVisible(not panel.isVisible()))
+        btn_apply.clicked.connect(lambda: commit_callback(inputs))
+        return button, panel, inputs, btn_apply
+
+    def _set_vector_inputs(self, boxes, values):
+        values = np.asarray(values, dtype=float)
+        for box, value in zip(boxes, values, strict=True):
+            with QSignalBlocker(box):
+                box.setValue(float(value))
+
+    def _commit_manual_origin(self, boxes):
+        origin = np.array([box.value() for box in boxes], dtype=float)
+        self.state["origin"] = origin.copy()
+        self.point_console._update_center_label()
+        self._commit_origin(origin)
+
+    def _commit_manual_normal(self, boxes):
+        normal = np.array([box.value() for box in boxes], dtype=float)
+        norm = np.linalg.norm(normal)
+        if np.isclose(norm, 0.0):
+            QtWidgets.QMessageBox.warning(
+                self,
+                "Invalid normal",
+                "The normal vector must be non-zero.",
+            )
+            return
+
+        normal /= norm
+        self._set_vector_inputs(boxes, normal)
+        self.state["normal_azimuth"] = self.get_azimuth(normal)
+        self.state["normal_polar_angle"] = self.get_polar_angle(normal)
+        self.sliders["normal_azimuth"].set_tick(
+            self.state["normal_azimuth"], is_block_signals=True
+        )
+        self.sliders["normal_polar_angle"].set_tick(
+            self.state["normal_polar_angle"], is_block_signals=True
+        )
+        self.commit()
+
     # ==================== OVERRIDE ====================
     # InteractPlane overrides PanelBase.__init__ because this panel
     # controls a PlaneGrid host while also managing extra helper visuals
@@ -168,6 +241,19 @@ class InteractPlane(PanelBase):
         )
         self.layout.addWidget(self.point_console.group)
         self.sliders["origin_move_step"] = self.point_console.slider_step
+        (
+            self.btn_origin_manual,
+            self.panel_origin_manual,
+            self.origin_inputs,
+            self.btn_origin_manual_apply,
+        ) = self._make_vector_input_panel(
+            parent=self.point_console.group,
+            layout=self.point_console.gl,
+            title="Origin",
+            button_text="Set Origin Manually",
+            values=self.host.opts.origin,
+            commit_callback=self._commit_manual_origin,
+        )
 
         group_scalar = QtWidgets.QGroupBox("Scalar parameter", self)
         gl_scalar = QtWidgets.QVBoxLayout(group_scalar)
@@ -279,6 +365,19 @@ class InteractPlane(PanelBase):
             self._vect_text(self.host.opts.normal, "normal"), self
         )
         gl_orient.addWidget(self.normal_info)
+        (
+            self.btn_normal_manual,
+            self.panel_normal_manual,
+            self.normal_inputs,
+            self.btn_normal_manual_apply,
+        ) = self._make_vector_input_panel(
+            parent=group_orient,
+            layout=gl_orient,
+            title="Normal",
+            button_text="Set Normal Manually",
+            values=self.host.opts.normal,
+            commit_callback=self._commit_manual_normal,
+        )
 
         self.sliders["normal_azimuth"] = make_labeled_slider_row(
             parent=group_orient,
@@ -439,6 +538,7 @@ class InteractPlane(PanelBase):
                     self.host.opts.origin, dtype=float
                 ).copy()
                 self.point_console._update_center_label()
+                self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)
             if "alignment" in kwargs:
                 checked = self.host.opts.alignment == "center"
                 with QSignalBlocker(self.chk_is_origin_center):
@@ -473,6 +573,7 @@ class InteractPlane(PanelBase):
                 self._sync_from_host_slider(
                     "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
                 )
+                self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
                 self.normal_info.setText(
                     self._vect_text(self.host.opts.normal, "normal")
                 )
@@ -482,7 +583,10 @@ class InteractPlane(PanelBase):
                     self.get_axis1_azimuth(self.host.opts.axis1, self.host.opts.normal),
                 )
 
+        if "origin" in kwargs:
+            self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)
         if "normal" in kwargs:
+            self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
             self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
         if "axis1" in kwargs or "normal" in kwargs:
             self.axis1_info.setText(self._vect_text(self.host.opts.axis1, "axis1"))
