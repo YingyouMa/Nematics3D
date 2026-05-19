@@ -234,6 +234,18 @@ class PlotFigure(HostBase):
                 "on top of the main scene and are not occluded by 3D geometry."
             ),
         },
+        "entity_axes_actor": {
+            "doc": (
+                "The vtkAxesActor currently used by the orientation widget, "
+                "or None when no axes widget has been added."
+            ),
+        },
+        "entity_axes_widget": {
+            "doc": (
+                "The vtkOrientationMarkerWidget showing the corner axes, "
+                "or None when no axes widget has been added."
+            ),
+        },
         "pl": {
             "doc": "Read-only: Alias of `entity_plotter`.",
             "kind": "property",
@@ -289,6 +301,8 @@ class PlotFigure(HostBase):
         "entity_glyphs",
         "impl_interact_count",
         "entity_overlay",
+        "entity_axes_actor",
+        "entity_axes_widget",
     )
 
     # ==================== OVERRIDE ====================
@@ -374,6 +388,8 @@ class PlotFigure(HostBase):
         # --- Create overlay renderer (layer=1) at initialization ---
         overlay = self._helper_init_overlay_renderer()
         object.__setattr__(self, "entity_overlay", overlay)
+        object.__setattr__(self, "entity_axes_actor", None)
+        object.__setattr__(self, "entity_axes_widget", None)
 
         if not is_off_screen:
 
@@ -489,6 +505,7 @@ class PlotFigure(HostBase):
         )
 
         self._helper_close_interacts()
+        self.act_remove_axes_widget()
 
         if is_remove_glyphs:
             for glyph in list(self.glyphs):
@@ -625,6 +642,106 @@ class PlotFigure(HostBase):
         rw.AddRenderer(overlay)
 
         return overlay
+
+    @staticmethod
+    def _helper_get_director_axes_colors():
+        """Return the default director colormap evaluated on the x/y/z axes."""
+        from nematics3d.field import n_color_immerse
+
+        return tuple(n_color_immerse(np.eye(3)))
+
+    @staticmethod
+    def _helper_build_axes_widget_actor(
+        *,
+        colors=None,
+        labels=("x", "y", "z"),
+    ) -> vtk.vtkAxesActor:
+        """Build a vtkAxesActor styled to match the director default colors."""
+        if colors is None:
+            colors = PlotFigure._helper_get_director_axes_colors()
+
+        if len(colors) != 3:
+            raise ValueError("`colors` must contain exactly three RGB colors.")
+        if len(labels) != 3:
+            raise ValueError("`labels` must contain exactly three axis labels.")
+
+        axes_actor = vtk.vtkAxesActor()
+        axes_actor.SetXAxisLabelText(str(labels[0]))
+        axes_actor.SetYAxisLabelText(str(labels[1]))
+        axes_actor.SetZAxisLabelText(str(labels[2]))
+
+        actor_parts = (
+            (
+                colors[0],
+                axes_actor.GetXAxisShaftProperty(),
+                axes_actor.GetXAxisTipProperty(),
+                axes_actor.GetXAxisCaptionActor2D(),
+            ),
+            (
+                colors[1],
+                axes_actor.GetYAxisShaftProperty(),
+                axes_actor.GetYAxisTipProperty(),
+                axes_actor.GetYAxisCaptionActor2D(),
+            ),
+            (
+                colors[2],
+                axes_actor.GetZAxisShaftProperty(),
+                axes_actor.GetZAxisTipProperty(),
+                axes_actor.GetZAxisCaptionActor2D(),
+            ),
+        )
+
+        for color, shaft_prop, tip_prop, caption_actor in actor_parts:
+            color = as_ColorRGB(color, name="axes color")
+            shaft_prop.SetColor(*color)
+            tip_prop.SetColor(*color)
+            caption_actor.GetCaptionTextProperty().SetColor(*color)
+
+        return axes_actor
+
+    def act_remove_axes_widget(self):
+        """Disable and forget the current orientation axes widget, if any."""
+        widget = getattr(self, "entity_axes_widget", None)
+        if widget is not None:
+            try:
+                widget.EnabledOff()
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+
+        object.__setattr__(self, "entity_axes_widget", None)
+        object.__setattr__(self, "entity_axes_actor", None)
+
+    def act_add_axes_widget(
+        self,
+        *,
+        colors=None,
+        labels=("x", "y", "z"),
+        interactive=False,
+        viewport=(0.0, 0.0, 0.2, 0.2),
+    ):
+        """Add a corner orientation widget whose axis colors match director colors."""
+        if len(viewport) != 4:
+            raise ValueError("`viewport` must be a 4-sequence of floats.")
+        viewport = tuple(float(value) for value in viewport)
+        if any(value < 0.0 or value > 1.0 for value in viewport):
+            raise ValueError("`viewport` values must lie in [0, 1].")
+
+        self.act_remove_axes_widget()
+
+        axes_actor = self._helper_build_axes_widget_actor(
+            colors=colors,
+            labels=labels,
+        )
+        widget = self.pl.add_orientation_widget(
+            axes_actor,
+            interactive=as_bool(interactive, name="axes widget interactive flag"),
+            viewport=viewport,
+        )
+
+        object.__setattr__(self, "entity_axes_actor", axes_actor)
+        object.__setattr__(self, "entity_axes_widget", widget)
+
+        return widget
 
     # -------------------------------
     # Camera synchronization
