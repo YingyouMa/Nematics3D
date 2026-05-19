@@ -76,7 +76,12 @@ class ContourSurface(ClassBase):
         },
     }
 
-    __slots__ = ("raw_level", "calc_surface_index", "entity_mesh_cache", "impl_sync_func")
+    __slots__ = (
+        "raw_level",
+        "calc_surface_index",
+        "entity_mesh_cache",
+        "impl_sync_func",
+    )
 
     def __init__(
         self,
@@ -345,6 +350,7 @@ class ContourSurfaceSet(ClassBase):
         opts_defaults_override: Mapping[str, Any] | None = None,
         visual_default: Mapping[str, Any] | None = None,
         figure=None,
+        is_extract: bool = False,
         is_plot: bool = False,
     ):
         super().__init__(
@@ -372,15 +378,16 @@ class ContourSurfaceSet(ClassBase):
             raise TypeError(
                 "`visual_default` must be a mapping of plot option overrides."
             )
-        if (
-            opts_defaults_override is not None
-            and not isinstance(opts_defaults_override, Mapping)
+        if opts_defaults_override is not None and not isinstance(
+            opts_defaults_override, Mapping
         ):
             raise TypeError(
                 "`opts_defaults_override` must be a mapping of default opts overrides."
             )
 
-        object.__setattr__(self, "raw_values", as_readonly_array(values_use, dtype=float))
+        object.__setattr__(
+            self, "raw_values", as_readonly_array(values_use, dtype=float)
+        )
         object.__setattr__(self, "impl_init_levels", self._helper_as_levels(levels))
         object.__setattr__(
             self,
@@ -401,9 +408,7 @@ class ContourSurfaceSet(ClassBase):
         object.__setattr__(
             self,
             "impl_plot_opts_defaults_override",
-            None
-            if opts_defaults_override is None
-            else dict(opts_defaults_override),
+            None if opts_defaults_override is None else dict(opts_defaults_override),
         )
         if bounds is not None:
             self.act_bind_relation_base(
@@ -418,6 +423,8 @@ class ContourSurfaceSet(ClassBase):
         )
         self.act_bind_relation_base("surface_registry", registry, is_weak=False)
         self._helper_build_surfaces()
+        if as_bool(is_extract, name="Whether to extract contour meshes immediately"):
+            self.act_extract_all()
         if as_bool(is_plot, name="Whether to create contour visuals immediately"):
             self.act_plot_all(figure=figure)
 
@@ -753,6 +760,13 @@ class ContourSurfaceSet(ClassBase):
 
     def _helper_remove_surface(self, surface: ContourSurface) -> ContourSurface:
         """Remove one resolved contour surface and rebuild the child collection."""
+        visual = surface._helper_resolve_current_visual()
+        if visual is not None:
+            visual.act_remove()
+            surface.act_unbind_relation_base("visual")
+        else:
+            surface.act_unbind_relation_base("visual")
+        surface.act_unbind_relation_base("owner")
         self.surface_registry.act_unregister(surface, is_missing_ok=True)
         self._helper_normalize_surface_order()
         return surface

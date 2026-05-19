@@ -70,6 +70,21 @@ class TestContourSurface(unittest.TestCase):
 
         plot_all.assert_called_once_with(contour, figure="dummy-figure")
 
+    def test_init_is_extract_triggers_extract_all(self):
+        with mock.patch.object(
+            ContourSurfaceSet,
+            "act_extract_all",
+            autospec=True,
+            return_value=(),
+        ) as extract_all:
+            contour = ContourSurfaceSet(
+                np.zeros((2, 2, 2), dtype=float),
+                levels=(0.1,),
+                is_extract=True,
+            )
+
+        extract_all.assert_called_once_with(contour)
+
     def test_surface_plot_binds_single_visual_relation(self):
         contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1,))
         surface = contour[0]
@@ -129,3 +144,26 @@ class TestContourSurface(unittest.TestCase):
         visual_old.act_remove.assert_not_called()
         self.assertIs(returned, visual_new)
         self.assertIs(surface.visual, visual_new)
+
+    def test_remove_surface_unbinds_owner_relation(self):
+        contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1, 0.2))
+        surface = contour[0]
+
+        removed = contour.act_remove_surface(0)
+
+        self.assertIs(removed, surface)
+        self.assertIsNone(surface.owner)
+        self.assertEqual(len(contour), 1)
+
+    def test_remove_surface_removes_live_visual(self):
+        contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1,))
+        surface = contour[0]
+        visual = mock.Mock(name="visual")
+        visual.fig = mock.Mock(is_alive=True)
+        surface.act_bind_relation_base("visual", visual, is_weak=False)
+
+        contour.act_remove_surface(0)
+
+        visual.act_remove.assert_called_once_with()
+        self.assertIsNone(surface.visual)
+        self.assertIsNone(surface.owner)
