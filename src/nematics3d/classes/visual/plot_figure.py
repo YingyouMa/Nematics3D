@@ -28,6 +28,7 @@ from ..opts import cover_value
 from ..registry_base import RegistryBase
 from .pick_manager import PickManager
 from .qt.console import ScopedConsoleDock
+from .scalar_bar import ScalarBar
 
 
 @dataclass(slots=True, repr=False)
@@ -278,6 +279,10 @@ class PlotFigure(HostBase):
             "doc": "Read-only: Alias of `entity_scalar_bars`.",
             "kind": "property",
         },
+        "scalar_bar": {
+            "doc": "Read-only: First registered scalar bar, or None when empty.",
+            "kind": "property",
+        },
         "glyphs": {
             "doc": "Read-only: Alias of `entity_glyphs`.",
             "kind": "property",
@@ -456,6 +461,13 @@ class PlotFigure(HostBase):
         return self.entity_scalar_bars
 
     @property
+    def scalar_bar(self):
+        """Return the first registered scalar bar when one exists."""
+        if len(self.scalar_bars) == 0:
+            return None
+        return self.scalar_bars[0]
+
+    @property
     def glyphs(self):
         """Return the registry managing glyph objects attached to this figure."""
         return self.entity_glyphs
@@ -487,6 +499,75 @@ class PlotFigure(HostBase):
             return
         interacts.act_unregister(panel, is_missing_ok=True)
 
+    # -------------------------------
+    # Scalar-Bar Registration
+    # -------------------------------
+
+    def act_register_scalar_bar(
+        self,
+        scalar_bar,
+        is_contain_ok=False,
+        is_bind_registry_relation=True,
+    ):
+        """Register one ScalarBar object in the figure-owned scalar-bar registry."""
+        if not isinstance(scalar_bar, ScalarBar):
+            raise TypeError(
+                "scalar_bar must be a ScalarBar instance. "
+                f"Got {type(scalar_bar).__name__!r} instead."
+            )
+
+        bind_relation = getattr(scalar_bar, "act_bind_relation_base", None)
+        if callable(bind_relation):
+            bind_relation("owner", self, is_weak=True)
+
+        self.scalar_bars.act_register(
+            scalar_bar,
+            is_contain_ok=is_contain_ok,
+            is_bind_registry_relation=is_bind_registry_relation,
+        )
+        return scalar_bar
+
+    def _helper_resolve_scalar_bar(self, key):
+        """Resolve one registered scalar bar from a registry-compatible key."""
+        scalar_bar = self.scalar_bars[key]
+        if scalar_bar is None:
+            return None
+        if not isinstance(scalar_bar, ScalarBar):
+            raise TypeError(
+                "Resolved scalar-bar registry item must be a ScalarBar instance. "
+                f"Got {type(scalar_bar).__name__!r} instead."
+            )
+        return scalar_bar
+
+    def act_unregister_scalar_bar(self, key, is_missing_ok=False):
+        """Unregister one scalar bar by registry index or registered name."""
+        try:
+            scalar_bar = self._helper_resolve_scalar_bar(key)
+        except (KeyError, IndexError):
+            if is_missing_ok:
+                return
+            raise
+        if scalar_bar is None:
+            if is_missing_ok:
+                return
+            raise KeyError("Scalar-bar key cannot be None when unregistering.")
+        self.scalar_bars.act_unregister(scalar_bar, is_missing_ok=is_missing_ok)
+        if getattr(scalar_bar, "owner", None) is self:
+            scalar_bar.act_unbind_relation_base("owner")
+
+    def act_sync_scalar_bar(self, key):
+        """
+        Prepare one registered scalar bar for future backend synchronization.
+
+        This declaration-side sync currently resolves the registry item and
+        returns its PyVista kwargs payload. Live backend updates are intentionally
+        deferred to a later implementation step.
+        """
+        scalar_bar = self._helper_resolve_scalar_bar(key)
+        if scalar_bar is None:
+            raise KeyError("Scalar-bar key cannot be None when syncing.")
+        return dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
+
     def _helper_close_interacts(self):
         interacts = self.interacts
         if interacts is None:
@@ -494,6 +575,20 @@ class PlotFigure(HostBase):
         for panel in list(interacts):
             try:
                 panel.close()
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+
+    def _helper_close_scalar_bars(self):
+        scalar_bars = self.scalar_bars
+        if scalar_bars is None:
+            return
+        for scalar_bar in list(scalar_bars):
+            try:
+                scalar_bar.act_clear_backend()
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+            try:
+                self.act_unregister_scalar_bar(scalar_bar.name, is_missing_ok=True)
             except (AttributeError, RuntimeError, ReferenceError):
                 pass
 
@@ -517,6 +612,8 @@ class PlotFigure(HostBase):
                         self.act_unregister(glyph, is_missing_ok=True)
                 except (AttributeError, RuntimeError, ReferenceError):
                     self.act_unregister(glyph, is_missing_ok=True)
+
+        self._helper_close_scalar_bars()
 
         try:
             self.pl.close()
@@ -1001,9 +1098,10 @@ class PlotFigure(HostBase):
     # ==================================================
 
     def __repr__(self):
-        """Return the detailed host summary together with the glyph registry view."""
+        """Return the detailed host summary plus glyph and scalar-bar registries."""
         msg = HostBase.__repr__(self) + "\n"
         msg += repr(self.glyphs)
+        msg += "\n" + repr(self.scalar_bars)
         return msg
 
     # ==================== OVERRIDE ====================
