@@ -50,6 +50,28 @@ class TestGlyphResolverSource(unittest.TestCase):
 
         np.testing.assert_allclose(glyph._helper_get_resolver_source(), coords)
 
+    def test_attr_specific_source_falls_back_to_global_when_none(self):
+        glyph = MinimalGlyph(
+            np.arange(6, dtype=float).reshape(2, 3), resolver_source="coords"
+        )
+        object.__setattr__(glyph.opts, "resolver_source_opacity", None)
+
+        np.testing.assert_allclose(
+            glyph._helper_get_resolver_source("opacity"),
+            glyph.raw_coords,
+        )
+
+    def test_attr_specific_source_override_uses_its_own_setting(self):
+        glyph = MinimalGlyph(
+            np.arange(9, dtype=float).reshape(3, 3), resolver_source="coords"
+        )
+        object.__setattr__(glyph.opts, "resolver_source_opacity", "u_percent")
+
+        np.testing.assert_allclose(
+            glyph._helper_get_resolver_source("opacity"),
+            np.array([0.0, 50.0, 100.0], dtype=np.float32),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,14 @@ ColorMode = ColorRGB | Callable | Sequence
 OpacityMode = float | Callable | Sequence
 RadiusMode = float | Callable | Sequence
 ScalarsMode = Callable | Sequence | None
+
+
+def _as_resolver_source_or_none(value, name, *, pool):
+    if value is None:
+        return None
+    return as_str(value, name=name, pool=pool)
+
+
 # fmt: off
 @dataclass(slots=True, repr=False)
 class OptsGlyph(OptsBase):
@@ -89,7 +97,11 @@ class OptsGlyph(OptsBase):
     opacity:                    OpacityMode | Unset                 = UNSET
     scalars:                    ScalarsMode | Unset                 = UNSET
     radius:                     RadiusMode | Unset                  = UNSET
-    resolver_source:             str | Unset                         = UNSET
+    resolver_source:            str | Unset                         = UNSET
+    resolver_source_color:      str | None | Unset                  = UNSET
+    resolver_source_opacity:    str | None | Unset                  = UNSET
+    resolver_source_radius:     str | None | Unset                  = UNSET
+    resolver_source_scalars:    str | None | Unset                  = UNSET
 
     # --- Scalars (used if color == "scalars") ---
     scalars_cmap:               str | Unset                         = UNSET
@@ -146,9 +158,25 @@ class OptsGlyph(OptsBase):
             "3) radius data set manually."
         ),
         "resolver_source": (
-            "Defines the input passed to callable visual resolvers. "
+            "Default input passed to callable visual resolvers. "
             + "Use 'coords' for raw coordinates or 'u_percent' for the point-index "
             + "percentage along the glyph."
+        ),
+        "resolver_source_color": (
+            "Optional resolver-source override for callable color. "
+            + "Use None to fall back to resolver_source."
+        ),
+        "resolver_source_opacity": (
+            "Optional resolver-source override for callable opacity. "
+            + "Use None to fall back to resolver_source."
+        ),
+        "resolver_source_radius": (
+            "Optional resolver-source override for callable radius. "
+            + "Use None to fall back to resolver_source."
+        ),
+        "resolver_source_scalars": (
+            "Optional resolver-source override for callable scalars. "
+            + "Use None to fall back to resolver_source."
         ),
 
         # === Scalars Control (Needs color_rule='scalars') ===
@@ -178,6 +206,18 @@ class OptsGlyph(OptsBase):
         "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
         "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
         "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "u_percent")),
+        "resolver_source_color": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent")
+        ),
+        "resolver_source_opacity": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent")
+        ),
+        "resolver_source_radius": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent")
+        ),
+        "resolver_source_scalars": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent")
+        ),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
         "scalars_clim":         lambda v, d: (v if v is None else as_Vect(v, name=d, dim=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
@@ -207,6 +247,10 @@ class OptsGlyph(OptsBase):
         "scalars":              lambda x: np.arange(len(x)),
         "radius":               0.5,
         "resolver_source":      "coords",
+        "resolver_source_color": None,
+        "resolver_source_opacity": None,
+        "resolver_source_radius": None,
+        "resolver_source_scalars": None,
         "scalars_cmap":         "viridis",
         "scalars_clim":         None,
         "is_scalar_bar":        True,
@@ -441,6 +485,14 @@ class PlotGlyph(HostBase):
     )
 
     _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
+    _resolver_source_override_attr_names: Mapping[str, str] = MappingProxyType(
+        {
+            "color": "resolver_source_color",
+            "opacity": "resolver_source_opacity",
+            "radius": "resolver_source_radius",
+            "scalars": "resolver_source_scalars",
+        }
+    )
     # fmt: on
 
     # ==================== OVERRIDE ====================
@@ -663,12 +715,22 @@ class PlotGlyph(HostBase):
     # Resolver Helpers
     # ------------------------------------------------------------------
 
-    def _helper_get_resolver_source(self):
-        source_name = as_str(
-            self.opts.resolver_source,
+    def _helper_get_resolver_source_name(self, attr_name=None):
+        source_name = None
+        if attr_name is not None:
+            override_attr = self._resolver_source_override_attr_names.get(attr_name)
+            if override_attr is not None:
+                source_name = getattr(self.opts, override_attr, None)
+        if source_name is None:
+            source_name = self.opts.resolver_source
+        return as_str(
+            source_name,
             name="glyph resolver source",
             pool=("coords", "u_percent"),
         )
+
+    def _helper_get_resolver_source(self, attr_name=None):
+        source_name = self._helper_get_resolver_source_name(attr_name)
         if source_name == "coords":
             return self.raw_coords
         n_points = len(self.raw_coords)
@@ -700,7 +762,7 @@ class PlotGlyph(HostBase):
             if attr_name == "color"
             else (len(self.raw_coords),)
         )
-        source = self._helper_get_resolver_source()
+        source = self._helper_get_resolver_source(attr_name)
 
         try:
             if attr_input is None:
@@ -1040,8 +1102,20 @@ class PlotGlyph(HostBase):
 
         resolver_source = kwargs.pop("resolver_source", None)
         is_reresolve = is_reapply_opts
+        attrs_reresolve_for_source: set[str] = set()
         if resolver_source is not None:
             object.__setattr__(self.opts, "resolver_source", resolver_source)
+            is_reresolve = True
+            attrs_reresolve_for_source.update(self._pending_resolution_attrs)
+
+        for (
+            attr_name,
+            override_key,
+        ) in self._resolver_source_override_attr_names.items():
+            if override_key not in kwargs:
+                continue
+            object.__setattr__(self.opts, override_key, kwargs.pop(override_key))
+            attrs_reresolve_for_source.add(attr_name)
             is_reresolve = True
 
         if len(self.raw_coords) == 0:
@@ -1073,7 +1147,10 @@ class PlotGlyph(HostBase):
         is_needs_remesh = is_reresolve
         for attr in self._pending_resolution_attrs:
             if attr not in kwargs:
-                if is_reresolve:
+                if is_reresolve and (
+                    (not attrs_reresolve_for_source)
+                    or (attr in attrs_reresolve_for_source)
+                ):
                     self._helper_resolver_spec(attr)
             else:
                 self._helper_resolver_spec(attr, attr_value=kwargs.pop(attr))

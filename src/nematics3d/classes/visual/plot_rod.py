@@ -14,7 +14,7 @@ from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
-from .glyph import OptsGlyph, PlotGlyph
+from .glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from .plot_figure import FigureData
 from .qt.interact_rod import InteractRod
 
@@ -153,6 +153,18 @@ class OptsRod(OptsGlyph):
             v,
             name=d,
             pool=("coords", "u_percent", "orient"),
+        ),
+        "resolver_source_color": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent", "orient")
+        ),
+        "resolver_source_opacity": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent", "orient")
+        ),
+        "resolver_source_radius": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent", "orient")
+        ),
+        "resolver_source_scalars": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "u_percent", "orient")
         ),
     }
 
@@ -457,15 +469,25 @@ class PlotRod(PlotGlyph):
     # PlotRod overrides PlotGlyph._helper_get_resolver_source to add rod
     # orientation as a valid callable-resolver input source.
     # ==================================================
-    def _helper_get_resolver_source(self):
-        source_name = as_str(
-            self.opts.resolver_source,
+    def _helper_get_resolver_source_name(self, attr_name=None):
+        source_name = None
+        if attr_name is not None:
+            override_attr = self._resolver_source_override_attr_names.get(attr_name)
+            if override_attr is not None:
+                source_name = getattr(self.opts, override_attr, None)
+        if source_name is None:
+            source_name = self.opts.resolver_source
+        return as_str(
+            source_name,
             name="glyph resolver source",
             pool=("coords", "u_percent", "orient"),
         )
+
+    def _helper_get_resolver_source(self, attr_name=None):
+        source_name = self._helper_get_resolver_source_name(attr_name)
         if source_name == "orient":
             return self.raw_orient
-        return super()._helper_get_resolver_source()
+        return super()._helper_get_resolver_source(attr_name)
 
     # -------------------------------
     # Center clipping and polyline preparation

@@ -14,7 +14,7 @@ from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
-from .glyph import OptsGlyph, PlotGlyph
+from .glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from .plot_figure import FigureData
 
 LengthMode = float | Callable | Sequence
@@ -88,6 +88,18 @@ class OptsVector(OptsGlyph):
             v,
             name=d,
             pool=("coords", "orient", "orient_length"),
+        ),
+        "resolver_source_color": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "orient", "orient_length")
+        ),
+        "resolver_source_opacity": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "orient", "orient_length")
+        ),
+        "resolver_source_radius": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "orient", "orient_length")
+        ),
+        "resolver_source_scalars": lambda v, d: _as_resolver_source_or_none(
+            v, d, pool=("coords", "orient", "orient_length")
         ),
         "anchor": lambda v, d: as_str(
             v,
@@ -238,17 +250,27 @@ class PlotVector(PlotGlyph):
     # PlotVector overrides PlotGlyph._helper_get_resolver_source to add vector
     # orientation and vector-length resolver sources.
     # ==================================================
-    def _helper_get_resolver_source(self):
-        source_name = as_str(
-            self.opts.resolver_source,
+    def _helper_get_resolver_source_name(self, attr_name=None):
+        source_name = None
+        if attr_name is not None:
+            override_attr = self._resolver_source_override_attr_names.get(attr_name)
+            if override_attr is not None:
+                source_name = getattr(self.opts, override_attr, None)
+        if source_name is None:
+            source_name = self.opts.resolver_source
+        return as_str(
+            source_name,
             name="glyph resolver source",
             pool=("coords", "orient", "orient_length"),
         )
+
+    def _helper_get_resolver_source(self, attr_name=None):
+        source_name = self._helper_get_resolver_source_name(attr_name)
         if source_name == "orient":
             return self.raw_orient
         if source_name == "orient_length":
             return np.linalg.norm(self.raw_orient, axis=1)
-        return self.raw_coords
+        return super()._helper_get_resolver_source(attr_name)
 
     def _helper_sync_derived_geometry(self):
         """Update shaft/tip derived arrays from resolved length and radius."""

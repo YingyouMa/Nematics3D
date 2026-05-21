@@ -64,8 +64,18 @@ class TestPlotVector(unittest.TestCase):
         opts.act_finalize()
 
         self.assertEqual(opts.resolver_source, "orient_length")
+        self.assertIsNone(opts.resolver_source_color)
+        self.assertIsNone(opts.resolver_source_opacity)
+        self.assertIsNone(opts.resolver_source_radius)
+        self.assertIsNone(opts.resolver_source_scalars)
         self.assertEqual(opts.anchor, "center")
         self.assertAlmostEqual(opts.tip_length_fraction, 0.2)
+
+    def test_vector_attr_specific_resolver_source_accepts_orient_length(self):
+        opts = OptsVector(resolver_source_radius="orient_length")
+        opts.act_finalize()
+
+        self.assertEqual(opts.resolver_source_radius, "orient_length")
 
     def test_length_and_radius_resolve_from_orient_length(self):
         fig = self._make_figure()
