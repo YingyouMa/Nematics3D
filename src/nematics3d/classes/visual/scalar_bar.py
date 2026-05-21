@@ -1,0 +1,421 @@
+"""Scalar-bar object model for figure-level scalar legend management."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, ClassVar
+
+import numpy as np
+
+from nematics3d.datatypes import (
+    UNSET,
+    Unset,
+    as_ColorRGB,
+    as_Number,
+    as_Vect,
+    as_bool,
+    as_str,
+)
+
+from ..host_base import HostBase, OptsBase
+
+
+def _as_optional_str(value, desc, *, pool=None):
+    if value is None:
+        return None
+    return as_str(value, name=desc, pool=pool)
+
+
+def _as_optional_int(value, desc, *, value_range=None):
+    if value is None:
+        return None
+    return as_Number(
+        value,
+        name=desc,
+        is_int=True,
+        value_range=value_range,
+        bounded=True,
+    )
+
+
+def _as_optional_float(value, desc, *, value_range=None):
+    if value is None:
+        return None
+    return as_Number(
+        value,
+        name=desc,
+        value_range=value_range,
+        bounded=True,
+    )
+
+
+def _as_optional_bool(value, desc):
+    if value is None:
+        return None
+    return as_bool(value, name=desc)
+
+
+def _as_optional_color(value, desc):
+    if value is None:
+        return None
+    color = as_ColorRGB(value, name=desc)
+    return tuple(float(x) for x in color)
+
+
+def _as_optional_range(value, desc):
+    if value is None:
+        return None
+    return tuple(float(x) for x in as_Vect(value, dim=2, name=desc))
+
+
+def _as_optional_position(value, desc):
+    if value is None:
+        return None
+    position = tuple(float(x) for x in as_Vect(value, dim=2, name=desc))
+    if any((x < 0.0) or (x > 1.0) for x in position):
+        raise ValueError(f"{desc} must lie inside the normalized viewport [0, 1].")
+    return position
+
+
+def _as_bar_args(value, desc):
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise TypeError(
+            f"{desc} must be a mapping. Got {type(value).__name__} instead."
+        )
+    return dict(value)
+
+
+@dataclass(slots=True, repr=False)
+class OptsScalarBar(OptsBase):
+    """Configuration object for one figure-level scalar bar."""
+
+    title: str | Unset = UNSET
+    cmap: str | None | Unset = UNSET
+    bar_range: tuple[float, float] | None | Unset = UNSET
+    is_visible: bool | Unset = UNSET
+    is_vertical: bool | Unset = UNSET
+    width: float | None | Unset = UNSET
+    height: float | None | Unset = UNSET
+    position: tuple[float, float] | None | Unset = UNSET
+    n_labels: int | None | Unset = UNSET
+    fmt: str | None | Unset = UNSET
+    n_colors: int | None | Unset = UNSET
+    font_family: str | None | Unset = UNSET
+    title_font_size: int | None | Unset = UNSET
+    label_font_size: int | None | Unset = UNSET
+    color: tuple[float, float, float] | None | Unset = UNSET
+    background_color: tuple[float, float, float] | None | Unset = UNSET
+    is_fill: bool | None | Unset = UNSET
+    is_outline: bool | None | Unset = UNSET
+    is_bold: bool | None | Unset = UNSET
+    is_italic: bool | None | Unset = UNSET
+    is_shadow: bool | None | Unset = UNSET
+    is_interactive: bool | None | Unset = UNSET
+    is_use_opacity: bool | None | Unset = UNSET
+    is_unconstrained_font_size: bool | None | Unset = UNSET
+    is_nan_annotation: bool | None | Unset = UNSET
+    below_label: str | None | Unset = UNSET
+    above_label: str | None | Unset = UNSET
+    bar_args: dict[str, Any] | Unset = UNSET
+
+    # fmt: off
+    __attrs__: ClassVar[Mapping[str, str]] = {
+        **dict(OptsBase.__attrs__),
+        "title":                   "Title shown above or beside the scalar bar.",
+        "cmap":                    "Optional colormap name associated with this scalar bar.",
+        "bar_range":               "Optional scalar range represented by this scalar bar.",
+        "is_visible":              "Whether this scalar bar should currently be shown.",
+        "is_vertical":             "Whether the scalar bar should use vertical orientation.",
+        "width":                   "Normalized scalar-bar width in the figure viewport.",
+        "height":                  "Normalized scalar-bar height in the figure viewport.",
+        "position":                "Normalized (x, y) scalar-bar anchor position in the figure viewport.",
+        "n_labels":                "Number of numeric labels shown on the scalar bar.",
+        "fmt":                     "Numeric label format string used by the scalar bar.",
+        "n_colors":                "Number of discrete colors displayed in the scalar bar.",
+        "font_family":             "Font family used for scalar-bar text.",
+        "title_font_size":         "Font size of the scalar-bar title.",
+        "label_font_size":         "Font size of the scalar-bar numeric labels.",
+        "color":                   "Text and outline color used by the scalar bar.",
+        "background_color":        "Background fill color of the scalar-bar box.",
+        "is_fill":                 "Whether the scalar-bar background box should be filled.",
+        "is_outline":              "Whether the scalar bar should draw an outline frame.",
+        "is_bold":                 "Whether scalar-bar text should use a bold font weight.",
+        "is_italic":               "Whether scalar-bar text should use italics.",
+        "is_shadow":               "Whether scalar-bar text should use drop shadows.",
+        "is_interactive":          "Whether the scalar bar should be interactive/draggable when supported.",
+        "is_use_opacity":          "Whether to display opacity information in the scalar bar.",
+        "is_unconstrained_font_size": (
+            "Whether font size may exceed the scalar-bar box constraints."
+        ),
+        "is_nan_annotation":       "Whether NaN values should be annotated in the scalar bar.",
+        "below_label":             "Label shown for values below the displayed range.",
+        "above_label":             "Label shown for values above the displayed range.",
+        "bar_args":                "Additional backend keyword arguments passed through to PyVista.",
+    }
+
+    impl_validators: ClassVar[Mapping[str, Any]] = {
+        **dict(OptsBase.impl_validators),
+        "title":                   lambda v, d: as_str(v, name=d),
+        "cmap":                    lambda v, d: _as_optional_str(v, d),
+        "bar_range":               lambda v, d: _as_optional_range(v, d),
+        "is_visible":              lambda v, d: as_bool(v, name=d),
+        "is_vertical":             lambda v, d: as_bool(v, name=d),
+        "width":                   lambda v, d: _as_optional_float(v, d, value_range=(0.0, 1.0)),
+        "height":                  lambda v, d: _as_optional_float(v, d, value_range=(0.0, 1.0)),
+        "position":                lambda v, d: _as_optional_position(v, d),
+        "n_labels":                lambda v, d: _as_optional_int(v, d, value_range=(0, np.inf)),
+        "fmt":                     lambda v, d: _as_optional_str(v, d),
+        "n_colors":                lambda v, d: _as_optional_int(v, d, value_range=(1, np.inf)),
+        "font_family":             lambda v, d: _as_optional_str(v, d, pool=("arial", "courier", "times")),
+        "title_font_size":         lambda v, d: _as_optional_int(v, d, value_range=(1, np.inf)),
+        "label_font_size":         lambda v, d: _as_optional_int(v, d, value_range=(1, np.inf)),
+        "color":                   lambda v, d: _as_optional_color(v, d),
+        "background_color":        lambda v, d: _as_optional_color(v, d),
+        "is_fill":                 lambda v, d: _as_optional_bool(v, d),
+        "is_outline":              lambda v, d: _as_optional_bool(v, d),
+        "is_bold":                 lambda v, d: _as_optional_bool(v, d),
+        "is_italic":               lambda v, d: _as_optional_bool(v, d),
+        "is_shadow":               lambda v, d: _as_optional_bool(v, d),
+        "is_interactive":          lambda v, d: _as_optional_bool(v, d),
+        "is_use_opacity":          lambda v, d: _as_optional_bool(v, d),
+        "is_unconstrained_font_size": lambda v, d: _as_optional_bool(v, d),
+        "is_nan_annotation":       lambda v, d: _as_optional_bool(v, d),
+        "below_label":             lambda v, d: _as_optional_str(v, d),
+        "above_label":             lambda v, d: _as_optional_str(v, d),
+        "bar_args":                lambda v, d: _as_bar_args(v, d),
+    }
+
+    impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
+        {
+            **dict(OptsBase.impl_defaults_frozen),
+            "title": "scalar",
+            "cmap": None,
+            "bar_range": None,
+            "is_visible": True,
+            "is_vertical": True,
+            "width": None,
+            "height": None,
+            "position": None,
+            "n_labels": 5,
+            "fmt": None,
+            "n_colors": None,
+            "font_family": None,
+            "title_font_size": None,
+            "label_font_size": None,
+            "color": None,
+            "background_color": None,
+            "is_fill": None,
+            "is_outline": None,
+            "is_bold": None,
+            "is_italic": None,
+            "is_shadow": None,
+            "is_interactive": None,
+            "is_use_opacity": None,
+            "is_unconstrained_font_size": None,
+            "is_nan_annotation": None,
+            "below_label": None,
+            "above_label": None,
+            "bar_args": {},
+        }
+    )
+    # fmt: on
+
+
+# ScalarBar developer conventions:
+# - ScalarBar is a figure-owned HostBase object whose independent user inputs
+#   live in OptsScalarBar and whose derived backend-facing state lives in
+#   calc_/entity_ fields on the host.
+# - Keep `owner` bound to the owning PlotFigure and `source` bound to the
+#   glyph-like object that currently provides mapper semantics for this bar.
+# - Treat `raw_name` as the registry identity and `opts.title` as user-facing
+#   display text. The title is not the unique identity key.
+# - `calc_pyvista_kwargs` should remain the resolved high-level kwargs payload
+#   that can later be passed to PyVista, while `entity_backend` stores the live
+#   backend actor/handle when one exists.
+
+
+class ScalarBar(HostBase):
+    """Host-style declaration object for one figure-level scalar bar."""
+
+    __attr_defs__ = {
+        **dict(HostBase.__attr_defs__),
+        "source": {
+            "doc": "The glyph-like object that currently provides the scalar-bar mapper semantics.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
+        "raw_mapper_name": {
+            "doc": "Optional readable name of the mapper/source associated with this scalar bar.",
+            "validator": lambda v, d: _as_optional_str(v, d),
+        },
+        "calc_pyvista_kwargs": {
+            "doc": "Resolved PyVista scalar-bar keyword arguments derived from the current opts.",
+        },
+        "entity_backend": {
+            "doc": "Live backend scalar-bar handle managed by the rendering layer, or None if not created.",
+        },
+        "backend": {
+            "doc": "Read-only: Alias of `entity_backend`.",
+            "kind": "property",
+        },
+    }
+
+    __slots__ = (
+        "raw_mapper_name",
+        "calc_pyvista_kwargs",
+        "entity_backend",
+    )
+
+    _PYVISTA_COMMON_OPT_KEYS = (
+        "title",
+        "is_vertical",
+        "n_labels",
+        "is_italic",
+        "is_bold",
+        "is_shadow",
+        "fmt",
+        "font_family",
+        "label_font_size",
+        "title_font_size",
+        "color",
+        "position",
+        "width",
+        "height",
+        "n_colors",
+        "background_color",
+        "is_fill",
+        "is_outline",
+        "is_interactive",
+        "is_use_opacity",
+        "is_unconstrained_font_size",
+        "is_nan_annotation",
+        "below_label",
+        "above_label",
+    )
+
+    _PYVISTA_BOOL_KEY_MAP = {
+        "is_vertical": "vertical",
+        "is_fill": "fill",
+        "is_outline": "outline",
+        "is_bold": "bold",
+        "is_italic": "italic",
+        "is_shadow": "shadow",
+        "is_interactive": "interactive",
+        "is_use_opacity": "use_opacity",
+        "is_unconstrained_font_size": "unconstrained_font_size",
+        "is_nan_annotation": "nan_annotation",
+    }
+
+    def __init__(
+        self,
+        *,
+        name: str | None = None,
+        mapper_name: str | None = None,
+        opts: OptsScalarBar | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        backend=None,
+        **kwargs,
+    ):
+        mapper_name_validated = _as_optional_str(
+            mapper_name,
+            "Optional readable name of the mapper/source associated with this scalar bar.",
+        )
+        name_replace = "scalar_bar"
+        if mapper_name_validated is not None:
+            name_replace = f"{mapper_name_validated}_scalarbar"
+
+        super().__init__(
+            OptsScalarBar,
+            opts,
+            opts_defaults_override,
+            name=name,
+            name_replace=name_replace,
+            **kwargs,
+        )
+        object.__setattr__(
+            self,
+            "raw_mapper_name",
+            mapper_name_validated,
+        )
+        object.__setattr__(self, "entity_backend", backend)
+        object.__setattr__(self, "calc_pyvista_kwargs", {})
+        self.opts.act_finalize(self.opts_defaults)
+        self._helper_commit_apply_opts(is_reapply_opts=True)
+
+    @property
+    def backend(self):
+        """Return the live backend handle currently attached to this scalar bar."""
+        return self.entity_backend
+
+    def act_set_backend(self, backend):
+        """Attach or replace the live backend handle for this scalar bar."""
+        object.__setattr__(self, "entity_backend", backend)
+        return backend
+
+    def act_clear_backend(self):
+        """Forget the live backend handle without changing the declarative state."""
+        object.__setattr__(self, "entity_backend", None)
+
+    def _helper_build_pyvista_kwargs(self) -> dict[str, Any]:
+        """Build the common PyVista keyword payload from current opts values."""
+        kwargs_resolved: dict[str, Any] = {}
+        opts_dict = self.opts.act_asdict()
+
+        for key in self._PYVISTA_COMMON_OPT_KEYS:
+            value = opts_dict.get(key)
+            if value is None:
+                continue
+            if key == "position":
+                kwargs_resolved["position_x"] = value[0]
+                kwargs_resolved["position_y"] = value[1]
+                continue
+            target_key = self._PYVISTA_BOOL_KEY_MAP.get(key, key)
+            kwargs_resolved[target_key] = value
+
+        bar_args = dict(opts_dict.get("bar_args", {}))
+        kwargs_resolved.update(bar_args)
+        return kwargs_resolved
+
+    # ==================== OVERRIDE ====================
+    # ScalarBar overrides HostBase._helper_commit_apply_opts_main so opts
+    # updates are normalized into a resolved PyVista kwargs payload stored on
+    # the host for later backend synchronization.
+    # ==================================================
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
+        del is_reapply_opts
+
+        kwargs_left = {}
+        kwargs_applied_opts_main = {}
+        for key, value in kwargs.items():
+            if key not in type(self.opts).__attrs__:
+                kwargs_left[key] = value
+                continue
+            object.__setattr__(self.opts, key, value)
+            kwargs_applied_opts_main[key] = getattr(self.opts, key)
+
+        object.__setattr__(
+            self, "calc_pyvista_kwargs", self._helper_build_pyvista_kwargs()
+        )
+        return kwargs_left, kwargs_applied_opts_main
+
+    def __str__(self):
+        """Return the compact identity-style string form of this scalar bar."""
+        return f"{type(self).__name__}({self.name!r})"
+
+    def __repr__(self):
+        """Return a short readable summary of this scalar-bar declaration."""
+        return (
+            f"{type(self).__name__}("
+            f"name={self.name!r}, "
+            f"title={self.opts.title!r}, "
+            f"mapper_name={self.raw_mapper_name!r}, "
+            f"is_visible={self.opts.is_visible!r}, "
+            f"pyvista_kwargs={self.calc_pyvista_kwargs!r})"
+        )
