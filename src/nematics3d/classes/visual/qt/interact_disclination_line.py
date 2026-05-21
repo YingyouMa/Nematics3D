@@ -16,16 +16,10 @@ class InteractDisclinationLine(InteractGlyphBase):
         # host is the PlotTube
         self.wrapper = host.wrapper  # DisclinationLineSmoothPlot
         self.smooth = host.wrapper.owner  # DisclinationLineSmooth
-        object.__setattr__(
-            self,
-            "_impl_silhouette_state_backup",
-            bool(getattr(host, "state_is_silhouette", True)),
+        self._impl_silhouette_state_backup = bool(
+            getattr(host, "state_is_silhouette", True)
         )
-        object.__setattr__(
-            self,
-            "_impl_min_line_length_backup",
-            self.smooth.opts.min_line_length,
-        )
+        self._impl_min_line_length_backup = self.smooth.opts.min_line_length
 
         object.__setattr__(host, "state_is_silhouette", False)
 

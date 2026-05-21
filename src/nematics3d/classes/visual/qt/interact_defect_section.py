@@ -26,7 +26,7 @@ class InteractDefectSection(PanelBase):
             is_visible=False,
         )
         object.__setattr__(self.visual_normal, "state_is_interactable", False)
-        object.__setattr__(self, "_is_continuous_interacting", False)
+        self._is_continuous_interacting = False
 
         super().__init__(field.grid, figure, title=f"Controls of {field.grid.name!r}")
         self.defect_plane.act_save_opts(self.str_now)
@@ -58,7 +58,7 @@ class InteractDefectSection(PanelBase):
     def _helper_begin_continuous_interaction(self, *_args):
         if self._is_continuous_interacting:
             return
-        object.__setattr__(self, "_is_continuous_interacting", True)
+        self._is_continuous_interacting = True
         for visual in self._iter_silhouette_targets():
             if not hasattr(visual, "state_is_silhouette"):
                 continue
@@ -69,7 +69,7 @@ class InteractDefectSection(PanelBase):
     def _helper_end_continuous_interaction(self, *_args):
         if not self._is_continuous_interacting:
             return
-        object.__setattr__(self, "_is_continuous_interacting", False)
+        self._is_continuous_interacting = False
         for visual in self._iter_silhouette_targets():
             if not hasattr(visual, "state_is_silhouette"):
                 continue

@@ -18,14 +18,14 @@ from .panel_base import (
 class InteractBounds(PanelBase):
 
     def __init__(self, host, figure):
-        object.__setattr__(self, "_is_continuous_interacting", False)
-        object.__setattr__(self, "_impl_silhouette_state_backup", {})
-        object.__setattr__(self, "_helper_origin_visual", None)
-        object.__setattr__(self, "_helper_axis1_visual", None)
-        object.__setattr__(self, "_helper_axis2_visual", None)
-        object.__setattr__(self, "_helper_origin_radius", None)
-        object.__setattr__(self, "_helper_axis1_radius", None)
-        object.__setattr__(self, "_helper_axis2_radius", None)
+        self._is_continuous_interacting = False
+        self._impl_silhouette_state_backup = {}
+        self._helper_origin_visual = None
+        self._helper_axis1_visual = None
+        self._helper_axis2_visual = None
+        self._helper_origin_radius = None
+        self._helper_axis1_radius = None
+        self._helper_axis2_radius = None
         super().__init__(host, figure, title=f"Controls of {host.name!r}")
 
     def _helper_get_host_visual_in_current_figure(self):
@@ -59,9 +59,9 @@ class InteractBounds(PanelBase):
             ]
             base_radius = max(lengths) / 100.0
 
-        object.__setattr__(self, "_helper_axis1_radius", float(base_radius) * 2.6)
-        object.__setattr__(self, "_helper_axis2_radius", float(base_radius) * 1.7)
-        object.__setattr__(self, "_helper_origin_radius", float(base_radius) * 3.0)
+        self._helper_axis1_radius = float(base_radius) * 2.6
+        self._helper_axis2_radius = float(base_radius) * 1.7
+        self._helper_origin_radius = float(base_radius) * 3.0
 
     def _helper_build_axes_coords(self):
         origin = np.asarray(self.host.opts.origin, dtype=float)
@@ -127,9 +127,9 @@ class InteractBounds(PanelBase):
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
 
-        object.__setattr__(self, "_helper_origin_visual", origin_visual)
-        object.__setattr__(self, "_helper_axis1_visual", axis1_visual)
-        object.__setattr__(self, "_helper_axis2_visual", axis2_visual)
+        self._helper_origin_visual = origin_visual
+        self._helper_axis1_visual = axis1_visual
+        self._helper_axis2_visual = axis2_visual
 
     def _update_helper_visuals(self, is_visible=True):
         if self._helper_origin_visual is None:
@@ -341,7 +341,7 @@ class InteractBounds(PanelBase):
     def _helper_begin_continuous_interaction(self, *_args):
         if self._is_continuous_interacting:
             return
-        object.__setattr__(self, "_is_continuous_interacting", True)
+        self._is_continuous_interacting = True
         backups = {}
         for visual in self._iter_silhouette_targets():
             if not hasattr(visual, "state_is_silhouette"):
@@ -350,12 +350,12 @@ class InteractBounds(PanelBase):
             object.__setattr__(visual, "state_is_silhouette", False)
             if hasattr(visual, "_helper_clear_silhouette"):
                 visual._helper_clear_silhouette()
-        object.__setattr__(self, "_impl_silhouette_state_backup", backups)
+        self._impl_silhouette_state_backup = backups
 
     def _helper_end_continuous_interaction(self, *_args):
         if not self._is_continuous_interacting:
             return
-        object.__setattr__(self, "_is_continuous_interacting", False)
+        self._is_continuous_interacting = False
         backups = getattr(self, "_impl_silhouette_state_backup", {})
         for visual in self._iter_silhouette_targets():
             if not hasattr(visual, "state_is_silhouette"):
@@ -368,7 +368,7 @@ class InteractBounds(PanelBase):
                 and hasattr(visual, "_helper_add_silhouette")
             ):
                 visual._helper_add_silhouette()
-        object.__setattr__(self, "_impl_silhouette_state_backup", {})
+        self._impl_silhouette_state_backup = {}
 
     def _commit_origin(self, center):
         self._is_gui_updating = True
