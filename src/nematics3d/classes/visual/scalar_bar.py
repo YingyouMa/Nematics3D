@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+import datetime
 from types import MappingProxyType
 from typing import Any, ClassVar
 
@@ -231,8 +232,9 @@ class OptsScalarBar(OptsBase):
 #   calc_/entity_ fields on the host.
 # - Keep `owner` bound to the owning PlotFigure and `source` bound to the
 #   glyph-like object that currently provides mapper semantics for this bar.
-# - Treat `raw_name` as the registry identity and `opts.title` as user-facing
-#   display text. The title is not the unique identity key.
+# - Treat `raw_name` as the registry identity, `impl_name_pv` as the stable
+#   backend-facing PyVista key, and `opts.title` as user-facing display text.
+#   None of these three roles should be conflated.
 # - `calc_pyvista_kwargs` should remain the resolved high-level kwargs payload
 #   that can later be passed to PyVista, while `entity_backend` stores the live
 #   backend actor/handle when one exists.
@@ -255,6 +257,9 @@ class ScalarBar(HostBase):
             "doc": "Optional readable name of the mapper/source associated with this scalar bar.",
             "validator": lambda v, d: _as_optional_str(v, d),
         },
+        "impl_name_pv": {
+            "doc": "Stable unique identifier of this scalar bar stored in the PyVista plotter.",
+        },
         "calc_pyvista_kwargs": {
             "doc": "Resolved PyVista scalar-bar keyword arguments derived from the current opts.",
         },
@@ -269,6 +274,7 @@ class ScalarBar(HostBase):
 
     __slots__ = (
         "raw_mapper_name",
+        "impl_name_pv",
         "calc_pyvista_kwargs",
         "entity_backend",
     )
@@ -344,6 +350,9 @@ class ScalarBar(HostBase):
             "raw_mapper_name",
             mapper_name_validated,
         )
+        str_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        unique_id = self.name + str_now
+        object.__setattr__(self, "impl_name_pv", unique_id)
         object.__setattr__(self, "entity_backend", backend)
         object.__setattr__(self, "calc_pyvista_kwargs", {})
         self.opts.act_finalize(self.opts_defaults)
@@ -414,6 +423,7 @@ class ScalarBar(HostBase):
         return (
             f"{type(self).__name__}("
             f"name={self.name!r}, "
+            f"impl_name_pv={self.impl_name_pv!r}, "
             f"title={self.opts.title!r}, "
             f"mapper_name={self.raw_mapper_name!r}, "
             f"is_visible={self.opts.is_visible!r}, "
