@@ -26,18 +26,13 @@ class InteractPlane(PanelBase):
         parent,
         layout,
         title,
-        button_text,
         values,
         commit_callback,
     ):
-        button = QtWidgets.QPushButton(button_text, parent)
-        layout.addWidget(button)
-
         panel = QtWidgets.QWidget(parent)
         panel_layout = QtWidgets.QHBoxLayout(panel)
         panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(6)
-        panel.hide()
 
         panel_layout.addWidget(QtWidgets.QLabel(f"{title}:", panel))
         inputs = []
@@ -54,9 +49,8 @@ class InteractPlane(PanelBase):
         panel_layout.addWidget(btn_apply)
         layout.addWidget(panel)
 
-        button.clicked.connect(lambda: panel.setVisible(not panel.isVisible()))
         btn_apply.clicked.connect(lambda: commit_callback(inputs))
-        return button, panel, inputs, btn_apply
+        return panel, inputs, btn_apply
 
     def _set_vector_inputs(self, boxes, values):
         values = np.asarray(values, dtype=float)
@@ -242,7 +236,6 @@ class InteractPlane(PanelBase):
         self.layout.addWidget(self.point_console.group)
         self.sliders["origin_move_step"] = self.point_console.slider_step
         (
-            self.btn_origin_manual,
             self.panel_origin_manual,
             self.origin_inputs,
             self.btn_origin_manual_apply,
@@ -250,7 +243,6 @@ class InteractPlane(PanelBase):
             parent=self.point_console.group,
             layout=self.point_console.gl,
             title="Origin",
-            button_text="Set Origin Manually",
             values=self.host.opts.origin,
             commit_callback=self._commit_manual_origin,
         )
@@ -366,7 +358,6 @@ class InteractPlane(PanelBase):
         )
         gl_orient.addWidget(self.normal_info)
         (
-            self.btn_normal_manual,
             self.panel_normal_manual,
             self.normal_inputs,
             self.btn_normal_manual_apply,
@@ -374,7 +365,6 @@ class InteractPlane(PanelBase):
             parent=group_orient,
             layout=gl_orient,
             title="Normal",
-            button_text="Set Normal Manually",
             values=self.host.opts.normal,
             commit_callback=self._commit_manual_normal,
         )
