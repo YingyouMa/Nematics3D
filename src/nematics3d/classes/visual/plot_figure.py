@@ -28,7 +28,7 @@ from ..opts import cover_value
 from ..registry_base import RegistryBase
 from .pick_manager import PickManager
 from .qt.console import ScopedConsoleDock
-from .scalar_bar import ScalarBar
+from .scalar_bar_registry import ScalarBarRegistry
 
 
 @dataclass(slots=True, repr=False)
@@ -382,7 +382,7 @@ class PlotFigure(HostBase):
         glyphs.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "entity_glyphs", glyphs)
 
-        scalar_bars = RegistryBase("scalar bars manager")
+        scalar_bars = ScalarBarRegistry("scalar bars manager")
         scalar_bars.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "entity_scalar_bars", scalar_bars)
 
@@ -509,145 +509,20 @@ class PlotFigure(HostBase):
         is_contain_ok=False,
         is_bind_registry_relation=True,
     ):
-        """Register one ScalarBar object in the figure-owned scalar-bar registry."""
-        if not isinstance(scalar_bar, ScalarBar):
-            raise TypeError(
-                "scalar_bar must be a ScalarBar instance. "
-                f"Got {type(scalar_bar).__name__!r} instead."
-            )
-
-        bind_relation = getattr(scalar_bar, "act_bind_relation_base", None)
-        if callable(bind_relation):
-            bind_relation("owner", self, is_weak=True)
-
-        self.scalar_bars.act_register(
+        """Forward scalar-bar registration to the owned scalar-bar registry."""
+        return self.scalar_bars.act_register(
             scalar_bar,
             is_contain_ok=is_contain_ok,
             is_bind_registry_relation=is_bind_registry_relation,
         )
-        return scalar_bar
-
-    def _helper_resolve_scalar_bar(self, key):
-        """Resolve one registered scalar bar from a registry-compatible key."""
-        scalar_bar = self.scalar_bars[key]
-        if scalar_bar is None:
-            return None
-        if not isinstance(scalar_bar, ScalarBar):
-            raise TypeError(
-                "Resolved scalar-bar registry item must be a ScalarBar instance. "
-                f"Got {type(scalar_bar).__name__!r} instead."
-            )
-        return scalar_bar
-
-    def _helper_resolve_scalar_bar_mapper(self, scalar_bar):
-        """Resolve the live VTK mapper that should drive one scalar bar."""
-        source = getattr(scalar_bar, "source", None)
-        if source is None:
-            raise ValueError(
-                f"Scalar bar {scalar_bar!r} has no bound source relation, so no "
-                "PyVista mapper can be resolved yet."
-            )
-
-        actor = getattr(source, "entity_actor", None)
-        mapper = getattr(actor, "mapper", None)
-        if mapper is not None:
-            return mapper
-
-        mapper = getattr(source, "mapper", None)
-        if mapper is not None:
-            return mapper
-
-        raise ValueError(
-            f"Failed to resolve a mapper from source {source!r} for scalar bar "
-            f"{scalar_bar!r}."
-        )
-
-    def _helper_find_scalar_bar_backend_key(self, scalar_bar):
-        """Return the Plotter.scalar_bars key currently bound to one backend."""
-        plotter_scalar_bars = getattr(self.pl, "scalar_bars", None)
-        if plotter_scalar_bars is None:
-            return None
-
-        backend = getattr(scalar_bar, "backend", None)
-        backend_name = scalar_bar.impl_name_pv
-        if backend_name in plotter_scalar_bars:
-            actor = plotter_scalar_bars[backend_name]
-            if backend is None or actor is backend:
-                return backend_name
-
-        if backend is None:
-            return None
-
-        for title, actor in plotter_scalar_bars.items():
-            if actor is backend:
-                return title
-        return None
 
     def act_unregister_scalar_bar(self, key, is_missing_ok=False):
-        """Unregister one scalar bar by registry index or registered name."""
-        try:
-            scalar_bar = self._helper_resolve_scalar_bar(key)
-        except (KeyError, IndexError):
-            if is_missing_ok:
-                return
-            raise
-        if scalar_bar is None:
-            if is_missing_ok:
-                return
-            raise KeyError("Scalar-bar key cannot be None when unregistering.")
-
-        backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
-        if backend_key is not None:
-            try:
-                self.pl.remove_scalar_bar(title=backend_key, render=False)
-            except (AttributeError, RuntimeError, ReferenceError, KeyError, ValueError):
-                pass
-        scalar_bar.act_clear_backend()
-
-        self.scalar_bars.act_unregister(scalar_bar, is_missing_ok=is_missing_ok)
-        if getattr(scalar_bar, "owner", None) is self:
-            scalar_bar.act_unbind_relation_base("owner")
+        """Forward scalar-bar removal to the owned scalar-bar registry."""
+        self.scalar_bars.act_unregister(key, is_missing_ok=is_missing_ok)
 
     def act_sync_scalar_bar(self, key):
-        """
-        Prepare one registered scalar bar for future backend synchronization.
-
-        This declaration-side sync currently resolves the registry item and
-        returns its PyVista kwargs payload. Live backend updates are intentionally
-        deferred to a later implementation step.
-        """
-        scalar_bar = self._helper_resolve_scalar_bar(key)
-        if scalar_bar is None:
-            raise KeyError("Scalar-bar key cannot be None when syncing.")
-
-        kwargs_pyvista = dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
-        kwargs_return = dict(kwargs_pyvista)
-        backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
-        if backend_key is not None and getattr(scalar_bar, "backend", None) is not None:
-            return kwargs_return
-
-        mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
-        display_title = kwargs_pyvista.pop("title", scalar_bar.opts.title)
-        kwargs_create = dict(kwargs_pyvista)
-        kwargs_create["title"] = scalar_bar.impl_name_pv
-        kwargs_create["mapper"] = mapper
-        kwargs_create["render"] = False
-
-        backend = self.pl.add_scalar_bar(**kwargs_create)
-        if backend is None:
-            backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
-            if backend_key is not None:
-                backend = self.pl.scalar_bars[backend_key]
-        if backend is None:
-            raise RuntimeError(
-                f"Failed to create or resolve PyVista scalar-bar backend for "
-                f"{scalar_bar!r}."
-            )
-
-        if display_title is not None:
-            backend.SetTitle(display_title)
-        scalar_bar.act_set_backend(backend)
-        return kwargs_return
+        """Forward scalar-bar backend synchronization to the owned registry."""
+        return self.scalar_bars.act_sync(key)
 
     def _helper_close_interacts(self):
         interacts = self.interacts
@@ -663,15 +538,10 @@ class PlotFigure(HostBase):
         scalar_bars = self.scalar_bars
         if scalar_bars is None:
             return
-        for scalar_bar in list(scalar_bars):
-            try:
-                scalar_bar.act_clear_backend()
-            except (AttributeError, RuntimeError, ReferenceError):
-                pass
-            try:
-                self.act_unregister_scalar_bar(scalar_bar.name, is_missing_ok=True)
-            except (AttributeError, RuntimeError, ReferenceError):
-                pass
+        try:
+            scalar_bars.act_clear(is_show_existing=False)
+        except (AttributeError, RuntimeError, ReferenceError):
+            pass
 
     def act_close(self, *, is_remove_glyphs: bool = True):
         """Close interact panels, optional glyphs, and the plotter backend."""

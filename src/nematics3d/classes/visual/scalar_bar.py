@@ -96,7 +96,7 @@ class OptsScalarBar(OptsBase):
 
     title: str | Unset = UNSET
     cmap: str | None | Unset = UNSET
-    bar_range: tuple[float, float] | None | Unset = UNSET
+    clim: tuple[float, float] | None | Unset = UNSET
     is_visible: bool | Unset = UNSET
     is_vertical: bool | Unset = UNSET
     width: float | None | Unset = UNSET
@@ -128,7 +128,7 @@ class OptsScalarBar(OptsBase):
         **dict(OptsBase.__attrs__),
         "title":                   "Title shown above or beside the scalar bar.",
         "cmap":                    "Optional colormap name associated with this scalar bar.",
-        "bar_range":               "Optional scalar range represented by this scalar bar.",
+        "clim":                    "Optional scalar range represented by this scalar bar.",
         "is_visible":              "Whether this scalar bar should currently be shown.",
         "is_vertical":             "Whether the scalar bar should use vertical orientation.",
         "width":                   "Normalized scalar-bar width in the figure viewport.",
@@ -162,7 +162,7 @@ class OptsScalarBar(OptsBase):
         **dict(OptsBase.impl_validators),
         "title":                   lambda v, d: as_str(v, name=d),
         "cmap":                    lambda v, d: _as_optional_str(v, d),
-        "bar_range":               lambda v, d: _as_optional_range(v, d),
+        "clim":                    lambda v, d: _as_optional_range(v, d),
         "is_visible":              lambda v, d: as_bool(v, name=d),
         "is_vertical":             lambda v, d: as_bool(v, name=d),
         "width":                   lambda v, d: _as_optional_float(v, d, value_range=(0.0, 1.0)),
@@ -195,7 +195,7 @@ class OptsScalarBar(OptsBase):
             **dict(OptsBase.impl_defaults_frozen),
             "title": "scalar",
             "cmap": None,
-            "bar_range": None,
+            "clim": None,
             "is_visible": True,
             "is_vertical": True,
             "width": None,
@@ -266,8 +266,18 @@ class ScalarBar(HostBase):
         "entity_backend": {
             "doc": "Live backend scalar-bar handle managed by the rendering layer, or None if not created.",
         },
+        "entity_backend_widget": {
+            "doc": "Live backend scalar-bar widget handle when interactive mode is enabled.",
+        },
+        "impl_is_syncing_backend": {
+            "doc": "Internal guard preventing recursive opts/backend synchronization loops.",
+        },
         "backend": {
             "doc": "Read-only: Alias of `entity_backend`.",
+            "kind": "property",
+        },
+        "backend_widget": {
+            "doc": "Read-only: Alias of `entity_backend_widget`.",
             "kind": "property",
         },
     }
@@ -277,6 +287,8 @@ class ScalarBar(HostBase):
         "impl_name_pv",
         "calc_pyvista_kwargs",
         "entity_backend",
+        "entity_backend_widget",
+        "impl_is_syncing_backend",
     )
 
     _PYVISTA_COMMON_OPT_KEYS = (
@@ -354,6 +366,8 @@ class ScalarBar(HostBase):
         unique_id = self.name + str_now
         object.__setattr__(self, "impl_name_pv", unique_id)
         object.__setattr__(self, "entity_backend", backend)
+        object.__setattr__(self, "entity_backend_widget", None)
+        object.__setattr__(self, "impl_is_syncing_backend", False)
         object.__setattr__(self, "calc_pyvista_kwargs", {})
         self.opts.act_finalize(self.opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
@@ -363,14 +377,48 @@ class ScalarBar(HostBase):
         """Return the live backend handle currently attached to this scalar bar."""
         return self.entity_backend
 
+    @property
+    def backend_widget(self):
+        """Return the live backend widget handle when interactive mode is enabled."""
+        return self.entity_backend_widget
+
     def act_set_backend(self, backend):
         """Attach or replace the live backend handle for this scalar bar."""
         object.__setattr__(self, "entity_backend", backend)
         return backend
 
+    def act_set_backend_widget(self, widget):
+        """Attach or replace the live backend widget handle for this scalar bar."""
+        object.__setattr__(self, "entity_backend_widget", widget)
+        return widget
+
     def act_clear_backend(self):
         """Forget the live backend handle without changing the declarative state."""
         object.__setattr__(self, "entity_backend", None)
+        object.__setattr__(self, "entity_backend_widget", None)
+
+    def act_set_backend_sync_guard(self, is_syncing):
+        """Set the internal backend-sync guard used to avoid recursive updates."""
+        object.__setattr__(self, "impl_is_syncing_backend", bool(is_syncing))
+
+    def _helper_request_owner_sync(self):
+        """Request owner-side backend synchronization after opts/state changes."""
+        if self.impl_is_syncing_backend:
+            return
+
+        registry = getattr(self, "registry", None)
+        act_sync = getattr(registry, "act_sync", None)
+        if callable(act_sync):
+            act_sync(self.name)
+            return
+
+        owner = getattr(self, "owner", None)
+        if owner is None:
+            return
+
+        act_sync_scalar_bar = getattr(owner, "act_sync_scalar_bar", None)
+        if callable(act_sync_scalar_bar):
+            act_sync_scalar_bar(self.name)
 
     def _helper_build_pyvista_kwargs(self) -> dict[str, Any]:
         """Build the common PyVista keyword payload from current opts values."""
@@ -412,6 +460,7 @@ class ScalarBar(HostBase):
         object.__setattr__(
             self, "calc_pyvista_kwargs", self._helper_build_pyvista_kwargs()
         )
+        self._helper_request_owner_sync()
         return kwargs_left, kwargs_applied_opts_main
 
     def __str__(self):
