@@ -520,9 +520,6 @@ class InteractPlane(PanelBase):
     # with PlaneGrid option changes from the host side.
     # ==================================================
     def _sync_func(self, **kwargs):
-        if getattr(self, "_is_gui_updating", False):
-            return
-
         if "origin" in kwargs:
             self.state["origin"] = np.asarray(self.host.opts.origin, dtype=float).copy()
             self.point_console._update_center_label()

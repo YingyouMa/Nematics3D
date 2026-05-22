@@ -25,6 +25,9 @@ class InteractVector(InteractGlyphBase):
 
     def _build_extra_geometry(self, parent, layout):
         self.state["length_rescale"] = 1.0
+        self._length_rescale_base = self._helper_clone_resolver_value(
+            self.host.opts.length
+        )
         log_mapper = LogTickMapper(value_min=0.2, value_max=5, base=10.0)
         self.sliders["length_rescale"] = make_labeled_slider_row(
             parent=parent,
@@ -135,14 +138,14 @@ class InteractVector(InteractGlyphBase):
         )
 
     def _extra_commit(self, params):
-        current_length = self.host.opts.length
+        length_base = self._length_rescale_base
         scale = float(self.state["length_rescale"])
-        if callable(current_length):
-            params["length"] = lambda x: scale * current_length(x)
-        elif np.isscalar(current_length):
-            params["length"] = scale * float(current_length)
+        if callable(length_base):
+            params["length"] = lambda x: scale * length_base(x)
+        elif np.isscalar(length_base):
+            params["length"] = scale * float(length_base)
         else:
-            params["length"] = scale * np.asarray(current_length, dtype=float)
+            params["length"] = scale * np.asarray(length_base, dtype=float)
 
         params["tip_length_fraction"] = float(self.state["tip_length_fraction"])
         params["tip_radius_ratio"] = float(self.state["tip_radius_ratio"])
@@ -160,6 +163,11 @@ class InteractVector(InteractGlyphBase):
     # ==================================================
     def _sync_func(self, **kwargs):
         super()._sync_func(**kwargs)
+
+        if "length" in kwargs and not getattr(self, "_is_gui_updating", False):
+            self._length_rescale_base = self._helper_clone_resolver_value(
+                self.host.opts.length
+            )
 
         if "tip_length_fraction" in kwargs:
             self._sync_from_host_slider(
