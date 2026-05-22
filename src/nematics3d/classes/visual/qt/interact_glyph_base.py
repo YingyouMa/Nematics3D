@@ -60,21 +60,18 @@ class LightingConsole(QtWidgets.QWidget):
         hl_mode.addWidget(self.chk_phong)
         hl_mode.addWidget(self.chk_pbr)
 
-        self.group_shared = QtWidgets.QGroupBox("Shared Lighting", self)
-        gl_shared = QtWidgets.QVBoxLayout(self.group_shared)
-        self.layout.addWidget(self.group_shared)
+        self.group_phong = QtWidgets.QGroupBox("Phong Lighting", self)
+        gl_phong = QtWidgets.QVBoxLayout(self.group_phong)
+        self.layout.addWidget(self.group_phong)
+
         make_RGB_slider(
-            self.group_shared,
-            gl_shared,
+            self.group_phong,
+            gl_phong,
             self.sliders,
             "specular_color",
             init_rgb=tuple(np.asarray(self.host.opts.specular_color, dtype=float)),
             value_fmt="{:.3f}",
         )
-
-        self.group_phong = QtWidgets.QGroupBox("Phong Lighting", self)
-        gl_phong = QtWidgets.QVBoxLayout(self.group_phong)
-        self.layout.addWidget(self.group_phong)
 
         for key in ("ambient", "diffuse", "specular"):
             self.sliders[key] = make_labeled_slider_row(
@@ -171,6 +168,12 @@ class LightingConsole(QtWidgets.QWidget):
         is_phong = shading_type == "phong"
         self.group_phong.setEnabled(is_phong)
         self.group_pbr.setEnabled(not is_phong)
+        for key in (
+            "specular_color_r",
+            "specular_color_g",
+            "specular_color_b",
+        ):
+            self.sliders[key].set_enabled(is_phong)
 
         if is_commit:
             self.commit()
