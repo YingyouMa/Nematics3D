@@ -269,6 +269,9 @@ class ScalarBar(HostBase):
         "entity_backend_widget": {
             "doc": "Live backend scalar-bar widget handle when interactive mode is enabled.",
         },
+        "impl_backend_widget_observer_tag": {
+            "doc": "Internal observer id attached to the interactive widget end-event.",
+        },
         "impl_is_syncing_backend": {
             "doc": "Internal guard preventing recursive opts/backend synchronization loops.",
         },
@@ -288,6 +291,7 @@ class ScalarBar(HostBase):
         "calc_pyvista_kwargs",
         "entity_backend",
         "entity_backend_widget",
+        "impl_backend_widget_observer_tag",
         "impl_is_syncing_backend",
     )
 
@@ -367,6 +371,7 @@ class ScalarBar(HostBase):
         object.__setattr__(self, "impl_name_pv", unique_id)
         object.__setattr__(self, "entity_backend", backend)
         object.__setattr__(self, "entity_backend_widget", None)
+        object.__setattr__(self, "impl_backend_widget_observer_tag", None)
         object.__setattr__(self, "impl_is_syncing_backend", False)
         object.__setattr__(self, "calc_pyvista_kwargs", {})
         self.opts.act_finalize(self.opts_defaults)
@@ -392,10 +397,16 @@ class ScalarBar(HostBase):
         object.__setattr__(self, "entity_backend_widget", widget)
         return widget
 
+    def act_set_backend_widget_observer_tag(self, tag):
+        """Attach or replace the widget end-interaction observer id."""
+        object.__setattr__(self, "impl_backend_widget_observer_tag", tag)
+        return tag
+
     def act_clear_backend(self):
         """Forget the live backend handle without changing the declarative state."""
         object.__setattr__(self, "entity_backend", None)
         object.__setattr__(self, "entity_backend_widget", None)
+        object.__setattr__(self, "impl_backend_widget_observer_tag", None)
 
     def act_set_backend_sync_guard(self, is_syncing):
         """Set the internal backend-sync guard used to avoid recursive updates."""

@@ -12,6 +12,8 @@ from .scalar_bar import ScalarBar
 class ScalarBarRegistry(RegistryBase):
     """Figure-owned registry that manages scalar-bar declarations and backends."""
 
+    _WIDGET_GEOMETRY_ROUND_DIGITS = 6
+
     def _helper_resolve_scalar_bar(self, key):
         """Resolve one registered scalar bar from a registry-compatible key."""
         if isinstance(key, ScalarBar):
@@ -82,6 +84,78 @@ class ScalarBarRegistry(RegistryBase):
             return None
         return widgets.get(backend_key)
 
+    def _helper_configure_scalar_bar_widget(self, scalar_bar):
+        """Hide widget decoration and bind geometry write-back for one bar."""
+        widget = self._helper_resolve_scalar_bar_widget(scalar_bar)
+        scalar_bar.act_set_backend_widget(widget)
+        if widget is None:
+            scalar_bar.act_set_backend_widget_observer_tag(None)
+            return None
+
+        rep = widget.GetRepresentation()
+        rep.SetShowBorderToOff()
+        rep.SetShowPolygonToOff()
+        rep.SetShowHorizontalBorder(0)
+        rep.SetShowVerticalBorder(0)
+
+        observer_tag_old = getattr(scalar_bar, "impl_backend_widget_observer_tag", None)
+        if observer_tag_old is not None:
+            try:
+                widget.RemoveObserver(observer_tag_old)
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+
+        def _on_end_interaction(_obj, _event):
+            self._helper_pull_scalar_bar_widget_geometry(scalar_bar)
+
+        observer_tag = widget.AddObserver("EndInteractionEvent", _on_end_interaction)
+        scalar_bar.act_set_backend_widget_observer_tag(observer_tag)
+        return widget
+
+    def _helper_pull_scalar_bar_widget_geometry(self, scalar_bar):
+        """Pull the current widget geometry back into scalar-bar opts."""
+        widget = getattr(scalar_bar, "backend_widget", None)
+        if widget is None:
+            return None
+
+        rep = widget.GetRepresentation()
+        position = tuple(
+            round(float(value), self._WIDGET_GEOMETRY_ROUND_DIGITS)
+            for value in rep.GetPosition()[:2]
+        )
+        size = tuple(
+            round(float(value), self._WIDGET_GEOMETRY_ROUND_DIGITS)
+            for value in rep.GetPosition2()[:2]
+        )
+        payload = {
+            "position": position,
+            "width": size[0],
+            "height": size[1],
+        }
+
+        opts_now = scalar_bar.opts
+        if (
+            (
+                tuple(
+                    round(float(v), self._WIDGET_GEOMETRY_ROUND_DIGITS)
+                    for v in opts_now.position
+                )
+                if opts_now.position is not None
+                else None
+            )
+            == position
+            and opts_now.width == size[0]
+            and opts_now.height == size[1]
+        ):
+            return payload
+
+        scalar_bar.act_set_backend_sync_guard(True)
+        try:
+            scalar_bar.act_commit(**payload)
+        finally:
+            scalar_bar.act_set_backend_sync_guard(False)
+        return payload
+
     def _helper_create_scalar_bar_backend(self, scalar_bar):
         """Create one live PyVista scalar-bar backend from the current declaration."""
         kwargs_pyvista = dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
@@ -121,9 +195,7 @@ class ScalarBarRegistry(RegistryBase):
             backend.SetTitle(display_title)
 
         scalar_bar.act_set_backend(backend)
-        scalar_bar.act_set_backend_widget(
-            self._helper_resolve_scalar_bar_widget(scalar_bar)
-        )
+        self._helper_configure_scalar_bar_widget(scalar_bar)
         return backend
 
     def _helper_update_scalar_bar_backend(self, scalar_bar):
@@ -253,6 +325,7 @@ class ScalarBarRegistry(RegistryBase):
                 height = opts.height if opts.height is not None else backend.GetHeight()
                 rep.SetPosition2(width, height)
             rep.SetOrientation(1 if opts.is_vertical else 0)
+            self._helper_configure_scalar_bar_widget(scalar_bar)
         return backend
 
     def _helper_render_after_scalar_bar_sync(self):
