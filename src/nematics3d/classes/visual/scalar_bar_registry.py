@@ -112,6 +112,20 @@ class ScalarBarRegistry(RegistryBase):
         scalar_bar.act_set_backend_widget_observer_tag(observer_tag)
         return widget
 
+    def _helper_apply_scalar_bar_visibility(self, scalar_bar):
+        """Apply scalar-bar visibility without deleting the live backend."""
+        backend = getattr(scalar_bar, "backend", None)
+        if backend is None:
+            return None
+
+        is_visible = bool(scalar_bar.opts.is_visible)
+        backend.SetVisibility(is_visible)
+
+        widget = getattr(scalar_bar, "backend_widget", None)
+        if widget is not None:
+            widget.SetEnabled(1 if is_visible else 0)
+        return is_visible
+
     def _helper_pull_scalar_bar_widget_geometry(self, scalar_bar):
         """Pull the current widget geometry back into scalar-bar opts."""
         widget = getattr(scalar_bar, "backend_widget", None)
@@ -196,6 +210,7 @@ class ScalarBarRegistry(RegistryBase):
 
         scalar_bar.act_set_backend(backend)
         self._helper_configure_scalar_bar_widget(scalar_bar)
+        self._helper_apply_scalar_bar_visibility(scalar_bar)
         return backend
 
     def _helper_update_scalar_bar_backend(self, scalar_bar):
@@ -326,6 +341,8 @@ class ScalarBarRegistry(RegistryBase):
                 rep.SetPosition2(width, height)
             rep.SetOrientation(1 if opts.is_vertical else 0)
             self._helper_configure_scalar_bar_widget(scalar_bar)
+
+        self._helper_apply_scalar_bar_visibility(scalar_bar)
         return backend
 
     def _helper_render_after_scalar_bar_sync(self):
