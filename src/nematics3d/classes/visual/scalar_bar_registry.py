@@ -13,6 +13,17 @@ class ScalarBarRegistry(RegistryBase):
     """Figure-owned registry that manages scalar-bar declarations and backends."""
 
     _WIDGET_GEOMETRY_ROUND_DIGITS = 6
+    _FONT_FAMILY_INT_TO_NAME = {
+        0: "arial",
+        1: "courier",
+        2: "times",
+    }
+
+    def _helper_build_scalar_bar_rebuild_signature(self, scalar_bar):
+        """Return the subset of opts that requires backend recreation."""
+        return {
+            "is_interactive": scalar_bar.opts.is_interactive,
+        }
 
     def _helper_resolve_scalar_bar(self, key):
         """Resolve one registered scalar bar from a registry-compatible key."""
@@ -52,6 +63,26 @@ class ScalarBarRegistry(RegistryBase):
             f"{scalar_bar!r}."
         )
 
+    def _helper_resolve_scalar_bar_source_display(self, scalar_bar):
+        """Resolve source-owned display settings that drive the scalar bar."""
+        source = getattr(scalar_bar, "source", None)
+        if source is None:
+            return {
+                "title": scalar_bar.name,
+                "cmap": None,
+                "clim": None,
+            }
+
+        opts = getattr(source, "opts", None)
+        title = getattr(opts, "scalar_bar_title", scalar_bar.name)
+        cmap = getattr(opts, "scalars_cmap", None)
+        clim = getattr(opts, "scalars_clim", None)
+        return {
+            "title": title,
+            "cmap": cmap,
+            "clim": clim,
+        }
+
     def _helper_find_scalar_bar_backend_key(self, scalar_bar):
         """Return the Plotter.scalar_bars key currently bound to one backend."""
         plotter_scalar_bars = getattr(self.owner.pl, "scalar_bars", None)
@@ -87,9 +118,9 @@ class ScalarBarRegistry(RegistryBase):
     def _helper_configure_scalar_bar_widget(self, scalar_bar):
         """Hide widget decoration and bind geometry write-back for one bar."""
         widget = self._helper_resolve_scalar_bar_widget(scalar_bar)
-        scalar_bar.act_set_backend_widget(widget)
+        scalar_bar._helper_set_backend_widget(widget)
         if widget is None:
-            scalar_bar.act_set_backend_widget_observer_tag(None)
+            scalar_bar._helper_set_backend_widget_observer_tag(None)
             return None
 
         rep = widget.GetRepresentation()
@@ -109,7 +140,7 @@ class ScalarBarRegistry(RegistryBase):
             self._helper_pull_scalar_bar_widget_geometry(scalar_bar)
 
         observer_tag = widget.AddObserver("EndInteractionEvent", _on_end_interaction)
-        scalar_bar.act_set_backend_widget_observer_tag(observer_tag)
+        scalar_bar._helper_set_backend_widget_observer_tag(observer_tag)
         return widget
 
     def _helper_apply_scalar_bar_visibility(self, scalar_bar):
@@ -163,32 +194,99 @@ class ScalarBarRegistry(RegistryBase):
         ):
             return payload
 
-        scalar_bar.act_set_backend_sync_guard(True)
+        scalar_bar._helper_set_backend_sync_guard(True)
         try:
             scalar_bar.act_commit(**payload)
         finally:
-            scalar_bar.act_set_backend_sync_guard(False)
+            scalar_bar._helper_set_backend_sync_guard(False)
         return payload
+
+    def _helper_finalize_scalar_bar_effective_opts(self, scalar_bar):
+        """
+        Fill unresolved None-valued opts with the current live backend values.
+
+        This keeps the declaration object aligned with the effective PyVista
+        state after the backend has been created and configured.
+        """
+        backend = getattr(scalar_bar, "backend", None)
+        if backend is None:
+            return None
+
+        opts = scalar_bar.opts
+        mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
+        lut = getattr(mapper, "lookup_table", None)
+        label_text = backend.GetLabelTextProperty()
+        title_text = backend.GetTitleTextProperty()
+        background_prop = backend.GetBackgroundProperty()
+
+        values_now = {
+            "width": float(backend.GetWidth()),
+            "height": float(backend.GetHeight()),
+            "position": tuple(float(x) for x in backend.GetPosition()[:2]),
+            "is_vertical": bool(backend.GetOrientation()),
+            "n_labels": int(backend.GetNumberOfLabels()),
+            "fmt": backend.GetLabelFormat(),
+            "n_colors": int(backend.GetMaximumNumberOfColors()),
+            "font_family": self._FONT_FAMILY_INT_TO_NAME.get(
+                int(label_text.GetFontFamily())
+            ),
+            "title_font_size": int(title_text.GetFontSize()),
+            "label_font_size": int(label_text.GetFontSize()),
+            "color": tuple(float(x) for x in label_text.GetColor()),
+            "background_color": tuple(float(x) for x in background_prop.GetColor()),
+            "is_fill": bool(backend.GetDrawBackground()),
+            "is_outline": bool(backend.GetDrawFrame()),
+            "is_bold": bool(label_text.GetBold()),
+            "is_italic": bool(label_text.GetItalic()),
+            "is_shadow": bool(label_text.GetShadow()),
+            "is_interactive": bool(
+                getattr(scalar_bar, "backend_widget", None) is not None
+            ),
+            "is_use_opacity": bool(backend.GetUseOpacity()),
+            "is_unconstrained_font_size": bool(backend.GetUnconstrainedFontSize()),
+            "is_nan_annotation": bool(backend.GetDrawNanAnnotation()),
+        }
+        if backend.GetDrawBelowRangeSwatch():
+            values_now["below_label"] = backend.GetBelowRangeAnnotation()
+        if backend.GetDrawAboveRangeSwatch():
+            values_now["above_label"] = backend.GetAboveRangeAnnotation()
+
+        for key, value_now in values_now.items():
+            if getattr(opts, key) is None and value_now is not None:
+                object.__setattr__(opts, key, value_now)
+
+        return values_now
+
+    def _helper_remove_scalar_bar_backend(self, scalar_bar):
+        """Remove only the live backend while keeping the declaration registered."""
+        backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
+        if backend_key is not None:
+            try:
+                self.owner.pl.remove_scalar_bar(title=backend_key, render=False)
+            except (AttributeError, RuntimeError, ReferenceError, KeyError, ValueError):
+                pass
+        scalar_bar._helper_clear_backend()
+        return backend_key
 
     def _helper_create_scalar_bar_backend(self, scalar_bar):
         """Create one live PyVista scalar-bar backend from the current declaration."""
         kwargs_pyvista = dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
         mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
+        source_display = self._helper_resolve_scalar_bar_source_display(scalar_bar)
         if not isinstance(mapper.lookup_table, pv.LookupTable):
             mapper.lookup_table = pv.LookupTable()
-        if scalar_bar.opts.cmap is not None:
+        if source_display["cmap"] is not None:
             n_values = (
                 scalar_bar.opts.n_colors
                 if scalar_bar.opts.n_colors is not None
                 else mapper.lookup_table.n_values
             )
-            mapper.lookup_table.apply_cmap(scalar_bar.opts.cmap, n_values=n_values)
-        if scalar_bar.opts.clim is not None:
-            mapper.scalar_range = tuple(float(x) for x in scalar_bar.opts.clim)
+            mapper.lookup_table.apply_cmap(source_display["cmap"], n_values=n_values)
+        if source_display["clim"] is not None:
+            mapper.scalar_range = tuple(float(x) for x in source_display["clim"])
             mapper.lookup_table.scalar_range = tuple(
-                float(x) for x in scalar_bar.opts.clim
+                float(x) for x in source_display["clim"]
             )
-        display_title = kwargs_pyvista.pop("title", scalar_bar.opts.title)
         kwargs_create = dict(kwargs_pyvista)
         kwargs_create["title"] = scalar_bar.impl_name_pv
         kwargs_create["mapper"] = mapper
@@ -205,12 +303,15 @@ class ScalarBarRegistry(RegistryBase):
                 f"{scalar_bar!r}."
             )
 
-        if display_title is not None:
-            backend.SetTitle(display_title)
+        backend.SetTitle(source_display["title"])
 
-        scalar_bar.act_set_backend(backend)
+        scalar_bar._helper_set_backend(backend)
         self._helper_configure_scalar_bar_widget(scalar_bar)
         self._helper_apply_scalar_bar_visibility(scalar_bar)
+        self._helper_finalize_scalar_bar_effective_opts(scalar_bar)
+        scalar_bar._helper_set_backend_rebuild_signature(
+            self._helper_build_scalar_bar_rebuild_signature(scalar_bar)
+        )
         return backend
 
     def _helper_update_scalar_bar_backend(self, scalar_bar):
@@ -226,25 +327,26 @@ class ScalarBarRegistry(RegistryBase):
 
         mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
         widget = self._helper_resolve_scalar_bar_widget(scalar_bar)
-        scalar_bar.act_set_backend_widget(widget)
+        scalar_bar._helper_set_backend_widget(widget)
         opts = scalar_bar.opts
+        source_display = self._helper_resolve_scalar_bar_source_display(scalar_bar)
 
         if not isinstance(mapper.lookup_table, pv.LookupTable):
             mapper.lookup_table = pv.LookupTable()
 
         lut = mapper.lookup_table
-        if opts.cmap is not None:
+        if source_display["cmap"] is not None:
             n_values = opts.n_colors if opts.n_colors is not None else lut.n_values
-            lut.apply_cmap(opts.cmap, n_values=n_values)
+            lut.apply_cmap(source_display["cmap"], n_values=n_values)
 
-        if opts.clim is not None:
-            mapper.scalar_range = tuple(float(x) for x in opts.clim)
-            lut.scalar_range = tuple(float(x) for x in opts.clim)
+        if source_display["clim"] is not None:
+            mapper.scalar_range = tuple(float(x) for x in source_display["clim"])
+            lut.scalar_range = tuple(float(x) for x in source_display["clim"])
 
         if opts.n_colors is not None:
             backend.SetMaximumNumberOfColors(opts.n_colors)
 
-        backend.SetTitle(opts.title)
+        backend.SetTitle(source_display["title"])
         if opts.n_labels is not None and opts.n_labels < 1:
             backend.SetDrawTickLabels(False)
         elif opts.n_labels is not None:
@@ -352,6 +454,11 @@ class ScalarBarRegistry(RegistryBase):
         except (AttributeError, RuntimeError, ReferenceError):
             pass
 
+    # ==================== OVERRIDE ====================
+    # ScalarBarRegistry overrides RegistryBase.act_register so scalar-bar
+    # declarations are owner-bound to the current PlotFigure before entering
+    # the registry bookkeeping.
+    # ==================================================
     def act_register(
         self,
         scalar_bar,
@@ -378,6 +485,11 @@ class ScalarBarRegistry(RegistryBase):
         )
         return scalar_bar
 
+    # ==================== OVERRIDE ====================
+    # ScalarBarRegistry overrides RegistryBase.act_unregister so the live
+    # PyVista scalar-bar backend is removed and the owner relation is unbound
+    # before the declaration leaves the registry.
+    # ==================================================
     def act_unregister(self, key, is_missing_ok=False, logger=None):
         """Unregister one scalar bar by registry index, name, or direct object."""
         try:
@@ -391,15 +503,11 @@ class ScalarBarRegistry(RegistryBase):
                 return
             raise KeyError("Scalar-bar key cannot be None when unregistering.")
 
-        backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
-        if backend_key is not None:
-            try:
-                self.owner.pl.remove_scalar_bar(title=backend_key, render=False)
-            except (AttributeError, RuntimeError, ReferenceError, KeyError, ValueError):
-                pass
-        scalar_bar.act_set_backend_sync_guard(True)
-        scalar_bar.act_clear_backend()
-        scalar_bar.act_set_backend_sync_guard(False)
+        scalar_bar._helper_set_backend_sync_guard(True)
+        try:
+            self._helper_remove_scalar_bar_backend(scalar_bar)
+        finally:
+            scalar_bar._helper_set_backend_sync_guard(False)
 
         super().act_unregister(scalar_bar, is_missing_ok=is_missing_ok, logger=logger)
         if getattr(scalar_bar, "owner", None) is self.owner:
@@ -409,25 +517,37 @@ class ScalarBarRegistry(RegistryBase):
         """
         Synchronize one scalar-bar declaration into the live PyVista backend.
 
-        The current framework establishes the create/update/render workflow and
-        synchronization guard. Concrete per-opts backend updates can be filled in
-        later inside `_helper_update_scalar_bar_backend()`.
+        This method keeps the registered ScalarBar declaration and its live
+        PyVista backend aligned. It creates the backend on first sync, applies
+        in-place updates for normal opts changes, recreates the backend for
+        recreate-sensitive settings such as interactivity, and renders the
+        owning plotter after the synchronization pass.
         """
         scalar_bar = self._helper_resolve_scalar_bar(key)
         if scalar_bar is None:
             raise KeyError("Scalar-bar key cannot be None when syncing.")
 
         kwargs_return = dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
-        scalar_bar.act_set_backend_sync_guard(True)
+        scalar_bar._helper_set_backend_sync_guard(True)
         try:
             backend_key = self._helper_find_scalar_bar_backend_key(scalar_bar)
             backend = getattr(scalar_bar, "backend", None)
             if backend_key is None or backend is None:
                 self._helper_create_scalar_bar_backend(scalar_bar)
             else:
-                self._helper_update_scalar_bar_backend(scalar_bar)
+                signature_now = self._helper_build_scalar_bar_rebuild_signature(
+                    scalar_bar
+                )
+                signature_applied = getattr(
+                    scalar_bar, "impl_backend_rebuild_signature", None
+                )
+                if signature_applied != signature_now:
+                    self._helper_remove_scalar_bar_backend(scalar_bar)
+                    self._helper_create_scalar_bar_backend(scalar_bar)
+                else:
+                    self._helper_update_scalar_bar_backend(scalar_bar)
         finally:
-            scalar_bar.act_set_backend_sync_guard(False)
+            scalar_bar._helper_set_backend_sync_guard(False)
 
         self._helper_render_after_scalar_bar_sync()
         return kwargs_return

@@ -30,6 +30,7 @@ from nematics3d.logging_decorator import logging_and_warning_decorator
 from ..bounds import BoundsData, as_bounds
 from ..host_base import OptsBase, HostBase
 from .plot_figure import FigureData, as_plotfigure
+from .scalar_bar import ScalarBar
 
 #!!! colorbar name args manager
 #!!! is_reset_camera commit
@@ -896,6 +897,7 @@ class PlotGlyph(HostBase):
             else:
                 object.__setattr__(self, "calc_coords", self.raw_coords.copy())
             self._helper_apply_empty_input_state()
+            self._helper_remove_scalar_bars()
             self._helper_clear_live_actor()
             self.fig.pl.render()
             return
@@ -913,9 +915,7 @@ class PlotGlyph(HostBase):
         if is_scalars:
             input_dir["opacity"] = "opacity"
             input_dir["cmap"] = self.opts.scalars_cmap
-            input_dir["show_scalar_bar"] = self.opts.is_scalar_bar
             input_dir["clim"] = self.opts.scalars_clim
-            input_dir["scalar_bar_args"] = {"title": self.opts.scalar_bar_title}
 
         if self.state_clip_mode == "center":
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())
@@ -929,6 +929,7 @@ class PlotGlyph(HostBase):
 
         if self._helper_is_empty_mesh(mesh):
             object.__setattr__(self, "calc_is_empty", True)
+            self._helper_remove_scalar_bars()
             self._helper_clear_live_actor()
             self.fig.pl.render()
             return
@@ -966,6 +967,7 @@ class PlotGlyph(HostBase):
 
         object.__setattr__(self, "entity_actor", actor)
         self._helper_register_pick(actor)
+        self._helper_sync_scalar_bar()
 
         if self.state_is_silhouette:
             self._helper_add_silhouette()
@@ -1007,6 +1009,65 @@ class PlotGlyph(HostBase):
     # Mapper / Scalar Display
     # ------------------------------------------------------------------
 
+    def _helper_collect_scalar_bars(self):
+        """Return scalar-bar objects in the figure registry that currently source this glyph."""
+        fig = self.fig
+        if fig is None:
+            return []
+        return [
+            bar for bar in list(fig.scalar_bars) if getattr(bar, "source", None) is self
+        ]
+
+    def _helper_remove_scalar_bars(self):
+        """Remove all scalar-bar objects currently driven by this glyph."""
+        fig = self.fig
+        if fig is None:
+            return []
+
+        removed = []
+        for bar in list(self._helper_collect_scalar_bars()):
+            fig.scalar_bars.act_unregister(bar, is_missing_ok=True)
+            removed.append(bar)
+        return removed
+
+    def _helper_sync_scalar_bar(self):
+        """Ensure one figure-managed scalar bar matches this glyph's scalar-display state."""
+        fig = self.fig
+        actor = getattr(self, "entity_actor", None)
+        should_have_scalar_bar = (
+            fig is not None
+            and actor is not None
+            and not self.calc_is_empty
+            and self.opts.paint_by == "scalars"
+            and self.opts.is_scalar_bar
+        )
+
+        if not should_have_scalar_bar:
+            self._helper_remove_scalar_bars()
+            return None
+
+        bars = self._helper_collect_scalar_bars()
+        if len(bars) > 1:
+            for bar in bars[1:]:
+                fig.scalar_bars.act_unregister(bar, is_missing_ok=True)
+            bars = bars[:1]
+
+        if bars:
+            bar = bars[0]
+        else:
+            bar = ScalarBar(
+                name=f"{self.name}_scalarbar",
+                mapper_name=self.name,
+            )
+            bar.act_bind_relation_base("source", self, is_weak=True)
+            fig.scalar_bars.act_register(bar, is_contain_ok=True)
+
+        if getattr(bar, "source", None) is not self:
+            bar.act_bind_relation_base("source", self, is_weak=True)
+
+        bar.act_commit()
+        return bar
+
     def _helper_update_rgba(self):
         mapper = self.entity_actor.mapper
         mapper.scalar_visibility = True
@@ -1014,8 +1075,7 @@ class PlotGlyph(HostBase):
         mapper.lookup_table = None
         mapper.dataset.set_active_scalars("rgba")
         mapper.SetArrayName("rgba")
-        if self.opts.scalar_bar_title in self.fig.pl.scalar_bars.keys():
-            self.fig.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
+        self._helper_remove_scalar_bars()
 
     def _helper_update_scalars(self):
 
@@ -1037,15 +1097,7 @@ class PlotGlyph(HostBase):
             opacity=mesh_data["opacity"],
         )
 
-        if not self.opts.is_scalar_bar:
-            if self.opts.scalar_bar_title in self.fig.pl.scalar_bars.keys():
-                self.fig.pl.remove_scalar_bar(title=self.opts.scalar_bar_title)
-            return
-
-        if self.opts.scalar_bar_title not in self.fig.pl.scalar_bars.keys():
-            self.fig.pl.add_scalar_bar(
-                title=self.opts.scalar_bar_title, mapper=mapper, render=False
-            )
+        self._helper_sync_scalar_bar()
 
     # ------------------------------------------------------------------
     # Figure Registration / Picking
@@ -1068,6 +1120,7 @@ class PlotGlyph(HostBase):
             bounds_visual_source._helper_unregister_visual_sync(tube=self)
             self.act_unbind_relation_base("bounds_visual_source")
         figure = self.fig
+        self._helper_remove_scalar_bars()
         self.act_unbind_bounds(is_apply=False)
         self._helper_clear_live_actor()
         if figure is not None:
@@ -1132,6 +1185,7 @@ class PlotGlyph(HostBase):
                 object.__setattr__(self, "calc_coords", self.raw_coords.copy())
 
             self._helper_apply_empty_input_state()
+            self._helper_remove_scalar_bars()
             self._helper_clear_live_actor()
 
             for key, value in kwargs.items():

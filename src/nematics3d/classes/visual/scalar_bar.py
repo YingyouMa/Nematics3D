@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import datetime
 from types import MappingProxyType
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import numpy as np
 
@@ -65,12 +65,6 @@ def _as_optional_color(value, desc):
     return tuple(float(x) for x in color)
 
 
-def _as_optional_range(value, desc):
-    if value is None:
-        return None
-    return tuple(float(x) for x in as_Vect(value, dim=2, name=desc))
-
-
 def _as_optional_position(value, desc):
     if value is None:
         return None
@@ -80,23 +74,10 @@ def _as_optional_position(value, desc):
     return position
 
 
-def _as_bar_args(value, desc):
-    if value is None:
-        return {}
-    if not isinstance(value, Mapping):
-        raise TypeError(
-            f"{desc} must be a mapping. Got {type(value).__name__} instead."
-        )
-    return dict(value)
-
-
 @dataclass(slots=True, repr=False)
 class OptsScalarBar(OptsBase):
     """Configuration object for one figure-level scalar bar."""
 
-    title: str | Unset = UNSET
-    cmap: str | None | Unset = UNSET
-    clim: tuple[float, float] | None | Unset = UNSET
     is_visible: bool | Unset = UNSET
     is_vertical: bool | Unset = UNSET
     width: float | None | Unset = UNSET
@@ -121,14 +102,9 @@ class OptsScalarBar(OptsBase):
     is_nan_annotation: bool | None | Unset = UNSET
     below_label: str | None | Unset = UNSET
     above_label: str | None | Unset = UNSET
-    bar_args: dict[str, Any] | Unset = UNSET
-
     # fmt: off
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsBase.__attrs__),
-        "title":                   "Title shown above or beside the scalar bar.",
-        "cmap":                    "Optional colormap name associated with this scalar bar.",
-        "clim":                    "Optional scalar range represented by this scalar bar.",
         "is_visible":              "Whether this scalar bar should currently be shown.",
         "is_vertical":             "Whether the scalar bar should use vertical orientation.",
         "width":                   "Normalized scalar-bar width in the figure viewport.",
@@ -155,14 +131,10 @@ class OptsScalarBar(OptsBase):
         "is_nan_annotation":       "Whether NaN values should be annotated in the scalar bar.",
         "below_label":             "Label shown for values below the displayed range.",
         "above_label":             "Label shown for values above the displayed range.",
-        "bar_args":                "Additional backend keyword arguments passed through to PyVista.",
     }
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
-        "title":                   lambda v, d: as_str(v, name=d),
-        "cmap":                    lambda v, d: _as_optional_str(v, d),
-        "clim":                    lambda v, d: _as_optional_range(v, d),
         "is_visible":              lambda v, d: as_bool(v, name=d),
         "is_vertical":             lambda v, d: as_bool(v, name=d),
         "width":                   lambda v, d: _as_optional_float(v, d, value_range=(0.0, 1.0)),
@@ -187,15 +159,11 @@ class OptsScalarBar(OptsBase):
         "is_nan_annotation":       lambda v, d: _as_optional_bool(v, d),
         "below_label":             lambda v, d: _as_optional_str(v, d),
         "above_label":             lambda v, d: _as_optional_str(v, d),
-        "bar_args":                lambda v, d: _as_bar_args(v, d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
         {
             **dict(OptsBase.impl_defaults_frozen),
-            "title": "scalar",
-            "cmap": None,
-            "clim": None,
             "is_visible": True,
             "is_vertical": True,
             "width": None,
@@ -220,7 +188,6 @@ class OptsScalarBar(OptsBase):
             "is_nan_annotation": None,
             "below_label": None,
             "above_label": None,
-            "bar_args": {},
         }
     )
     # fmt: on
@@ -232,12 +199,12 @@ class OptsScalarBar(OptsBase):
 #   calc_/entity_ fields on the host.
 # - Keep `owner` bound to the owning PlotFigure and `source` bound to the
 #   glyph-like object that currently provides mapper semantics for this bar.
-# - Treat `raw_name` as the registry identity, `impl_name_pv` as the stable
-#   backend-facing PyVista key, and `opts.title` as user-facing display text.
-#   None of these three roles should be conflated.
-# - `calc_pyvista_kwargs` should remain the resolved high-level kwargs payload
-#   that can later be passed to PyVista, while `entity_backend` stores the live
-#   backend actor/handle when one exists.
+# - Treat `raw_name` as the registry identity and `impl_name_pv` as the stable
+#   backend-facing PyVista key. User-facing scalar metadata such as title,
+#   cmap, and clim are source-derived rather than scalar-bar-owned inputs.
+# - `calc_pyvista_kwargs` should remain the resolved backend kwargs payload
+#   derived from the supported explicit opts, while `entity_backend` stores the
+#   live backend actor/handle when one exists.
 
 
 class ScalarBar(HostBase):
@@ -272,6 +239,9 @@ class ScalarBar(HostBase):
         "impl_backend_widget_observer_tag": {
             "doc": "Internal observer id attached to the interactive widget end-event.",
         },
+        "impl_backend_rebuild_signature": {
+            "doc": "Internal signature of backend settings that require backend recreation when changed.",
+        },
         "impl_is_syncing_backend": {
             "doc": "Internal guard preventing recursive opts/backend synchronization loops.",
         },
@@ -292,11 +262,11 @@ class ScalarBar(HostBase):
         "entity_backend",
         "entity_backend_widget",
         "impl_backend_widget_observer_tag",
+        "impl_backend_rebuild_signature",
         "impl_is_syncing_backend",
     )
 
     _PYVISTA_COMMON_OPT_KEYS = (
-        "title",
         "is_vertical",
         "n_labels",
         "is_italic",
@@ -372,6 +342,7 @@ class ScalarBar(HostBase):
         object.__setattr__(self, "entity_backend", backend)
         object.__setattr__(self, "entity_backend_widget", None)
         object.__setattr__(self, "impl_backend_widget_observer_tag", None)
+        object.__setattr__(self, "impl_backend_rebuild_signature", None)
         object.__setattr__(self, "impl_is_syncing_backend", False)
         object.__setattr__(self, "calc_pyvista_kwargs", {})
         self.opts.act_finalize(self.opts_defaults)
@@ -387,28 +358,34 @@ class ScalarBar(HostBase):
         """Return the live backend widget handle when interactive mode is enabled."""
         return self.entity_backend_widget
 
-    def act_set_backend(self, backend):
+    def _helper_set_backend(self, backend):
         """Attach or replace the live backend handle for this scalar bar."""
         object.__setattr__(self, "entity_backend", backend)
         return backend
 
-    def act_set_backend_widget(self, widget):
+    def _helper_set_backend_widget(self, widget):
         """Attach or replace the live backend widget handle for this scalar bar."""
         object.__setattr__(self, "entity_backend_widget", widget)
         return widget
 
-    def act_set_backend_widget_observer_tag(self, tag):
+    def _helper_set_backend_widget_observer_tag(self, tag):
         """Attach or replace the widget end-interaction observer id."""
         object.__setattr__(self, "impl_backend_widget_observer_tag", tag)
         return tag
 
-    def act_clear_backend(self):
+    def _helper_set_backend_rebuild_signature(self, signature):
+        """Store the applied backend-rebuild signature for future sync checks."""
+        object.__setattr__(self, "impl_backend_rebuild_signature", signature)
+        return signature
+
+    def _helper_clear_backend(self):
         """Forget the live backend handle without changing the declarative state."""
         object.__setattr__(self, "entity_backend", None)
         object.__setattr__(self, "entity_backend_widget", None)
         object.__setattr__(self, "impl_backend_widget_observer_tag", None)
+        object.__setattr__(self, "impl_backend_rebuild_signature", None)
 
-    def act_set_backend_sync_guard(self, is_syncing):
+    def _helper_set_backend_sync_guard(self, is_syncing):
         """Set the internal backend-sync guard used to avoid recursive updates."""
         object.__setattr__(self, "impl_is_syncing_backend", bool(is_syncing))
 
@@ -447,14 +424,12 @@ class ScalarBar(HostBase):
             target_key = self._PYVISTA_BOOL_KEY_MAP.get(key, key)
             kwargs_resolved[target_key] = value
 
-        bar_args = dict(opts_dict.get("bar_args", {}))
-        kwargs_resolved.update(bar_args)
         return kwargs_resolved
 
     # ==================== OVERRIDE ====================
     # ScalarBar overrides HostBase._helper_commit_apply_opts_main so opts
-    # updates are normalized into a resolved PyVista kwargs payload stored on
-    # the host for later backend synchronization.
+    # updates are normalized into a resolved backend kwargs payload and then
+    # forwarded into owner-side scalar-bar synchronization.
     # ==================================================
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         del is_reapply_opts
@@ -484,7 +459,6 @@ class ScalarBar(HostBase):
             f"{type(self).__name__}("
             f"name={self.name!r}, "
             f"impl_name_pv={self.impl_name_pv!r}, "
-            f"title={self.opts.title!r}, "
             f"mapper_name={self.raw_mapper_name!r}, "
             f"is_visible={self.opts.is_visible!r}, "
             f"pyvista_kwargs={self.calc_pyvista_kwargs!r})"
