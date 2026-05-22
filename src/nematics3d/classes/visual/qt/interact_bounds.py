@@ -453,48 +453,45 @@ class InteractBounds(PanelBase):
     # with Bounds updates that may come from outside the panel.
     # ==================================================
     def _sync_func(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(kwargs)
+        if getattr(self, "_is_gui_updating", False):
+            return
 
-        if is_external:
-            if "origin" in kwargs:
-                self.state["origin"] = np.asarray(
-                    self.host.opts.origin, dtype=float
-                ).copy()
-                self.point_console._update_center_label()
-            if "alignment" in kwargs:
-                checked = self.host.opts.alignment == "center"
-                with QSignalBlocker(self.chk_is_origin_center):
-                    self.chk_is_origin_center.setChecked(checked)
-                self.state["is_origin_center"] = checked
-            if "length1" in kwargs:
-                self._sync_from_host_slider("length1", self.host.opts.length1)
-            if "length2" in kwargs:
-                value = (
-                    self.host.opts.length2
-                    if self.host.opts.length2 is not None
-                    else self.host.opts.length1
-                )
-                self._sync_from_host_slider("length2", value)
-            if "length3" in kwargs:
-                value = (
-                    self.host.opts.length3
-                    if self.host.opts.length3 is not None
-                    else self.host.opts.length1
-                )
-                self._sync_from_host_slider("length3", value)
-            if "axis1" in kwargs or "axis2" in kwargs:
-                axis1 = np.asarray(self.host.opts.axis1, dtype=float)
-                axis2 = np.asarray(self.host.calc_axis2, dtype=float)
-                axis3 = np.asarray(self.host.calc_axis3, dtype=float)
-                self._sync_from_host_slider("axis1_azimuth", self.get_azimuth(axis1))
-                self._sync_from_host_slider(
-                    "axis1_polar_angle",
-                    self.get_polar_angle(axis1),
-                )
-                self._sync_from_host_slider(
-                    "axis2_roll",
-                    self._helper_get_axis2_roll(axis1, axis2),
-                )
+        if "origin" in kwargs:
+            self.state["origin"] = np.asarray(self.host.opts.origin, dtype=float).copy()
+            self.point_console._update_center_label()
+        if "alignment" in kwargs:
+            checked = self.host.opts.alignment == "center"
+            with QSignalBlocker(self.chk_is_origin_center):
+                self.chk_is_origin_center.setChecked(checked)
+            self.state["is_origin_center"] = checked
+        if "length1" in kwargs:
+            self._sync_from_host_slider("length1", self.host.opts.length1)
+        if "length2" in kwargs:
+            value = (
+                self.host.opts.length2
+                if self.host.opts.length2 is not None
+                else self.host.opts.length1
+            )
+            self._sync_from_host_slider("length2", value)
+        if "length3" in kwargs:
+            value = (
+                self.host.opts.length3
+                if self.host.opts.length3 is not None
+                else self.host.opts.length1
+            )
+            self._sync_from_host_slider("length3", value)
+        if "axis1" in kwargs or "axis2" in kwargs:
+            axis1 = np.asarray(self.host.opts.axis1, dtype=float)
+            axis2 = np.asarray(self.host.calc_axis2, dtype=float)
+            self._sync_from_host_slider("axis1_azimuth", self.get_azimuth(axis1))
+            self._sync_from_host_slider(
+                "axis1_polar_angle",
+                self.get_polar_angle(axis1),
+            )
+            self._sync_from_host_slider(
+                "axis2_roll",
+                self._helper_get_axis2_roll(axis1, axis2),
+            )
         if "axis1" in kwargs or "axis2" in kwargs:
             self._update_axis_info_labels()
 

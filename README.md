@@ -417,7 +417,7 @@ Q.figs[0].interacts['panel2'].host.act_commit(
 
 At this point, we can control the object through both the panel and the command line.
 
-We have already mentioned the `Restore Original` button in the panel. It restores the object's `opts` to the snapshot taken when the panel was opened. The other button, `Reset to Live`, removes all modifications made from the panel itself, so that only the modifications made from the command line after the panel was opened are kept.
+We have already mentioned the `Restore Original` button in the panel. It restores the object's `opts` to the snapshot taken when the panel was opened.
 
 Now suppose we want to inspect the smallest defect loop in the figure, namely the second one from the left. Using the grid control panel we just opened together with the usual camera interactions, we can focus the view into a zoomed-in image like the following:
 

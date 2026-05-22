@@ -33,11 +33,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             is_opacity=True,
         )
 
-        self.wrapper.act_save_opts(name=self.str_now)
-        self.smooth.act_save_opts(name=self.str_now)
-        self.wrapper.act_save_opts(name=self.str_now_live)
-        self.smooth.act_save_opts(name=self.str_now_live)
-
         console = getattr(self.fig, "console", None)
         if console is not None and self.name != "panel_unregistered":
             console.println(
@@ -61,6 +56,14 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.spheres.act_bounds_enable()
         else:
             self.spheres.act_bounds_disable()
+
+    def _helper_list_snapshot_hosts(self):
+        return [self.smooth, self.wrapper, self.host]
+
+    def _helper_after_restore_snapshot(self, name: str) -> None:
+        self.spheres.act_commit(
+            coords=self._helper_create_sphere_coords(self.wrapper.opts.is_wrap)
+        )
 
     def _build_extra_group(self):
 
@@ -96,7 +99,7 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.sliders["window_length"].set_enabled(self.state["is_smooth"])
 
         self.smooth.act_attach_sync_task(
-            name=self.str_now_live,
+            name=self.str_now,
             func=self._sync_func_smooth,
         )
 
@@ -110,7 +113,7 @@ class InteractDisclinationLine(InteractGlyphBase):
         self.chk_is_wrap.stateChanged.connect(self._on_toggle_is_wrap)
 
         self.wrapper.act_attach_sync_task(
-            name=self.str_now_live,
+            name=self.str_now,
             func=self._sync_func_wrapper,
         )
 
@@ -141,13 +144,12 @@ class InteractDisclinationLine(InteractGlyphBase):
             self.spheres.act_commit(
                 coords=self._helper_create_sphere_coords(bool(kwargs["is_wrap"]))
             )
-        self._helper_sync_update_live_backup(kwargs, host=self.wrapper)
 
     def _sync_func_smooth(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(kwargs, host=self.smooth)
-        if is_external:
-            if "window_length" in kwargs:
-                self._sync_from_host_slider("window_length", kwargs["window_length"])
+        if getattr(self, "_is_gui_updating", False):
+            return
+        if "window_length" in kwargs:
+            self._sync_from_host_slider("window_length", kwargs["window_length"])
 
     def _helper_create_sphere_coords(self, is_wrap):
         owner = self.smooth.owner
@@ -221,64 +223,14 @@ class InteractDisclinationLine(InteractGlyphBase):
             self._is_gui_updating = False
 
     # ==================== OVERRIDE ====================
-    # InteractDisclinationLine overrides PanelBase reset actions
-    # because this console jointly controls PlotTube, the wrapper,
-    # and the smoothing object rather than a single host only.
-    # ==================================================
-    def _on_reset_to_live(self):
-        smooth_live = {
-            k: v
-            for k, v in self.smooth.opts_backup[self.str_now_live].items()
-            if k not in self.smooth.attrs_forbidden
-        }
-        self.smooth.act_commit(**smooth_live)
-        self.wrapper.act_commit(**self.wrapper.opts_backup[self.str_now_live])
-        host_live = {
-            k: v
-            for k, v in self.host.opts_backup[self.str_now_live].items()
-            if k not in self.host.attrs_forbidden
-        }
-        self.host.act_commit(**host_live)
-        self.spheres.act_commit(
-            coords=self._helper_create_sphere_coords(self.wrapper.opts.is_wrap)
-        )
-
-    # ==================== OVERRIDE ====================
-    # InteractDisclinationLine overrides PanelBase reset actions
-    # because restoring the original state must also reset the
-    # wrapper/smoothing baselines and the helper sphere markers.
-    # ==================================================
-    def _on_reset_to_original(self):
-        original_smooth = {
-            k: v
-            for k, v in self.smooth.opts_backup[self.str_now].items()
-            if k not in self.smooth.attrs_forbidden
-        }
-        original_wrapper = dict(self.wrapper.opts_backup[self.str_now])
-        original_host = {
-            k: v
-            for k, v in self.host.opts_backup[self.str_now].items()
-            if k not in self.host.attrs_forbidden
-        }
-        self.smooth.act_commit(**original_smooth)
-        self.wrapper.act_commit(**original_wrapper)
-        self.host.act_commit(**original_host)
-        self.smooth.opts_backup[self.str_now_live] = dict(original_smooth)
-        self.wrapper.opts_backup[self.str_now_live] = dict(original_wrapper)
-        self.host.opts_backup[self.str_now_live] = dict(original_host)
-        self.spheres.act_commit(
-            coords=self._helper_create_sphere_coords(self.wrapper.opts.is_wrap)
-        )
-
-    # ==================== OVERRIDE ====================
     # InteractDisclinationLine overrides PanelBase.on_close
     # because it must detach the extra sync tasks created for
     # wrapper/smooth control and remove the helper sphere markers.
     # ==================================================
     def on_close(self):
         super().on_close()
-        self.wrapper.act_detach_sync_task(self.str_now_live)
-        self.smooth.act_detach_sync_task(self.str_now_live)
+        self.wrapper.act_detach_sync_task(self.str_now)
+        self.smooth.act_detach_sync_task(self.str_now)
         object.__setattr__(
             self.host,
             "state_is_silhouette",

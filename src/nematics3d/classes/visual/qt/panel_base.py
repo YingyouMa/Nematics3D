@@ -609,9 +609,8 @@ class PanelBase(QtWidgets.QWidget):
         self.fig = figure
         self.raw_name = "panel_unregistered"
         self.str_now = datetime.datetime.now().strftime("panel_%Y%m%d_%H%M%S_%f")[:-3]
-        self.host.act_save_opts(self.str_now)
-        self.str_now_live = self.str_now + "_live"
-        self.host.act_save_opts(self.str_now_live)
+        self._snapshot_names_saved_from_panel: list[str] = []
+        self._helper_save_snapshot(self.str_now, is_user_snapshot=False)
         if hasattr(self.host, "state_is_interactable"):
             object.__setattr__(self.host, "state_is_interactable", False)
 
@@ -653,27 +652,39 @@ class PanelBase(QtWidgets.QWidget):
         self.act_wire_default_slider_connections()
 
         # ----------------------------
-        # Reset Actions group
+        # Save / Load Actions group
         # ----------------------------
-        group_reset = QtWidgets.QGroupBox("Reset", self)
+        group_reset = QtWidgets.QGroupBox("Save / Load", self)
         hl_reset = QtWidgets.QHBoxLayout(group_reset)
         self.layout.addWidget(group_reset)
 
-        self.btn_reset_live = QtWidgets.QPushButton("Reset to Live", group_reset)
-        self.btn_reset_live.setToolTip(
-            "Discard UI changes and revert to the current live baseline."
+        self.btn_save_current = QtWidgets.QPushButton("Save Current", group_reset)
+        self.btn_save_current.setToolTip(
+            "Save the current parameters using a default timestamped name."
         )
-        self.btn_reset_live.clicked.connect(self._on_reset_to_live)
-        hl_reset.addWidget(self.btn_reset_live)
+        self.btn_save_current.clicked.connect(self._on_save_current_snapshot)
+        hl_reset.addWidget(self.btn_save_current)
 
         self.btn_reset_orig = QtWidgets.QPushButton("Restore Original", group_reset)
         self.btn_reset_orig.setToolTip(
-            "Discard all console overrides and restore the initial state."
+            "Restore the state captured when this control panel was opened."
         )
-        self.btn_reset_orig.clicked.connect(self._on_reset_to_original)
+        self.btn_reset_orig.clicked.connect(self._on_restore_original_snapshot)
         hl_reset.addWidget(self.btn_reset_orig)
 
-        self.host.act_attach_sync_task(name=self.str_now_live, func=self._sync_func)
+        self.btn_load_latest = QtWidgets.QPushButton("Load Latest Save", group_reset)
+        self.btn_load_latest.setToolTip(
+            "Restore the most recent snapshot created from this control panel."
+        )
+        self.btn_load_latest.clicked.connect(self._on_load_latest_snapshot)
+        hl_reset.addWidget(self.btn_load_latest)
+
+        self.btn_load_choose = QtWidgets.QPushButton("Load Saved...", group_reset)
+        self.btn_load_choose.setToolTip("Choose one available snapshot and restore it.")
+        self.btn_load_choose.clicked.connect(self._on_choose_snapshot_to_restore)
+        hl_reset.addWidget(self.btn_load_choose)
+
+        self.host.act_attach_sync_task(name=self.str_now, func=self._sync_func)
 
         console = getattr(self.fig, "console", None) if self.fig is not None else None
         if console is not None and self.name != "panel_unregistered":
@@ -696,25 +707,59 @@ class PanelBase(QtWidgets.QWidget):
         s.set_tick(value, is_block_signals=True)
         self.on_changed(0, is_commit=False)
 
-    def _helper_sync_update_live_backup(self, kwargs, *, host=None) -> bool:
-        """
-        Update the panel live snapshot only for changes that come from outside
-        the panel itself.
+    # -------------------------------
+    # Snapshot helpers
+    # -------------------------------
 
-        Design note
-        -----------
-        In this repository, panel-originated commits and external command-line
-        commits should share the same synchronization side effects such as
-        label refreshes, helper-visual updates, and marker movement. The only
-        behavior that should remain exclusive to external updates is advancing
-        the panel's live backup, which powers ``Reset to Live``.
-        """
-        if getattr(self, "_is_gui_updating", False):
-            return False
-        if host is None:
-            host = self.host
-        host.opts_backup[self.str_now_live].update(kwargs)
-        return True
+    def _helper_list_snapshot_hosts(self):
+        return [self.host]
+
+    def _helper_make_snapshot_name(self) -> str:
+        return datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+
+    def _helper_get_snapshot_names(self) -> list[str]:
+        hosts = list(self._helper_list_snapshot_hosts())
+        if not hosts:
+            return []
+
+        name_sets = [set(getattr(host, "opts_backup", {}).keys()) for host in hosts]
+        names_common = set.intersection(*name_sets) if name_sets else set()
+        names_primary = list(getattr(hosts[0], "opts_backup", {}).keys())
+        return [name for name in names_primary if name in names_common]
+
+    def _helper_get_snapshot_choice_entries(self) -> list[tuple[str, str]]:
+        entries = []
+        for name in self._helper_get_snapshot_names():
+            label = f"{name} (initial)" if name == self.str_now else name
+            entries.append((label, name))
+        return entries
+
+    def _helper_notify_snapshot(self, message: str) -> None:
+        console = getattr(self.fig, "console", None) if self.fig is not None else None
+        if console is not None:
+            console.println(message)
+
+    def _helper_save_snapshot(self, name: str, *, is_user_snapshot: bool) -> None:
+        for host in self._helper_list_snapshot_hosts():
+            host.act_save_opts(name)
+        if is_user_snapshot:
+            self._snapshot_names_saved_from_panel.append(name)
+
+    def _helper_restore_snapshot(self, name: str) -> None:
+        for host in self._helper_list_snapshot_hosts():
+            snapshot = getattr(host, "opts_backup", {}).get(name)
+            if snapshot is None:
+                raise KeyError(f"Snapshot {name!r} was not found on {host!s}.")
+            attrs_forbidden = set(getattr(host, "attrs_forbidden", ()))
+            payload = {
+                key: value
+                for key, value in snapshot.items()
+                if key not in attrs_forbidden
+            }
+            host.act_commit(**payload)
+
+    def _helper_after_restore_snapshot(self, name: str) -> None:
+        return None
 
     def on_changed(self, _v=0, is_commit=True):
         for item in self.sliders.values():
@@ -790,13 +835,56 @@ class PanelBase(QtWidgets.QWidget):
         self.slider_throttle_ms = int(value)
         self._slider_throttle.set_interval_ms(self.slider_throttle_ms)
 
-    def _on_reset_to_live(self):
-        self.host.act_commit(**self.host.opts_backup[self.str_now_live])
+    def _on_save_current_snapshot(self):
+        name = self._helper_make_snapshot_name()
+        self._helper_save_snapshot(name, is_user_snapshot=True)
+        self._helper_notify_snapshot(f"Saved current parameters as {name!r}.")
 
-    def _on_reset_to_original(self):
-        original = self.host.opts_backup[self.str_now]
-        self.host.act_commit(**original)
-        self.host.opts_backup[self.str_now_live] = dict(original)
+    def _on_restore_original_snapshot(self):
+        self._helper_restore_snapshot(self.str_now)
+        self._helper_after_restore_snapshot(self.str_now)
+        self._helper_notify_snapshot("Restored the original panel snapshot.")
+
+    def _on_load_latest_snapshot(self):
+        if not self._snapshot_names_saved_from_panel:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Snapshot",
+                "No panel-created snapshot is available yet.",
+            )
+            return
+        name = self._snapshot_names_saved_from_panel[-1]
+        self._helper_restore_snapshot(name)
+        self._helper_after_restore_snapshot(name)
+        self._helper_notify_snapshot(f"Restored snapshot {name!r}.")
+
+    def _on_choose_snapshot_to_restore(self):
+        entries = self._helper_get_snapshot_choice_entries()
+        if not entries:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Snapshot",
+                "No snapshot is available for this panel.",
+            )
+            return
+
+        labels = [label for label, _name in entries]
+        label_selected, is_ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Load Saved Snapshot",
+            "Choose one snapshot to restore:",
+            labels,
+            0,
+            False,
+        )
+        if not is_ok or not label_selected:
+            return
+
+        lookup = dict(entries)
+        name = lookup[str(label_selected)]
+        self._helper_restore_snapshot(name)
+        self._helper_after_restore_snapshot(name)
+        self._helper_notify_snapshot(f"Restored snapshot {name!r}.")
 
     # -------------------------------
     # Qt lifecycle
@@ -817,7 +905,7 @@ class PanelBase(QtWidgets.QWidget):
         self._slider_throttle.cancel()
         if hasattr(self.host, "state_is_interactable"):
             object.__setattr__(self.host, "state_is_interactable", True)
-        self.host.act_detach_sync_task(self.str_now_live)
+        self.host.act_detach_sync_task(self.str_now)
         if self.fig is not None and hasattr(self.fig, "act_unregister_interact"):
             self.fig.act_unregister_interact(self)
 

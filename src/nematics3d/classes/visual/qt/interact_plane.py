@@ -520,58 +520,54 @@ class InteractPlane(PanelBase):
     # with PlaneGrid option changes from the host side.
     # ==================================================
     def _sync_func(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(kwargs)
+        if getattr(self, "_is_gui_updating", False):
+            return
 
-        if is_external:
-            if "origin" in kwargs:
-                self.state["origin"] = np.asarray(
-                    self.host.opts.origin, dtype=float
-                ).copy()
-                self.point_console._update_center_label()
-                self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)
-            if "alignment" in kwargs:
-                checked = self.host.opts.alignment == "center"
-                with QSignalBlocker(self.chk_is_origin_center):
-                    self.chk_is_origin_center.setChecked(checked)
-                self.state["is_origin_center"] = checked
-            if "spacing" in kwargs:
-                self._sync_from_host_slider("spacing", self.host.opts.spacing)
-            if "size" in kwargs:
-                self._sync_from_host_slider("size", self.host.opts.size)
-            if "spacing_extra" in kwargs:
-                result = self.host.opts.spacing_extra is not None
-                with QSignalBlocker(self.chk_use_spacing_extra):
-                    self.chk_use_spacing_extra.setChecked(result)
-                self.state["is_use_control_spacing_extra"] = result
-                self.sliders["spacing_extra"].set_enabled(result)
-                if result:
-                    self._sync_from_host_slider(
-                        "spacing_extra", self.host.opts.spacing_extra
-                    )
-            if "size_extra" in kwargs:
-                result = self.host.opts.size_extra is not None
-                with QSignalBlocker(self.chk_use_size_extra):
-                    self.chk_use_size_extra.setChecked(result)
-                self.state["is_use_control_size_extra"] = result
-                self.sliders["size_extra"].set_enabled(result)
-                if result:
-                    self._sync_from_host_slider("size_extra", self.host.opts.size_extra)
-            if "normal" in kwargs:
+        if "origin" in kwargs:
+            self.state["origin"] = np.asarray(self.host.opts.origin, dtype=float).copy()
+            self.point_console._update_center_label()
+            self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)
+        if "alignment" in kwargs:
+            checked = self.host.opts.alignment == "center"
+            with QSignalBlocker(self.chk_is_origin_center):
+                self.chk_is_origin_center.setChecked(checked)
+            self.state["is_origin_center"] = checked
+        if "spacing" in kwargs:
+            self._sync_from_host_slider("spacing", self.host.opts.spacing)
+        if "size" in kwargs:
+            self._sync_from_host_slider("size", self.host.opts.size)
+        if "spacing_extra" in kwargs:
+            result = self.host.opts.spacing_extra is not None
+            with QSignalBlocker(self.chk_use_spacing_extra):
+                self.chk_use_spacing_extra.setChecked(result)
+            self.state["is_use_control_spacing_extra"] = result
+            self.sliders["spacing_extra"].set_enabled(result)
+            if result:
                 self._sync_from_host_slider(
-                    "normal_azimuth", self.get_azimuth(self.host.opts.normal)
+                    "spacing_extra", self.host.opts.spacing_extra
                 )
-                self._sync_from_host_slider(
-                    "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
-                )
-                self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
-                self.normal_info.setText(
-                    self._vect_text(self.host.opts.normal, "normal")
-                )
-            if "axis1" in kwargs or "normal" in kwargs:
-                self._sync_from_host_slider(
-                    "axis1_azimuth",
-                    self.get_axis1_azimuth(self.host.opts.axis1, self.host.opts.normal),
-                )
+        if "size_extra" in kwargs:
+            result = self.host.opts.size_extra is not None
+            with QSignalBlocker(self.chk_use_size_extra):
+                self.chk_use_size_extra.setChecked(result)
+            self.state["is_use_control_size_extra"] = result
+            self.sliders["size_extra"].set_enabled(result)
+            if result:
+                self._sync_from_host_slider("size_extra", self.host.opts.size_extra)
+        if "normal" in kwargs:
+            self._sync_from_host_slider(
+                "normal_azimuth", self.get_azimuth(self.host.opts.normal)
+            )
+            self._sync_from_host_slider(
+                "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
+            )
+            self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
+            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
+        if "axis1" in kwargs or "normal" in kwargs:
+            self._sync_from_host_slider(
+                "axis1_azimuth",
+                self.get_axis1_azimuth(self.host.opts.axis1, self.host.opts.normal),
+            )
 
         if "origin" in kwargs:
             self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)

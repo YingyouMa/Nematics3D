@@ -29,12 +29,13 @@ class InteractDefectSection(PanelBase):
         self._is_continuous_interacting = False
 
         super().__init__(field.grid, figure, title=f"Controls of {field.grid.name!r}")
-        self.defect_plane.act_save_opts(self.str_now)
-        self.defect_plane.act_save_opts(self.str_now_live)
-        self._section_sync_name = self.str_now_live + "_section"
+        self._section_sync_name = self.str_now + "_section"
         self.defect_plane.act_attach_sync_task(
             self._section_sync_name, self._sync_func_defect_plane
         )
+
+    def _helper_list_snapshot_hosts(self):
+        return [self.defect_plane, self.host]
 
     def _iter_silhouette_targets(self):
         targets = [self.visual_normal]
@@ -307,34 +308,33 @@ class InteractDefectSection(PanelBase):
         self.commit()
 
     def _sync_func(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(kwargs)
+        if getattr(self, "_is_gui_updating", False):
+            return
 
-        if is_external:
-            if "normal" in kwargs:
-                if self.state["is_use_control_normal"]:
-                    self._sync_from_host_slider(
-                        "normal_azimuth",
-                        self.get_azimuth(self.host.opts.normal),
-                    )
-                    self._sync_from_host_slider(
-                        "normal_polar_angle",
-                        self.get_polar_angle(self.host.opts.normal),
-                    )
-            if "dr" in kwargs:
-                self._sync_from_host_slider("dr", self.host.opts.dr)
-            if "arc_dist" in kwargs:
-                is_controlled = self.host.opts.arc_dist is not None
-                self.state["is_use_control_arc_dist"] = is_controlled
-                self.chk_use_arc_dist.blockSignals(True)
-                try:
-                    self.chk_use_arc_dist.setChecked(is_controlled)
-                finally:
-                    self.chk_use_arc_dist.blockSignals(False)
-                self.sliders["arc_dist"].set_enabled(is_controlled)
-                if is_controlled:
-                    self._sync_from_host_slider("arc_dist", self.host.opts.arc_dist)
-            if "layers" in kwargs:
-                self._sync_from_host_slider("layers", int(self.host.opts.layers))
+        if "normal" in kwargs and self.state["is_use_control_normal"]:
+            self._sync_from_host_slider(
+                "normal_azimuth",
+                self.get_azimuth(self.host.opts.normal),
+            )
+            self._sync_from_host_slider(
+                "normal_polar_angle",
+                self.get_polar_angle(self.host.opts.normal),
+            )
+        if "dr" in kwargs:
+            self._sync_from_host_slider("dr", self.host.opts.dr)
+        if "arc_dist" in kwargs:
+            is_controlled = self.host.opts.arc_dist is not None
+            self.state["is_use_control_arc_dist"] = is_controlled
+            self.chk_use_arc_dist.blockSignals(True)
+            try:
+                self.chk_use_arc_dist.setChecked(is_controlled)
+            finally:
+                self.chk_use_arc_dist.blockSignals(False)
+            self.sliders["arc_dist"].set_enabled(is_controlled)
+            if is_controlled:
+                self._sync_from_host_slider("arc_dist", self.host.opts.arc_dist)
+        if "layers" in kwargs:
+            self._sync_from_host_slider("layers", int(self.host.opts.layers))
 
         if "origin" in kwargs:
             self.origin_info.setText(self._vect_text(self.host.opts.origin, "origin"))
@@ -345,69 +345,35 @@ class InteractDefectSection(PanelBase):
             self._update_normal_visual(is_visible=True)
 
     def _sync_func_defect_plane(self, **kwargs):
-        is_external = self._helper_sync_update_live_backup(
-            kwargs, host=self.defect_plane
-        )
+        if getattr(self, "_is_gui_updating", False):
+            return
 
-        if is_external:
-            if "u_percent" in kwargs:
+        if "u_percent" in kwargs:
+            self._sync_from_host_slider("u_percent", self.defect_plane.opts.u_percent)
+        if "state_normal" in kwargs:
+            is_controlled = not (
+                isinstance(self.defect_plane.state_normal, str)
+                and self.defect_plane.state_normal == "tangent"
+            )
+            self.state["is_use_control_normal"] = is_controlled
+            self.chk_use_normal.blockSignals(True)
+            try:
+                self.chk_use_normal.setChecked(is_controlled)
+            finally:
+                self.chk_use_normal.blockSignals(False)
+            self.sliders["normal_azimuth"].set_enabled(is_controlled)
+            self.sliders["normal_polar_angle"].set_enabled(is_controlled)
+            if is_controlled:
                 self._sync_from_host_slider(
-                    "u_percent", self.defect_plane.opts.u_percent
+                    "normal_azimuth",
+                    self.get_azimuth(self.host.opts.normal),
                 )
-            if "state_normal" in kwargs:
-                is_controlled = not (
-                    isinstance(self.defect_plane.state_normal, str)
-                    and self.defect_plane.state_normal == "tangent"
+                self._sync_from_host_slider(
+                    "normal_polar_angle",
+                    self.get_polar_angle(self.host.opts.normal),
                 )
-                self.state["is_use_control_normal"] = is_controlled
-                self.chk_use_normal.blockSignals(True)
-                try:
-                    self.chk_use_normal.setChecked(is_controlled)
-                finally:
-                    self.chk_use_normal.blockSignals(False)
-                self.sliders["normal_azimuth"].set_enabled(is_controlled)
-                self.sliders["normal_polar_angle"].set_enabled(is_controlled)
-                if is_controlled:
-                    self._sync_from_host_slider(
-                        "normal_azimuth",
-                        self.get_azimuth(self.host.opts.normal),
-                    )
-                    self._sync_from_host_slider(
-                        "normal_polar_angle",
-                        self.get_polar_angle(self.host.opts.normal),
-                    )
         if "state_normal" in kwargs:
             self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
-
-    def _on_reset_to_live(self):
-        defect_live = {
-            k: v
-            for k, v in self.defect_plane.opts_backup[self.str_now_live].items()
-            if k not in self.defect_plane.attrs_forbidden
-        }
-        host_live = {
-            k: v
-            for k, v in self.host.opts_backup[self.str_now_live].items()
-            if k not in self.host.attrs_forbidden
-        }
-        self.defect_plane.act_commit(**defect_live)
-        self.host.act_commit(**host_live)
-
-    def _on_reset_to_original(self):
-        defect_original = {
-            k: v
-            for k, v in self.defect_plane.opts_backup[self.str_now].items()
-            if k not in self.defect_plane.attrs_forbidden
-        }
-        host_original = {
-            k: v
-            for k, v in self.host.opts_backup[self.str_now].items()
-            if k not in self.host.attrs_forbidden
-        }
-        self.defect_plane.act_commit(**defect_original)
-        self.host.act_commit(**host_original)
-        self.defect_plane.opts_backup[self.str_now_live] = dict(defect_original)
-        self.host.opts_backup[self.str_now_live] = dict(host_original)
 
     def on_close(self):
         self._helper_end_continuous_interaction()

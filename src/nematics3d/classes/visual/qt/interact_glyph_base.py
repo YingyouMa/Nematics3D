@@ -22,7 +22,7 @@ class LightingConsole(QtWidgets.QWidget):
         self.sliders = {}
         self.state = {}
         self._is_gui_updating = False
-        self._sync_name = f"{parent_panel.str_now_live}::lighting"
+        self._sync_name = f"{parent_panel.str_now}::lighting"
 
         self.setWindowTitle(f"Lighting Controls of {host.name!r}")
         self.setObjectName(f"{parent_panel.objectName()}_lighting")
@@ -354,7 +354,7 @@ class InteractGlyphBase(PanelBase):
                     self._on_toggle_bounds_enabled
                 )
                 self.lbl_bounds_restore_note = QtWidgets.QLabel(
-                    "Note: this option does not currently support Restore Original or Reset to Live.",
+                    "Note: this option does not currently support Restore Original.",
                     self.group_geometry,
                 )
                 self.lbl_bounds_restore_note.setWordWrap(True)
@@ -499,7 +499,7 @@ class InteractGlyphBase(PanelBase):
     def _helper_build_commit_params(self):
         params = {}
         if self.config["is_radius"]:
-            current_radius = self.host.opts_backup[self.str_now_live]["radius"]
+            current_radius = self.host.opts.radius
             scale = float(self.state["radius_rescale"])
             if callable(current_radius):
                 params["radius"] = lambda x: scale * current_radius(x)
@@ -516,15 +516,13 @@ class InteractGlyphBase(PanelBase):
                 )
                 params["paint_by"] = "color"
             else:
-                params["color"] = self.host.opts_backup[self.str_now_live]["color"]
-                params["paint_by"] = self.host.opts_backup[self.str_now_live][
-                    "paint_by"
-                ]
+                params["color"] = self.host.opts.color
+                params["paint_by"] = self.host.opts.paint_by
         if self.config["is_opacity"]:
             params["opacity"] = (
                 self.state["opacity"]
                 if self.state.get("is_use_control_opacity")
-                else self.host.opts_backup[self.str_now_live]["opacity"]
+                else self.host.opts.opacity
             )
         if self.config["is_sides"]:
             params["sides"] = int(self.state["sides"])
@@ -584,16 +582,15 @@ class InteractGlyphBase(PanelBase):
     # ==================================================
 
     def _sync_func(self, **kwargs):
-        kwargs_live = dict(kwargs)
-        is_bounds_enabled = kwargs_live.pop("is_bounds_enabled", None)
-        is_external = self._helper_sync_update_live_backup(kwargs_live)
+        is_gui_updating = getattr(self, "_is_gui_updating", False)
+        is_bounds_enabled = kwargs.get("is_bounds_enabled", None)
 
         if is_bounds_enabled is not None and hasattr(self, "chk_is_bounds_enabled"):
             self._is_block_chk_commit = True
             self.chk_is_bounds_enabled.setChecked(bool(is_bounds_enabled))
             self._is_block_chk_commit = False
             self.state["is_bounds_enabled"] = bool(is_bounds_enabled)
-        if is_external:
+        if not is_gui_updating:
             if "sides" in kwargs and self.config["is_sides"]:
                 self._sync_from_host_slider("sides", kwargs["sides"])
             if "color" in kwargs and self.config["is_color"]:
@@ -606,13 +603,13 @@ class InteractGlyphBase(PanelBase):
                 self._is_block_chk_commit = False
 
         if "radius" in kwargs and self.config["is_radius"]:
-            if is_external:
+            if not is_gui_updating:
                 self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
             self._update_radius_label()
 
         update_length_label = getattr(self, "_update_length_label", None)
         if callable(update_length_label) and "length" in kwargs:
-            if is_external and "length_rescale" in self.sliders:
+            if not is_gui_updating and "length_rescale" in self.sliders:
                 self.sliders["length_rescale"].set_tick(1, is_block_signals=True)
             update_length_label()
 

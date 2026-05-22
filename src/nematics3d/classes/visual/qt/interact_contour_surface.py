@@ -24,7 +24,7 @@ class InteractContourSurface(InteractGlyphBase):
         self.level_min = float(np.min(values))
         self.level_max = float(np.max(values))
         self._level_original = float(host.calc_level)
-        self._level_live = float(host.calc_level)
+        self._snapshot_levels: dict[str, float] = {}
 
         super().__init__(
             host,
@@ -90,16 +90,18 @@ class InteractContourSurface(InteractGlyphBase):
             return
 
         level_current = float(self.host.calc_level)
-        self._level_live = level_current
         self._sync_from_host_slider("level", level_current)
 
-    def _on_reset_to_live(self):
-        self.surface.act_set_level(float(self._level_live))
-        self.host.act_commit(**self.host.opts_backup[self.str_now_live])
+    def _helper_save_snapshot(self, name: str, *, is_user_snapshot: bool) -> None:
+        super()._helper_save_snapshot(name, is_user_snapshot=is_user_snapshot)
+        self._snapshot_levels[name] = float(self.host.calc_level)
 
-    def _on_reset_to_original(self):
-        self.surface.act_set_level(float(self._level_original))
-        original = self.host.opts_backup[self.str_now]
-        self.host.act_commit(**original)
-        self.host.opts_backup[self.str_now_live] = dict(original)
-        self._level_live = float(self._level_original)
+    def _helper_restore_snapshot(self, name: str) -> None:
+        level = self._snapshot_levels.get(name)
+        if level is None:
+            if name == self.str_now:
+                level = float(self._level_original)
+            else:
+                raise KeyError(f"Snapshot {name!r} has no saved contour level.")
+        self.surface.act_set_level(float(level))
+        super()._helper_restore_snapshot(name)
