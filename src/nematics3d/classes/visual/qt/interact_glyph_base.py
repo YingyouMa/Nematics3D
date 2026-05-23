@@ -438,7 +438,6 @@ class InteractGlyphBase(PanelBase):
         self.layout.addWidget(self.btn_lighting_console)
         self.btn_lighting_console.clicked.connect(self._open_lighting_console)
 
-
     def _build_extra_geometry(self, parent, layout):
         pass
 
