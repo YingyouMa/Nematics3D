@@ -18,7 +18,7 @@ from .classes.visual.plot_figure import *
 from .classes.visual.plot_sphere import *
 from .classes.visual.plot_vector import *
 from .classes.visual.plot_extent import *
-from .classes.visual.plot_surface import *
+from .classes.visual.plot_delaunay import *
 from .classes.visual.plot_contour_surface import *
 from .classes.plane_grid import *
 from .classes.plane_grid_polar import *

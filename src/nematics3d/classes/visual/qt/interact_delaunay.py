@@ -1,9 +1,9 @@
 from .interact_glyph_base import InteractGlyphBase
 
 
-class InteractSurface(InteractGlyphBase):
+class InteractDelaunay(InteractGlyphBase):
     # ==================== OVERRIDE ====================
-    # InteractSurface overrides InteractGlyphBase.__init__ because
+    # InteractDelaunay overrides InteractGlyphBase.__init__ because Delaunay
     # surface control only needs color and opacity, while radius,
     # sides, and extra geometry controls are not meaningful here.
     # ==================================================
@@ -11,7 +11,7 @@ class InteractSurface(InteractGlyphBase):
         super().__init__(
             host,
             figure,
-            title=f"Surface Controls of {host.name!r}",
+            title=f"Delaunay Controls of {host.name!r}",
             is_radius=False,
             is_sides=False,
             is_geometry=False,

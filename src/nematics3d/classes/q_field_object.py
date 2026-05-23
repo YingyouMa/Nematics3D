@@ -136,7 +136,7 @@ from ..disclination import defect_detect, defect_classify_into_lines
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
-from .visual.plot_surface import OptsSurface
+from .visual.plot_delaunay import OptsDelaunay
 from .visual.plot_figure import PlotFigure, OptsFigure
 from .q_plane import QPlane, QPlanePolar
 from .visual.figure_manager import FigureManager
@@ -150,6 +150,7 @@ from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine
 from .class_base import ClassBase
+
 
 @dataclass(slots=True)
 class InputQ:
@@ -1315,7 +1316,7 @@ class QFieldObject(ClassBase):
         is_new: bool = False,
         is_extent: bool = True,
         opts_grid: OptsPlaneGrid | None = None,
-        opts_S: OptsSurface | None = None,
+        opts_S: OptsDelaunay | None = None,
         opts_figure: OptsFigure | None = None,
         opts_extent: OptsTube | None = None,
         bounds=None,
@@ -1342,7 +1343,7 @@ class QFieldObject(ClassBase):
             Base `OptsPlaneGrid` configuration for constructing the analysis
             plane.
         opts_S
-            Base `OptsSurface` configuration for the rendered scalar-order
+            Base `OptsDelaunay` configuration for the rendered scalar-order
             surface.
         opts_figure
             Base `OptsFigure` configuration for the target figure.
@@ -1383,7 +1384,7 @@ class QFieldObject(ClassBase):
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_S is None:
-            opts_S = OptsSurface()
+            opts_S = OptsDelaunay()
 
         merge = merge_opts_all(
             {
@@ -1709,10 +1710,7 @@ class QFieldObject(ClassBase):
                     opts_smooth,
                     min_line_length=self.default_miminum_line_length_smooth,
                 )
-            if (
-                opts_smooth.window_length is UNSET
-                and opts_smooth.window_ratio is UNSET
-            ):
+            if opts_smooth.window_length is UNSET and opts_smooth.window_ratio is UNSET:
                 opts_smooth = replace(
                     opts_smooth,
                     window_length=self.default_smooth_window_length,

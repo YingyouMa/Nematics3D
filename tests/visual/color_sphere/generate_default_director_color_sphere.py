@@ -16,7 +16,7 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_surface import PlotSurface
+from nematics3d.classes.visual.plot_delaunay import PlotDelaunay
 from nematics3d.classes.visual.plot_vector import PlotVector
 from nematics3d.field import n_color_immerse
 
@@ -97,7 +97,7 @@ def build_director_color_sphere(
             radius=radius,
             samples=patch_samples,
         )
-        surface = PlotSurface(
+        surface = PlotDelaunay(
             coords=coords,
             figure=figure,
             name=f"sphere_patch_{face_name}",

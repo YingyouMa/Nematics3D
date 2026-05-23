@@ -32,7 +32,7 @@ from .result_base import ResultBase
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
-from .visual.plot_surface import OptsSurface, PlotSurface
+from .visual.plot_delaunay import OptsDelaunay, PlotDelaunay
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -140,7 +140,7 @@ class QPlane(InterpolatePlane):
             "doc_runtime": None,
         },
         "visual_S": {
-            "doc": "The PlotSurface visual showing scalar order on this Q plane.",
+            "doc": "The PlotDelaunay visual showing scalar order on this Q plane.",
             "kind": "relation",
             "is_weak_by_default": False,
             "is_weak": None,
@@ -525,7 +525,7 @@ class QPlane(InterpolatePlane):
         self,
         figure: PlotFigure | BackgroundPlotter | None = None,
         opts_figure: OptsFigure | None = None,
-        opts_S: OptsSurface | None = None,
+        opts_S: OptsDelaunay | None = None,
         **kwargs,
     ):
         """Create or refresh the scalar-order surface visual for this Q plane."""
@@ -533,7 +533,7 @@ class QPlane(InterpolatePlane):
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_S is None:
-            opts_S = OptsSurface()
+            opts_S = OptsDelaunay()
 
         merge = merge_opts_all(
             {
@@ -549,7 +549,7 @@ class QPlane(InterpolatePlane):
 
         figure = as_plotfigure(figure, opts_figure)
 
-        visual_S = PlotSurface(
+        visual_S = PlotDelaunay(
             coords=self.grid(),
             scalars=self.calc_S,
             figure=figure,

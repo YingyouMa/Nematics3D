@@ -1,4 +1,4 @@
-"""Surface glyph visuals built on the shared PlotGlyph pipeline."""
+"""Delaunay-surface glyph visuals built on the shared PlotGlyph pipeline."""
 
 from __future__ import annotations
 
@@ -13,24 +13,24 @@ from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
 from ..bounds import BoundsData
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
-from .qt.interact_surface import InteractSurface
+from .qt.interact_delaunay import InteractDelaunay
 
 
 @dataclass(slots=True, repr=False)
-class OptsSurface(OptsGlyph):
+class OptsDelaunay(OptsGlyph):
     """
-    Visual configuration object for `PlotSurface`.
+    Visual configuration object for `PlotDelaunay`.
 
-    `OptsSurface` stores the settings that control how reconstructed surface
+    `OptsDelaunay` stores the settings that control how reconstructed surface
     glyphs look after they are created. It does not define the input point
     cloud itself; those points come from the `coords` passed to
-    `PlotSurface`. Instead, this class controls coloring, opacity, shading,
+    `PlotDelaunay`. Instead, this class controls coloring, opacity, shading,
     scalar mapping, and other display properties of the generated surface
     mesh.
 
     Important readable attributes:
 
-    - `host`: the PlotSurface currently using this opts object, if any.
+    - `host`: the PlotDelaunay currently using this opts object, if any.
     - `color`, `opacity`, `scalars`: the main pointwise visual controls.
     - `paint_by`: chooses direct RGBA painting or scalar-colormap rendering.
     - `resolver_source`: selects the input used by callable visual resolvers.
@@ -47,7 +47,7 @@ class OptsSurface(OptsGlyph):
 
     Common ways to use this object:
 
-    - create `OptsSurface(...)` first and pass it into `PlotSurface`
+    - create `OptsDelaunay(...)` first and pass it into `PlotDelaunay`
     - modify fields on `surface.opts` after a surface glyph already exists
     - apply a prepared settings object with `surface.act_commit(opts=opts)`
 
@@ -87,7 +87,7 @@ class OptsSurface(OptsGlyph):
     - lighting fields change appearance but not the reconstructed geometry
 
     If you want the full field list and their short descriptions, see
-    `OptsSurface.__attrs__`, plus the inherited `OptsGlyph` option fields.
+    `OptsDelaunay.__attrs__`, plus the inherited `OptsGlyph` option fields.
     For the shared glyph option model and lower-level commit/update rules,
     see the docstrings of `OptsGlyph` and `OptsBase`.
 
@@ -95,19 +95,19 @@ class OptsSurface(OptsGlyph):
     --------
     Create reusable surface options:
 
-    >>> opts = OptsSurface(color=(0.9, 0.2, 0.2), opacity=0.8)
-    >>> surface = PlotSurface(coords, opts=opts)
+    >>> opts = OptsDelaunay(color=(0.9, 0.2, 0.2), opacity=0.8)
+    >>> surface = PlotDelaunay(coords, opts=opts)
 
     Resolve values from coordinates:
 
-    >>> opts = OptsSurface(
+    >>> opts = OptsDelaunay(
     ...     resolver_source="coords",
     ...     opacity=lambda pts: np.clip(1.0 - np.abs(pts[:, 2]), 0.2, 1.0),
     ... )
 
     Use scalar coloring:
 
-    >>> opts = OptsSurface(
+    >>> opts = OptsDelaunay(
     ...     paint_by="scalars",
     ...     scalars=lambda pts: pts[:, 2],
     ...     scalars_cmap="viridis",
@@ -159,11 +159,11 @@ class OptsSurface(OptsGlyph):
     }
 
 
-class PlotSurface(PlotGlyph):
+class PlotDelaunay(PlotGlyph):
     """
     Reconstruct and render a surface mesh from input points.
 
-    `PlotSurface` is the surface-based concrete glyph class. It takes a set
+    `PlotDelaunay` is the Delaunay-surface concrete glyph class. It takes a set
     of 3D sample points, builds a surface mesh from them, and then renders
     that mesh with the normal glyph display pipeline. This makes it useful
     when your geometry is naturally a sampled surface rather than isolated
@@ -178,7 +178,7 @@ class PlotSurface(PlotGlyph):
 
     Important readable attributes:
 
-    - `opts`: the paired OptsSurface controlling surface appearance.
+    - `opts`: the paired OptsDelaunay controlling surface appearance.
     - `fig`: the PlotFigure currently hosting this glyph, if any.
     - `bounds`: the currently bound clipping object, if any.
     - `raw_coords`: the raw surface sample coordinates.
@@ -229,7 +229,7 @@ class PlotSurface(PlotGlyph):
         this glyph can join an existing scene without extra setup. If `None`,
         a new figure is created automatically.
     opts
-        Optional `OptsSurface` instance holding the visual configuration.
+        Optional `OptsDelaunay` instance holding the visual configuration.
         You can also reuse an existing options object later with
         `surface.act_commit(opts=other.opts)` to apply another object's
         current option settings directly. If both `opts` and explicit option
@@ -246,7 +246,7 @@ class PlotSurface(PlotGlyph):
     is_clip_inside
         Controls whether clipping keeps the region inside the active bounds
         (`True`) or outside it (`False`). This is a glyph/host setting, not
-        an `OptsSurface` field.
+        an `OptsDelaunay` field.
     bounds
         Optional clipping object forwarded through the underlying `PlotGlyph`
         interface.
@@ -257,7 +257,7 @@ class PlotSurface(PlotGlyph):
     **kwargs
         Additional option values forwarded into the glyph configuration
         pipeline. For the full list of supported visual options, see the
-        docstring of `OptsSurface` and its base option classes.
+        docstring of `OptsDelaunay` and its base option classes.
 
     Resolver Behavior
     -----------------
@@ -270,7 +270,7 @@ class PlotSurface(PlotGlyph):
 
     Notes
     -----
-    `PlotSurface` currently reconstructs the visible mesh from the prepared
+    `PlotDelaunay` currently reconstructs the visible mesh from the prepared
     point cloud with a 2D Delaunay step. This means the result depends on the
     input point distribution and is best suited to point sets that already
     sample a surface reasonably well.
@@ -297,7 +297,7 @@ class PlotSurface(PlotGlyph):
     ...     [0.0, 1.0, 0.0],
     ...     [1.0, 1.0, 0.2],
     ... ])
-    >>> surface = PlotSurface(
+    >>> surface = PlotDelaunay(
     ...     pts,
     ...     color=(0.8, 0.5, 0.2),
     ...     opacity=0.9,
@@ -354,8 +354,8 @@ class PlotSurface(PlotGlyph):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # PlotSurface overrides PlotGlyph.__init__ only to select the surface opts
-    # type and install the surface-specific interaction entry point.
+    # PlotDelaunay overrides PlotGlyph.__init__ only to select the Delaunay
+    # opts type and install the Delaunay-specific interaction entry point.
     # ==================================================
     def __init__(
         self,
@@ -364,7 +364,7 @@ class PlotSurface(PlotGlyph):
         name_replace: str = "surface",
         category: str = "surface",
         figure: FigureData | None = None,
-        opts: OptsSurface | None = None,
+        opts: OptsDelaunay | None = None,
         bounds: BoundsData | None = None,
         clip_mode: str = "center",
         is_clip_inside: bool = True,
@@ -373,7 +373,7 @@ class PlotSurface(PlotGlyph):
     ):
         super().__init__(
             coords=coords,
-            opts_type=OptsSurface,
+            opts_type=OptsDelaunay,
             category=category,
             name=name,
             name_replace=name_replace,
@@ -387,7 +387,7 @@ class PlotSurface(PlotGlyph):
         )
 
         object.__setattr__(self, "calc_keep_index", None)
-        self.act_set_interact_func(lambda: InteractSurface.show_once(self, self.fig))
+        self.act_set_interact_func(lambda: InteractDelaunay.show_once(self, self.fig))
 
         self._helper_init_end()
 
@@ -396,7 +396,7 @@ class PlotSurface(PlotGlyph):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # PlotSurface overrides PlotGlyph._helper_bound_coords because
+    # PlotDelaunay overrides PlotGlyph._helper_bound_coords because
     # surface glyphs can center-clip by filtering raw surface points directly.
     # ==================================================
     def _helper_bound_coords(self):
@@ -434,7 +434,7 @@ class PlotSurface(PlotGlyph):
         return self.raw_coords[keep_index]
 
     # ==================== OVERRIDE ====================
-    # PlotSurface overrides PlotGlyph._helper_set_poly so center-based clipping
+    # PlotDelaunay overrides PlotGlyph._helper_set_poly so center-based clipping
     # can directly filter pointwise visual data with the kept indices.
     # ==================================================
     def _helper_set_poly(self, poly):
@@ -463,7 +463,7 @@ class PlotSurface(PlotGlyph):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # PlotSurface overrides PlotGlyph._helper_build_mesh because surfaces are
+    # PlotDelaunay overrides PlotGlyph._helper_build_mesh because surfaces are
     # reconstructed from the prepared point cloud with a 2D Delaunay stage
     # instead of glyph or tube extrusion logic.
     # ==================================================
@@ -476,7 +476,7 @@ class PlotSurface(PlotGlyph):
         return mesh
 
     # ==================== OVERRIDE ====================
-    # PlotSurface overrides PlotGlyph._helper_add_silhouette because surface
+    # PlotDelaunay overrides PlotGlyph._helper_add_silhouette because surface
     # objects need a feature-edge outline generated from the triangulated mesh
     # rather than the generic glyph silhouette behavior.
     # ==================================================
