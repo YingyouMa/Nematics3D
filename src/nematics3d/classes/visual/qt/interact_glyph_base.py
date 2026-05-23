@@ -7,6 +7,7 @@ from .panel_base import (
     make_RGB_slider,
     LogTickMapper,
 )
+from .ui_throttle import UIThrottle
 
 # NOTE: This panel is intentionally coupled to PlotGlyph-like hosts.
 # The host is expected to provide glyph internals such as:
@@ -23,6 +24,10 @@ class LightingConsole(QtWidgets.QWidget):
         self.state = {}
         self._is_gui_updating = False
         self._sync_name = f"{parent_panel.str_now}::lighting"
+        self._slider_throttle = UIThrottle(
+            interval_ms=int(getattr(parent_panel, "slider_throttle_ms", 20)),
+            parent=self,
+        )
 
         self.setWindowTitle(f"Lighting Controls of {host.name!r}")
         self.setObjectName(f"{parent_panel.objectName()}_lighting")
@@ -128,12 +133,19 @@ class LightingConsole(QtWidgets.QWidget):
             lambda _state: self._on_toggle_shading_type("pbr")
         )
         for item in self.sliders.values():
-            item.slider.valueChanged.connect(self.on_changed)
+            item.slider.valueChanged.connect(self._schedule_on_changed)
+            item.slider.sliderReleased.connect(self._flush_on_changed)
 
     def on_changed(self, _value=0):
         for item in self.sliders.values():
             item.sync_to_state(self.state)
         self.commit()
+
+    def _schedule_on_changed(self, _value=0):
+        self._slider_throttle.schedule(self.on_changed)
+
+    def _flush_on_changed(self, _value=0):
+        self._slider_throttle.flush()
 
     def commit(self):
         params = {
@@ -189,9 +201,6 @@ class LightingConsole(QtWidgets.QWidget):
         self._set_shading_type(shading_type, is_commit=True)
 
     def _sync_func(self, **kwargs):
-        if self._is_gui_updating:
-            return
-
         if "shading_type" in kwargs:
             self._set_shading_type(self.host.opts.shading_type, is_commit=False)
 
@@ -217,6 +226,7 @@ class LightingConsole(QtWidgets.QWidget):
 
     def closeEvent(self, event):
         try:
+            self._slider_throttle.cancel()
             self.host.act_detach_sync_task(self._sync_name)
             self.parent_panel._lighting_console = None
         finally:
@@ -312,6 +322,9 @@ class InteractGlyphBase(PanelBase):
 
             if self.config["is_radius"]:
                 self.state["radius_rescale"] = 1.0
+                self._radius_rescale_base = self._helper_clone_resolver_value(
+                    self.host.opts.radius
+                )
                 log_mapper = LogTickMapper(value_min=0.2, value_max=5, base=10.0)
                 self.sliders["radius_rescale"] = make_labeled_slider_row(
                     parent=self.group_geometry,
@@ -425,11 +438,6 @@ class InteractGlyphBase(PanelBase):
         self.layout.addWidget(self.btn_lighting_console)
         self.btn_lighting_console.clicked.connect(self._open_lighting_console)
 
-        for item in self.sliders.values():
-            if item not in self._custom_sliders:
-                item.slider.valueChanged.connect(self.on_changed)
-            item.slider.sliderPressed.connect(self._on_slider_pressed)
-            item.slider.sliderReleased.connect(self._on_slider_released)
 
     def _build_extra_geometry(self, parent, layout):
         pass
@@ -470,6 +478,14 @@ class InteractGlyphBase(PanelBase):
 
         return float(radius_all[0]), 0
 
+    @staticmethod
+    def _helper_clone_resolver_value(value):
+        if callable(value):
+            return value
+        if np.isscalar(value):
+            return float(value)
+        return np.asarray(value, dtype=float).copy()
+
     def _update_radius_label(self):
         if not hasattr(self, "lbl_radius"):
             return
@@ -502,14 +518,14 @@ class InteractGlyphBase(PanelBase):
     def _helper_build_commit_params(self):
         params = {}
         if self.config["is_radius"]:
-            current_radius = self.host.opts.radius
+            radius_base = self._radius_rescale_base
             scale = float(self.state["radius_rescale"])
-            if callable(current_radius):
-                params["radius"] = lambda x: scale * current_radius(x)
-            elif np.isscalar(current_radius):
-                params["radius"] = scale * float(current_radius)
+            if callable(radius_base):
+                params["radius"] = lambda x: scale * radius_base(x)
+            elif np.isscalar(radius_base):
+                params["radius"] = scale * float(radius_base)
             else:
-                params["radius"] = scale * np.asarray(current_radius, dtype=float)
+                params["radius"] = scale * np.asarray(radius_base, dtype=float)
         if self.config["is_color"]:
             if self.state.get("is_use_control_color"):
                 params["color"] = (
@@ -607,6 +623,9 @@ class InteractGlyphBase(PanelBase):
 
         if "radius" in kwargs and self.config["is_radius"]:
             if not is_gui_updating:
+                self._radius_rescale_base = self._helper_clone_resolver_value(
+                    self.host.opts.radius
+                )
                 self.sliders["radius_rescale"].set_tick(1, is_block_signals=True)
             self._update_radius_label()
 

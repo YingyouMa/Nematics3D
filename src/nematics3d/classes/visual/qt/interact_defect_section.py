@@ -308,9 +308,6 @@ class InteractDefectSection(PanelBase):
         self.commit()
 
     def _sync_func(self, **kwargs):
-        if getattr(self, "_is_gui_updating", False):
-            return
-
         if "normal" in kwargs and self.state["is_use_control_normal"]:
             self._sync_from_host_slider(
                 "normal_azimuth",
@@ -345,9 +342,6 @@ class InteractDefectSection(PanelBase):
             self._update_normal_visual(is_visible=True)
 
     def _sync_func_defect_plane(self, **kwargs):
-        if getattr(self, "_is_gui_updating", False):
-            return
-
         if "u_percent" in kwargs:
             self._sync_from_host_slider("u_percent", self.defect_plane.opts.u_percent)
         if "state_normal" in kwargs:

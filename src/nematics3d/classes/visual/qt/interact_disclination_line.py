@@ -86,7 +86,16 @@ class InteractDisclinationLine(InteractGlyphBase):
         )
 
         self.sliders["window_length"].slider.valueChanged.connect(
-            lambda: self.on_changed(is_only_smooth=True)
+            lambda _value=0: self._slider_throttle.schedule(
+                self.on_changed,
+                is_only_smooth=True,
+            )
+        )
+        self.sliders["window_length"].slider.sliderPressed.connect(
+            self._helper_begin_slider_interaction
+        )
+        self.sliders["window_length"].slider.sliderReleased.connect(
+            self._helper_end_slider_interaction
         )
         self._custom_sliders.append(self.sliders["window_length"])
 
@@ -146,8 +155,6 @@ class InteractDisclinationLine(InteractGlyphBase):
             )
 
     def _sync_func_smooth(self, **kwargs):
-        if getattr(self, "_is_gui_updating", False):
-            return
         if "window_length" in kwargs:
             self._sync_from_host_slider("window_length", kwargs["window_length"])
 

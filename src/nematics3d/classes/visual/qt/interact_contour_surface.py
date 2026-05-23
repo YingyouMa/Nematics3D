@@ -86,8 +86,6 @@ class InteractContourSurface(InteractGlyphBase):
 
     def _sync_func(self, **kwargs):
         super()._sync_func(**kwargs)
-        if getattr(self, "_is_gui_updating", False):
-            return
 
         level_current = float(self.host.calc_level)
         self._sync_from_host_slider("level", level_current)
