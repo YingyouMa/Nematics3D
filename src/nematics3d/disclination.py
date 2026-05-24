@@ -68,9 +68,6 @@ def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
 
     test = np.einsum("...i,...i->...", a, d)
 
-    # print(test[:, :-1])
-    # print(np.array(np.where(test < threshold)).T.astype(float))
-
     coords = np.array(np.where(test < threshold)).T.astype(float)
     coords[:, [0, 1]] += 0.5
 
@@ -138,10 +135,10 @@ def defect_detect(
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
 
-    logger.debug("Start to defect defects")
-    logger.debug(f"Periodic boundary flags: {is_boundary_periodic}")
     logger.debug(
-        f"Threshold of the inner product between the first and last director is {threshold}"
+        "Start to defect defects. \n"
+        f"Periodic boundary flags: {is_boundary_periodic}. \n"
+        f"Threshold of the inner product between the first and last director is {threshold}."
     )
 
     n = add_periodic_boundary(n_origin, is_boundary_periodic)
@@ -245,11 +242,13 @@ def defect_classify_into_lines(
     from .grid import unwrap_trajectory
     from .general import make_hash_table, search_in_reservoir
 
-    logger.debug("Start line classfication")
-
     box_size_periodic = as_dimension_info(box_size_periodic)
     grid_transform = as_grid_transform(grid_transform)
-    logger.debug(f"box_size_periodic: {box_size_periodic}")
+
+    logger.debug(
+        "Start line classfication. \n"
+        f"box_size_periodic: {box_size_periodic}."
+    )
 
     defect_indices_hash = make_hash_table(defect_indices)
 

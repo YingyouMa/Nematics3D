@@ -1,0 +1,19 @@
+import numpy as np
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+import nematics3d
+
+DATA_DIR = Path(__file__).resolve().parent.parent / "example/data"
+
+n = np.load(DATA_DIR / "n_example_global.npy")
+S = np.load(DATA_DIR / "S_example_global.npy")
+
+Q = nematics3d.QFieldObject(S=S, n=n, box_periodic_flag=True, name="testQ", log_level=10)
+Q.act_lines_smooth()
+Q.act_visualize_disclination_lines(is_wrap=False, extent_color=(0.5, 0.5, 0.5))
+
+
+

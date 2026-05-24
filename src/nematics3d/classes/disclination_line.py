@@ -337,7 +337,6 @@ class DisclinationLine(ClassBase):
             as_dimension_info(self.raw_box_size_periodic_index),
         )
 
-        logger.debug("Classifying line kind by the distance between head and tail.")
         if (
             np.linalg.norm(self.raw_defect_indices[0] - self.raw_defect_indices[-1])
             == 0
@@ -1345,10 +1344,6 @@ class DisclinationLineSmoothPlot(HostBase):
         is_wrap = bool(self.opts.is_wrap)
         owner = self.owner
 
-        logger.debug(
-            f"Start to visualize line: {owner.name!r} with kind ``{owner.owner.kind}``"
-        )
-
         if not is_wrap:
             line_coords = owner.result if is_smooth else owner.owner.calc_defect_coords
             if owner.owner.kind == "loop":
@@ -1356,7 +1351,6 @@ class DisclinationLineSmoothPlot(HostBase):
             line_index = None
 
         else:
-            logger.debug("Start to deal with the periodic boundary condition")
 
             boundary_flag = boundary_periodic_size_to_flag(
                 owner.owner.raw_box_size_periodic_index
