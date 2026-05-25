@@ -1,4 +1,4 @@
-"""Plane sampling grids embedded in 3D space with optional bounds filtering."""
+"""Plane sampling grids defined by one physical plane basis in 3D space."""
 
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -22,13 +22,14 @@ from nematics3d.grid import (
     apply_linear_transform,
     as_grid_transform,
     generate_fixed_step_grid,
+    resolve_plane_physical_axes,
 )
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
 from .host_base import HostBase, OptsBase
 from .opts import cover_value
-from ..general import rotation_matrix_from_vectors, select_grid_in_box
+from ..general import select_grid_in_box
 
 
 #!!! grid unit
@@ -39,7 +40,14 @@ from ..general import rotation_matrix_from_vectors, select_grid_in_box
 # --- Plane Options ---
 @dataclass(slots=True, repr=False)
 class OptsPlaneGrid(OptsBase):
-    """Options object controlling the geometry and filtering of a PlaneGrid."""
+    """
+    Options object controlling one PlaneGrid defined directly in physical space.
+
+    The primary geometry inputs are the physical-space `origin`, `normal`,
+    `axis1`, `spacing`, `spacing_extra`, `size`, and `size_extra`. Integer
+    lattice indices remain an internal sampling topology, not the public
+    geometric contract.
+    """
 
     normal: Vect(3) | Unset = UNSET
     spacing: Number | Unset = UNSET
@@ -55,27 +63,29 @@ class OptsPlaneGrid(OptsBase):
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsBase.__attrs__),
-        "normal": "normal of plane",
-        "spacing": "grid spacing along axis1",
-        "spacing_extra": "grid spacing along axis2",
-        "size": "size of plane",
-        "size_extra": "size of plane along axis2",
-        "origin": "origin of plane",
+        "normal": "physical-space unit normal of the plane",
+        "spacing": "physical step length along the physical in-plane axis1",
+        "spacing_extra": "physical step length along the derived physical in-plane axis2",
+        "size": "physical size of the plane along axis1",
+        "size_extra": "physical size of the plane along axis2",
+        "origin": "physical-space reference point on the plane",
         "alignment": (
-            "Grid reference point to be placed at 'origin' "
-            "('center' for geometric middle, 'bottom-left' for the first grid point [0,0])"
+            "Physical interpretation of where `origin` sits relative to the generated "
+            "grid ('center' for the geometric middle, 'bottom-left' for the first "
+            "grid point [0, 0])"
         ),
-        "axis1": "first in-plane axis",
+        "axis1": "physical-space unit reference axis lying in the plane",
         "is_clip_inside": (
             "Whether bounds filtering keeps the grid points inside the bounds "
             "(True) or outside (False)."
         ),
         "grid_offset": (
-            "grid translation offset to map lattice indices to real-space coordinates"
+            "Legacy post-generation translation applied after the PlaneGrid physical "
+            "basis has produced 3D points"
         ),
         "grid_transform": (
-            "grid transform matrix to map lattice indices to real-space coordinates "
-            "(3x3 matrix)"
+            "Legacy post-generation linear transform applied after the PlaneGrid "
+            "physical basis has produced 3D points (3x3 matrix)"
         ),
     }
 
@@ -117,15 +127,28 @@ class OptsPlaneGrid(OptsBase):
 
 
 # PlaneGrid keeps the HostBase option pipeline but specializes it for
-# generating a 2D lattice embedded in 3D space with optional bounds clipping.
+# generating a 2D lattice embedded in 3D space from one physical plane basis.
 #
-# Subclasses should preserve the relationship among `normal`, `axis1`,
-# the derived in-plane axis, and the generated grid caches. If grid
-# generation is overridden, keep `entity_grid`, `entity_grid_all`,
-# `entity_grid_int`, and the derived size/offset fields synchronized.
+# Subclasses should preserve the relationship among the physical-space
+# `origin`, `normal`, `axis1`, the derived physical `axis2`, and the generated
+# grid caches. If grid generation is overridden, keep `entity_grid`,
+# `entity_grid_all`, `entity_grid_int`, and the derived size/offset fields
+# synchronized.
 class PlaneGrid(HostBase):
     """
-    PlaneGrid generates a 2D sampling grid embedded in 3D space.
+    PlaneGrid generates a 2D sampling grid embedded in 3D physical space.
+
+    The public geometry contract is physical-space first:
+
+    - `origin` is one physical point on the plane
+    - `normal` is one physical unit normal
+    - `axis1` is one physical unit in-plane reference axis
+    - `spacing` / `spacing_extra` are physical step lengths
+    - `size` / `size_extra` are physical plane extents
+    - `alignment` defines where `origin` lies relative to the generated grid
+
+    The integer lattice exists to describe sampling layout only. It should not
+    be treated as the primary geometric basis of the plane.
 
     Normal users configure the grid through `grid.opts` or
     `grid.act_commit(...)`, and can iterate over the selected grid points or
@@ -139,39 +162,53 @@ class PlaneGrid(HostBase):
         **dict(HostBase.__attr_defs__),
         "entity_grid": {
             "doc": (
-                "Selected 3D grid points after applying transforms and optional "
-                "bounding-box filtering (array of shape N x 3)."
+                "Selected physical-space 3D grid points after optional legacy "
+                "post-transform steps and optional bounding-box filtering "
+                "(array of shape N x 3)."
             ),
         },
         "entity_grid_all": {
             "doc": (
-                "Complete 3D grid points before filtering, reshaped as "
+                "Complete physical-space 3D grid points before filtering, reshaped as "
                 "(num1 x num2 x 3)."
             ),
         },
         "entity_grid_int": {
             "doc": (
-                "Integer lattice indices corresponding to 2D grid positions "
-                "(num1 x num2 x 3)."
+                "Integer lattice indices used as discrete sampling topology for "
+                "the 2D grid positions."
             ),
         },
         "calc_axis2": {
-            "doc": "The second in-plane axis perpendicular to both axis1 and normal.",
+            "doc": (
+                "The derived physical secondary in-plane axis perpendicular to both "
+                "axis1 and normal."
+            ),
         },
         "calc_offset_real": {
             "doc": (
-                "Base 3D offset that maps 2D array indices [i, j] into plane "
-                "coordinates before the global grid transform."
+                "Legacy cache for the physical-space base offset used by the current "
+                "generation pipeline before any optional post-transform step."
             ),
         },
         "calc_box_mask": {
             "doc": "Boolean mask selecting the grid points kept after optional bounds filtering.",
         },
         "calc_size": {
-            "doc": "The actual size calculated from opts.size.",
+            "doc": (
+                "The effective physical size along axis1 actually realized by the "
+                "discrete sampling grid. This may differ from opts.size because the "
+                "requested size is snapped down to a grid compatible with the fixed "
+                "spacing."
+            ),
         },
         "calc_size_extra": {
-            "doc": "The actual secondary size calculated from opts.size and opts.size_extra.",
+            "doc": (
+                "The effective physical size along axis2 actually realized by the "
+                "discrete sampling grid. This may differ from opts.size_extra "
+                "(or opts.size when size_extra is omitted) because the requested "
+                "size is snapped down to a grid compatible with the fixed spacing."
+            ),
         },
         "entity_fig_demo": {
             "doc": (
@@ -294,54 +331,26 @@ class PlaneGrid(HostBase):
         alignment = self.opts.alignment
         is_clip_inside = self.opts.is_clip_inside
 
-        if axis1 is not None:
-            dot_product = normal @ axis1
-            if np.isclose(abs(dot_product), 1.0, atol=1e-8):
-                old_axis1 = axis1.copy()
-                axis1 = None
-                if self.impl_is_warn_orthogonal:
-                    logger.warning(
-                        f"Invalid geometry: axis1 is collinear with normal "
-                        f"(dot product: {dot_product:.4e}). Ignore original axis1 "
-                        f"{old_axis1} and fall back to the automatic reference "
-                        f"axis for normal {normal}."
-                    )
-            elif not np.isclose(dot_product, 0, atol=1e-8):
-                old_axis1 = axis1.copy()
-                axis1 = axis1 - dot_product * normal
-                axis1 /= np.linalg.norm(axis1)
-                if self.impl_is_warn_orthogonal:
-                    logger.warning(
-                        f"Invalid geometry: axis1 is not perpendicular to normal "
-                        f"(dot product: {dot_product:.4e}). Projecting original "
-                        f"axis1 {old_axis1} onto the plane defined by normal "
-                        f"{normal}. New orthonormal axis1: {axis1}."
-                    )
-        if axis1 is None:
-            rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
-            axis1 = rotation_matrix @ np.array([1, 0, 0])
-            logger.debug(
-                f"axis1 not provided. Automatically generated a reference axis1 "
-                f"{axis1} perpendicular to normal {normal}."
-            )
+        axis1, axis2 = resolve_plane_physical_axes(
+            normal,
+            axis1,
+            is_warn=self.impl_is_warn_orthogonal,
+        )
 
-        axis2 = np.cross(normal, axis1)
-        logger.debug(f"axis2={axis2}")
-
-        grid, grid_int, sizes = generate_fixed_step_grid(
+        _, grid_int, sizes = generate_fixed_step_grid(
             size1, size2, space1, space2, alignment=alignment
         )
         size1, size2 = sizes
-        target_shape = np.shape(grid)[:2]
-        grid_int = np.reshape(grid_int, (-1, 2))
-
-        step_both = np.array([axis1 * space1, axis2 * space2])
-        index_origin_shift = np.zeros(2, dtype=float)
-        if alignment == "center":
-            index_origin_shift = 0.5 * (np.asarray(target_shape, dtype=float) - 1.0)
-
-        offset = origin - np.einsum("i, ib -> b", index_origin_shift, step_both)
-        grid = np.einsum("ai, ib -> ab", grid_int, step_both) + offset
+        target_shape = np.shape(grid_int)[:2]
+        grid, grid_int, offset = self._helper_grid_indices_to_physical_points(
+            grid_int=grid_int,
+            origin=origin,
+            axis1=axis1,
+            axis2=axis2,
+            spacing=space1,
+            spacing_extra=space2,
+            alignment=alignment,
+        )
 
         grid = apply_linear_transform(
             grid, transform=grid_transform, offset=grid_offset
@@ -396,6 +405,39 @@ class PlaneGrid(HostBase):
     # ==================================================
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
+
+    def _helper_get_alignment_index_shift(self, target_shape, alignment):
+        """Return the index-space shift that places the chosen alignment at origin."""
+        index_origin_shift = np.zeros(2, dtype=float)
+        if alignment == "center":
+            index_origin_shift = 0.5 * (np.asarray(target_shape, dtype=float) - 1.0)
+        return index_origin_shift
+
+    def _helper_grid_indices_to_physical_points(
+        self,
+        grid_int,
+        origin,
+        axis1,
+        axis2,
+        spacing,
+        spacing_extra,
+        alignment,
+    ):
+        """
+        Map integer lattice indices directly into physical-space grid points.
+
+        The integer lattice expresses only sampling topology. Physical geometry
+        is defined by origin, axis1, axis2, and the physical step lengths.
+        """
+        target_shape = np.shape(grid_int)[:2]
+        grid_index_flat = np.reshape(grid_int, (-1, 2))
+        step_both = np.array([axis1 * spacing, axis2 * spacing_extra])
+        index_origin_shift = self._helper_get_alignment_index_shift(
+            target_shape, alignment
+        )
+        offset = origin - np.einsum("i, ib -> b", index_origin_shift, step_both)
+        grid_points = np.einsum("ai, ib -> ab", grid_index_flat, step_both) + offset
+        return grid_points, grid_index_flat, offset
 
     def __iter__(self):
         """Iterate over the currently selected grid points."""
