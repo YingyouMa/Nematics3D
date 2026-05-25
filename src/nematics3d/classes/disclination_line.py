@@ -1114,8 +1114,6 @@ class DisclinationLineSmooth(SmoothedLine):
             origin=origin,
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
-            grid_offset=None,
-            grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )
         q_plane = QPlanePolar(
@@ -1708,8 +1706,6 @@ class DefectSectionGrid(HostBase):
             origin=pose["origin"],
             opts=opts_grid,
             opts_defaults_override=opts_grid_defaults_override,
-            grid_offset=None,
-            grid_transform=GRID_TRANSFORM_IDENTITY,
             **kwargs,
         )
         grid.act_bind_wrapper(self, protected_attrs=["origin", "normal"])

@@ -14,7 +14,6 @@ from nematics3d.field import (
     align_directors,
     n_color_immerse,
 )
-from nematics3d.grid import apply_linear_transform
 from nematics3d.general import (
     find_rotation_axis,
     mark_points_membership,
@@ -834,13 +833,10 @@ class QPlanePolar(QPlane):
             return np.array([], dtype=float)
 
         plane_grid = self.grid
-        defects_local = apply_linear_transform(
-            defect_centers,
-            transform=plane_grid.opts.grid_transform,
-            offset=plane_grid.opts.grid_offset,
-            is_inv=True,
+        delta = np.asarray(defect_centers, dtype=float) - np.asarray(
+            plane_grid.opts.origin,
+            dtype=float,
         )
-        delta = defects_local - plane_grid.opts.origin
         axis1 = plane_grid.opts.theta0_axis
         axis2 = np.cross(plane_grid.opts.normal, axis1)
 

@@ -2,6 +2,7 @@ import numpy as np
 from qtpy import QtWidgets
 
 from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper
+from .interact_plane import InteractPlane
 from ..plot_rod import PlotRod
 from nematics3d.format import is_equal, is_given_str
 
@@ -99,12 +100,28 @@ class InteractDefectSection(PanelBase):
             else:
                 self.visual_normal.opts.is_visible = False
 
+        row_show_axes = QtWidgets.QWidget(self)
+        row_show_axes_layout = QtWidgets.QHBoxLayout(row_show_axes)
+        row_show_axes_layout.setContentsMargins(0, 0, 0, 0)
+        row_show_axes_layout.setSpacing(8)
+
         self.chk_is_show_axes = QtWidgets.QCheckBox(
             "Whether to visualize normal",
-            self,
+            row_show_axes,
         )
         self.chk_is_show_axes.setChecked(False)
-        self.layout.addWidget(self.chk_is_show_axes)
+        row_show_axes_layout.addWidget(self.chk_is_show_axes)
+
+        self.btn_dataset_grid_info = QtWidgets.QPushButton(
+            "Show source grid axes",
+            row_show_axes,
+        )
+        self.btn_dataset_grid_info.clicked.connect(
+            self._show_dataset_grid_spacing_dialog
+        )
+        row_show_axes_layout.addWidget(self.btn_dataset_grid_info)
+        row_show_axes_layout.addStretch(1)
+        self.layout.addWidget(row_show_axes)
         self.chk_is_show_axes.stateChanged.connect(_on_toggle_show_axes)
 
         arc_dist_init = (
@@ -258,6 +275,29 @@ class InteractDefectSection(PanelBase):
         )
 
         self.on_changed(0, is_commit=False)
+
+    def _show_dataset_grid_spacing_dialog(self):
+        """Show one popup with source dataset grid-axis information."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Source Dataset Grid Axes")
+        dialog.setModal(False)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        for line in InteractPlane._helper_dataset_grid_spacing_lines(self.field):
+            label = QtWidgets.QLabel(line, dialog)
+            label.setStyleSheet("font-size: 14pt;")
+            layout.addWidget(label)
+
+        btn_close = QtWidgets.QPushButton("Close", dialog)
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close)
+
+        dialog.adjustSize()
+        dialog.show()
+        self._dataset_grid_info_dialog = dialog
 
     def commit(self):
         # ---- normal ----

@@ -6,21 +6,9 @@ from typing import Any, ClassVar, Mapping
 
 import numpy as np
 
-from nematics3d.datatypes import (
-    Tensor,
-    UNSET,
-    Unset,
-    Vect,
-    as_Number,
-    as_Vect,
-    as_bool,
-)
-from nematics3d.grid import (
-    GRID_TRANSFORM_IDENTITY,
-    apply_linear_transform,
-    as_grid_transform,
-)
-from nematics3d.general import rotation_matrix_from_vectors, select_grid_in_box
+from nematics3d.datatypes import UNSET, Unset, Vect, as_Number, as_Vect, as_bool
+from nematics3d.grid import resolve_plane_physical_axes
+from nematics3d.general import select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
@@ -31,14 +19,12 @@ from .opts import cover_value
 @dataclass(slots=True, repr=False)
 class OptsPlaneGridPolar(OptsBase):
     """
-    Options for generating a polar (concentric-ring) point lattice on a plane.
+    Options for generating a polar point lattice directly in physical space.
 
-    This option set targets the "ring + equal arc-length" strategy:
-    - Rings are placed at radii r_i = r_min + i * dr
-    - Points on each ring are spaced by approximately constant arc length
-      (via N_theta(i) ~ round(2*pi*r_i / arc_dist))
-    - Rings are angularly staggered using the golden angle for reduced aliasing
-      (a deterministic, reproducible staggering scheme)
+    The primary geometry inputs are the physical-space `origin`, `normal`,
+    `theta0_axis`, `r_min`, `dr`, `arc_dist`, and `layers`. The generated
+    points are stored directly in physical space; there is no secondary
+    transform/offset remap stage.
     """
 
     origin: Vect(3) | Unset = UNSET
@@ -49,33 +35,24 @@ class OptsPlaneGridPolar(OptsBase):
     dr: float | Unset = UNSET
     arc_dist: float | Unset = UNSET
     is_clip_inside: bool | Unset = UNSET
-    grid_offset: Vect(3) | None | Unset = UNSET
-    grid_transform: Tensor((3, 3)) | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsBase.__attrs__),
-        "origin": "center of the polar grid in index coordinates",
-        "normal": "normal of the plane (unit vector)",
+        "origin": "physical-space center of the polar grid",
+        "normal": "physical-space unit normal of the plane",
         "theta0_axis": (
-            "in-plane reference axis defining theta=0; will be projected onto "
-            "the plane and normalized (None uses the default axis)"
+            "physical-space in-plane reference axis defining theta=0; it will "
+            "be projected onto the plane and normalized (None uses the default axis)"
         ),
-        "r_min": "minimum radius of the first ring (or 0 for center point)",
+        "r_min": "minimum physical radius of the first ring (or 0 for center point)",
         "layers": "total number of rings/layers to generate",
-        "dr": "radial spacing between rings; rings at r_i = r_min + i * dr",
+        "dr": "physical radial spacing between rings; rings at r_i = r_min + i * dr",
         "arc_dist": (
-            "target arc-length spacing between adjacent points along each ring"
+            "target physical arc-length spacing between adjacent points along each ring"
         ),
         "is_clip_inside": (
             "Whether bounds filtering keeps the grid points inside the bounds "
             "(True) or outside (False)."
-        ),
-        "grid_offset": (
-            "grid translation offset to map lattice indices to real-space coordinates"
-        ),
-        "grid_transform": (
-            "grid transform matrix to map lattice indices to real-space coordinates "
-            "(3x3 matrix)"
         ),
     }
 
@@ -97,8 +74,6 @@ class OptsPlaneGridPolar(OptsBase):
             None if v is None else as_Number(v, name=d, value_range=(1e-6, np.inf))
         ),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
-        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -111,8 +86,6 @@ class OptsPlaneGridPolar(OptsBase):
             "dr": 0.5,
             "arc_dist": None,
             "is_clip_inside": True,
-            "grid_offset": None,
-            "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )
 
@@ -141,13 +114,13 @@ class PlaneGridPolar(HostBase):
         **dict(HostBase.__attr_defs__),
         "entity_grid": {
             "doc": (
-                "Selected 3D polar grid points after applying transforms and optional "
+                "Selected physical-space 3D polar grid points after optional "
                 "bounds filtering (array of shape N x 3)."
             ),
         },
         "entity_grid_all": {
             "doc": (
-                "Complete 3D polar grid points before filtering, stored as an "
+                "Complete physical-space 3D polar grid points before filtering, stored as an "
                 "array of shape (N, 3)."
             ),
         },
@@ -266,40 +239,11 @@ class PlaneGridPolar(HostBase):
         theta0_axis = self.opts.theta0_axis
         layers = self.opts.layers
 
-        if theta0_axis is not None:
-            dot_product = normal @ theta0_axis
-            if np.isclose(abs(dot_product), 1.0, atol=1e-8):
-                old_theta0_axis = theta0_axis.copy()
-                theta0_axis = None
-                if self.impl_is_warn_orthogonal:
-                    logger.warning(
-                        f"Invalid geometry: theta0_axis is collinear with normal "
-                        f"(dot product: {dot_product:.4e}). Ignore original "
-                        f"theta0_axis {old_theta0_axis} and fall back to the "
-                        f"automatic reference axis for normal {normal}."
-                    )
-            elif not np.isclose(dot_product, 0, atol=1e-8):
-                old_theta0_axis = theta0_axis.copy()
-                theta0_axis = theta0_axis - dot_product * normal
-                theta0_axis /= np.linalg.norm(theta0_axis)
-                if self.impl_is_warn_orthogonal:
-                    logger.warning(
-                        f"Invalid geometry: theta0_axis is not perpendicular to "
-                        f"normal (dot product: {dot_product:.4e}). Projecting "
-                        f"original theta0_axis {old_theta0_axis} onto the plane "
-                        f"defined by normal {normal}. New orthonormal "
-                        f"theta0_axis: {theta0_axis}."
-                    )
-        if theta0_axis is None:
-            rotation_matrix = rotation_matrix_from_vectors((0, 0, 1), normal)
-            theta0_axis = rotation_matrix @ np.array([1, 0, 0])
-            logger.debug(
-                f"theta0_axis not provided. Automatically generated a reference "
-                f"theta0_axis {theta0_axis} perpendicular to normal {normal}."
-            )
-
-        e1 = theta0_axis
-        e2 = np.cross(normal, e1)
+        theta0_axis, axis2 = resolve_plane_physical_axes(
+            normal,
+            theta0_axis,
+            is_warn=self.impl_is_warn_orthogonal,
+        )
         golden_angle = np.pi * (3.0 - np.sqrt(5.0))
 
         points_list = []
@@ -325,8 +269,8 @@ class PlaneGridPolar(HostBase):
             sin_t = np.sin(thetas)
             ring_points = (
                 origin
-                + (r * cos_t)[:, None] * e1[None, :]
-                + (r * sin_t)[:, None] * e2[None, :]
+                + (r * cos_t)[:, None] * theta0_axis[None, :]
+                + (r * sin_t)[:, None] * axis2[None, :]
             )
 
             points_list.append(ring_points)
@@ -339,10 +283,6 @@ class PlaneGridPolar(HostBase):
         ring_offsets = np.empty(len(ring_sizes) + 1, dtype=np.int64)
         ring_offsets[0] = 0
         ring_offsets[1:] = np.cumsum(ring_sizes, dtype=np.int64)
-
-        points = apply_linear_transform(
-            points, transform=self.opts.grid_transform, offset=self.opts.grid_offset
-        )
 
         bounds = self.bounds if self.impl_is_bounds_enabled else None
         if bounds is None:
