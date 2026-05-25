@@ -73,7 +73,9 @@ class QPlane(InterpolatePlane):
     Normal users access the sampled Q values through `plane.result`, the
     derived director and order fields through the plane attributes, and can
     create visual summaries with `act_visualize_n()` and `act_visualize_S()`.
-    Use `plane.show_relations()` to inspect the bound grid.
+    For Cartesian `PlaneGrid`, defect positions are reconstructed directly in
+    physical space from the integer sampling topology plus the grid's physical
+    plane basis. Use `plane.show_relations()` to inspect the bound grid.
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
@@ -277,6 +279,9 @@ class QPlane(InterpolatePlane):
             step2 = plane_grid.calc_axis2 * space2
             step_both = np.array([step1, step2])
 
+            # Defect topology is detected on the integer lattice, then mapped
+            # directly into physical plane coordinates using the native
+            # PlaneGrid basis instead of any legacy post-transform stage.
             defect_centers = (
                 np.einsum("ai, ib -> ab", defect_plane_index, step_both)
                 + plane_grid.calc_origin_grid0

@@ -2,6 +2,7 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
+from nematics3d.grid import is_grid_transform_identity
 from .panel_base import (
     PanelBase,
     make_labeled_slider_row,
@@ -20,6 +21,82 @@ from ..plot_sphere import PlotSphere
 
 
 class InteractPlane(PanelBase):
+    @staticmethod
+    def _helper_format_two_decimals(value: float) -> str:
+        """Format one float with two digits after the decimal point."""
+        return f"{float(value):.2f}"
+
+    @staticmethod
+    def _helper_dataset_grid_spacing_lines(field) -> list[str]:
+        """Return popup lines describing source dataset axis directions."""
+        interpolator = getattr(field, "interpolator", None)
+        grid_field = getattr(interpolator, "owner", None)
+        dataset = getattr(grid_field, "owner", None)
+        if dataset is None:
+            return [
+                "Original dataset grid axes in physical space:",
+                "Unavailable",
+                "",
+                "",
+            ]
+
+        spacing = getattr(dataset, "calc_grid_spacing", None)
+        transform = getattr(dataset, "raw_grid_transform", None)
+        if spacing is None or transform is None:
+            return [
+                "Original dataset grid axes in physical space:",
+                "Unavailable",
+                "",
+                "",
+            ]
+
+        spacing = np.asarray(spacing, dtype=float).reshape(3)
+        if is_grid_transform_identity(transform):
+            directions = np.eye(3, dtype=float)
+        else:
+            directions = np.asarray(transform, dtype=float)
+
+        axis_names = ("i", "j", "k")
+        lines = ["Original dataset grid axes in physical space:"]
+        for axis_idx, axis_name in enumerate(axis_names):
+            basis_vector = np.asarray(directions[:, axis_idx], dtype=float)
+            length = float(np.linalg.norm(basis_vector))
+            if np.isclose(length, 0.0):
+                direction_unit = np.zeros(3, dtype=float)
+            else:
+                direction_unit = basis_vector / length
+            lines.append(
+                f"{axis_name}: dir=("
+                f"{InteractPlane._helper_format_two_decimals(direction_unit[0])}, "
+                f"{InteractPlane._helper_format_two_decimals(direction_unit[1])}, "
+                f"{InteractPlane._helper_format_two_decimals(direction_unit[2])}), "
+                f"step={InteractPlane._helper_format_two_decimals(spacing[axis_idx])}"
+            )
+        return lines
+
+    def _show_dataset_grid_spacing_dialog(self):
+        """Show one popup with source dataset grid-axis information."""
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Source Dataset Grid Axes")
+        dialog.setModal(False)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(10)
+
+        for line in self._helper_dataset_grid_spacing_lines(self.field):
+            label = QtWidgets.QLabel(line, dialog)
+            label.setStyleSheet("font-size: 14pt;")
+            layout.addWidget(label)
+
+        btn_close = QtWidgets.QPushButton("Close", dialog)
+        btn_close.clicked.connect(dialog.accept)
+        layout.addWidget(btn_close)
+
+        dialog.adjustSize()
+        dialog.show()
+        self._dataset_grid_info_dialog = dialog
+
     def _make_vector_input_panel(
         self,
         *,
@@ -178,12 +255,28 @@ class InteractPlane(PanelBase):
                 visual._helper_add_silhouette()
 
     def build_ui(self):
+        row_show_axes = QtWidgets.QWidget(self)
+        row_show_axes_layout = QtWidgets.QHBoxLayout(row_show_axes)
+        row_show_axes_layout.setContentsMargins(0, 0, 0, 0)
+        row_show_axes_layout.setSpacing(8)
+
         self.chk_is_show_axes = QtWidgets.QCheckBox(
-            "Whether to visualize normal and origin",
-            self,
+            "Visualize the physical origin and normal",
+            row_show_axes,
         )
         self.chk_is_show_axes.setChecked(False)
-        self.layout.addWidget(self.chk_is_show_axes)
+        row_show_axes_layout.addWidget(self.chk_is_show_axes)
+
+        self.btn_dataset_grid_info = QtWidgets.QPushButton(
+            "Show source grid axes",
+            row_show_axes,
+        )
+        self.btn_dataset_grid_info.clicked.connect(
+            self._show_dataset_grid_spacing_dialog
+        )
+        row_show_axes_layout.addWidget(self.btn_dataset_grid_info)
+        row_show_axes_layout.addStretch(1)
+        self.layout.addWidget(row_show_axes)
         self.chk_is_show_axes.stateChanged.connect(self._on_toggle_show_axes)
 
         spacing_extra_init = (
@@ -247,12 +340,12 @@ class InteractPlane(PanelBase):
             commit_callback=self._commit_manual_origin,
         )
 
-        group_scalar = QtWidgets.QGroupBox("Scalar parameter", self)
+        group_scalar = QtWidgets.QGroupBox("Physical lengths and alignment", self)
         gl_scalar = QtWidgets.QVBoxLayout(group_scalar)
         self.layout.addWidget(group_scalar)
 
         self.chk_is_origin_center = QtWidgets.QCheckBox(
-            "Whether to set origin at center (if not, set it at bottom-left)",
+            "Place the physical origin at the plane center (otherwise at the bottom-left sample point)",
             group_scalar,
         )
         self.chk_is_origin_center.setChecked(self.state["is_origin_center"])
@@ -349,7 +442,7 @@ class InteractPlane(PanelBase):
         self.chk_use_size_extra.stateChanged.connect(self._on_toggle_use_size_extra)
         self.sliders["size_extra"].set_enabled(self.state["is_use_control_size_extra"])
 
-        group_orient = QtWidgets.QGroupBox("Vector parameter", self)
+        group_orient = QtWidgets.QGroupBox("Physical plane basis", self)
         gl_orient = QtWidgets.QVBoxLayout(group_orient)
         self.layout.addWidget(group_orient)
 

@@ -1,4 +1,4 @@
-"""Vector-field interpolation on plane grids with vector glyph visualization."""
+"""Vector-field interpolation on physical-space plane grids."""
 
 from copy import deepcopy
 from typing import Any, ClassVar, Mapping
@@ -26,9 +26,11 @@ class VectorPlane(InterpolatePlane):
     VectorPlane samples a vector-valued interpolator on a plane grid.
 
     The sampled vectors are available through `plane.result`, while
-    `plane.calc_magnitude` stores the per-point vector norms. Use
-    `act_visualize_vector()` to render the sampled plane field with arrow
-    glyphs, and `plane.show_relations()` to inspect the bound grid.
+    `plane.calc_magnitude` stores the per-point vector norms. For Cartesian
+    `PlaneGrid`, those vectors are sampled directly at the grid's physical-space
+    plane coordinates. Use `act_visualize_vector()` to render the sampled plane
+    field with arrow glyphs, and `plane.show_relations()` to inspect the bound
+    grid.
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {

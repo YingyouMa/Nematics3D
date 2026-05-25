@@ -1,4 +1,4 @@
-"""Plane-based interpolation results built on top of PlaneGrid sampling objects."""
+"""Plane-based interpolation results built on physical-space PlaneGrid samplers."""
 
 from typing import Any, ClassVar, Mapping
 import numpy as np
@@ -16,15 +16,19 @@ from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 # Subclasses should preserve the binding contract between `grid` and `field`,
 # keep `calc_result` synchronized with the current grid mask, and be careful
 # when changing grid construction because this class currently accepts either
-# Cartesian or polar plane-grid implementations.
+# Cartesian physical-basis PlaneGrid instances or polar plane-grid
+# implementations.
 class InterpolatePlane(ClassBase):
     """
     InterpolatePlane samples a `GridInterpolator` on a plane grid.
 
     Normal users pass in an interpolator plus either an existing plane grid
     or plane-grid options. The sampled values are then available through
-    `plane.result`. Use `plane.show_relations()` to inspect the bound grid and
-    `plane.grid.show_modifiable_attrs()` to inspect grid settings.
+    `plane.result`. For Cartesian `PlaneGrid`, the sample coordinates come
+    directly from the physical-space `origin`, `normal`, `axis1`, and spacing
+    settings of the bound grid. Use `plane.show_relations()` to inspect the
+    bound grid and `plane.grid.show_modifiable_attrs()` to inspect grid
+    settings.
     """
 
     __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {

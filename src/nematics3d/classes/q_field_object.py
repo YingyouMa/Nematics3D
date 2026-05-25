@@ -1289,8 +1289,6 @@ class QFieldObject(ClassBase):
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "grid_offset": self.raw_grid_offset,
-                "grid_transform": self.raw_grid_transform,
             },
         )
         self.objs.act_register(n_plane)
@@ -1416,8 +1414,6 @@ class QFieldObject(ClassBase):
             opts_defaults_override={
                 "size": 1.8 * np.max(self.S.shape),
                 "spacing": 1,
-                "grid_offset": self.raw_grid_offset,
-                "grid_transform": self.raw_grid_transform,
             },
         )
         self.objs.act_register(S_plane)
