@@ -8,7 +8,6 @@ import numpy as np
 
 from nematics3d.datatypes import (
     Number,
-    Tensor,
     UNSET,
     Unset,
     Vect,
@@ -17,13 +16,7 @@ from nematics3d.datatypes import (
     as_bool,
     as_str,
 )
-from nematics3d.grid import (
-    GRID_TRANSFORM_IDENTITY,
-    apply_linear_transform,
-    as_grid_transform,
-    generate_fixed_step_grid,
-    resolve_plane_physical_axes,
-)
+from nematics3d.grid import generate_fixed_step_grid, resolve_plane_physical_axes
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
@@ -58,8 +51,6 @@ class OptsPlaneGrid(OptsBase):
     alignment: Literal["center", "bottom-left"] | Unset = UNSET
     axis1: Vect(3) | None | Unset = UNSET
     is_clip_inside: bool | Unset = UNSET
-    grid_offset: Vect(3) | None | Unset = UNSET
-    grid_transform: Tensor((3, 3)) | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsBase.__attrs__),
@@ -78,14 +69,6 @@ class OptsPlaneGrid(OptsBase):
         "is_clip_inside": (
             "Whether bounds filtering keeps the grid points inside the bounds "
             "(True) or outside (False)."
-        ),
-        "grid_offset": (
-            "Legacy post-generation translation applied after the PlaneGrid physical "
-            "basis has produced 3D points"
-        ),
-        "grid_transform": (
-            "Legacy post-generation linear transform applied after the PlaneGrid "
-            "physical basis has produced 3D points (3x3 matrix)"
         ),
     }
 
@@ -106,8 +89,6 @@ class OptsPlaneGrid(OptsBase):
         ),
         "axis1": lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
-        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
-        "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -120,8 +101,6 @@ class OptsPlaneGrid(OptsBase):
             "alignment": "center",
             "axis1": None,
             "is_clip_inside": True,
-            "grid_offset": None,
-            "grid_transform": GRID_TRANSFORM_IDENTITY,
         }
     )
 
@@ -132,7 +111,7 @@ class OptsPlaneGrid(OptsBase):
 # Subclasses should preserve the relationship among the physical-space
 # `origin`, `normal`, `axis1`, the derived physical `axis2`, and the generated
 # grid caches. If grid generation is overridden, keep `entity_grid`,
-# `entity_grid_all`, `entity_grid_int`, and the derived size/offset fields
+# `entity_grid_all`, `entity_grid_int`, and the derived size/origin-point fields
 # synchronized.
 class PlaneGrid(HostBase):
     """
@@ -162,9 +141,8 @@ class PlaneGrid(HostBase):
         **dict(HostBase.__attr_defs__),
         "entity_grid": {
             "doc": (
-                "Selected physical-space 3D grid points after optional legacy "
-                "post-transform steps and optional bounding-box filtering "
-                "(array of shape N x 3)."
+                "Selected physical-space 3D grid points after optional "
+                "bounding-box filtering (array of shape N x 3)."
             ),
         },
         "entity_grid_all": {
@@ -185,10 +163,10 @@ class PlaneGrid(HostBase):
                 "axis1 and normal."
             ),
         },
-        "calc_offset_real": {
+        "calc_origin_grid0": {
             "doc": (
-                "Legacy cache for the physical-space base offset used by the current "
-                "generation pipeline before any optional post-transform step."
+                "Physical-space point corresponding to integer lattice index "
+                "[0, 0] after alignment handling."
             ),
         },
         "calc_box_mask": {
@@ -326,8 +304,6 @@ class PlaneGrid(HostBase):
         origin = self.opts.origin
         normal = self.opts.normal
         axis1 = self.opts.axis1
-        grid_transform = self.opts.grid_transform
-        grid_offset = self.opts.grid_offset
         alignment = self.opts.alignment
         is_clip_inside = self.opts.is_clip_inside
 
@@ -352,10 +328,6 @@ class PlaneGrid(HostBase):
             alignment=alignment,
         )
 
-        grid = apply_linear_transform(
-            grid, transform=grid_transform, offset=grid_offset
-        )
-
         bounds = self.bounds if self.impl_is_bounds_enabled else None
         if bounds is None:
             logger.debug("No bounds filtering applied to this plane grid.")
@@ -376,7 +348,7 @@ class PlaneGrid(HostBase):
             self, "entity_grid_all", np.reshape(grid, (*target_shape, 3))
         )
         object.__setattr__(self, "entity_grid_int", grid_int)
-        object.__setattr__(self, "calc_offset_real", offset)
+        object.__setattr__(self, "calc_origin_grid0", offset)
         object.__setattr__(self, "calc_axis2", axis2)
         object.__setattr__(self, "calc_box_mask", mask)
         object.__setattr__(self, "calc_size", size1)

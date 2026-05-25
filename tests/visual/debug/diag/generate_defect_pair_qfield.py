@@ -97,8 +97,6 @@ plane = n3d.QPlane(
         spacing=4,
         size=NX - 1,
         alignment="center",
-        grid_offset=None,
-        grid_transform=np.eye(3),
     ),
     bounds=qobj.calc_bounds,
 )

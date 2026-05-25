@@ -17,7 +17,6 @@ if "nematics3d" not in sys.modules:
 
 from nematics3d.classes.disclination_line import DisclinationLine
 from nematics3d.classes.grid_field import InputGridField
-from nematics3d.classes.plane_grid import OptsPlaneGrid
 from nematics3d.classes.plane_grid_polar import OptsPlaneGridPolar
 from nematics3d.classes.q_field_object import InputQ
 from nematics3d.disclination import defect_classify_into_lines
@@ -27,7 +26,6 @@ class TestGridOffsetNone(unittest.TestCase):
     def test_input_validators_accept_none_grid_offset(self):
         self.assertIsNone(InputGridField(grid_offset=None).grid_offset)
         self.assertIsNone(InputQ(grid_offset=None).grid_offset)
-        self.assertIsNone(OptsPlaneGrid(grid_offset=None).grid_offset)
         self.assertIsNone(OptsPlaneGridPolar(grid_offset=None).grid_offset)
 
     def test_disclination_line_accepts_none_grid_offset(self):

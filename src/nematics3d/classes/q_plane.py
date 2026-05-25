@@ -279,12 +279,7 @@ class QPlane(InterpolatePlane):
 
             defect_centers = (
                 np.einsum("ai, ib -> ab", defect_plane_index, step_both)
-                + plane_grid.calc_offset_real
-            )
-            defect_centers = apply_linear_transform(
-                defect_centers,
-                transform=plane_grid.opts.grid_transform,
-                offset=plane_grid.opts.grid_offset,
+                + plane_grid.calc_origin_grid0
             )
 
         return defect_centers, adjacent_mask
