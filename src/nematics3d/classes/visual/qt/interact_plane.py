@@ -38,7 +38,7 @@ class InteractPlane(PanelBase):
         inputs = []
         for value in np.asarray(values, dtype=float):
             box = QtWidgets.QDoubleSpinBox(panel)
-            box.setDecimals(6)
+            box.setDecimals(3)
             box.setKeyboardTracking(False)
             box.setRange(-1.0e12, 1.0e12)
             box.setValue(float(value))
@@ -225,7 +225,7 @@ class InteractPlane(PanelBase):
             step_max=100.0,
             step_tick_max=1000,
             step_fmt="{:.2f}",
-            center_fmt="{:.2f}",
+            center_fmt="{:.3f}",
             on_move=self._commit_origin,
             on_press=self._helper_begin_continuous_interaction,
             on_hold=None,

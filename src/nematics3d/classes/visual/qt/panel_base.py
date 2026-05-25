@@ -655,7 +655,7 @@ class PanelBase(QtWidgets.QWidget):
         # Save / Load Actions group
         # ----------------------------
         group_reset = QtWidgets.QGroupBox("Save / Load", self)
-        hl_reset = QtWidgets.QHBoxLayout(group_reset)
+        gl_reset = QtWidgets.QGridLayout(group_reset)
         self.layout.addWidget(group_reset)
 
         self.btn_save_current = QtWidgets.QPushButton("Save Current", group_reset)
@@ -663,26 +663,26 @@ class PanelBase(QtWidgets.QWidget):
             "Save the current parameters using a default timestamped name."
         )
         self.btn_save_current.clicked.connect(self._on_save_current_snapshot)
-        hl_reset.addWidget(self.btn_save_current)
+        gl_reset.addWidget(self.btn_save_current, 0, 0)
 
         self.btn_reset_orig = QtWidgets.QPushButton("Restore Original", group_reset)
         self.btn_reset_orig.setToolTip(
             "Restore the state captured when this control panel was opened."
         )
         self.btn_reset_orig.clicked.connect(self._on_restore_original_snapshot)
-        hl_reset.addWidget(self.btn_reset_orig)
+        gl_reset.addWidget(self.btn_reset_orig, 0, 1)
 
         self.btn_load_latest = QtWidgets.QPushButton("Load Latest Save", group_reset)
         self.btn_load_latest.setToolTip(
             "Restore the most recent snapshot created from this control panel."
         )
         self.btn_load_latest.clicked.connect(self._on_load_latest_snapshot)
-        hl_reset.addWidget(self.btn_load_latest)
+        gl_reset.addWidget(self.btn_load_latest, 1, 0)
 
         self.btn_load_choose = QtWidgets.QPushButton("Load Saved...", group_reset)
         self.btn_load_choose.setToolTip("Choose one available snapshot and restore it.")
         self.btn_load_choose.clicked.connect(self._on_choose_snapshot_to_restore)
-        hl_reset.addWidget(self.btn_load_choose)
+        gl_reset.addWidget(self.btn_load_choose, 1, 1)
 
         self.host.act_attach_sync_task(name=self.str_now, func=self._sync_func)
 
