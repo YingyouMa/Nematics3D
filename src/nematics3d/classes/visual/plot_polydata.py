@@ -14,6 +14,7 @@ from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
 from ..bounds import BoundsData
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
+from .qt.interact_polydata import InteractPolyData
 
 
 def _as_polydata_input(data, name: str = "polydata input") -> pv.PolyData:
@@ -280,7 +281,7 @@ class PlotPolyData(PlotGlyph):
 
         object.__setattr__(self, "raw_poly", _helper_make_clean_polydata(poly))
         self.act_register_protected_attr(["coords", "raw_coords", "poly", "raw_poly"])
-        self.act_set_interact_func(lambda: None)
+        self.act_set_interact_func(lambda: InteractPolyData.show_once(self, self.fig))
         self._helper_init_end()
 
     def _helper_bound_coords(self):
