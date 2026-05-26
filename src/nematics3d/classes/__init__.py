@@ -7,11 +7,14 @@ from typing import TYPE_CHECKING
 __all__ = [
     "ContourSurface",
     "ContourSurfaceSet",
+    "OptsSurfaceSampling",
+    "SurfaceSampling",
 ]
 
 
 if TYPE_CHECKING:
     from .contour_surface import ContourSurface, ContourSurfaceSet
+    from .surface_sampling import OptsSurfaceSampling, SurfaceSampling
 
 
 def __getattr__(name: str):
@@ -21,6 +24,14 @@ def __getattr__(name: str):
         exports = {
             "ContourSurface": ContourSurface,
             "ContourSurfaceSet": ContourSurfaceSet,
+        }
+        return exports[name]
+    if name in {"OptsSurfaceSampling", "SurfaceSampling"}:
+        from .surface_sampling import OptsSurfaceSampling, SurfaceSampling
+
+        exports = {
+            "OptsSurfaceSampling": OptsSurfaceSampling,
+            "SurfaceSampling": SurfaceSampling,
         }
         return exports[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

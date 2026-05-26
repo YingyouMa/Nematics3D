@@ -17,7 +17,7 @@ from .plot_figure import FigureData
 from .qt.interact_polydata import InteractPolyData
 
 
-def _as_polydata_input(data, name: str = "polydata input") -> pv.PolyData:
+def as_polydata_input(data, name: str = "polydata input") -> pv.PolyData:
     """
     Normalize supported mesh-like inputs to ``pyvista.PolyData``.
 
@@ -69,7 +69,7 @@ def _as_polydata_input(data, name: str = "polydata input") -> pv.PolyData:
     )
 
 
-def _helper_make_clean_polydata(poly: pv.PolyData) -> pv.PolyData:
+def make_clean_polydata(poly: pv.PolyData) -> pv.PolyData:
     """
     Return a deep-copied PolyData that keeps only geometry/topology.
 
@@ -261,7 +261,7 @@ class PlotPolyData(PlotGlyph):
         opts_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
-        poly = _as_polydata_input(polydata, name="polydata")
+        poly = as_polydata_input(polydata, name="polydata")
         coords = np.asarray(poly.points, dtype=float)
 
         super().__init__(
@@ -279,7 +279,7 @@ class PlotPolyData(PlotGlyph):
             **kwargs,
         )
 
-        object.__setattr__(self, "raw_poly", _helper_make_clean_polydata(poly))
+        object.__setattr__(self, "raw_poly", make_clean_polydata(poly))
         self.act_register_protected_attr(["coords", "raw_coords", "poly", "raw_poly"])
         self.act_set_interact_func(lambda: InteractPolyData.show_once(self, self.fig))
         self._helper_init_end()

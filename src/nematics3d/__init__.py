@@ -12,6 +12,7 @@ from .classes.disclination_line import DisclinationLine
 from .classes.graph import Graph
 from .classes.q_field_object import QFieldObject
 from .classes.contour_surface import *
+from .classes.surface_sampling import *
 from .classes.visual.plot_tube import *
 from .classes.visual.plot_rod import *
 from .classes.visual.plot_figure import *
