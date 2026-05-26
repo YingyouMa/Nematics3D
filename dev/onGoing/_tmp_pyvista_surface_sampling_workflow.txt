@@ -1,0 +1,89 @@
+--- PAGE 1 ---
+PyVista Contour Surface Sampling Workflow
+This document defines a practical workflow for approximately uniform sampling on a PyVista contour surface. The
+goal is visualization and interpolation quality rather than rigorous scientific blue-noise analysis.
+1. Inputs
+The sampler accepts the following inputs:
+Parameter
+Type
+Meaning
+contour
+pyvista.PolyData
+Input surface mesh / contour surface
+density
+float
+Target sample density measured in samples per unit surface area
+seed
+int
+Random seed for full reproducibility
+2. Density Definition
+Density is defined as:
+ρ = N / A
+where:
+- A = total surface area
+- N = target number of sampled points
+- ρ = samples per unit surface area
+The final target point count is:
+N = round(density × surface.area)
+3. Internal Parameters
+The implementation internally uses three fixed parameters. These are implementation details and are not exposed in
+the public API.
+Parameter
+Typical Value
+Purpose
+oversample
+6
+Generate extra candidate points before FPS selection
+distance metric
+Euclidean
+Distance used during FPS selection
+FPS initialization
+Seeded random
+Choose the first FPS point reproducibly
+4. Sampling Workflow
+The workflow consists of the following stages:
+1. Extract and triangulate the input PolyData surface.
+2. Compute the area of every triangle.
+3. Compute the target sample count N from density × area.
+4. Randomly generate oversample × N candidate points.
+5. Sample triangles proportionally to triangle area.
+
+
+--- PAGE 2 ---
+6. Generate uniformly distributed barycentric coordinates inside each selected triangle.
+7. Run Farthest Point Sampling (FPS) on the candidate set.
+8. Iteratively select the point farthest from all currently selected points.
+9. Continue until N points are selected.
+10. Return the final sampled point cloud.
+5. Why This Method
+This workflow was selected because it provides a strong engineering tradeoff for visualization-oriented use cases.
+Advantages:
+- Visually uniform point distribution
+- Fully reproducible through seed control
+- No explicit spacing parameter required
+- Simple API
+- Stable on arbitrary contour surfaces
+- Good interpolation support
+Limitations:
+- Uses Euclidean distance rather than geodesic distance
+- Not mathematically exact Poisson-disk sampling
+- FPS becomes slower for very large point counts
+6. Output
+The output is:
+- A NumPy array of shape (N, 3), or
+- A PyVista PolyData point cloud
+Example:
+pts = sample_contour_uniform(
+    contour,
+    density=30.0,
+    seed=42,
+)
+cloud = pv.PolyData(pts)
+7. Computational Complexity
+Let:
+- N = final number of sampled points
+- M = oversample × N candidate points
+The dominant cost is FPS:
+O(N × M)
+This is practical for small and medium-sized visualization workloads.
+
