@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import types
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pyvista as pv
@@ -21,6 +22,7 @@ from nematics3d.classes.visual import OptsPolyData as ExportedOptsPolyData
 from nematics3d.classes.visual import PlotPolyData as ExportedPlotPolyData
 from nematics3d.classes.visual.plot_figure import PlotFigure
 from nematics3d.classes.visual.plot_polydata import OptsPolyData, PlotPolyData
+from nematics3d.classes.visual.qt.interact_polydata import InteractPolyData
 
 
 class TestPlotPolyData(unittest.TestCase):
@@ -157,6 +159,25 @@ class TestPlotPolyData(unittest.TestCase):
             self.assertEqual(tuple(actor_prop.edge_color)[:3], (1.0, 0.0, 0.0))
             self.assertAlmostEqual(float(actor_prop.line_width), 3.0)
             self.assertEqual(actor_prop.style, "Wireframe")
+        finally:
+            fig.act_close()
+
+    def test_plot_polydata_interact_func_opens_polydata_panel(self):
+        fig = self._make_figure()
+        try:
+            poly = pv.Plane(i_resolution=1, j_resolution=1).triangulate().clean()
+            mesh = PlotPolyData(poly, figure=fig)
+
+            sentinel = object()
+            with patch.object(
+                InteractPolyData,
+                "show_once",
+                return_value=sentinel,
+            ) as mocked_show_once:
+                panel = mesh.impl_interact_func()
+
+            self.assertIs(panel, sentinel)
+            mocked_show_once.assert_called_once_with(mesh, mesh.fig)
         finally:
             fig.act_close()
 
