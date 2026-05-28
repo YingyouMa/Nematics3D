@@ -27,6 +27,12 @@ class InteractPlane(PanelBase):
         return f"{float(value):.2f}"
 
     @staticmethod
+    def _helper_format_three_vector(values) -> str:
+        """Format one 3-vector compactly for info dialogs."""
+        values = np.asarray(values, dtype=float).reshape(3)
+        return "(" f"{values[0]:.2f}, " f"{values[1]:.2f}, " f"{values[2]:.2f}" ")"
+
+    @staticmethod
     def _helper_dataset_grid_spacing_lines(field) -> list[str]:
         """Return popup lines describing source dataset axis directions."""
         interpolator = getattr(field, "interpolator", None)
@@ -34,7 +40,7 @@ class InteractPlane(PanelBase):
         dataset = getattr(grid_field, "owner", None)
         if dataset is None:
             return [
-                "Original dataset grid axes in physical space:",
+                "Grid axes in physical space:",
                 "Unavailable",
                 "",
                 "",
@@ -42,9 +48,11 @@ class InteractPlane(PanelBase):
 
         spacing = getattr(dataset, "calc_grid_spacing", None)
         transform = getattr(dataset, "raw_grid_transform", None)
+        corners = getattr(dataset, "calc_corners", None)
+        center = getattr(dataset, "calc_center", None)
         if spacing is None or transform is None:
             return [
-                "Original dataset grid axes in physical space:",
+                "Grid axes in physical space:",
                 "Unavailable",
                 "",
                 "",
@@ -57,7 +65,7 @@ class InteractPlane(PanelBase):
             directions = np.asarray(transform, dtype=float)
 
         axis_names = ("i", "j", "k")
-        lines = ["Original dataset grid axes in physical space:"]
+        lines = ["Grid axes in physical space:"]
         for axis_idx, axis_name in enumerate(axis_names):
             basis_vector = np.asarray(directions[:, axis_idx], dtype=float)
             length = float(np.linalg.norm(basis_vector))
@@ -70,14 +78,29 @@ class InteractPlane(PanelBase):
                 f"{InteractPlane._helper_format_two_decimals(direction_unit[0])}, "
                 f"{InteractPlane._helper_format_two_decimals(direction_unit[1])}, "
                 f"{InteractPlane._helper_format_two_decimals(direction_unit[2])}), "
-                f"step={InteractPlane._helper_format_two_decimals(spacing[axis_idx])}"
+                f"length={InteractPlane._helper_format_two_decimals(spacing[axis_idx])}"
             )
+
+        if center is not None:
+            lines.append("")
+            lines.append(
+                "Center: " f"{InteractPlane._helper_format_three_vector(center)}"
+            )
+
+        if corners is not None:
+            lines.append("")
+            lines.append("Corners:")
+            for corner_idx, corner in enumerate(np.asarray(corners, dtype=float)):
+                lines.append(
+                    f"{corner_idx}: "
+                    f"{InteractPlane._helper_format_three_vector(corner)}"
+                )
         return lines
 
     def _show_dataset_grid_spacing_dialog(self):
         """Show one popup with source dataset grid-axis information."""
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle("Source Dataset Grid Axes")
+        dialog.setWindowTitle("Grid Axes")
         dialog.setModal(False)
 
         layout = QtWidgets.QVBoxLayout(dialog)
@@ -268,7 +291,7 @@ class InteractPlane(PanelBase):
         row_show_axes_layout.addWidget(self.chk_is_show_axes)
 
         self.btn_dataset_grid_info = QtWidgets.QPushButton(
-            "Show source grid axes",
+            "Show grid axes",
             row_show_axes,
         )
         self.btn_dataset_grid_info.clicked.connect(
@@ -319,6 +342,7 @@ class InteractPlane(PanelBase):
             step_tick_max=1000,
             step_fmt="{:.2f}",
             center_fmt="{:.3f}",
+            is_show_location=False,
             on_move=self._commit_origin,
             on_press=self._helper_begin_continuous_interaction,
             on_hold=None,
@@ -446,10 +470,6 @@ class InteractPlane(PanelBase):
         gl_orient = QtWidgets.QVBoxLayout(group_orient)
         self.layout.addWidget(group_orient)
 
-        self.normal_info = QtWidgets.QLabel(
-            self._vect_text(self.host.opts.normal, "normal"), self
-        )
-        gl_orient.addWidget(self.normal_info)
         (
             self.panel_normal_manual,
             self.normal_inputs,
@@ -652,7 +672,6 @@ class InteractPlane(PanelBase):
                 "normal_polar_angle", self.get_polar_angle(self.host.opts.normal)
             )
             self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
-            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
         if "axis1" in kwargs or "normal" in kwargs:
             self._sync_from_host_slider(
                 "axis1_azimuth",
@@ -663,7 +682,6 @@ class InteractPlane(PanelBase):
             self._set_vector_inputs(self.origin_inputs, self.host.opts.origin)
         if "normal" in kwargs:
             self._set_vector_inputs(self.normal_inputs, self.host.opts.normal)
-            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
         if "axis1" in kwargs or "normal" in kwargs:
             self.axis1_info.setText(self._vect_text(self.host.opts.axis1, "axis1"))
 

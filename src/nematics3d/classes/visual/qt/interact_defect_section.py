@@ -113,7 +113,7 @@ class InteractDefectSection(PanelBase):
         row_show_axes_layout.addWidget(self.chk_is_show_axes)
 
         self.btn_dataset_grid_info = QtWidgets.QPushButton(
-            "Show source grid axes",
+            "Show grid axes",
             row_show_axes,
         )
         self.btn_dataset_grid_info.clicked.connect(
@@ -153,11 +153,6 @@ class InteractDefectSection(PanelBase):
         gl_vector = QtWidgets.QVBoxLayout(group_vector)
         self.layout.addWidget(group_vector)
 
-        self.origin_info = QtWidgets.QLabel(
-            self._vect_text(self.host.opts.origin, "origin"), self
-        )
-        gl_vector.addWidget(self.origin_info)
-
         self.sliders["u_percent"] = make_labeled_slider_row(
             parent=group_vector,
             layout=gl_vector,
@@ -170,11 +165,6 @@ class InteractDefectSection(PanelBase):
             value_to_tick=lambda v: int(round(v * 1000)),
             value_fmt="{:.3f}",
         )
-
-        self.normal_info = QtWidgets.QLabel(
-            self._vect_text(self.host.opts.normal, "normal"), self
-        )
-        gl_vector.addWidget(self.normal_info)
 
         self.sliders["normal_azimuth"] = make_labeled_slider_row(
             parent=group_vector,
@@ -373,11 +363,6 @@ class InteractDefectSection(PanelBase):
         if "layers" in kwargs:
             self._sync_from_host_slider("layers", int(self.host.opts.layers))
 
-        if "origin" in kwargs:
-            self.origin_info.setText(self._vect_text(self.host.opts.origin, "origin"))
-        if "normal" in kwargs:
-            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
-
         if self.chk_is_show_axes.isChecked():
             self._update_normal_visual(is_visible=True)
 
@@ -406,8 +391,6 @@ class InteractDefectSection(PanelBase):
                     "normal_polar_angle",
                     self.get_polar_angle(self.host.opts.normal),
                 )
-        if "state_normal" in kwargs:
-            self.normal_info.setText(self._vect_text(self.host.opts.normal, "normal"))
 
     def on_close(self):
         self._helper_end_continuous_interaction()

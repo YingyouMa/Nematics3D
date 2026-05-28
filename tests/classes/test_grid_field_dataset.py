@@ -190,6 +190,27 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
         self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
 
+    def test_dataset_calc_center_returns_transformed_box_center(self):
+        grid_transform = np.array(
+            [
+                [0.0, -2.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        grid_offset = np.array([10.0, 20.0, 30.0])
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 3, 4),
+                grid_offset=grid_offset,
+                grid_transform=grid_transform,
+            )
+        )
+
+        expected_center = grid_offset + np.array([0.5, 1.0, 1.5]) @ grid_transform
+
+        self.assertTrue(np.allclose(dataset.calc_center, expected_center))
+
     def test_dataset_bounds_opts_are_protected_but_copies_are_editable(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
         bounds = dataset.calc_bounds

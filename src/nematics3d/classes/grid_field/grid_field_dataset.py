@@ -149,6 +149,13 @@ class GridFieldDataset(ClassBase):
             "doc": "Real-space spacing along each lattice axis.",
             "kind": "calc",
         },
+        "calc_center": {
+            "doc": (
+                "Read-only: Geometric center of the dataset box in real-space "
+                "coordinates after the grid transform and offset."
+            ),
+            "kind": "property",
+        },
         "calc_box_size_periodic_index": {
             "doc": (
                 "Effective periodic box size in index units. "
@@ -435,6 +442,19 @@ class GridFieldDataset(ClassBase):
     def __getitem__(self, name: str | int | None):
         """Shortcut for act_get_field."""
         return self.act_get_field(name)
+
+    @property
+    def calc_center(self):
+        """Return the transformed geometric center of the dataset box."""
+        if self.raw_shape is UNSET:
+            return UNSET
+
+        center_index = 0.5 * (np.asarray(self.raw_shape, dtype=float) - 1.0)
+        return apply_linear_transform(
+            center_index[np.newaxis, :],
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
+        )[0]
 
 
 from .grid_field_dataset_derivatives import (  # noqa: E402

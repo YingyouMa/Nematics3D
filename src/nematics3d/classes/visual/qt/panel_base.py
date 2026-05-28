@@ -362,6 +362,7 @@ class MovePointConsole:
     step_tick_max: int = 1000
     step_fmt: str = "{:.2f}"
     center_fmt: str = "{:.2f}"
+    is_show_location: bool = True
 
     on_move: Callable[[np.ndarray], None] | None = None
     on_press: Callable[[Vect(3), np.ndarray], None] | None = None
@@ -428,10 +429,11 @@ class MovePointConsole:
         grid.setVerticalSpacing(6)
         self.gl.addWidget(grid_widget)
 
-        grid.addWidget(QtWidgets.QLabel("Location:", self.group), 0, 0, 1, 1)
-        self.lab_center = QtWidgets.QLabel("", self.group)
-        self.lab_center.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
-        grid.addWidget(self.lab_center, 0, 1, 1, 2)
+        if self.is_show_location:
+            grid.addWidget(QtWidgets.QLabel("Location:", self.group), 0, 0, 1, 1)
+            self.lab_center = QtWidgets.QLabel("", self.group)
+            self.lab_center.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            grid.addWidget(self.lab_center, 0, 1, 1, 2)
 
         # ensure center exists in state
         if self.center_key not in self.state:
@@ -536,7 +538,8 @@ class MovePointConsole:
         )
 
     def _update_center_label(self) -> None:
-        assert self.lab_center is not None
+        if self.lab_center is None:
+            return
         c = np.array(self.state[self.center_key], dtype=float)
         fmt = self.center_fmt
         self.lab_center.setText(
