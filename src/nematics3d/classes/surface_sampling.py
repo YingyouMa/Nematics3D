@@ -63,6 +63,12 @@ def _helper_resolve_sample_count_target(area: float, spacing: float) -> int:
     return max(int(np.round(area / (hex_area * spacing**2))), 1)
 
 
+def _helper_resolve_spacing_for_target_count(area: float, target_count: int) -> float:
+    """Infer one effective spacing that yields roughly the requested target count."""
+    hex_area = np.sqrt(3.0) / 2.0
+    return float(np.sqrt(area / (hex_area * max(int(target_count), 1))))
+
+
 def _helper_sample_triangle_candidates(
     surface: pv.PolyData,
     candidate_count: int,
@@ -190,38 +196,43 @@ class OptsSurfaceSampling(OptsBase):
     legal PyVista/VTK PolyData object carrying surface geometry is acceptable.
     """
 
-    spacing: float | Unset = UNSET
+    spacing: float | None | Unset = UNSET
     seed: int | Unset = UNSET
     oversample: int | Unset = UNSET
     relax_steps: int | Unset = UNSET
     k_neighbors: int | Unset = UNSET
+    default_sample_count_target: int | Unset = UNSET
 
     # fmt: off
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsBase.__attrs__),
-        "spacing":     "Approximate average spacing between sampled points on the surface. The final point count is inferred from surface area and this target spacing.",
+        "spacing":     "Approximate average spacing between sampled points on the surface. If None, the host estimates a spacing that yields roughly default_sample_count_target points.",
         "seed":        "Random seed controlling candidate generation and the first FPS choice so sampling remains reproducible.",
         "oversample":  "Candidate-pool multiplier used before farthest-point down-selection.",
         "relax_steps": "Number of optional local relaxation passes applied after farthest-point sampling.",
         "k_neighbors": "Nearest-neighbor count used by each relaxation pass when relax_steps is positive.",
+        "default_sample_count_target": "Fallback target point count used when spacing is None and the host enters automatic spacing mode.",
     }
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
-        "spacing":     lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "spacing":     lambda v, d: None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "seed":        lambda v, d: as_Number(v, name=d, is_int=True),
         "oversample":  lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
         "relax_steps": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(0, np.inf)),
         "k_neighbors": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
+        "default_sample_count_target": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType({
         **dict(OptsBase.impl_defaults_frozen),
-        "tag":         "surface sampling options",
-        "seed":        0,
-        "oversample":  6,
-        "relax_steps": 0,
-        "k_neighbors": 8,
+        "tag":                         "surface sampling options",
+        "spacing":                     None,
+        "seed":                        0,
+        "oversample":                  6,
+        "relax_steps":                 0,
+        "k_neighbors":                 8,
+        "default_sample_count_target": 100,
     })
     # fmt: on
 
@@ -351,9 +362,17 @@ class SurfaceSampling(HostBase):
 
         surface_clean = _helper_prepare_surface(self.raw_surface)
         surface_area = float(surface_clean.area)
+        if self.opts.spacing is None:
+            spacing_effective = _helper_resolve_spacing_for_target_count(
+                surface_area,
+                int(self.opts.default_sample_count_target),
+            )
+        else:
+            spacing_effective = float(self.opts.spacing)
+
         sample_count_target = _helper_resolve_sample_count_target(
             surface_area,
-            float(self.opts.spacing),
+            spacing_effective,
         )
         candidate_count = max(
             int(self.opts.oversample) * sample_count_target,
@@ -389,5 +408,6 @@ class SurfaceSampling(HostBase):
 
         logger.info(
             f"Resampled {self.name!r}: area={surface_area:.6g}, "
+            f"spacing_effective={spacing_effective:.6g}, "
             f"target_count={sample_count_target}, candidate_count={candidate_count}."
         )
