@@ -1,5 +1,6 @@
 import weakref
 import time
+import datetime
 import vtk
 import numpy as np
 from qtpy import QtCore, QtWidgets
@@ -13,6 +14,7 @@ from nematics3d.datatypes import (
     as_ColorRGB,
 )
 from ..opts import merge_opts_all
+from .qt.panel_base import make_labeled_slider_row, make_RGB_slider
 
 
 @dataclass(slots=True)
@@ -103,6 +105,411 @@ class OptsPickManager:
             owner.owner.pl.render()
 
 
+class _FigureOptionsDialog(QtWidgets.QDialog):
+    """Non-modal live PlotFigure options dialog."""
+
+    def __init__(self, figure, parent=None):
+        super().__init__(parent)
+        self.figure = figure
+        self._is_gui_updating = False
+        self._sliders: dict[str, object] = {}
+        self._snapshots: dict[str, dict[str, object]] = {}
+        self._snapshot_names_saved_from_dialog: list[str] = []
+        self._sync_task_name = self._helper_make_snapshot_name(
+            prefix="figure_opts_sync"
+        )
+        self._original_snapshot_name = self._helper_make_snapshot_name(
+            prefix="figure_opts_initial"
+        )
+
+        self.setWindowTitle("PlotFigure Options")
+
+        self.layout = QtWidgets.QVBoxLayout(self)
+        self.layout.setContentsMargins(12, 12, 12, 12)
+        self.layout.setSpacing(10)
+
+        self._build_ui()
+        self.adjustSize()
+        self._helper_save_snapshot(
+            self._original_snapshot_name,
+            is_user_snapshot=False,
+        )
+        self._sync_from_opts()
+        if self.figure is not None:
+            self.figure.act_attach_sync_task(
+                self._sync_task_name,
+                self._sync_from_figure,
+            )
+
+    def _build_ui(self):
+        group_camera = QtWidgets.QGroupBox("Camera", self)
+        layout_camera = QtWidgets.QVBoxLayout(group_camera)
+        self.layout.addWidget(group_camera)
+
+        self._sliders["azimuth"] = make_labeled_slider_row(
+            parent=group_camera,
+            layout=layout_camera,
+            name="Azimuth",
+            state_key="azimuth",
+            value_min=0,
+            value_max=360,
+            value_init=0,
+            tick_to_value=lambda t: t / 10,
+            value_to_tick=lambda v: int(round(v * 10)),
+            value_fmt="{:.2f}",
+        )
+        self._sliders["elevation"] = make_labeled_slider_row(
+            parent=group_camera,
+            layout=layout_camera,
+            name="Elevation",
+            state_key="elevation",
+            value_min=-90,
+            value_max=90,
+            value_init=0,
+            tick_to_value=lambda t: t / 10,
+            value_to_tick=lambda v: int(round(v * 10)),
+            value_fmt="{:.2f}",
+        )
+        self._sliders["roll"] = make_labeled_slider_row(
+            parent=group_camera,
+            layout=layout_camera,
+            name="Roll",
+            state_key="roll",
+            value_min=-180,
+            value_max=180,
+            value_init=0,
+            tick_to_value=lambda t: t / 10,
+            value_to_tick=lambda v: int(round(v * 10)),
+            value_fmt="{:.2f}",
+        )
+        for key in ("azimuth", "elevation", "roll"):
+            slider = self._sliders[key]
+            slider.slider.valueChanged.connect(self._apply_camera_slider_changes)
+
+        (
+            self.panel_distance,
+            self.distance_input,
+            self.btn_distance_apply,
+        ) = self._make_scalar_apply_row(
+            parent=group_camera,
+            layout=layout_camera,
+            title="Distance",
+            value=0.0,
+            value_min=0.0,
+            value_max=1.0e12,
+            decimals=2,
+            callback=self._apply_distance,
+        )
+
+        (
+            self.panel_focal_point,
+            self.focal_inputs,
+            self.btn_focal_apply,
+        ) = self._make_vector_apply_row(
+            parent=group_camera,
+            layout=layout_camera,
+            title="Focal Point",
+            values=(0.0, 0.0, 0.0),
+            callback=self._apply_focal_point,
+        )
+
+        group_background = QtWidgets.QGroupBox("Background", self)
+        layout_background = QtWidgets.QVBoxLayout(group_background)
+        self.layout.addWidget(group_background)
+        make_RGB_slider(
+            parent=group_background,
+            layout=layout_background,
+            sliders=self._sliders,
+            prefix="bg_color",
+            init_rgb=(1.0, 1.0, 1.0),
+            value_fmt="{:.2f}",
+        )
+        for key in ("bg_color_r", "bg_color_g", "bg_color_b"):
+            slider = self._sliders[key]
+            slider.slider.valueChanged.connect(self._apply_bg_color_changes)
+
+        group_snapshot = QtWidgets.QGroupBox("Snapshots", self)
+        layout_snapshot = QtWidgets.QGridLayout(group_snapshot)
+        self.layout.addWidget(group_snapshot)
+
+        self.btn_save_current = QtWidgets.QPushButton("Save Current", group_snapshot)
+        self.btn_save_current.clicked.connect(self._on_save_current_snapshot)
+        layout_snapshot.addWidget(self.btn_save_current, 0, 0)
+
+        self.btn_restore_original = QtWidgets.QPushButton(
+            "Restore Original",
+            group_snapshot,
+        )
+        self.btn_restore_original.clicked.connect(self._on_restore_original_snapshot)
+        layout_snapshot.addWidget(self.btn_restore_original, 0, 1)
+
+        self.btn_load_latest = QtWidgets.QPushButton("Load Latest Save", group_snapshot)
+        self.btn_load_latest.clicked.connect(self._on_load_latest_snapshot)
+        layout_snapshot.addWidget(self.btn_load_latest, 1, 0)
+
+        self.btn_load_choose = QtWidgets.QPushButton("Load Saved...", group_snapshot)
+        self.btn_load_choose.clicked.connect(self._on_choose_snapshot_to_restore)
+        layout_snapshot.addWidget(self.btn_load_choose, 1, 1)
+
+        buttons = QtWidgets.QDialogButtonBox(
+            QtWidgets.QDialogButtonBox.Close,
+            parent=self,
+        )
+        buttons.rejected.connect(self.reject)
+        self.layout.addWidget(buttons)
+
+    def _make_scalar_apply_row(
+        self,
+        *,
+        parent,
+        layout,
+        title,
+        value,
+        value_min,
+        value_max,
+        decimals,
+        callback,
+    ):
+        panel = QtWidgets.QWidget(parent)
+        panel_layout = QtWidgets.QHBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(6)
+
+        panel_layout.addWidget(QtWidgets.QLabel(f"{title}:", panel))
+        box = QtWidgets.QDoubleSpinBox(panel)
+        box.setDecimals(int(decimals))
+        box.setKeyboardTracking(False)
+        box.setRange(float(value_min), float(value_max))
+        box.setValue(float(value))
+        panel_layout.addWidget(box)
+
+        btn_apply = QtWidgets.QPushButton("Apply", panel)
+        panel_layout.addWidget(btn_apply)
+        layout.addWidget(panel)
+
+        btn_apply.clicked.connect(lambda: callback(box))
+        return panel, box, btn_apply
+
+    def _make_vector_apply_row(
+        self,
+        *,
+        parent,
+        layout,
+        title,
+        values,
+        callback,
+    ):
+        panel = QtWidgets.QWidget(parent)
+        panel_layout = QtWidgets.QHBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(6)
+
+        panel_layout.addWidget(QtWidgets.QLabel(f"{title}:", panel))
+        inputs = []
+        for value in np.asarray(values, dtype=float):
+            box = QtWidgets.QDoubleSpinBox(panel)
+            box.setDecimals(2)
+            box.setKeyboardTracking(False)
+            box.setRange(-1.0e12, 1.0e12)
+            box.setValue(float(value))
+            panel_layout.addWidget(box)
+            inputs.append(box)
+
+        btn_apply = QtWidgets.QPushButton("Apply", panel)
+        panel_layout.addWidget(btn_apply)
+        layout.addWidget(panel)
+
+        btn_apply.clicked.connect(lambda: callback(inputs))
+        return panel, inputs, btn_apply
+
+    def _helper_make_snapshot_name(self, prefix: str = "figure_opts") -> str:
+        stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        return f"{prefix}_{stamp}"
+
+    def _helper_collect_current_payload(self) -> dict[str, object]:
+        figure = self.figure
+        if figure is None or not figure.is_alive:
+            return {}
+        opts = figure.opts
+        return {
+            "azimuth": float(opts.azimuth),
+            "elevation": float(opts.elevation),
+            "roll": float(opts.roll),
+            "distance": float(opts.distance),
+            "focal_point": np.asarray(opts.focal_point, dtype=float).copy(),
+            "bg_color": np.asarray(opts.bg_color, dtype=float).copy(),
+        }
+
+    def _helper_save_snapshot(self, name: str, *, is_user_snapshot: bool) -> None:
+        payload = self._helper_collect_current_payload()
+        if not payload:
+            return
+        self._snapshots[name] = payload
+        if is_user_snapshot:
+            self._snapshot_names_saved_from_dialog.append(name)
+
+    def _helper_restore_snapshot(self, name: str) -> None:
+        payload = self._snapshots.get(name)
+        if payload is None:
+            raise KeyError(f"Snapshot {name!r} is not available.")
+        self.figure.act_commit(
+            azimuth=float(payload["azimuth"]),
+            elevation=float(payload["elevation"]),
+            roll=float(payload["roll"]),
+            distance=float(payload["distance"]),
+            focal_point=np.asarray(payload["focal_point"], dtype=float),
+            bg_color=np.asarray(payload["bg_color"], dtype=float),
+        )
+
+    def _helper_get_snapshot_choice_entries(self) -> list[tuple[str, str]]:
+        entries = []
+        for name in self._snapshots:
+            label = (
+                f"{name} (initial)" if name == self._original_snapshot_name else name
+            )
+            entries.append((label, name))
+        return entries
+
+    def _sync_slider_value(self, key: str, value: float) -> None:
+        slider = self._sliders[key]
+        if slider.slider.isSliderDown() or slider.value_box.hasFocus():
+            return
+        slider.set_tick(float(value), is_block_signals=True)
+
+    def _sync_scalar_box(self, box: QtWidgets.QDoubleSpinBox, value: float) -> None:
+        if box.hasFocus():
+            return
+        box.blockSignals(True)
+        try:
+            box.setValue(float(value))
+        finally:
+            box.blockSignals(False)
+
+    def _sync_vector_boxes(self, boxes, values) -> None:
+        values = np.asarray(values, dtype=float)
+        for box, value in zip(boxes, values, strict=True):
+            if box.hasFocus():
+                continue
+            box.blockSignals(True)
+            try:
+                box.setValue(float(value))
+            finally:
+                box.blockSignals(False)
+
+    def _sync_from_opts(self):
+        if self._is_gui_updating:
+            return
+        payload = self._helper_collect_current_payload()
+        if not payload:
+            return
+
+        self._is_gui_updating = True
+        try:
+            self._sync_slider_value("azimuth", payload["azimuth"])
+            self._sync_slider_value("elevation", payload["elevation"])
+            self._sync_slider_value("roll", payload["roll"])
+            self._sync_scalar_box(self.distance_input, payload["distance"])
+            self._sync_vector_boxes(self.focal_inputs, payload["focal_point"])
+
+            bg_color = np.asarray(payload["bg_color"], dtype=float)
+            self._sync_slider_value("bg_color_r", bg_color[0])
+            self._sync_slider_value("bg_color_g", bg_color[1])
+            self._sync_slider_value("bg_color_b", bg_color[2])
+        finally:
+            self._is_gui_updating = False
+
+    def _sync_from_figure(self, **kwargs):
+        if not kwargs:
+            return
+        relevant_keys = {
+            "azimuth",
+            "elevation",
+            "roll",
+            "distance",
+            "focal_point",
+            "bg_color",
+        }
+        if not any(key in kwargs for key in relevant_keys):
+            return
+        self._sync_from_opts()
+
+    def _apply_camera_slider_changes(self, *_args):
+        if self._is_gui_updating:
+            return
+        self.figure.act_commit(
+            azimuth=float(self._sliders["azimuth"].get_value()),
+            elevation=float(self._sliders["elevation"].get_value()),
+            roll=float(self._sliders["roll"].get_value()),
+        )
+
+    def _apply_bg_color_changes(self, *_args):
+        if self._is_gui_updating:
+            return
+        self.figure.act_commit(
+            bg_color=(
+                float(self._sliders["bg_color_r"].get_value()),
+                float(self._sliders["bg_color_g"].get_value()),
+                float(self._sliders["bg_color_b"].get_value()),
+            )
+        )
+
+    def _apply_distance(self, box: QtWidgets.QDoubleSpinBox):
+        self.figure.act_commit(distance=float(box.value()))
+
+    def _apply_focal_point(self, boxes):
+        self.figure.act_commit(
+            focal_point=np.array([box.value() for box in boxes], dtype=float)
+        )
+
+    def _on_save_current_snapshot(self):
+        name = self._helper_make_snapshot_name()
+        self._helper_save_snapshot(name, is_user_snapshot=True)
+
+    def _on_restore_original_snapshot(self):
+        self._helper_restore_snapshot(self._original_snapshot_name)
+
+    def _on_load_latest_snapshot(self):
+        if not self._snapshot_names_saved_from_dialog:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Snapshot",
+                "No dialog-created snapshot is available yet.",
+            )
+            return
+        self._helper_restore_snapshot(self._snapshot_names_saved_from_dialog[-1])
+
+    def _on_choose_snapshot_to_restore(self):
+        entries = self._helper_get_snapshot_choice_entries()
+        if not entries:
+            QtWidgets.QMessageBox.information(
+                self,
+                "No Saved Snapshot",
+                "No snapshot is available for this dialog.",
+            )
+            return
+
+        labels = [label for label, _name in entries]
+        label_selected, is_ok = QtWidgets.QInputDialog.getItem(
+            self,
+            "Load Saved Snapshot",
+            "Choose one snapshot to restore:",
+            labels,
+            0,
+            False,
+        )
+        if not is_ok:
+            return
+        name = dict(entries)[str(label_selected)]
+        self._helper_restore_snapshot(name)
+
+    def closeEvent(self, event):
+        try:
+            if self.figure is not None:
+                self.figure.act_detach_sync_task(self._sync_task_name)
+        finally:
+            super().closeEvent(event)
+
+
 class PickManager:
     """
 
@@ -134,6 +541,8 @@ class PickManager:
         "_entity_helper_markers": "A dict of panel/helper marker packs keyed by logical name.",
         "_entity_settings_action": "Menu action opening interaction settings for this window.",
         "_entity_figure_opts_action": "Menu action showing this PlotFigure opts snapshot.",
+        "_entity_settings_dialog": "Live non-modal interaction settings dialog, if open.",
+        "_entity_figure_opts_dialog": "Live non-modal figure-options dialog, if open.",
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
@@ -151,6 +560,8 @@ class PickManager:
         object.__setattr__(self, "_entity_helper_markers", {})
         object.__setattr__(self, "_entity_settings_action", None)
         object.__setattr__(self, "_entity_figure_opts_action", None)
+        object.__setattr__(self, "_entity_settings_dialog", None)
+        object.__setattr__(self, "_entity_figure_opts_dialog", None)
 
         if opts is None:
             opts = OptsPickManager()
@@ -194,6 +605,13 @@ class PickManager:
         return menu_bar.addMenu("Settings")
 
     def _helper_open_settings_dialog(self):
+        dialog_existing = self._entity_settings_dialog
+        if dialog_existing is not None:
+            dialog_existing.show()
+            dialog_existing.raise_()
+            dialog_existing.activateWindow()
+            return
+
         fig = self.owner
         parent = (
             fig.pl.app_window
@@ -328,54 +746,39 @@ class PickManager:
         btn_cancel.clicked.connect(dialog.reject)
         layout.addWidget(buttons)
 
-        dialog.exec()
+        dialog.setModal(False)
+        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.destroyed.connect(
+            lambda *_args: object.__setattr__(self, "_entity_settings_dialog", None)
+        )
+        object.__setattr__(self, "_entity_settings_dialog", dialog)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _helper_open_figure_opts_dialog(self):
+        dialog_existing = self._entity_figure_opts_dialog
+        if dialog_existing is not None:
+            dialog_existing.show()
+            dialog_existing.raise_()
+            dialog_existing.activateWindow()
+            return
+
         fig = self.owner
         parent = (
             fig.pl.app_window
             if (fig is not None and hasattr(fig.pl, "app_window"))
             else None
         )
-        opts_snapshot = (
-            repr(fig.opts) if fig is not None else "<PlotFigure unavailable>"
+        dialog = _FigureOptionsDialog(fig, parent=parent)
+        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.destroyed.connect(
+            lambda *_args: object.__setattr__(self, "_entity_figure_opts_dialog", None)
         )
-
-        dialog = QtWidgets.QDialog(parent)
-        dialog.setWindowTitle("PlotFigure Options")
-        dialog.resize(720, 520)
-
-        layout = QtWidgets.QVBoxLayout(dialog)
-
-        notice = QtWidgets.QLabel(
-            "Live refresh is temporarily not updated. "
-            "This view shows only the PlotFigure options captured when this "
-            "dialog was opened.",
-            dialog,
-        )
-        notice_font = notice.font()
-        notice_font.setPointSize(max(1, notice_font.pointSize() * 2))
-        notice.setFont(notice_font)
-        notice.setWordWrap(True)
-        layout.addWidget(notice)
-
-        text_opts = QtWidgets.QPlainTextEdit(dialog)
-        text_opts.setReadOnly(True)
-        text_opts.setPlainText(opts_snapshot)
-        font = QtWidgets.QApplication.font("QPlainTextEdit")
-        font.setFamily("Consolas")
-        font.setPointSize(max(1, font.pointSize() * 2))
-        text_opts.setFont(font)
-        layout.addWidget(text_opts)
-
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Close,
-            parent=dialog,
-        )
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-
-        dialog.exec()
+        object.__setattr__(self, "_entity_figure_opts_dialog", dialog)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _helper_init_settings_menu(self):
         fig = self.owner

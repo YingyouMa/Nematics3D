@@ -823,6 +823,8 @@ class PlotFigure(HostBase):
             cover_value(
                 self.opts, is_allow_cover_target_set=is_allow_cover_target_set, **alter
             )
+        if alter:
+            self._helper_trigger_sync_batch(**alter)
 
     def _helper_sync_from_opts(self):
 
