@@ -291,6 +291,14 @@ class SurfaceSampling(HostBase):
                 "(N, 3) array."
             ),
         },
+        "field": {
+            "doc": "The interpolated field object attached to this surface sampling.",
+            "kind": "relation",
+            "is_weak_by_default": True,
+            "is_weak": None,
+            "relation_value": None,
+            "doc_runtime": None,
+        },
         "result": {
             "doc": "Read-only: Alias of `calc_sample_points`.",
             "kind": "property",
@@ -411,3 +419,6 @@ class SurfaceSampling(HostBase):
             f"spacing_effective={spacing_effective:.6g}, "
             f"target_count={sample_count_target}, candidate_count={candidate_count}."
         )
+
+        if self.field:
+            self.field.act_refresh()

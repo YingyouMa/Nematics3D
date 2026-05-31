@@ -26,6 +26,7 @@ from .classes.plane_grid import *
 from .classes.plane_grid_polar import *
 from .classes.q_plane import *
 from .classes.vector_plane import *
+from .classes.q_surface import *
 from .general import *
 from .logging_decorator import logging_and_warning_decorator
 from .classes.visual import qt
