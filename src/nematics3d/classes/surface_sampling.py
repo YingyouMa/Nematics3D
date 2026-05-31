@@ -158,28 +158,40 @@ def _helper_relax_points(
     relax_steps: int,
     k_neighbors: int,
 ) -> np.ndarray:
-    """Run simple kNN relaxation with projection back to the surface."""
+    """Run simple kNN repulsion with projection back to the surface."""
     points = np.asarray(points, dtype=float).copy()
     if relax_steps <= 0 or len(points) <= 1:
         return points
 
-    move_ratio = 0.5
+    move_ratio = 0.15
+    eps = 1.0e-12
     for _ in range(int(relax_steps)):
         neighbor_count = min(int(k_neighbors) + 1, len(points))
         if neighbor_count <= 1:
             return points
 
         tree = cKDTree(points)
-        _, neighbor_ids = tree.query(points, k=neighbor_count)
+        neighbor_dist, neighbor_ids = tree.query(points, k=neighbor_count)
         if neighbor_ids.ndim == 1:
             neighbor_ids = neighbor_ids[:, None]
+            neighbor_dist = neighbor_dist[:, None]
 
         neighbor_ids = neighbor_ids[:, 1:]
+        neighbor_dist = neighbor_dist[:, 1:]
         if neighbor_ids.shape[1] == 0:
             return points
 
-        local_centers = points[neighbor_ids].mean(axis=1)
-        moved_points = points + move_ratio * (local_centers - points)
+        # Use short-range repulsion rather than centroid attraction. The old
+        # centroid-based update behaved like Laplacian smoothing and could
+        # collapse the sample distribution after repeated projection.
+        offset_vecs = points[:, None, :] - points[neighbor_ids]
+        dist_safe = np.maximum(neighbor_dist, eps)
+        repel_force = (offset_vecs / dist_safe[..., None] ** 3).sum(axis=1)
+        repel_norm = np.linalg.norm(repel_force, axis=1, keepdims=True)
+        repel_unit = np.divide(repel_force, np.maximum(repel_norm, eps))
+
+        local_scale = np.median(dist_safe, axis=1, keepdims=True)
+        moved_points = points + move_ratio * local_scale * repel_unit
         points = _helper_project_points_to_surface(moved_points, surface)
 
     return points

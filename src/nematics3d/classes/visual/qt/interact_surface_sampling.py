@@ -6,7 +6,7 @@ from ...surface_sampling import (
     SurfaceSampling,
     _helper_resolve_spacing_for_target_count,
 )
-from .panel_base import PanelBase, LogTickMapper, make_labeled_slider_row
+from .panel_base import PanelBase, make_labeled_slider_row
 
 
 class InteractSurfaceSampling(PanelBase):
@@ -66,7 +66,8 @@ class InteractSurfaceSampling(PanelBase):
 
     def build_ui(self):
         spacing_current = self._helper_get_display_spacing()
-        spacing_mapper = LogTickMapper(value_min=1.0e-3, value_max=1.0e3, base=10.0)
+        spacing_min = 1.0e-3
+        spacing_max = max(1.0, spacing_current * 5.0)
 
         self._custom_sliders = []
         self.state = {
@@ -91,12 +92,12 @@ class InteractSurfaceSampling(PanelBase):
             layout=layout_spacing,
             name="spacing",
             state_key="spacing",
-            value_min=spacing_mapper.value_min,
-            value_max=spacing_mapper.value_max,
+            value_min=spacing_min,
+            value_max=spacing_max,
             value_init=spacing_current,
-            tick_to_value=spacing_mapper.tick_to_value,
-            value_to_tick=spacing_mapper.value_to_tick,
-            value_fmt="{:.4f}",
+            tick_to_value=lambda t: float(t / 1000.0),
+            value_to_tick=lambda v: int(round(v * 1000.0)),
+            value_fmt="{:.3f}",
             input_out_of_range="expand_max",
         )
         self._custom_sliders.append(self.sliders["spacing"])
@@ -111,6 +112,9 @@ class InteractSurfaceSampling(PanelBase):
         self.lbl_spacing_mode = QtWidgets.QLabel(group_spacing)
         self.lbl_spacing_mode.setWordWrap(True)
         layout_spacing.addWidget(self.lbl_spacing_mode)
+        self.lbl_spacing_estimate = QtWidgets.QLabel(group_spacing)
+        self.lbl_spacing_estimate.setWordWrap(True)
+        layout_spacing.addWidget(self.lbl_spacing_estimate)
 
         group_params = QtWidgets.QGroupBox("Sampling Parameters", self)
         form = QtWidgets.QFormLayout(group_params)
@@ -165,8 +169,8 @@ class InteractSurfaceSampling(PanelBase):
 
         self.lbl_surface_area = QtWidgets.QLabel(group_summary)
         layout_summary.addWidget(self.lbl_surface_area)
-        self.lbl_target_count = QtWidgets.QLabel(group_summary)
-        layout_summary.addWidget(self.lbl_target_count)
+        self.lbl_triangle_count = QtWidgets.QLabel(group_summary)
+        layout_summary.addWidget(self.lbl_triangle_count)
         self.lbl_sample_count = QtWidgets.QLabel(group_summary)
         layout_summary.addWidget(self.lbl_sample_count)
 
@@ -197,36 +201,43 @@ class InteractSurfaceSampling(PanelBase):
         return 1.0
 
     def _update_spacing_mode_label(self):
-        if hasattr(self, "chk_is_auto_spacing"):
-            is_auto = bool(self.chk_is_auto_spacing.isChecked())
-        else:
-            is_auto = self.host.opts.spacing is None
+        spacing_current = self._helper_get_display_spacing()
+        self.lbl_spacing_mode.setText(
+            f"Current effective spacing: {spacing_current:.3f}"
+        )
+        self._update_spacing_estimate_label()
 
-        if hasattr(self, "sliders") and "spacing" in self.sliders:
-            spacing_display = float(self.sliders["spacing"].value_box.value())
-        else:
-            spacing_display = self._helper_get_display_spacing()
+    def _helper_get_preview_spacing(self) -> float:
+        if self.chk_is_auto_spacing.isChecked():
+            return self._helper_get_display_spacing()
+        return max(float(self.sliders["spacing"].value_box.value()), 1.0e-12)
 
-        if is_auto:
-            self.lbl_spacing_mode.setText(
-                "Automatic mode is selected. Apply will resample using "
-                "`default_sample_count_target`; the displayed spacing is only the "
-                f"current estimate: {spacing_display:.4f}."
+    def _update_spacing_estimate_label(self):
+        spacing_preview = self._helper_get_preview_spacing()
+        surface_area = float(getattr(self.host, "calc_surface_area", 0.0))
+        if surface_area <= 0.0:
+            self.lbl_spacing_estimate.setText(
+                "Estimated sample count for current spacing: unavailable"
             )
             return
 
-        self.lbl_spacing_mode.setText(
-            "Manual mode is selected. Apply will resample using "
-            f"spacing = {spacing_display:.4f}."
+        hex_area = np.sqrt(3.0) / 2.0
+        sample_count_estimate = max(
+            int(np.round(surface_area / (hex_area * spacing_preview**2))),
+            1,
+        )
+        self.lbl_spacing_estimate.setText(
+            "Estimated sample count for current spacing: " f"{sample_count_estimate}"
         )
 
     def _update_summary_labels(self):
         surface_area = float(getattr(self.host, "calc_surface_area", 0.0))
-        target_count = int(getattr(self.host, "calc_sample_count_target", 0))
+        surface_clean = getattr(self.host, "calc_surface_clean", None)
+        triangle_count = 0 if surface_clean is None else int(surface_clean.n_cells)
         sample_count = len(np.asarray(getattr(self.host, "calc_sample_points", ())))
 
         self.lbl_surface_area.setText(f"Surface area: {surface_area:.6g}")
-        self.lbl_target_count.setText(f"Resolved target sample count: {target_count}")
+        self.lbl_triangle_count.setText(f"Current triangle count: {triangle_count}")
         self.lbl_sample_count.setText(f"Current sampled point count: {sample_count}")
 
     def _sync_spinbox(self, box: QtWidgets.QSpinBox, value: int):
