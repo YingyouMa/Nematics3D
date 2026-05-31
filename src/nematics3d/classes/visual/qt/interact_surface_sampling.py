@@ -102,7 +102,7 @@ class InteractSurfaceSampling(PanelBase):
         self._custom_sliders.append(self.sliders["spacing"])
         self.sliders["spacing"].set_enabled(not self.state["is_auto_spacing"])
         self.sliders["spacing"].slider.valueChanged.connect(
-            lambda _value=0: self._update_spacing_mode_label()
+            lambda _value=0: self._on_spacing_slider_changed()
         )
         self.sliders["spacing"].value_box.editingFinished.connect(
             self._update_spacing_mode_label
@@ -236,6 +236,10 @@ class InteractSurfaceSampling(PanelBase):
     # -------------------------------
     # Commit and synchronization
     # -------------------------------
+
+    def _on_spacing_slider_changed(self):
+        self.sliders["spacing"].set_label()
+        self._update_spacing_mode_label()
 
     def _capture_ui_state(self):
         self.sliders["spacing"].apply_value_box_edit()
