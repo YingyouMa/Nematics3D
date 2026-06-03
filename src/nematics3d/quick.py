@@ -6,53 +6,12 @@ from pathlib import Path
 
 import numpy as np
 
-if __package__ in {None, ""}:
-    import sys
-
-    _REPO_ROOT = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(_REPO_ROOT / "src"))
-
-    from nematics3d.classes.q_field_object import QFieldObject
-    from nematics3d.classes.visual.plot_figure import PlotFigure
-    from nematics3d.classes.visual.plot_sphere import OptsSphere, PlotSphere
-    from nematics3d.classes.visual.plot_tube import OptsTube
-    from nematics3d.datatypes import UNSET
-    from nematics3d.logging_decorator import logging_and_warning_decorator
-else:
-    from .classes.q_field_object import QFieldObject
-    from .classes.visual.plot_figure import PlotFigure
-    from .classes.visual.plot_sphere import OptsSphere, PlotSphere
-    from .classes.visual.plot_tube import OptsTube
-    from .datatypes import UNSET
-    from .logging_decorator import logging_and_warning_decorator
-
-
-def _resolve_director_spacing_level(level):
-    spacing_config_by_level = {
-        "dense": {
-            "grid_spacing_scale": 1.0,
-            "n_length_scale": 1.0,
-            "n_radius_scale": 1.0,
-        },
-        "medium": {
-            "grid_spacing_scale": 1.75,
-            "n_length_scale": 1.2,
-            "n_radius_scale": 1.1,
-        },
-        "sparse": {
-            "grid_spacing_scale": 2.5,
-            "n_length_scale": 1.45,
-            "n_radius_scale": 1.2,
-        },
-    }
-
-    try:
-        return spacing_config_by_level[level]
-    except KeyError as exc:
-        valid_levels = ", ".join(repr(key) for key in spacing_config_by_level)
-        raise ValueError(
-            f"`director_spacing` must be one of {valid_levels}, got {level!r}."
-        ) from exc
+from .classes.q_field_object import QFieldObject
+from .classes.visual.plot_figure import PlotFigure
+from .classes.visual.plot_sphere import OptsSphere, PlotSphere
+from .classes.visual.plot_tube import OptsTube
+from .datatypes import UNSET
+from .logging_decorator import logging_and_warning_decorator
 
 
 def _auto_quick_Q_visual_params(field, grid_normal):
@@ -94,7 +53,6 @@ def quick_visualize_Q(
     box_periodic_flag=False,
     name="Q",
     grid_normal=(0, 0, 1),
-    director_spacing="medium",
     is_visualize_lines=True,
     save_path=None,
     is_off_screen=False,
@@ -117,7 +75,6 @@ def quick_visualize_Q(
 
     field_for_shape = Q if is_Q_provided else n
     params = _auto_quick_Q_visual_params(field_for_shape, grid_normal)
-    director_spacing_config = _resolve_director_spacing_level(director_spacing)
 
     q_obj = QFieldObject(
         Q=Q if is_Q_provided else UNSET,
@@ -164,13 +121,11 @@ def quick_visualize_Q(
     q_obj.act_visualize_n_plane(
         is_extent=False,
         grid_normal=grid_normal,
-        grid_spacing=(
-            params["grid_spacing"] * director_spacing_config["grid_spacing_scale"]
-        ),
+        grid_spacing=params["grid_spacing"],
         grid_size=params["grid_size"],
         grid_origin=params["grid_origin"],
-        n_length=params["n_length"] * director_spacing_config["n_length_scale"],
-        n_radius=params["n_radius"] * director_spacing_config["n_radius_scale"],
+        n_length=params["n_length"],
+        n_radius=params["n_radius"],
         figure=figure,
     )
 
@@ -180,42 +135,3 @@ def quick_visualize_Q(
         figure.act_savefig(save_path)
 
     return q_obj, figure
-
-
-def _find_repo_root_for_quick_demo():
-    for candidate in Path(__file__).resolve().parents:
-        if (candidate / "example" / "data" / "Q_example_workflow.npy").exists():
-            return candidate
-
-    raise FileNotFoundError(
-        "Could not locate the repository root for the quick_visualize_Q demo."
-    )
-
-
-def _run_quick_visualize_Q_tutorial_demo():
-    repo_root = _find_repo_root_for_quick_demo()
-    data_path = repo_root / "example" / "data" / "Q_example_workflow.npy"
-    output_dir = repo_root / "tutorials" / "output" / "quick_visualize_Q"
-    save_path = output_dir / "quick_py_main_preview.png"
-
-    Q_data = np.load(data_path)
-
-    # Edit these values directly when using this file as a quick local driver.
-    demo_kwargs = {
-        "Q": Q_data,
-        "name": "quick_py_main_demo",
-        "grid_normal": (0, 0, 1),
-        "director_spacing": "sparse",
-        "is_visualize_lines": True,
-        "save_path": save_path,
-        "is_off_screen": False,
-    }
-
-    q_obj, figure = quick_visualize_Q(**demo_kwargs)
-    print(f"Loaded tutorial data from: {data_path}")
-    print(f"Saved preview image to: {save_path}")
-    return q_obj, figure
-
-
-if __name__ == "__main__":
-    _run_quick_visualize_Q_tutorial_demo()
