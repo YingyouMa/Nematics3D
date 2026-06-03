@@ -3,6 +3,7 @@ from pathlib import Path
 import types
 
 import numpy as np
+import pyvista as pv
 from PIL import Image, ImageChops
 
 SRC_DIR = Path(__file__).resolve().parents[3] / "src"
@@ -16,23 +17,12 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_delaunay import PlotDelaunay
+from nematics3d.classes.visual.plot_polydata import PlotPolyData
 from nematics3d.classes.visual.plot_vector import PlotVector
 from nematics3d.field import n_color_immerse
 
 OUTPUT_DIR = Path(__file__).resolve().parent
 PATH_IMAGE = OUTPUT_DIR / "default_director_color_sphere.png"
-
-
-def _normalize_rows(vectors):
-    vectors = np.asarray(vectors, dtype=float)
-    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
-    return vectors / norms
-
-
-def director_colors_from_coords(coords):
-    director = _normalize_rows(coords)
-    return np.asarray(n_color_immerse(director), dtype=float)
 
 
 def crop_white_margins(path, *, padding=80):
@@ -52,35 +42,11 @@ def crop_white_margins(path, *, padding=80):
     return path
 
 
-def build_cube_sphere_patch(face_name, *, radius=1.0, samples=33):
-    u = np.linspace(-1.0, 1.0, samples)
-    v = np.linspace(-1.0, 1.0, samples)
-    uu, vv = np.meshgrid(u, v, indexing="ij")
-
-    if face_name == "+x":
-        xyz = np.stack([np.ones_like(uu), uu, vv], axis=-1)
-    elif face_name == "-x":
-        xyz = np.stack([-np.ones_like(uu), uu, vv], axis=-1)
-    elif face_name == "+y":
-        xyz = np.stack([uu, np.ones_like(uu), vv], axis=-1)
-    elif face_name == "-y":
-        xyz = np.stack([uu, -np.ones_like(uu), vv], axis=-1)
-    elif face_name == "+z":
-        xyz = np.stack([uu, vv, np.ones_like(uu)], axis=-1)
-    elif face_name == "-z":
-        xyz = np.stack([uu, vv, -np.ones_like(uu)], axis=-1)
-    else:
-        raise ValueError(f"Unsupported face name: {face_name!r}")
-
-    xyz = xyz.reshape(-1, 3)
-    xyz = radius * _normalize_rows(xyz)
-    return xyz
-
-
 def build_director_color_sphere(
     *,
     radius=1.0,
-    patch_samples=33,
+    theta_resolution=120,
+    phi_resolution=120,
     axis_length=1.55,
 ):
     figure = PlotFigure(
@@ -89,29 +55,29 @@ def build_director_color_sphere(
         size=(1800, 1800),
     )
 
-    face_names = ("+x", "-x", "+y", "-y", "+z", "-z")
-    surfaces = []
-    for face_name in face_names:
-        coords = build_cube_sphere_patch(
-            face_name,
-            radius=radius,
-            samples=patch_samples,
-        )
-        surface = PlotDelaunay(
-            coords=coords,
-            figure=figure,
-            name=f"sphere_patch_{face_name}",
-            category="director_color_sphere",
-            color=director_colors_from_coords(coords),
-            opacity=1.0,
-            ambient=0.32,
-            diffuse=0.82,
-            specular=0.18,
-            specular_power=18,
-            is_pickable=False,
-            is_reset_camera=False,
-        )
-        surfaces.append(surface)
+    sphere = pv.Sphere(
+        radius=radius,
+        theta_resolution=theta_resolution,
+        phi_resolution=phi_resolution,
+    )
+    pts = np.asarray(sphere.points, dtype=float)
+    directors = pts / np.linalg.norm(pts, axis=1, keepdims=True)
+    colors = np.asarray(n_color_immerse(directors), dtype=float)
+
+    surface = PlotPolyData(
+        polydata=sphere,
+        figure=figure,
+        name="director_color_sphere",
+        category="director_color_sphere",
+        color=colors,
+        opacity=1.0,
+        ambient=0.32,
+        diffuse=0.82,
+        specular=0.18,
+        specular_power=18,
+        is_pickable=False,
+        is_reset_camera=False,
+    )
 
     axis_orient = axis_length * np.eye(3)
     axis_colors = np.asarray(n_color_immerse(np.eye(3)), dtype=float)
@@ -142,7 +108,7 @@ def build_director_color_sphere(
 
     return {
         "figure": figure,
-        "surfaces": surfaces,
+        "surface": surface,
         "axes": axes,
     }
 

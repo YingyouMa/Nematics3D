@@ -754,6 +754,49 @@ class PlotFigure(HostBase):
 
         return axes_actor
 
+    @staticmethod
+    def _helper_build_sphere_widget_actor(
+        *,
+        theta_resolution=60,
+        phi_resolution=60,
+    ) -> vtk.vtkActor:
+        """Build a director-colored sphere actor for use as an orientation widget."""
+        import pyvista as pv
+        from nematics3d.field import n_color_immerse
+
+        sphere = pv.Sphere(
+            radius=1.0,
+            theta_resolution=theta_resolution,
+            phi_resolution=phi_resolution,
+        )
+        pts = np.asarray(sphere.points, dtype=float)
+        directors = pts / np.linalg.norm(pts, axis=1, keepdims=True)
+        colors_f = np.asarray(n_color_immerse(directors), dtype=float)
+        colors_u8 = (colors_f * 255).clip(0, 255).astype(np.uint8)
+
+        vtk_colors = vtk.vtkUnsignedCharArray()
+        vtk_colors.SetNumberOfComponents(3)
+        vtk_colors.SetName("RGB")
+        for rgb in colors_u8:
+            vtk_colors.InsertNextTuple3(*rgb)
+
+        sphere.GetPointData().SetScalars(vtk_colors)
+
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(sphere)
+        mapper.SetScalarModeToUsePointData()
+        mapper.SetColorModeToDirectScalars()
+        mapper.ScalarVisibilityOn()
+
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetAmbient(0.3)
+        actor.GetProperty().SetDiffuse(0.8)
+        actor.GetProperty().SetSpecular(0.15)
+        actor.GetProperty().SetSpecularPower(20)
+
+        return actor
+
     def act_remove_axes_widget(self):
         """Disable and forget the current orientation axes widget, if any."""
         widget = getattr(self, "entity_axes_widget", None)
@@ -769,12 +812,24 @@ class PlotFigure(HostBase):
     def act_add_axes_widget(
         self,
         *,
+        style="axes",
         colors=None,
         labels=("x", "y", "z"),
         interactive=False,
         viewport=(0.0, 0.0, 0.2, 0.2),
     ):
-        """Add a corner orientation widget whose axis colors match director colors."""
+        """Add a corner orientation widget whose axis colors match director colors.
+
+        Parameters
+        ----------
+        style : {"axes", "sphere"}
+            "axes" (default) shows the classic three-arrow vtkAxesActor.
+            "sphere" shows a director-colored sphere: the visible face color
+            directly encodes the current viewing direction in the director
+            colormap.
+        """
+        if style not in ("axes", "sphere"):
+            raise ValueError(f"`style` must be 'axes' or 'sphere', got {style!r}.")
         if len(viewport) != 4:
             raise ValueError("`viewport` must be a 4-sequence of floats.")
         viewport = tuple(float(value) for value in viewport)
@@ -783,17 +838,21 @@ class PlotFigure(HostBase):
 
         self.act_remove_axes_widget()
 
-        axes_actor = self._helper_build_axes_widget_actor(
-            colors=colors,
-            labels=labels,
-        )
+        if style == "sphere":
+            actor = self._helper_build_sphere_widget_actor()
+        else:
+            actor = self._helper_build_axes_widget_actor(
+                colors=colors,
+                labels=labels,
+            )
+
         widget = self.pl.add_orientation_widget(
-            axes_actor,
+            actor,
             interactive=as_bool(interactive, name="axes widget interactive flag"),
             viewport=viewport,
         )
 
-        object.__setattr__(self, "entity_axes_actor", axes_actor)
+        object.__setattr__(self, "entity_axes_actor", actor)
         object.__setattr__(self, "entity_axes_widget", widget)
 
         return widget
@@ -1096,7 +1155,15 @@ def as_plotfigure(figure, opts_figure=None, logger=None):
         if figure is None:
             figure = PlotFigure(opts=opts_figure)
         elif isinstance(figure, PlotFigure):
-            figure.act_commit(opts_figure)
+            if not figure.is_alive:
+                logger.warning(
+                    "The provided PlotFigure is no longer alive. "
+                    "A new figure will be created instead."
+                )
+                logger.recovery("Create a new figure instead.")
+                figure = PlotFigure(opts=opts_figure)
+            else:
+                figure.act_commit(opts_figure)
         elif isinstance(figure, (BackgroundPlotter, pv.Plotter)):
             figure = PlotFigure(plotter=figure, opts=opts_figure)
         else:
