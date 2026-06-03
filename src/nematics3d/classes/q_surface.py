@@ -2,8 +2,9 @@ import numpy as np
 from pyvistaqt import BackgroundPlotter
 
 from copy import deepcopy
-from typing import Any, ClassVar, Mapping
+from typing import Any, Mapping
 
+from .class_base import AttrDef
 from .interpolate_surface import InterpolateSurface
 from .opts import merge_opts_all
 from .surface_sampling import SurfaceSampling, OptsSurfaceSampling
@@ -22,44 +23,34 @@ class QSurface(InterpolateSurface):
     provides director visualization. S visualization can be added later.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(InterpolateSurface.__attr_defs__),
-        "raw_name": {
-            **dict(InterpolateSurface.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this Q-surface object.",
-        },
-        "calc_result": {
-            **dict(InterpolateSurface.__attr_defs__["calc_result"]),
-            "kind": "calc",
-        },
-        "calc_n": {
-            "doc": "Director field arrays derived from Q-diagonalization.",
-            "kind": "calc",
-        },
-        "calc_S": {
-            "doc": "Scalar-order values derived from Q-diagonalization.",
-            "kind": "calc",
-        },
-        "state_is_interactable": {
-            "doc": "Whether to create a control window when the instance is double right-clicked.",
-        },
-        "default_visual_opts": {
-            "doc": "Default opts_defaults_override mappings used for derived visuals.",
-        },
-        "visual_n": {
-            "doc": "The PlotRod visual showing directors on this Q surface.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+    __attr_defs__ = {
+        "calc_n": AttrDef(
+            doc="Director field arrays derived from Q-diagonalization.",
+            kind="calc",
+        ),
+        "calc_S": AttrDef(
+            doc="Scalar-order values derived from Q-diagonalization.",
+            kind="calc",
+        ),
+        "state_is_interactable": AttrDef(
+            doc="Whether to create a control window when the instance is double right-clicked.",
+            kind="state",
+        ),
+        "default_visual_opts": AttrDef(
+            doc="Default opts_defaults_override mappings used for derived visuals.",
+            kind="default",
+        ),
+        "visual_n": AttrDef(
+            doc="The PlotRod visual showing directors on this Q surface.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in InterpolateSurface.__slots__
     )
 

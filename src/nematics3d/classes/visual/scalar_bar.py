@@ -20,6 +20,7 @@ from nematics3d.datatypes import (
     as_str,
 )
 
+from ..class_base import AttrDef
 from ..host_base import HostBase, OptsBase
 
 
@@ -211,48 +212,52 @@ class ScalarBar(HostBase):
     """Host-style declaration object for one figure-level scalar bar."""
 
     __attr_defs__ = {
-        **dict(HostBase.__attr_defs__),
-        "source": {
-            "doc": "The glyph-like object that currently provides the scalar-bar mapper semantics.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "raw_mapper_name": {
-            "doc": "Optional readable name of the mapper/source associated with this scalar bar.",
-            "validator": lambda v, d: _as_optional_str(v, d),
-        },
-        "impl_name_pv": {
-            "doc": "Stable unique identifier of this scalar bar stored in the PyVista plotter.",
-        },
-        "calc_pyvista_kwargs": {
-            "doc": "Resolved PyVista scalar-bar keyword arguments derived from the current opts.",
-        },
-        "entity_backend": {
-            "doc": "Live backend scalar-bar handle managed by the rendering layer, or None if not created.",
-        },
-        "entity_backend_widget": {
-            "doc": "Live backend scalar-bar widget handle when interactive mode is enabled.",
-        },
-        "impl_backend_widget_observer_tag": {
-            "doc": "Internal observer id attached to the interactive widget end-event.",
-        },
-        "impl_backend_rebuild_signature": {
-            "doc": "Internal signature of backend settings that require backend recreation when changed.",
-        },
-        "impl_is_syncing_backend": {
-            "doc": "Internal guard preventing recursive opts/backend synchronization loops.",
-        },
-        "backend": {
-            "doc": "Read-only: Alias of `entity_backend`.",
-            "kind": "property",
-        },
-        "backend_widget": {
-            "doc": "Read-only: Alias of `entity_backend_widget`.",
-            "kind": "property",
-        },
+        "source": AttrDef(
+            doc="The glyph-like object that currently provides the scalar-bar mapper semantics.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "raw_mapper_name": AttrDef(
+            doc="Optional readable name of the mapper/source associated with this scalar bar.",
+            kind="raw",
+            validator=lambda v, d: _as_optional_str(v, d),
+        ),
+        "impl_name_pv": AttrDef(
+            doc="Stable unique identifier of this scalar bar stored in the PyVista plotter.",
+            kind="impl",
+        ),
+        "calc_pyvista_kwargs": AttrDef(
+            doc="Resolved PyVista scalar-bar keyword arguments derived from the current opts.",
+            kind="calc",
+        ),
+        "entity_backend": AttrDef(
+            doc="Live backend scalar-bar handle managed by the rendering layer, or None if not created.",
+            kind="entity",
+        ),
+        "entity_backend_widget": AttrDef(
+            doc="Live backend scalar-bar widget handle when interactive mode is enabled.",
+            kind="entity",
+        ),
+        "impl_backend_widget_observer_tag": AttrDef(
+            doc="Internal observer id attached to the interactive widget end-event.",
+            kind="impl",
+        ),
+        "impl_backend_rebuild_signature": AttrDef(
+            doc="Internal signature of backend settings that require backend recreation when changed.",
+            kind="impl",
+        ),
+        "impl_is_syncing_backend": AttrDef(
+            doc="Internal guard preventing recursive opts/backend synchronization loops.",
+            kind="impl",
+        ),
+        "backend": AttrDef(
+            doc="Read-only: Alias of `entity_backend`.",
+            kind="property",
+        ),
+        "backend_widget": AttrDef(
+            doc="Read-only: Alias of `entity_backend_widget`.",
+            kind="property",
+        ),
     }
 
     __slots__ = (

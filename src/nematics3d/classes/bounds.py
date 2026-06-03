@@ -25,6 +25,7 @@ from nematics3d.datatypes import (
 from nematics3d.grid import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import get_box_corners, rotation_matrix_from_vectors
+from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
 
 BoundsData: TypeAlias = (
@@ -142,48 +143,53 @@ class Bounds(HostBase):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(HostBase.__attr_defs__),
-        "entity_corners": {
-            "doc": "Corner coordinates of the bounds box in real space as an (8, 3) array.",
-        },
-        "entity_clip_geometry": {
-            "doc": "PyVista PolyData surface used for clipping other meshes inside this bounds.",
-        },
-        "entity_visuals": {
-            "doc": "Visual subscriptions of this bounds across figures.",
-        },
-        "entity_subscribers": {
-            "doc": (
+        "entity_corners": AttrDef(
+            doc="Corner coordinates of the bounds box in real space as an (8, 3) array.",
+            kind="entity",
+        ),
+        "entity_clip_geometry": AttrDef(
+            doc="PyVista PolyData surface used for clipping other meshes inside this bounds.",
+            kind="entity",
+        ),
+        "entity_visuals": AttrDef(
+            doc="Visual subscriptions of this bounds across figures.",
+            kind="entity",
+        ),
+        "entity_subscribers": AttrDef(
+            doc=(
                 "Weak subscriber records for hosts driven by this bounds, "
                 "excluding its own visualization frames."
             ),
-        },
-        "calc_axis2": {
-            "doc": "Resolved second axis used by the bounds box.",
-        },
-        "calc_axis3": {
-            "doc": "Resolved third axis used by the bounds box.",
-        },
-        "corners": {
-            "doc":  "Read-only: Alias of `entity_corners`.",
-            "kind": "property",
-        },
-        "clip_geometry": {
-            "doc":  "Read-only: Alias of `entity_clip_geometry`.",
-            "kind": "property",
-        },
-        "subscribers": {
-            "doc":  "Read-only: Live hosts currently subscribed to this bounds.",
-            "kind": "property",
-        },
-        "glyph_subscribers": {
-            "doc":  "Read-only: Live glyph hosts currently subscribed to this bounds.",
-            "kind": "property",
-        },
-        "plane_grid_subscribers": {
-            "doc":  "Read-only: Live plane-grid hosts currently subscribed to this bounds.",
-            "kind": "property",
-        },
+            kind="entity",
+        ),
+        "calc_axis2": AttrDef(
+            doc="Resolved second axis used by the bounds box.",
+            kind="calc",
+        ),
+        "calc_axis3": AttrDef(
+            doc="Resolved third axis used by the bounds box.",
+            kind="calc",
+        ),
+        "corners": AttrDef(
+            doc="Read-only: Alias of `entity_corners`.",
+            kind="property",
+        ),
+        "clip_geometry": AttrDef(
+            doc="Read-only: Alias of `entity_clip_geometry`.",
+            kind="property",
+        ),
+        "subscribers": AttrDef(
+            doc="Read-only: Live hosts currently subscribed to this bounds.",
+            kind="property",
+        ),
+        "glyph_subscribers": AttrDef(
+            doc="Read-only: Live glyph hosts currently subscribed to this bounds.",
+            kind="property",
+        ),
+        "plane_grid_subscribers": AttrDef(
+            doc="Read-only: Live plane-grid hosts currently subscribed to this bounds.",
+            kind="property",
+        ),
     }
     # fmt: on
 

@@ -1,11 +1,12 @@
 """Vector-field interpolation on physical-space plane grids."""
 
 from copy import deepcopy
-from typing import Any, ClassVar, Mapping
+from typing import Any, Mapping
 
 import numpy as np
 from pyvistaqt import BackgroundPlotter
 
+from .class_base import AttrDef
 from .grid_field import GridInterpolator
 from .interpolate_plane import InterpolatePlane
 from .opts import merge_opts_all
@@ -33,40 +34,30 @@ class VectorPlane(InterpolatePlane):
     grid.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(InterpolatePlane.__attr_defs__),
-        "raw_name": {
-            **dict(InterpolatePlane.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this vector-plane object.",
-        },
-        "calc_result": {
-            **dict(InterpolatePlane.__attr_defs__["calc_result"]),
-            "kind": "calc",
-        },
-        "calc_magnitude": {
-            "doc": "Vector magnitudes derived from the sampled plane vectors.",
-            "kind": "calc",
-        },
-        "state_is_interactable": {
-            "doc": "Whether to create a control window when the instance is double right-clicked.",
-        },
-        "default_visual_opts": {
-            "doc": "Default opts_defaults_override mappings used for vector visuals.",
-        },
-        "visual": {
-            "doc": "The PlotVector visual showing sampled vectors on this plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+    __attr_defs__ = {
+        "calc_magnitude": AttrDef(
+            doc="Vector magnitudes derived from the sampled plane vectors.",
+            kind="calc",
+        ),
+        "state_is_interactable": AttrDef(
+            doc="Whether to create a control window when the instance is double right-clicked.",
+            kind="state",
+        ),
+        "default_visual_opts": AttrDef(
+            doc="Default opts_defaults_override mappings used for vector visuals.",
+            kind="default",
+        ),
+        "visual": AttrDef(
+            doc="The PlotVector visual showing sampled vectors on this plane.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in InterpolatePlane.__slots__
     )
 

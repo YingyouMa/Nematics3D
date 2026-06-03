@@ -12,6 +12,8 @@ import vtk
 
 from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
 from ..bounds import BoundsData
+from ..class_base import AttrDef
+from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_polydata import InteractPolyData
@@ -230,20 +232,21 @@ class PlotPolyData(PlotGlyph):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "raw_poly": {
-            "doc": (
+        "raw_poly": AttrDef(
+            doc=(
                 "The normalized pyvista.PolyData source used as the topology "
                 "and point-data template for this plot wrapper."
             ),
-        },
+            kind="raw",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
 
     _pending_resolution_attrs = ["color", "scalars", "opacity"]

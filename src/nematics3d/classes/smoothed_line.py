@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, ClassVar, Literal, Mapping
+from typing import Any, Literal, Mapping
 
 import numpy as np
 from scipy.interpolate import interp1d, splev, splprep
@@ -8,7 +8,7 @@ from scipy.signal import savgol_filter
 
 from ..datatypes import Number, UNSET, Unset, as_Number, as_bool, as_points, as_str
 from ..logging_decorator import logging_and_warning_decorator
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 from .host_base import HostBase, OptsBase
 from .opts import cover_value, diff_dict_values
 from .registry_base import RegistryBase
@@ -157,56 +157,53 @@ class SmoothedLine(HostBase):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(HostBase.__attr_defs__),
-        "raw_name": {
-            **dict(HostBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of the original line",
-        },
-        "raw_coords": {
-            "doc":                        "Raw input line coordinates (shape: N x D)",
-            "validator":                  lambda v, d: as_points(v, name=d, dim=None),
-            "is_reapply_opts_after_raw":  True,
-        },
-        "calc_coords": {
-            "doc":                "The processed coordinates actually sent into the smoothing pipeline",
-
-        },
-        "calc_num_init": {
-            "doc":                "Read-only: Number of processed input points currently entering the smoothing pipeline.",
-            "kind":               "property",
-
-        },
-        "calc_num_out": {
-            "doc":                "Read-only: Number of output points requested after smoothing.",
-            "kind":               "property",
-
-        },
-        "calc_result": {
-            "doc":                "The smoothed output coordinates (shape: M x D)",
-
-        },
-        "entity_tck": {
-            "doc":                "B-spline representation (tck) used for evaluating curve derivatives",
-
-        },
-        "entity_linefuncs": {
-            "doc":                "RegistryBase object managing functions sampled along this line.",
-
-        },
-        "impl_linefunc_count": {
-            "doc":                "Monotonic counter used to assign default line-function names.",
-
-        },
-        "calc_is_smoothed": {
-            "doc":                "Boolean flag indicating whether smoothing was applied",
-
-        },
-        "state_is_window_warning": {
-            "doc":       "Whether to present the warning when both window_length and window_ratio are provided.",
-            "validator": lambda v, d: as_bool(v, name=d),
-        },
-        "calc_status": {
-            "doc": (
+        "raw_coords": AttrDef(
+            doc="Raw input line coordinates (shape: N x D)",
+            kind="raw",
+            validator=lambda v, d: as_points(v, name=d, dim=None),
+            is_reapply_opts_after_raw=True,
+        ),
+        "calc_coords": AttrDef(
+            doc="The processed coordinates actually sent into the smoothing pipeline",
+            kind="calc",
+        ),
+        "calc_num_init": AttrDef(
+            doc="Read-only: Number of processed input points currently entering the smoothing pipeline.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "calc_num_out": AttrDef(
+            doc="Read-only: Number of output points requested after smoothing.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "calc_result": AttrDef(
+            doc="The smoothed output coordinates (shape: M x D)",
+            kind="calc",
+        ),
+        "entity_tck": AttrDef(
+            doc="B-spline representation (tck) used for evaluating curve derivatives",
+            kind="entity",
+        ),
+        "entity_linefuncs": AttrDef(
+            doc="RegistryBase object managing functions sampled along this line.",
+            kind="entity",
+        ),
+        "impl_linefunc_count": AttrDef(
+            doc="Monotonic counter used to assign default line-function names.",
+            kind="impl",
+        ),
+        "calc_is_smoothed": AttrDef(
+            doc="Boolean flag indicating whether smoothing was applied",
+            kind="calc",
+        ),
+        "state_is_window_warning": AttrDef(
+            doc="Whether to present the warning when both window_length and window_ratio are provided.",
+            kind="state",
+            validator=lambda v, d: as_bool(v, name=d),
+        ),
+        "calc_status": AttrDef(
+            doc=(
                 "Status indicator of the smoothing pipeline. "
                 "Set to 'success' if smoothing completes normally. "
                 "If smoothing is skipped or disabled due to internally detected "
@@ -214,30 +211,30 @@ class SmoothedLine(HostBase):
                 "or numerical failures), this field stores a human-readable "
                 "string describing the specific reason."
             ),
-
-        },
-        "result": {
-            "doc":                "Read-only: Final output coordinates produced by the smoothing pipeline.",
-            "kind":               "property",
-
-        },
-        "linefuncs": {
-            "doc":                "Read-only: Registry of functions sampled along this line.",
-            "kind":               "property",
-
-        },
-        "linefunc_mode": {
-            "doc":                "Read-only: Interpolation mode used by functions sampled along this line.",
-            "kind":               "property",
-
-        },
+            kind="calc",
+        ),
+        "result": AttrDef(
+            doc="Read-only: Final output coordinates produced by the smoothing pipeline.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "linefuncs": AttrDef(
+            doc="Read-only: Registry of functions sampled along this line.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "linefunc_mode": AttrDef(
+            doc="Read-only: Interpolation mode used by functions sampled along this line.",
+            kind="property",
+            is_public_settable=False,
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
     )
     # -------------------------------
     # Initialization
@@ -258,16 +255,14 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        line_coord_input = type(self).__attr_defs__["raw_coords"]["validator"](
+        line_coord_input = type(self).__attr_defs__["raw_coords"].validator(
             line_coord_input,
-            type(self).__attr_defs__["raw_coords"]["doc"],
+            type(self).__attr_defs__["raw_coords"].doc,
         )
 
-        is_window_warning = type(self).__attr_defs__["state_is_window_warning"][
-            "validator"
-        ](
+        is_window_warning = type(self).__attr_defs__["state_is_window_warning"].validator(
             is_window_warning,
-            type(self).__attr_defs__["state_is_window_warning"]["doc"],
+            type(self).__attr_defs__["state_is_window_warning"].doc,
         )
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "calc_coords", self.raw_coords)
@@ -905,72 +900,73 @@ class SmoothedLineFunc(ClassBase):
     """
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this smoothed-line function.",
-        },
-        "owner": {
-            **dict(ClassBase.__attr_defs__["owner"]),
-            "doc": "The SmoothedLine instance that this function is associated with.",
-        },
-        "raw_func": {
-            "doc": (
+    __attr_defs__ = {
+        "owner": AttrDef(
+            doc="The SmoothedLine instance that this function is associated with.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "raw_func": AttrDef(
+            doc=(
                 "Numerical sampling function mapping one u_percent to a value "
                 "or a (value, metric) / (value, metric, payload_samples) / "
                 "(value, metric, payload_samples, payload_shared) tuple."
             ),
-            "validator": lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
-        },
-        "raw_u_samples": {
-            "doc": "Sampling locations in u_percent used to evaluate the numerical function.",
-            "validator": lambda v, d: SmoothedLineFunc._helper_validate_u_samples(v, name=d),
-        },
-        "raw_func_kwargs": {
-            "doc": "Extra keyword arguments passed to the numerical function during sampling.",
-            "validator": lambda v, d: SmoothedLineFunc._helper_validate_func_kwargs(v, name=d),
-        },
-        "state_is_follow_owner_opts": {
-            "doc": (
+            kind="raw",
+            validator=lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
+        ),
+        "raw_u_samples": AttrDef(
+            doc="Sampling locations in u_percent used to evaluate the numerical function.",
+            kind="raw",
+            validator=lambda v, d: SmoothedLineFunc._helper_validate_u_samples(v, name=d),
+        ),
+        "raw_func_kwargs": AttrDef(
+            doc="Extra keyword arguments passed to the numerical function during sampling.",
+            kind="raw",
+            validator=lambda v, d: SmoothedLineFunc._helper_validate_func_kwargs(v, name=d),
+        ),
+        "state_is_follow_owner_opts": AttrDef(
+            doc=(
                 "Whether owner opts changes should automatically refresh this "
                 "function before interpolation."
             ),
-            "validator": lambda v, d: as_bool(v, name=d),
-        },
-        "impl_owner_opts_snapshot": {
-            "doc": (
+            kind="state",
+            validator=lambda v, d: as_bool(v, name=d),
+        ),
+        "impl_owner_opts_snapshot": AttrDef(
+            doc=(
                 "Snapshot of owner opts and line-function mode at the time "
                 "this line function was last sampled."
             ),
-        },
-        "calc_values": {
-            "doc": "Values returned by the numerical function at each sampling location.",
-            "kind": "calc",
-        },
-        "calc_metrics": {
-            "doc": "Per-sample metrics returned by the numerical function, or None if unavailable.",
-            "kind": "calc",
-        },
-        "calc_payload_samples": {
-            "doc": "Per-sample payload objects returned by the numerical function, or None if unavailable.",
-            "kind": "calc",
-        },
-        "calc_payload_shared": {
-            "doc": "Shared payload returned for the full sampled function, or None if unavailable.",
-            "kind": "calc",
-        },
-        "entity_interpolator": {
-            "doc": "Interpolator object built from the sampled values.",
-            "kind": "entity",
-        },
+            kind="impl",
+        ),
+        "calc_values": AttrDef(
+            doc="Values returned by the numerical function at each sampling location.",
+            kind="calc",
+        ),
+        "calc_metrics": AttrDef(
+            doc="Per-sample metrics returned by the numerical function, or None if unavailable.",
+            kind="calc",
+        ),
+        "calc_payload_samples": AttrDef(
+            doc="Per-sample payload objects returned by the numerical function, or None if unavailable.",
+            kind="calc",
+        ),
+        "calc_payload_shared": AttrDef(
+            doc="Shared payload returned for the full sampled function, or None if unavailable.",
+            kind="calc",
+        ),
+        "entity_interpolator": AttrDef(
+            doc="Interpolator object built from the sampled values.",
+            kind="entity",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 
@@ -1047,7 +1043,7 @@ class SmoothedLineFunc(ClassBase):
         """Normalize user-facing u-sample endpoint duplication for wrap mode."""
         u_samples = self._helper_validate_u_samples(
             u_samples,
-            name=type(self).__attr_defs__["raw_u_samples"]["doc"],
+            name=type(self).__attr_defs__["raw_u_samples"].doc,
         )
         if mode == "wrap" and len(u_samples) >= 2:
             if np.isclose(u_samples[0], 0.0) and np.isclose(u_samples[-1], 100.0):
@@ -1080,33 +1076,33 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(
             self,
             "raw_func",
-            type(self).__attr_defs__["raw_func"]["validator"](
+            type(self).__attr_defs__["raw_func"].validator(
                 func,
-                type(self).__attr_defs__["raw_func"]["doc"],
+                type(self).__attr_defs__["raw_func"].doc,
             ),
         )
         object.__setattr__(
             self,
             "raw_u_samples",
-            type(self).__attr_defs__["raw_u_samples"]["validator"](
+            type(self).__attr_defs__["raw_u_samples"].validator(
                 u_samples,
-                type(self).__attr_defs__["raw_u_samples"]["doc"],
+                type(self).__attr_defs__["raw_u_samples"].doc,
             ),
         )
         object.__setattr__(
             self,
             "raw_func_kwargs",
-            type(self).__attr_defs__["raw_func_kwargs"]["validator"](
+            type(self).__attr_defs__["raw_func_kwargs"].validator(
                 func_kwargs,
-                type(self).__attr_defs__["raw_func_kwargs"]["doc"],
+                type(self).__attr_defs__["raw_func_kwargs"].doc,
             ),
         )
         object.__setattr__(
             self,
             "state_is_follow_owner_opts",
-            type(self).__attr_defs__["state_is_follow_owner_opts"]["validator"](
+            type(self).__attr_defs__["state_is_follow_owner_opts"].validator(
                 is_follow_owner_opts,
-                type(self).__attr_defs__["state_is_follow_owner_opts"]["doc"],
+                type(self).__attr_defs__["state_is_follow_owner_opts"].doc,
             ),
         )
         object.__setattr__(self, "impl_owner_opts_snapshot", None)
@@ -1124,16 +1120,17 @@ class SmoothedLineFunc(ClassBase):
     # changes immediately rebuild sampled values and the dependent interpolator.
     # ==================================================
     def __setattr__(self, key, value):
+        attr_defs = type(self).__attr_defs__
         try:
-            attr_info_map = object.__getattribute__(self, "impl_attrs")
+            object.__getattribute__(self, "impl_assign_state")
         except AttributeError:
             super().__setattr__(key, value)
             return
 
         target_key = key
-        if target_key not in attr_info_map:
+        if target_key not in attr_defs and target_key not in self.impl_extra:
             raw_key = f"raw_{key}"
-            if raw_key in attr_info_map:
+            if raw_key in attr_defs:
                 target_key = raw_key
 
         super().__setattr__(key, value)
@@ -1254,9 +1251,9 @@ class SmoothedLineFunc(ClassBase):
             object.__setattr__(
                 self,
                 "raw_func",
-                type(self).__attr_defs__["raw_func"]["validator"](
+                type(self).__attr_defs__["raw_func"].validator(
                     func,
-                    type(self).__attr_defs__["raw_func"]["doc"],
+                    type(self).__attr_defs__["raw_func"].doc,
                 ),
             )
         if func_kwargs is not None:
@@ -1265,7 +1262,7 @@ class SmoothedLineFunc(ClassBase):
                 "raw_func_kwargs",
                 self._helper_validate_func_kwargs(
                     func_kwargs,
-                    name=type(self).__attr_defs__["raw_func_kwargs"]["doc"],
+                    name=type(self).__attr_defs__["raw_func_kwargs"].doc,
                 ),
             )
 

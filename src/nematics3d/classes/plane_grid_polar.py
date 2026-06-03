@@ -12,6 +12,7 @@ from nematics3d.general import select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
+from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
 from .opts import cover_value
 
@@ -110,63 +111,64 @@ class PlaneGridPolar(HostBase):
     bindings.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(HostBase.__attr_defs__),
-        "entity_grid": {
-            "doc": (
+    __attr_defs__ = {
+        "entity_grid": AttrDef(
+            doc=(
                 "Selected physical-space 3D polar grid points after optional "
                 "bounds filtering (array of shape N x 3)."
             ),
-        },
-        "entity_grid_all": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_grid_all": AttrDef(
+            doc=(
                 "Complete physical-space 3D polar grid points before filtering, stored as an "
                 "array of shape (N, 3)."
             ),
-        },
-        "entity_polar": {
-            "doc": "The polar coordinates (r, theta) of every point in the full grid.",
-        },
-        "calc_ring_offsets": {
-            "doc": "Cumulative offsets defining the start/end indices of each polar ring.",
-        },
-        "calc_box_mask": {
-            "doc": "Boolean mask selecting the grid points kept after optional bounds filtering.",
-        },
-        "impl_name_bounds_sync": {
-            "doc": "Internal sync-task name used to react to bounds geometry updates.",
-        },
-        "impl_is_bounds_enabled": {
-            "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
-        },
-        "impl_is_warn_orthogonal": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_polar": AttrDef(
+            doc="The polar coordinates (r, theta) of every point in the full grid.",
+            kind="entity",
+        ),
+        "calc_ring_offsets": AttrDef(
+            doc="Cumulative offsets defining the start/end indices of each polar ring.",
+            kind="calc",
+        ),
+        "calc_box_mask": AttrDef(
+            doc="Boolean mask selecting the grid points kept after optional bounds filtering.",
+            kind="calc",
+        ),
+        "impl_name_bounds_sync": AttrDef(
+            doc="Internal sync-task name used to react to bounds geometry updates.",
+            kind="impl",
+        ),
+        "impl_is_bounds_enabled": AttrDef(
+            doc="Internal runtime switch controlling whether the bound bounds is applied.",
+            kind="impl",
+        ),
+        "impl_is_warn_orthogonal": AttrDef(
+            doc=(
                 "Internal runtime switch controlling whether automatic axis "
                 "orthogonalization emits warnings."
             ),
-        },
-        "field": {
-            "doc": "The interpolated field object attached to this polar plane grid.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "bounds": {
-            "doc": "The Bounds instance limiting this polar plane grid.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+            kind="impl",
+        ),
+        "field": AttrDef(
+            doc="The interpolated field object attached to this polar plane grid.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "bounds": AttrDef(
+            doc="The Bounds instance limiting this polar plane grid.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in HostBase.__slots__
     )
 

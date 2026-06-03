@@ -149,7 +149,7 @@ from ..general import blue_red_in_white_bg, sample_far
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 
 
 @dataclass(slots=True)
@@ -306,145 +306,131 @@ class QFieldObject(ClassBase):
     """
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this Q tensor object.",
-        },
-        "raw_Q": {
-            "doc": (
+    __attr_defs__: ClassVar = {
+        "raw_Q": AttrDef(
+            doc=(
                 "Raw Q-tensor field on lattice. Typically QField5 or QField9 "
                 "(shape: (Nx, Ny, Nz, ...))."
             ),
-        },
-        "raw_S": {
-            "doc": "Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
-        },
-        "raw_n": {
-            "doc": "Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
-        },
-        "raw_box_periodic_flag": {
-            "doc": "Per-dimension periodic boundary condition flags (bool array-like of length 3).",
-        },
-        "raw_grid_offset": {
-            "doc": (
+            kind="raw",
+        ),
+        "raw_S": AttrDef(
+            doc="Raw scalar order parameter field S on lattice (shape: (Nx, Ny, Nz)).",
+            kind="raw",
+        ),
+        "raw_n": AttrDef(
+            doc="Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
+            kind="raw",
+        ),
+        "raw_box_periodic_flag": AttrDef(
+            doc="Per-dimension periodic boundary condition flags (bool array-like of length 3).",
+            kind="raw",
+        ),
+        "raw_grid_offset": AttrDef(
+            doc=(
                 "A 3D vector, as the grid translation offset mapping lattice "
                 "indices -> real-space coordinates."
             ),
-        },
-        "raw_grid_transform": {
-            "doc": (
+            kind="raw",
+        ),
+        "raw_grid_transform": AttrDef(
+            doc=(
                 "A 3x3 tensor, as the linear transform mapping lattice "
                 "indices -> real-space coordinates"
             ),
-        },
-        "default_miminum_line_length_smooth": {
-            "doc": "Default minimum line length (#points) required to apply smoothing.",
-            "kind": "default",
-        },
-        "default_smooth_window_length": {
-            "doc": "Default smoothing window length (#points) used when not specified.",
-            "kind": "default",
-        },
-        "default_miminum_line_length_visual": {
-            "doc": "Default minimum line length (#points) required for visualization.",
-            "kind": "default",
-        },
-        "calc_grid_index": {
-            "doc": "Lattice coordinate grid in index space (before applying transform/offset).",
-            "kind": "property",
-        },
-        "calc_grid": {
-            "doc": "Coordinate grid in real space after applying grid_transform and grid_offset.",
-            "kind": "property",
-        },
-        "calc_corners_index": {
-            "doc": "Box corners in lattice-index space.",
-            "kind": "property",
-        },
-        "calc_corners": {
-            "doc": "Box corners in real-space coordinates.",
-            "kind": "property",
-        },
-        "calc_bounds": {
-            "doc": "Bounds object describing the Q-field box in real-space coordinates.",
-            "kind": "property",
-        },
-        "calc_box_size_periodic_index": {
-            "doc": (
+            kind="raw",
+        ),
+        "default_miminum_line_length_smooth": AttrDef(
+            doc="Default minimum line length (#points) required to apply smoothing.",
+            kind="default",
+        ),
+        "default_smooth_window_length": AttrDef(
+            doc="Default smoothing window length (#points) used when not specified.",
+            kind="default",
+        ),
+        "default_miminum_line_length_visual": AttrDef(
+            doc="Default minimum line length (#points) required for visualization.",
+            kind="default",
+        ),
+        "calc_grid_index": AttrDef(
+            doc="Lattice coordinate grid in index space (before applying transform/offset).",
+            kind="property",
+        ),
+        "calc_grid": AttrDef(
+            doc="Coordinate grid in real space after applying grid_transform and grid_offset.",
+            kind="property",
+        ),
+        "calc_corners_index": AttrDef(
+            doc="Box corners in lattice-index space.",
+            kind="property",
+        ),
+        "calc_corners": AttrDef(
+            doc="Box corners in real-space coordinates.",
+            kind="property",
+        ),
+        "calc_bounds": AttrDef(
+            doc="Bounds object describing the Q-field box in real-space coordinates.",
+            kind="property",
+        ),
+        "calc_box_size_periodic_index": AttrDef(
+            doc=(
                 "Effective periodic box size in index units. "
                 "For periodic dims equals grid size, otherwise inf."
             ),
-            "kind": "property",
-        },
-        "calc_defect_indices": {
-            "doc": "Indices (lattice coordinates) of detected defect points.",
-            "kind": "calc",
-        },
-        "calc_defect_grid": {
-            "doc": "Real-space coordinates of detected defect points.",
-            "kind": "calc",
-        },
-        "dataset": {
-            "doc": "Shared-grid dataset that owns the canonical raw Q field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "field": {
-            "doc": "Dataset-owned FieldData entry storing the canonical raw Q values.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "figures": {
-            "doc": "FigureManager object that manages PlotFigure objects created for this Q field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "objects": {
-            "doc": "RegistryBase object that manages physical objects related to this Q field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "interpolator": {
-            "doc": "The grid interpolator object associated with this Q field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "lines": {
-            "doc": "Read-only: Classified disclination lines.",
-            "kind": "property",
-        },
-        "figs": {
-            "doc": "Read-only: Visualization figures. Alias of `figures`.",
-            "kind": "property",
-        },
-        "objs": {
-            "doc": "Read-only: Physical objects. Alias of `objects`.",
-            "kind": "property",
-        },
+            kind="property",
+        ),
+        "calc_defect_indices": AttrDef(
+            doc="Indices (lattice coordinates) of detected defect points.",
+            kind="calc",
+        ),
+        "calc_defect_grid": AttrDef(
+            doc="Real-space coordinates of detected defect points.",
+            kind="calc",
+        ),
+        "dataset": AttrDef(
+            doc="Shared-grid dataset that owns the canonical raw Q field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "field": AttrDef(
+            doc="Dataset-owned FieldData entry storing the canonical raw Q values.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "figures": AttrDef(
+            doc="FigureManager object that manages PlotFigure objects created for this Q field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "objects": AttrDef(
+            doc="RegistryBase object that manages physical objects related to this Q field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "interpolator": AttrDef(
+            doc="The grid interpolator object associated with this Q field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "lines": AttrDef(
+            doc="Read-only: Classified disclination lines.",
+            kind="property",
+        ),
+        "figs": AttrDef(
+            doc="Read-only: Visualization figures. Alias of `figures`.",
+            kind="property",
+        ),
+        "objs": AttrDef(
+            doc="Read-only: Physical objects. Alias of `objects`.",
+            kind="property",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 

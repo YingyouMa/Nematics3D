@@ -1,10 +1,10 @@
 """Plane-based interpolation results built on physical-space PlaneGrid samplers."""
 
-from typing import Any, ClassVar, Mapping
+from typing import Any, Mapping
 import numpy as np
 
 
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 from .grid_field import GridInterpolator
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
@@ -31,42 +31,31 @@ class InterpolatePlane(ClassBase):
     settings.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this plane object.",
-        },
-        "calc_result": {
-            "doc": "The interpolated physics values sampled on the current plane grid.",
-            "kind": "calc",
-        },
-        "grid": {
-            "doc": "The plane grid associated with this interpolated field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "interpolator": {
-            "doc": "The grid interpolator object used to sample this plane.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "result": {
-            "doc": "Read-only: Alias of `calc_result`.",
-            "kind": "property",
-        },
+    __attr_defs__ = {
+        "calc_result": AttrDef(
+            doc="The interpolated physics values sampled on the current plane grid.",
+            kind="calc",
+        ),
+        "grid": AttrDef(
+            doc="The plane grid associated with this interpolated field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "interpolator": AttrDef(
+            doc="The grid interpolator object used to sample this plane.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "result": AttrDef(
+            doc="Read-only: Alias of `calc_result`.",
+            kind="property",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property")
         and name not in ClassBase.__slots__
     )
 

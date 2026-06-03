@@ -1,6 +1,7 @@
 from nematics3d.datatypes import as_bool, as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
+from ..class_base import AttrDef
 from ..registry_base import RegistryBase
 
 
@@ -34,21 +35,20 @@ class FigureManager(RegistryBase):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(RegistryBase.__attr_defs__),
-        "state_active_name": {
-            "doc":                "Current active figure name.",
-            "validator":          lambda v, d: None if v is None else as_str(v, name=d),
-            "is_public_settable": True,
-            "is_protected":       False,
-        },
-        "active_name": {
-            "doc":  "Read-only: The name of the current active figure.",
-            "kind": "property",
-        },
-        "active_fig": {
-            "doc":  "Read-only: The current active PlotFigure instance.",
-            "kind": "property",
-        },
+        "state_active_name": AttrDef(
+            doc="Current active figure name.",
+            kind="state",
+            validator=lambda v, d: None if v is None else as_str(v, name=d),
+            is_public_settable=True,
+        ),
+        "active_name": AttrDef(
+            doc="Read-only: The name of the current active figure.",
+            kind="property",
+        ),
+        "active_fig": AttrDef(
+            doc="Read-only: The current active PlotFigure instance.",
+            kind="property",
+        ),
     }
     # fmt: on
 

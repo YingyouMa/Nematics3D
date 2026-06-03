@@ -23,7 +23,7 @@ from nematics3d.grid import (
     as_readonly_grid_transform,
 )
 
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 from .bounds import as_bounds
 from .grid_field.input_grid_field import InputGridField, as_grid_shape
 from .registry_base import RegistryBase
@@ -37,43 +37,37 @@ def _as_contour_level(value, *, name: str) -> float:
 class ContourSurface(ClassBase):
     """One contour surface bound to one contour level."""
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this contour surface.",
-        },
-        "raw_level": {
-            "doc": "Contour value represented by this contour surface.",
-            "validator": lambda v, d: _as_contour_level(v, name=d),
-        },
-        "calc_surface_index": {
-            "doc": "Index of this contour surface inside its owner contour set.",
-            "kind": "calc",
-        },
-        "entity_mesh_cache": {
-            "doc": "Cached extracted contour mesh stored as PyVista PolyData.",
-            "kind": "entity",
-        },
-        "visual": {
-            "doc": "The one-to-one contour visual currently associated with this surface.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "impl_sync_func": {
-            "doc": "Internal sync callbacks triggered after contour mesh updates.",
-        },
-        "mesh": {
-            "doc": "Read-only: extracted contour mesh, if already cached.",
-            "kind": "property",
-        },
-        "is_extracted": {
-            "doc": "Read-only: whether this contour surface already has a cached mesh.",
-            "kind": "property",
-        },
+    __attr_defs__: ClassVar = {
+        "raw_level": AttrDef(
+            doc="Contour value represented by this contour surface.",
+            kind="raw",
+            validator=lambda v, d: _as_contour_level(v, name=d),
+        ),
+        "calc_surface_index": AttrDef(
+            doc="Index of this contour surface inside its owner contour set.",
+            kind="calc",
+        ),
+        "entity_mesh_cache": AttrDef(
+            doc="Cached extracted contour mesh stored as PyVista PolyData.",
+            kind="entity",
+        ),
+        "visual": AttrDef(
+            doc="The one-to-one contour visual currently associated with this surface.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "impl_sync_func": AttrDef(
+            doc="Internal sync callbacks triggered after contour mesh updates.",
+            kind="impl",
+        ),
+        "mesh": AttrDef(
+            doc="Read-only: extracted contour mesh, if already cached.",
+            kind="property",
+        ),
+        "is_extracted": AttrDef(
+            doc="Read-only: whether this contour surface already has a cached mesh.",
+            kind="property",
+        ),
     }
 
     __slots__ = (
@@ -99,9 +93,9 @@ class ContourSurface(ClassBase):
         object.__setattr__(
             self,
             "raw_level",
-            self.impl_attrs["raw_level"]["validator"](
+            type(self).__attr_defs__["raw_level"].validator(
                 level,
-                self.impl_attrs["raw_level"]["doc"],
+                type(self).__attr_defs__["raw_level"].doc,
             ),
         )
         object.__setattr__(self, "calc_surface_index", int(surface_index))
@@ -171,9 +165,9 @@ class ContourSurface(ClassBase):
 
     def act_set_level(self, level: float) -> float:
         """Update the contour level and immediately refresh the cached mesh."""
-        level_value = self.impl_attrs["raw_level"]["validator"](
+        level_value = type(self).__attr_defs__["raw_level"].validator(
             level,
-            self.impl_attrs["raw_level"]["doc"],
+            type(self).__attr_defs__["raw_level"].doc,
         )
         object.__setattr__(self, "raw_level", level_value)
         owner = self.owner
@@ -274,57 +268,53 @@ class ContourSurface(ClassBase):
 class ContourSurfaceSet(ClassBase):
     """Validated host for one scalar field and its per-level contour surfaces."""
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this contour-surface set.",
-        },
-        "raw_values": {
-            "doc": "Validated 3D scalar field values with shape (Nx, Ny, Nz).",
-        },
-        "impl_init_levels": {
-            "doc": "Initialization-time contour levels recorded for reference.",
-        },
-        "raw_box_periodic_flag": {
-            "doc": "Periodic-boundary-condition flags for the source grid.",
-        },
-        "raw_grid_offset": {
-            "doc": "Grid translation offset mapping lattice indices into real space.",
-        },
-        "raw_grid_transform": {
-            "doc": "Grid transform matrix mapping lattice indices into real space.",
-        },
-        "bounds": {
-            "doc": "Optional shared bounds used as the default clipping context for contour visuals.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "impl_visual_default": {
-            "doc": "Stored default visual option overrides used when contour plots are created.",
-        },
-        "impl_plot_opts_defaults_override": {
-            "doc": "Stored default opts-default overrides forwarded to contour plot creation.",
-        },
-        "surface_registry": {
-            "doc": "Registry storing the contour surfaces owned by this set.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "surfaces": {
-            "doc": "Read-only: contour surfaces owned by this set in level order.",
-            "kind": "property",
-        },
-        "calc_levels": {
-            "doc": "Read-only: current contour levels in the current surface order.",
-            "kind": "property",
-        },
+    __attr_defs__: ClassVar = {
+        "raw_values": AttrDef(
+            doc="Validated 3D scalar field values with shape (Nx, Ny, Nz).",
+            kind="raw",
+        ),
+        "impl_init_levels": AttrDef(
+            doc="Initialization-time contour levels recorded for reference.",
+            kind="impl",
+        ),
+        "raw_box_periodic_flag": AttrDef(
+            doc="Periodic-boundary-condition flags for the source grid.",
+            kind="raw",
+        ),
+        "raw_grid_offset": AttrDef(
+            doc="Grid translation offset mapping lattice indices into real space.",
+            kind="raw",
+        ),
+        "raw_grid_transform": AttrDef(
+            doc="Grid transform matrix mapping lattice indices into real space.",
+            kind="raw",
+        ),
+        "bounds": AttrDef(
+            doc="Optional shared bounds used as the default clipping context for contour visuals.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "impl_visual_default": AttrDef(
+            doc="Stored default visual option overrides used when contour plots are created.",
+            kind="impl",
+        ),
+        "impl_plot_opts_defaults_override": AttrDef(
+            doc="Stored default opts-default overrides forwarded to contour plot creation.",
+            kind="impl",
+        ),
+        "surface_registry": AttrDef(
+            doc="Registry storing the contour surfaces owned by this set.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "surfaces": AttrDef(
+            doc="Read-only: contour surfaces owned by this set in level order.",
+            kind="property",
+        ),
+        "calc_levels": AttrDef(
+            doc="Read-only: current contour levels in the current surface order.",
+            kind="property",
+        ),
     }
 
     __slots__ = (

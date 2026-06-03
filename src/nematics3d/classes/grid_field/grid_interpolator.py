@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Mapping
+from typing import ClassVar
 
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from nematics3d.datatypes import as_points
 from nematics3d.grid import apply_linear_transform
-from ..class_base import ClassBase
+from ..class_base import AttrDef, ClassBase
 from ...logging_decorator import logging_and_warning_decorator
 
 
@@ -23,23 +23,18 @@ class GridInterpolator(ClassBase):
     """
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this shared-grid interpolator.",
-        },
-        "entity_backend": {
-            "doc": "The scipy RegularGridInterpolator backend used to evaluate field values.",
-            "kind": "entity",
-        },
+    __attr_defs__: ClassVar = {
+        "entity_backend": AttrDef(
+            doc="The scipy RegularGridInterpolator backend used to evaluate field values.",
+            kind="entity",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, replace
-from typing import Any, ClassVar, Mapping
+from typing import ClassVar
 
 import numpy as np
 
@@ -14,7 +14,7 @@ from nematics3d.datatypes import (
 )
 
 from ..bounds import as_bounds
-from ..class_base import ClassBase
+from ..class_base import AttrDef, ClassBase
 from ..registry_base import RegistryBase
 from ...grid import (
     apply_linear_transform,
@@ -32,30 +32,27 @@ class FieldData(ClassBase):
     """Thin wrapper for one physical field living on a GridFieldDataset."""
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this grid field.",
-        },
-        "raw_values": {
-            "doc": "Field values with leading axes matching the dataset grid.",
-            "validator": as_real_lattice_field,
-        },
-        "raw_info": {
-            "doc": "Optional user-provided metadata or provenance for this field.",
-        },
-        "interpolator": {
-            "doc": "The generic interpolator associated with this field.",
-            "kind": "entity",
-        },
+    __attr_defs__: ClassVar = {
+        "raw_values": AttrDef(
+            doc="Field values with leading axes matching the dataset grid.",
+            kind="raw",
+            validator=as_real_lattice_field,
+        ),
+        "raw_info": AttrDef(
+            doc="Optional user-provided metadata or provenance for this field.",
+            kind="raw",
+        ),
+        "entity_interpolator": AttrDef(
+            doc="The generic interpolator associated with this field.",
+            kind="entity",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 
@@ -65,27 +62,27 @@ class FieldData(ClassBase):
         values,
         info=None,
     ):
-        values = self.__attr_defs__["raw_values"]["validator"](
+        values = type(self).__attr_defs__["raw_values"].validator(
             values,
-            self.__attr_defs__["raw_values"]["doc"],
+            type(self).__attr_defs__["raw_values"].doc,
         )
 
         super().__init__(name=name, name_replace="field", is_fixed=True)
         object.__setattr__(self, "raw_values", values)
         object.__setattr__(self, "raw_info", info)
-        object.__setattr__(self, "interpolator", None)
+        object.__setattr__(self, "entity_interpolator", None)
 
     def act_add_interpolator(self):
         """Create and bind a GridInterpolator if one is not already present."""
         from .grid_interpolator import GridInterpolator
 
-        interpolator_old = self.interpolator
+        interpolator_old = self.entity_interpolator
         if isinstance(interpolator_old, GridInterpolator):
             return interpolator_old
 
         interpolator = GridInterpolator(self, name=f"{self.name} interpolator")
-        object.__setattr__(self, "interpolator", interpolator)
-        return self.interpolator
+        object.__setattr__(self, "entity_interpolator", interpolator)
+        return self.entity_interpolator
 
     def act_interpolate(
         self,
@@ -94,9 +91,9 @@ class FieldData(ClassBase):
         is_out_warning: bool = False,
     ):
         """Interpolate this field at arbitrary sample points."""
-        if self.interpolator is None:
+        if self.entity_interpolator is None:
             self.act_add_interpolator()
-        return self.interpolator.interpolate(
+        return self.entity_interpolator.interpolate(
             points,
             is_index=is_index,
             is_out_warning=is_out_warning,
@@ -107,77 +104,73 @@ class GridFieldDataset(ClassBase):
     """Container for physical fields sharing one lattice and boundary model."""
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this shared-grid field dataset.",
-        },
-        "raw_shape": {
-            "doc": "Shared lattice grid shape (Nx, Ny, Nz), or UNSET before inference.",
-        },
-        "raw_box_periodic_flag": {
-            "doc": "Per-dimension periodic boundary condition flags.",
-        },
-        "raw_grid_offset": {
-            "doc": "Grid translation offset mapping lattice indices to real space.",
-        },
-        "raw_grid_transform": {
-            "doc": "Linear transform mapping lattice indices to real space.",
-        },
-        "calc_grid_index": {
-            "doc": "Lattice coordinate grid in index space.",
-            "kind": "calc",
-        },
-        "calc_grid": {
-            "doc": "Coordinate grid in real space after transform and offset.",
-            "kind": "calc",
-        },
-        "calc_corners_index": {
-            "doc": "Box corners in lattice-index space.",
-            "kind": "calc",
-        },
-        "calc_corners": {
-            "doc": "Box corners in real-space coordinates.",
-            "kind": "calc",
-        },
-        "calc_bounds": {
-            "doc": "Bounds object describing the dataset box in real-space coordinates.",
-            "kind": "calc",
-        },
-        "calc_grid_spacing": {
-            "doc": "Real-space spacing along each lattice axis.",
-            "kind": "calc",
-        },
-        "calc_center": {
-            "doc": (
+    __attr_defs__: ClassVar = {
+        "raw_shape": AttrDef(
+            doc="Shared lattice grid shape (Nx, Ny, Nz), or UNSET before inference.",
+            kind="raw",
+        ),
+        "raw_box_periodic_flag": AttrDef(
+            doc="Per-dimension periodic boundary condition flags.",
+            kind="raw",
+        ),
+        "raw_grid_offset": AttrDef(
+            doc="Grid translation offset mapping lattice indices to real space.",
+            kind="raw",
+        ),
+        "raw_grid_transform": AttrDef(
+            doc="Linear transform mapping lattice indices to real space.",
+            kind="raw",
+        ),
+        "calc_grid_index": AttrDef(
+            doc="Lattice coordinate grid in index space.",
+            kind="calc",
+        ),
+        "calc_grid": AttrDef(
+            doc="Coordinate grid in real space after transform and offset.",
+            kind="calc",
+        ),
+        "calc_corners_index": AttrDef(
+            doc="Box corners in lattice-index space.",
+            kind="calc",
+        ),
+        "calc_corners": AttrDef(
+            doc="Box corners in real-space coordinates.",
+            kind="calc",
+        ),
+        "calc_bounds": AttrDef(
+            doc="Bounds object describing the dataset box in real-space coordinates.",
+            kind="calc",
+        ),
+        "calc_grid_spacing": AttrDef(
+            doc="Real-space spacing along each lattice axis.",
+            kind="calc",
+        ),
+        "calc_center": AttrDef(
+            doc=(
                 "Read-only: Geometric center of the dataset box in real-space "
                 "coordinates after the grid transform and offset."
             ),
-            "kind": "property",
-        },
-        "calc_box_size_periodic_index": {
-            "doc": (
+            kind="property",
+        ),
+        "calc_box_size_periodic_index": AttrDef(
+            doc=(
                 "Effective periodic box size in index units. "
                 "For periodic dims equals grid size, otherwise inf."
             ),
-            "kind": "calc",
-        },
-        "fields": {
-            "doc": "Registry of physical fields bound to this shared grid.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+            kind="calc",
+        ),
+        "fields": AttrDef(
+            doc="Registry of physical fields bound to this shared grid.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 

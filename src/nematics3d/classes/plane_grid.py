@@ -20,6 +20,7 @@ from nematics3d.grid import generate_fixed_step_grid, resolve_plane_physical_axe
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
+from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
 from .opts import cover_value
 from ..general import select_grid_in_box
@@ -137,97 +138,102 @@ class PlaneGrid(HostBase):
     bindings.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(HostBase.__attr_defs__),
-        "entity_grid": {
-            "doc": (
+    __attr_defs__ = {
+        "entity_grid": AttrDef(
+            doc=(
                 "Selected physical-space 3D grid points after optional "
                 "bounding-box filtering (array of shape N x 3)."
             ),
-        },
-        "entity_grid_all": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_grid_all": AttrDef(
+            doc=(
                 "Complete physical-space 3D grid points before filtering, reshaped as "
                 "(num1 x num2 x 3)."
             ),
-        },
-        "entity_grid_int": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_grid_int": AttrDef(
+            doc=(
                 "Integer lattice indices used as discrete sampling topology for "
                 "the 2D grid positions."
             ),
-        },
-        "calc_axis2": {
-            "doc": (
+            kind="entity",
+        ),
+        "calc_axis2": AttrDef(
+            doc=(
                 "The derived physical secondary in-plane axis perpendicular to both "
                 "axis1 and normal."
             ),
-        },
-        "calc_origin_grid0": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_origin_grid0": AttrDef(
+            doc=(
                 "Physical-space point corresponding to integer lattice index "
                 "[0, 0] after alignment handling."
             ),
-        },
-        "calc_box_mask": {
-            "doc": "Boolean mask selecting the grid points kept after optional bounds filtering.",
-        },
-        "calc_size": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_box_mask": AttrDef(
+            doc="Boolean mask selecting the grid points kept after optional bounds filtering.",
+            kind="calc",
+        ),
+        "calc_size": AttrDef(
+            doc=(
                 "The effective physical size along axis1 actually realized by the "
                 "discrete sampling grid. This may differ from opts.size because the "
                 "requested size is snapped down to a grid compatible with the fixed "
                 "spacing."
             ),
-        },
-        "calc_size_extra": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_size_extra": AttrDef(
+            doc=(
                 "The effective physical size along axis2 actually realized by the "
                 "discrete sampling grid. This may differ from opts.size_extra "
                 "(or opts.size when size_extra is omitted) because the requested "
                 "size is snapped down to a grid compatible with the fixed spacing."
             ),
-        },
-        "entity_fig_demo": {
-            "doc": (
+            kind="calc",
+        ),
+        "entity_fig_demo": AttrDef(
+            doc=(
                 "Diagnostic plot showing the generated 2D grid points, axes, "
                 "and normal vector for verification."
             ),
-        },
-        "impl_name_bounds_sync": {
-            "doc": "Internal sync-task name used to react to bounds geometry updates.",
-        },
-        "impl_is_bounds_enabled": {
-            "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
-        },
-        "impl_is_warn_orthogonal": {
-            "doc": (
+            kind="entity",
+        ),
+        "impl_name_bounds_sync": AttrDef(
+            doc="Internal sync-task name used to react to bounds geometry updates.",
+            kind="impl",
+        ),
+        "impl_is_bounds_enabled": AttrDef(
+            doc="Internal runtime switch controlling whether the bound bounds is applied.",
+            kind="impl",
+        ),
+        "impl_is_warn_orthogonal": AttrDef(
+            doc=(
                 "Internal runtime switch controlling whether automatic axis "
                 "orthogonalization emits warnings."
             ),
-        },
-        "field": {
-            "doc": "The interpolated field object attached to this plane grid.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "bounds": {
-            "doc": "The Bounds instance limiting this plane grid.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+            kind="impl",
+        ),
+        "field": AttrDef(
+            doc="The interpolated field object attached to this plane grid.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "bounds": AttrDef(
+            doc="The Bounds instance limiting this plane grid.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in HostBase.__slots__
     )
 

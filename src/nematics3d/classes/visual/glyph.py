@@ -28,6 +28,7 @@ from nematics3d.general import find_nearest_point, fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData, as_bounds
+from ..class_base import AttrDef
 from ..host_base import OptsBase, HostBase
 from .plot_figure import FigureData, as_plotfigure
 from .scalar_bar import ScalarBar
@@ -378,111 +379,119 @@ class PlotGlyph(HostBase):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(HostBase.__attr_defs__),
-        "raw_name": {
-            **dict(HostBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of the glyph.",
-        },
-        "raw_category": {
-            "doc": "The category of the glyph, used in the classification of PlotFigure.",
-            "validator": lambda v, d: as_str(v, name=d),
-        },
-        "raw_coords": {
-            "doc": "The N x 3 input coordinates of each glyph.",
-            "validator": lambda v, d: as_points(v, name=d),
-            "is_reapply_opts_after_raw": True,
-        },
-        "state_clip_mode": {
-            "doc": (
+        "raw_category": AttrDef(
+            doc="The category of the glyph, used in the classification of PlotFigure.",
+            kind="raw",
+            validator=lambda v, d: as_str(v, name=d),
+        ),
+        "raw_coords": AttrDef(
+            doc="The N x 3 input coordinates of each glyph.",
+            kind="raw",
+            validator=lambda v, d: as_points(v, name=d),
+            is_reapply_opts_after_raw=True,
+        ),
+        "state_clip_mode": AttrDef(
+            doc=(
                 "Clip strategy for bounds application. 'mesh' clips the built "
                 "mesh while 'center' clips the center representation before meshing."
             ),
-            "validator": lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
-            "is_reapply_opts_after_raw": True,
-        },
-        "state_is_clip_inside": {
-            "doc": (
+            kind="state",
+            validator=lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
+            is_reapply_opts_after_raw=True,
+        ),
+        "state_is_clip_inside": AttrDef(
+            doc=(
                 "Whether bounds clipping keeps the region inside the bounds "
                 "(True) or outside (False)."
             ),
-            "validator": lambda v, d: as_bool(v, name=d),
-            "is_reapply_opts_after_raw": True,
-        },
-        "state_is_silhouette": {
-            "doc": "Whether silhouette actors should be rebuilt during glyph updates.",
-            "validator": lambda v, d: as_bool(v, name=d),
-        },
-        "state_is_interactable": {
-            "doc": "Whether to create a control window when the instance is double right-clicked.",
-            "validator": lambda v, d: as_bool(v, name=d),
-        },
-        "calc_coords": {
-            "doc": (
+            kind="state",
+            validator=lambda v, d: as_bool(v, name=d),
+            is_reapply_opts_after_raw=True,
+        ),
+        "state_is_silhouette": AttrDef(
+            doc="Whether silhouette actors should be rebuilt during glyph updates.",
+            kind="state",
+            validator=lambda v, d: as_bool(v, name=d),
+        ),
+        "state_is_interactable": AttrDef(
+            doc="Whether to create a control window when the instance is double right-clicked.",
+            kind="state",
+            validator=lambda v, d: as_bool(v, name=d),
+        ),
+        "calc_coords": AttrDef(
+            doc=(
                 "The effective coordinates used for the current glyph build "
                 "after clip-mode preprocessing."
             ),
-        },
-        "calc_poly": {
-            "doc": "The generated PyVista PolyData.",
-        },
-        "calc_color": {
-            "doc": "The resolved per-point RGB color array of the glyph.",
-        },
-        "calc_opacity": {
-            "doc": "The resolved per-point opacity array of the glyph.",
-        },
-        "calc_radius": {
-            "doc": "The resolved per-point radius array used for glyph thickness.",
-        },
-        "calc_scalars": {
-            "doc": "The resolved per-point scalar array used for scalar coloring.",
-        },
-        "calc_is_empty": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_poly": AttrDef(
+            doc="The generated PyVista PolyData.",
+            kind="calc",
+        ),
+        "calc_color": AttrDef(
+            doc="The resolved per-point RGB color array of the glyph.",
+            kind="calc",
+        ),
+        "calc_opacity": AttrDef(
+            doc="The resolved per-point opacity array of the glyph.",
+            kind="calc",
+        ),
+        "calc_radius": AttrDef(
+            doc="The resolved per-point radius array used for glyph thickness.",
+            kind="calc",
+        ),
+        "calc_scalars": AttrDef(
+            doc="The resolved per-point scalar array used for scalar coloring.",
+            kind="calc",
+        ),
+        "calc_is_empty": AttrDef(
+            doc=(
                 "Whether the glyph currently has no drawable geometry and "
                 "should skip render-side updates."
             ),
-        },
-        "entity_actor": {
-            "doc": "The PyVista Actor corresponding to this object in the plotter.",
-        },
-        "entity_silhouette": {
-            "doc": "The PyVista Actor used as the silhouette highlight for this object.",
-        },
-        "fig": {
-            "doc": "The PlotFigure instance containing this glyph.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "bounds": {
-            "doc": "The Bounds instance clipping this glyph.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "impl_name_pv": {
-            "doc": "The unique identifier of this glyph stored in the PyVista plotter.",
-        },
-        "impl_is_bounds_enabled": {
-            "doc": "Internal runtime switch controlling whether the bound bounds is applied.",
-        },
-        "impl_interact_func": {
-            "doc": (
+            kind="calc",
+        ),
+        "entity_actor": AttrDef(
+            doc="The PyVista Actor corresponding to this object in the plotter.",
+            kind="entity",
+        ),
+        "entity_silhouette": AttrDef(
+            doc="The PyVista Actor used as the silhouette highlight for this object.",
+            kind="entity",
+        ),
+        "fig": AttrDef(
+            doc="The PlotFigure instance containing this glyph.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "bounds": AttrDef(
+            doc="The Bounds instance clipping this glyph.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "impl_name_pv": AttrDef(
+            doc="The unique identifier of this glyph stored in the PyVista plotter.",
+            kind="impl",
+        ),
+        "impl_is_bounds_enabled": AttrDef(
+            doc="Internal runtime switch controlling whether the bound bounds is applied.",
+            kind="impl",
+        ),
+        "impl_interact_func": AttrDef(
+            doc=(
                 "The function to trigger the control window when the "
                 "instance is double right-clicked."
             ),
-        },
+            kind="impl",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
 
     _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
@@ -522,9 +531,9 @@ class PlotGlyph(HostBase):
         **kwargs,
     ):
 
-        coords = type(self).__attr_defs__["raw_coords"]["validator"](
+        coords = type(self).__attr_defs__["raw_coords"].validator(
             coords,
-            type(self).__attr_defs__["raw_coords"]["doc"],
+            type(self).__attr_defs__["raw_coords"].doc,
         )
         object.__setattr__(self, "raw_coords", coords)
         if len(coords) == 0:
@@ -532,20 +541,20 @@ class PlotGlyph(HostBase):
                 f"{type(self).__name__} received empty coords with shape {coords.shape}; "
                 "it will initialize as an empty glyph until coordinates are provided."
             )
-        clip_mode = type(self).__attr_defs__["state_clip_mode"]["validator"](
+        clip_mode = type(self).__attr_defs__["state_clip_mode"].validator(
             clip_mode,
-            type(self).__attr_defs__["state_clip_mode"]["doc"],
+            type(self).__attr_defs__["state_clip_mode"].doc,
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
-        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"]["validator"](
+        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"].validator(
             is_clip_inside,
-            type(self).__attr_defs__["state_is_clip_inside"]["doc"],
+            type(self).__attr_defs__["state_is_clip_inside"].doc,
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "calc_coords", coords.copy())
-        category = type(self).__attr_defs__["raw_category"]["validator"](
+        category = type(self).__attr_defs__["raw_category"].validator(
             category,
-            type(self).__attr_defs__["raw_category"]["doc"],
+            type(self).__attr_defs__["raw_category"].doc,
         )
         object.__setattr__(self, "raw_category", category)
         if name is None:
@@ -553,7 +562,7 @@ class PlotGlyph(HostBase):
         else:
             name = as_str(
                 name,
-                name=type(self).__attr_defs__["raw_name"]["doc"],
+                name=type(self).__attr_defs__["raw_name"].doc,
                 replace=name_replace,
             )
         object.__setattr__(self, "state_is_silhouette", True)

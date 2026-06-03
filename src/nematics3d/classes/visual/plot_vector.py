@@ -14,6 +14,8 @@ from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
+from ..class_base import AttrDef
+from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from .plot_figure import FigureData
 
@@ -136,46 +138,56 @@ class PlotVector(PlotGlyph):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "raw_orient": {
-            "doc":                       "The orientation vectors of plotted vectors.",
-            "validator":                 lambda v, d: as_points(v, name=d),
-            "is_reapply_opts_after_raw": True,
-        },
-        "calc_length": {
-            "doc": "The resolved per-vector total display length array.",
-        },
-        "calc_shaft_length": {
-            "doc": "The resolved per-vector shaft length array.",
-        },
-        "calc_tip_length": {
-            "doc": "The resolved per-vector tip length array derived from length.",
-        },
-        "calc_tip_radius": {
-            "doc": "The resolved per-vector tip radius array derived from radius.",
-        },
-        "calc_orient_unit": {
-            "doc": "The unit direction vectors used for plotting vector geometry.",
-        },
-        "calc_tail": {
-            "doc": "The resolved per-vector tail coordinates.",
-        },
-        "calc_shaft_end": {
-            "doc": "The resolved per-vector shaft-end coordinates.",
-        },
-        "calc_tip_end": {
-            "doc": "The resolved per-vector tip-end coordinates.",
-        },
-        "calc_keep_index": {
-            "doc": "Indices of raw vector anchors kept after center-based point filtering.",
-        },
+        "raw_orient": AttrDef(
+            doc="The orientation vectors of plotted vectors.",
+            kind="raw",
+            validator=lambda v, d: as_points(v, name=d),
+            is_reapply_opts_after_raw=True,
+        ),
+        "calc_length": AttrDef(
+            doc="The resolved per-vector total display length array.",
+            kind="calc",
+        ),
+        "calc_shaft_length": AttrDef(
+            doc="The resolved per-vector shaft length array.",
+            kind="calc",
+        ),
+        "calc_tip_length": AttrDef(
+            doc="The resolved per-vector tip length array derived from length.",
+            kind="calc",
+        ),
+        "calc_tip_radius": AttrDef(
+            doc="The resolved per-vector tip radius array derived from radius.",
+            kind="calc",
+        ),
+        "calc_orient_unit": AttrDef(
+            doc="The unit direction vectors used for plotting vector geometry.",
+            kind="calc",
+        ),
+        "calc_tail": AttrDef(
+            doc="The resolved per-vector tail coordinates.",
+            kind="calc",
+        ),
+        "calc_shaft_end": AttrDef(
+            doc="The resolved per-vector shaft-end coordinates.",
+            kind="calc",
+        ),
+        "calc_tip_end": AttrDef(
+            doc="The resolved per-vector tip-end coordinates.",
+            kind="calc",
+        ),
+        "calc_keep_index": AttrDef(
+            doc="Indices of raw vector anchors kept after center-based point filtering.",
+            kind="calc",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
 
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
@@ -207,9 +219,9 @@ class PlotVector(PlotGlyph):
         **kwargs,
     ):
 
-        orient = type(self).__attr_defs__["raw_orient"]["validator"](
+        orient = type(self).__attr_defs__["raw_orient"].validator(
             orient,
-            type(self).__attr_defs__["raw_orient"]["doc"],
+            type(self).__attr_defs__["raw_orient"].doc,
         )
         object.__setattr__(self, "raw_orient", orient)
 

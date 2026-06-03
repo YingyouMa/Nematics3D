@@ -23,6 +23,7 @@ from nematics3d.datatypes import (
 )
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
+from ..class_base import AttrDef
 from ..host_base import HostBase, OptsBase
 from ..opts import cover_value
 from ..registry_base import RegistryBase
@@ -175,126 +176,126 @@ class PlotFigure(HostBase):
     _DEFAULT_NAME = "unnamed figure"
 
     __attr_defs__ = {
-        **(HostBase.__attr_defs__),
-        # -----------------
-        # Public identity
-        # -----------------
-        "raw_name": {
-            "doc": (
-                "Human-readable identifier of the figure. "
-                "Used as the window title for BackgroundPlotter."
-            ),
-        },
         # -----------------
         # Core plot backend
         # -----------------
-        "entity_plotter": {
-            "doc": (
+        "entity_plotter": AttrDef(
+            doc=(
                 "The underlying plotting backend. "
                 "Either a pyvista.Plotter or a pyvistaqt.BackgroundPlotter instance."
             ),
-        },
+            kind="entity",
+        ),
         # -----------------
         # Attached entities
         # -----------------
-        "entity_pick_manager": {
-            "doc": (
+        "entity_pick_manager": AttrDef(
+            doc=(
                 "The PickManager instance associated with this figure. "
                 "Available only in interactive (on-screen) sessions."
             ),
-        },
-        "entity_console": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_console": AttrDef(
+            doc=(
                 "The ScopedConsoleDock attached to the Qt main window. "
                 "Available only in interactive (on-screen) sessions."
             ),
-        },
-        "entity_scalar_bars": {
-            "doc": "RegistryBase instance managing scalar bars attached to this figure.",
-        },
-        "entity_interacts": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_scalar_bars": AttrDef(
+            doc="RegistryBase instance managing scalar bars attached to this figure.",
+            kind="entity",
+        ),
+        "entity_interacts": AttrDef(
+            doc=(
                 "RegistryBase instance managing live interact panels attached to this figure."
             ),
-        },
-        "entity_glyphs": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_glyphs": AttrDef(
+            doc=(
                 "RegistryBase instance managing glyph visual objects attached to this figure."
             ),
-        },
-        "impl_interact_count": {
-            "doc": "Monotonic counter used to assign interact panel ids for this figure.",
-        },
+            kind="entity",
+        ),
+        "impl_interact_count": AttrDef(
+            doc="Monotonic counter used to assign interact panel ids for this figure.",
+            kind="impl",
+        ),
         # -----------------
         # VTK overlay layer
         # -----------------
-        "entity_overlay": {
-            "doc": (
+        "entity_overlay": AttrDef(
+            doc=(
                 "Foreground vtkRenderer (layer=1) that shares the main camera "
                 "with the base renderer. Actors added to this renderer are drawn "
                 "on top of the main scene and are not occluded by 3D geometry."
             ),
-        },
-        "entity_axes_actor": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_axes_actor": AttrDef(
+            doc=(
                 "The vtkAxesActor currently used by the orientation widget, "
                 "or None when no axes widget has been added."
             ),
-        },
-        "entity_axes_widget": {
-            "doc": (
+            kind="entity",
+        ),
+        "entity_axes_widget": AttrDef(
+            doc=(
                 "The vtkOrientationMarkerWidget showing the corner axes, "
                 "or None when no axes widget has been added."
             ),
-        },
-        "pl": {
-            "doc": "Read-only: Alias of `entity_plotter`.",
-            "kind": "property",
-        },
-        "pl_type": {
-            "doc": (
+            kind="entity",
+        ),
+        "pl": AttrDef(
+            doc="Read-only: Alias of `entity_plotter`.",
+            kind="property",
+        ),
+        "pl_type": AttrDef(
+            doc=(
                 "Read-only: Short identifier of the plotter type. "
                 "'B' for BackgroundPlotter, 'P' for pyvista.Plotter."
             ),
-            "kind": "property",
-        },
-        "pick_manager": {
-            "doc": (
+            kind="property",
+        ),
+        "pick_manager": AttrDef(
+            doc=(
                 "Read-only: Alias of `entity_pick_manager` "
                 "(or None if not initialized)."
             ),
-            "kind": "property",
-        },
-        "console": {
-            "doc": "Read-only: Alias of `entity_console` (or None if not initialized).",
-            "kind": "property",
-        },
-        "interacts": {
-            "doc": (
+            kind="property",
+        ),
+        "console": AttrDef(
+            doc="Read-only: Alias of `entity_console` (or None if not initialized).",
+            kind="property",
+        ),
+        "interacts": AttrDef(
+            doc=(
                 "Read-only: Alias of `entity_interacts` (or None if not initialized)."
             ),
-            "kind": "property",
-        },
-        "scalar_bars": {
-            "doc": "Read-only: Alias of `entity_scalar_bars`.",
-            "kind": "property",
-        },
-        "scalar_bar": {
-            "doc": "Read-only: First registered scalar bar, or None when empty.",
-            "kind": "property",
-        },
-        "glyphs": {
-            "doc": "Read-only: Alias of `entity_glyphs`.",
-            "kind": "property",
-        },
-        "overlay": {
-            "doc": "Read-only: Alias of `entity_overlay`.",
-            "kind": "property",
-        },
-        "is_alive": {
-            "doc": "Read-only: Whether the wrapped plotter/window backend is still alive.",
-            "kind": "property",
-        },
+            kind="property",
+        ),
+        "scalar_bars": AttrDef(
+            doc="Read-only: Alias of `entity_scalar_bars`.",
+            kind="property",
+        ),
+        "scalar_bar": AttrDef(
+            doc="Read-only: First registered scalar bar, or None when empty.",
+            kind="property",
+        ),
+        "glyphs": AttrDef(
+            doc="Read-only: Alias of `entity_glyphs`.",
+            kind="property",
+        ),
+        "overlay": AttrDef(
+            doc="Read-only: Alias of `entity_overlay`.",
+            kind="property",
+        ),
+        "is_alive": AttrDef(
+            doc="Read-only: Whether the wrapped plotter/window backend is still alive.",
+            kind="property",
+        ),
     }
 
     __slots__ = (

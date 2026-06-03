@@ -2,7 +2,7 @@
 
 from nematics3d.datatypes import as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 
 
 # RegistryBase developer conventions:
@@ -44,22 +44,24 @@ class RegistryBase(ClassBase):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            "doc":       "The name of the Registry.",
-            "validator": as_str,
-        },
-        "raw_info": {
-            "doc":       "The extra introduction for this instance for clarity.",
-            "validator": lambda v, d: None if v is None else as_str(v, name=d, replace=None),
-        },
-        "impl_entity": {
-            "doc": "Internal mutable storage for registered objects in insertion order.",
-        },
-        "entity": {
-            "doc":  "Read-only: Registered objects in insertion order.",
-            "kind": "property",
-        },
+        "raw_name": AttrDef(
+            doc="The name of the Registry.",
+            kind="raw",
+            validator=as_str,
+        ),
+        "raw_info": AttrDef(
+            doc="The extra introduction for this instance for clarity.",
+            kind="raw",
+            validator=lambda v, d: None if v is None else as_str(v, name=d, replace=None),
+        ),
+        "impl_entity": AttrDef(
+            doc="Internal mutable storage for registered objects in insertion order.",
+            kind="impl",
+        ),
+        "entity": AttrDef(
+            doc="Read-only: Registered objects in insertion order.",
+            kind="property",
+        ),
     }
     # fmt: on
 
@@ -71,10 +73,8 @@ class RegistryBase(ClassBase):
 
     def __init__(self, name, info=None):
         super().__init__(name=name, name_replace="registry")
-        info = self.impl_attrs["raw_info"]["validator"](
-            info,
-            self.impl_attrs["raw_info"]["doc"],
-        )
+        defn = type(self).__attr_defs__["raw_info"]
+        info = defn.validator(info, defn.doc)
         object.__setattr__(self, "raw_info", info)
         object.__setattr__(self, "impl_entity", [])
 

@@ -11,7 +11,9 @@ import pyvista as pv
 
 from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
 from ..bounds import BoundsData
+from ..class_base import AttrDef
 from ..contour_surface import ContourSurface
+from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_contour_surface import InteractContourSurface
@@ -70,19 +72,21 @@ class PlotContourSurface(PlotGlyph):
     """Render one extracted ``ContourSurface`` mesh in a figure."""
 
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "calc_level": {
-            "doc": "Current contour level copied from the owning ContourSurface.",
-        },
-        "impl_owner_sync_name": {
-            "doc": "Internal sync-task key used to auto-refresh from the owner surface.",
-        },
+        "calc_level": AttrDef(
+            doc="Current contour level copied from the owning ContourSurface.",
+            kind="calc",
+        ),
+        "impl_owner_sync_name": AttrDef(
+            doc="Internal sync-task key used to auto-refresh from the owner surface.",
+            kind="impl",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
 
     _pending_resolution_attrs = ["color", "scalars", "opacity"]

@@ -8,6 +8,8 @@ import numpy as np
 import pyvista as pv
 
 
+from ..class_base import AttrDef
+from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_sphere import InteractSphere
@@ -285,16 +287,17 @@ class PlotSphere(PlotGlyph):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "calc_keep_index": {
-            "doc": "Indices of raw points kept after center-based point filtering.",
-        },
+        "calc_keep_index": AttrDef(
+            doc="Indices of raw points kept after center-based point filtering.",
+            kind="calc",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
     # ==================== OVERRIDE ====================
     # PlotSphere overrides PlotGlyph.__init__ because it fixes the glyph family

@@ -14,6 +14,8 @@ from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
+from ..class_base import AttrDef
+from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from .plot_figure import FigureData
 from .qt.interact_rod import InteractRod
@@ -380,23 +382,26 @@ class PlotRod(PlotGlyph):
     """
 
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "raw_orient": {
-            "doc": "The orientation vectors of rods.",
-            "validator": lambda v, d: as_points(v, name=d),
-            "is_reapply_opts_after_raw": True,
-        },
-        "calc_length": {
-            "doc": "The resolved per-rod length array used for rod geometry building.",
-        },
-        "calc_keep_index": {
-            "doc": "Indices of raw rod centers kept after center-based point filtering.",
-        },
+        "raw_orient": AttrDef(
+            doc="The orientation vectors of rods.",
+            kind="raw",
+            validator=lambda v, d: as_points(v, name=d),
+            is_reapply_opts_after_raw=True,
+        ),
+        "calc_length": AttrDef(
+            doc="The resolved per-rod length array used for rod geometry building.",
+            kind="calc",
+        ),
+        "calc_keep_index": AttrDef(
+            doc="Indices of raw rod centers kept after center-based point filtering.",
+            kind="calc",
+        ),
     }
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
 
     _pending_resolution_attrs: Sequence[str] = PlotGlyph._pending_resolution_attrs + [
@@ -428,9 +433,9 @@ class PlotRod(PlotGlyph):
         **kwargs,
     ):
 
-        orient = type(self).__attr_defs__["raw_orient"]["validator"](
+        orient = type(self).__attr_defs__["raw_orient"].validator(
             orient,
-            type(self).__attr_defs__["raw_orient"]["doc"],
+            type(self).__attr_defs__["raw_orient"].doc,
         )
         object.__setattr__(self, "raw_orient", orient)
 

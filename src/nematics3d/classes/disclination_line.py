@@ -38,7 +38,7 @@ from .opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..format import is_given_str
 from ..general import find_plane_normal
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from .q_plane import OmegaResult, QPlanePolar
@@ -214,83 +214,83 @@ class DisclinationLine(ClassBase):
     - iteration, indexing, and `np.asarray(line)` operate on `raw_defect_indices`.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "Name identifier of this disclination line.",
-        },
-        "raw_defect_indices": {
-            "doc": "Lattice indices of defect points forming the line (array of shape Nx3).",
-        },
-        "raw_box_size_periodic_index": {
-            "doc": (
+    __attr_defs__ = {
+        "raw_defect_indices": AttrDef(
+            doc="Lattice indices of defect points forming the line (array of shape Nx3).",
+            kind="raw",
+        ),
+        "raw_box_size_periodic_index": AttrDef(
+            doc=(
                 "Box size along each dimension in index space "
                 "(finite for periodic boundaries, np.inf for non-periodic)."
             ),
-        },
-        "raw_grid_offset": {
-            "doc": (
+            kind="raw",
+        ),
+        "raw_grid_offset": AttrDef(
+            doc=(
                 "Grid translation offset mapping lattice indices to "
                 "real-space coordinates (3-vector)."
             ),
-        },
-        "raw_grid_transform": {
-            "doc": (
+            kind="raw",
+        ),
+        "raw_grid_transform": AttrDef(
+            doc=(
                 "Grid transformation matrix (3x3) mapping lattice indices "
                 "to real-space coordinates."
             ),
-        },
-        "calc_end2end_kind": {
-            "doc": (
+            kind="raw",
+        ),
+        "calc_end2end_kind": AttrDef(
+            doc=(
                 "Kind of line ends: 'loop' (closed loop), "
                 "'cross' (wraps across boundary), or 'seg' (open segment)."
             ),
-            "kind": "calc",
-        },
-        "calc_defect_num": {
-            "doc": "Number of defect points forming this line (integer).",
-            "kind": "calc",
-        },
-        "calc_defect_coords": {
-            "doc": "Real-space coordinates of the defect line (array of shape Nx3).",
-            "kind": "calc",
-        },
-        "calc_norm": {
-            "doc": "Estimated average plane normal vector of the disclination line.",
-            "kind": "calc",
-        },
-        "calc_norm_metric": {
-            "doc": "Collection of confidence scores for the plane-fitting result.",
-            "kind": "calc",
-        },
-        "entity_smooth_objs": {
-            "doc": (
-                "Generated DisclinationLineSmooth objects produced by act_smooth()."
-            ),
-            "kind": "entity",
-        },
-        "smooths": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_defect_num": AttrDef(
+            doc="Number of defect points forming this line (integer).",
+            kind="calc",
+        ),
+        "calc_defect_coords": AttrDef(
+            doc="Real-space coordinates of the defect line (array of shape Nx3).",
+            kind="calc",
+        ),
+        "calc_norm": AttrDef(
+            doc="Estimated average plane normal vector of the disclination line.",
+            kind="calc",
+        ),
+        "calc_norm_metric": AttrDef(
+            doc="Collection of confidence scores for the plane-fitting result.",
+            kind="calc",
+        ),
+        "entity_smooth_objs": AttrDef(
+            doc="Generated DisclinationLineSmooth objects produced by act_smooth().",
+            kind="entity",
+        ),
+        "smooths": AttrDef(
+            doc=(
                 "Read-only: All generated smoothed versions of this "
                 "disclination line."
             ),
-            "kind": "property",
-        },
-        "smooth": {
-            "doc": "Read-only: The latest generated smoothed version, if any.",
-            "kind": "property",
-        },
-        "kind": {
-            "doc": "Read-only: Shorthand for the end-to-end topology kind of this line.",
-            "kind": "property",
-        },
+            kind="property",
+            is_public_settable=False,
+        ),
+        "smooth": AttrDef(
+            doc="Read-only: The latest generated smoothed version, if any.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "kind": AttrDef(
+            doc="Read-only: Shorthand for the end-to-end topology kind of this line.",
+            kind="property",
+            is_public_settable=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in ClassBase.__slots__
     )
 
@@ -610,70 +610,74 @@ class DisclinationLineSmooth(SmoothedLine):
       current smoothed real-space result.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(SmoothedLine.__attr_defs__),
-        "calc_coords_index": {
-            "doc": (
+    __attr_defs__ = {
+        "calc_coords_index": AttrDef(
+            doc=(
                 "Index-space trajectory entering smoothing before conversion "
                 "to real-space coordinates."
             ),
-            "kind": "calc",
-        },
-        "calc_result_index": {
-            "doc": "The smoothed disclination coordinates in lattice-index space.",
-            "kind": "calc",
-        },
-        "calc_result_coords": {
-            "doc": "Compatibility alias of calc_result for real-space coordinates.",
-            "kind": "calc",
-        },
-        "calc_padding_num": {
-            "doc": "Temporary padding length used when smoothing a cross-boundary line.",
-            "kind": "calc",
-        },
-        "impl_owner_init_ref": {
-            "doc": "Temporary owner weakref used before the managed owner relation is bound.",
-            "kind": "impl",
-        },
-        "owner": {
-            "doc": "The raw disclination line that owns this smoothed version.",
-            "kind": "relation",
-        },
-        "visual": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_result_index": AttrDef(
+            doc="The smoothed disclination coordinates in lattice-index space.",
+            kind="calc",
+        ),
+        "calc_result_coords": AttrDef(
+            doc="Compatibility alias of calc_result for real-space coordinates.",
+            kind="calc",
+        ),
+        "calc_padding_num": AttrDef(
+            doc="Temporary padding length used when smoothing a cross-boundary line.",
+            kind="calc",
+        ),
+        "impl_owner_init_ref": AttrDef(
+            doc="Temporary owner weakref used before the managed owner relation is bound.",
+            kind="impl",
+        ),
+        "owner": AttrDef(
+            doc="The raw disclination line that owns this smoothed version.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "visual": AttrDef(
+            doc=(
                 "The one-to-one visualization wrapper currently associated with "
                 "this smoothed disclination line."
             ),
-            "kind": "relation",
-        },
-        "visual_tube": {
-            "doc": (
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "visual_tube": AttrDef(
+            doc=(
                 "Read-only: PlotTube wrapped by the current visualization wrapper, "
                 "or None when no visualization exists."
             ),
-            "kind": "property",
-        },
-        "sections": {
-            "doc": (
+            kind="property",
+            is_public_settable=False,
+        ),
+        "sections": AttrDef(
+            doc=(
                 "RegistryBase object managing cross-section grids created from "
                 "this smoothed disclination line."
             ),
-            "kind": "relation",
-        },
-        "linefunc_mode": {
-            "doc": (
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "linefunc_mode": AttrDef(
+            doc=(
                 "Read-only: Interpolation mode used by functions sampled along "
                 "this smoothed disclination line. Loop and cross-boundary lines "
                 "are periodic for line functions."
             ),
-            "kind": "property",
-        },
+            kind="property",
+            is_public_settable=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in SmoothedLine.__slots__
     )
 
@@ -1236,26 +1240,23 @@ class DisclinationLineSmoothPlot(HostBase):
     - `repr(obj)` returns a compact summary including the two display toggles.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(HostBase.__attr_defs__),
-        "raw_name": {
-            **dict(HostBase.__attr_defs__["raw_name"]),
-            "doc": "The name of this visualization wrapper for a smoothed disclination line.",
-        },
-        "owner": {
-            "doc": "The smoothed disclination line currently visualized by this wrapper.",
-            "kind": "relation",
-        },
-        "wrapped": {
-            "doc": "The internal PlotTube used for actual rendering.",
-            "kind": "relation",
-        },
+    __attr_defs__ = {
+        "owner": AttrDef(
+            doc="The smoothed disclination line currently visualized by this wrapper.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "wrapped": AttrDef(
+            doc="The internal PlotTube used for actual rendering.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in HostBase.__slots__
     )
 
@@ -1576,40 +1577,38 @@ class DefectSectionGrid(HostBase):
       `state_normal`.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(HostBase.__attr_defs__),
-        "raw_name": {
-            **dict(HostBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this local defect section grid wrapper.",
-        },
-        "state_normal": {
-            "doc": (
+    __attr_defs__ = {
+        "state_normal": AttrDef(
+            doc=(
                 "Current normal selector for the section; either tangent, "
                 "a registered name, or a direct vector."
             ),
-        },
-        "calc_normal": {
-            "doc": "Resolved normal currently used by this defect section grid.",
-            "kind": "calc",
-        },
-        "impl_normals": {
-            "doc": "Named normal providers used to resolve section normals.",
-            "kind": "impl",
-        },
-        "owner": {
-            "doc": "The smoothed disclination line that owns this section grid.",
-            "kind": "relation",
-        },
-        "wrapped": {
-            "doc": "The internal PlaneGridPolar used for actual sampling geometry.",
-            "kind": "relation",
-        },
+            kind="state",
+        ),
+        "calc_normal": AttrDef(
+            doc="Resolved normal currently used by this defect section grid.",
+            kind="calc",
+        ),
+        "impl_normals": AttrDef(
+            doc="Named normal providers used to resolve section normals.",
+            kind="impl",
+        ),
+        "owner": AttrDef(
+            doc="The smoothed disclination line that owns this section grid.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "wrapped": AttrDef(
+            doc="The internal PlaneGridPolar used for actual sampling geometry.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in HostBase.__slots__
     )
 
@@ -1698,7 +1697,6 @@ class DefectSectionGrid(HostBase):
         )
         object.__setattr__(self, "state_normal", state_normal)
 
-        self.impl_attrs["state_normal"]["validator"] = self._helper_check_state_normal
         pose = self._helper_resolve_pose()
 
         grid = PlaneGridPolar(

@@ -1,11 +1,11 @@
 """Q-tensor interpolation on sampled surfaces with director visualization."""
 
 from copy import deepcopy
-from typing import Any, ClassVar, Mapping
+from typing import Any, Mapping
 
 from nematics3d.field import Q_diagonalize, n_color_immerse
 
-from .class_base import ClassBase
+from .class_base import AttrDef, ClassBase
 from .grid_field import GridInterpolator
 from .surface_sampling import SurfaceSampling, OptsSurfaceSampling
 
@@ -15,42 +15,31 @@ class InterpolateSurface(ClassBase):
     InterpolateSurface samples a GridInterpolator on SurfaceSampling points.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this surface interpolation object.",
-        },
-        "calc_result": {
-            "doc": "The interpolated physics values sampled on the current surface.",
-            "kind": "calc",
-        },
-        "sampling": {
-            "doc": "The surface sampling object associated with this interpolated field.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "interpolator": {
-            "doc": "The grid interpolator object used to sample this surface.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "result": {
-            "doc": "Read-only: Alias of calc_result.",
-            "kind": "property",
-        },
+    __attr_defs__ = {
+        "calc_result": AttrDef(
+            doc="The interpolated physics values sampled on the current surface.",
+            kind="calc",
+        ),
+        "sampling": AttrDef(
+            doc="The surface sampling object associated with this interpolated field.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "interpolator": AttrDef(
+            doc="The grid interpolator object used to sample this surface.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "result": AttrDef(
+            doc="Read-only: Alias of calc_result.",
+            kind="property",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property")
         and name not in ClassBase.__slots__
     )
 

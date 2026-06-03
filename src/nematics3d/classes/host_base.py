@@ -49,7 +49,7 @@ from ..datatypes import UNSET, Unset, as_list, as_str
 from ..format import repr_field_line, save_opts_json
 from ..general import pop_exclusive
 from ..logging_decorator import logging_and_warning_decorator
-from .class_base import ClassBase
+from .class_base import AssignState, AttrDef, ClassBase
 from .opts import (
     build_dict_override,
     diff_dict_values,
@@ -517,6 +517,18 @@ class OptsBase:
 #   in `impl_...`; user-attached side storage belongs in extra attrs.
 
 
+@dataclass(slots=True)
+class HostAssignState(AssignState):
+    """Per-instance assignment-control flags for one public-settable host field.
+
+    Extends ``AssignState`` with ``is_wrapped``, which blocks assignment when
+    this host is controlled by a wrapper host.  ``ClassBase`` never needs to
+    know about ``is_wrapped``; only ``HostBase`` and its subclasses use it.
+    """
+
+    is_wrapped: bool = False
+
+
 class HostBase(ClassBase):
     """
     Shared host controller for objects driven by an associated ``OptsBase``.
@@ -570,66 +582,65 @@ class HostBase(ClassBase):
     can be translated into actual host-side state updates.
     """
 
+    # "opts" covers the three bridge fields: opts, opts_defaults, opts_backup.
+    # These use direct public names with no prefix and are not public-settable
+    # through the normal setattr/commit path.
+    _VALID_KINDS: ClassVar[frozenset[str]] = ClassBase._VALID_KINDS | {"opts"}
+
     __attr_defs__ = {
-        **ClassBase.__attr_defs__,
-        "opts": {
-            "doc": "The Opts instance controlling options.",
-        },
-        "opts_defaults": {
-            "doc": "The default option settings.",
-        },
-        "opts_backup": {
-            "doc": (
+        # no manual merge — __init_subclass__ handles MRO merging automatically
+        "opts": AttrDef(
+            doc="The Opts instance controlling options.",
+            kind="opts",
+        ),
+        "opts_defaults": AttrDef(
+            doc="The default option settings.",
+            kind="opts",
+        ),
+        "opts_backup": AttrDef(
+            doc=(
                 "A dictionary storing potentially useful options, indexed by "
                 "timestamp or a manual key."
             ),
-        },
-        "impl_sync_func": {
-            "doc": "A dictionary of callback functions for post-commit synchronization.",
-        },
-        "impl_enrich_kwargs_wrapped_func": {
-            "doc": "Callback functions that enrich forwarded kwargs for wrapped hosts.",
-        },
-        "impl_enrich_kwargs_sync_func": {
-            "doc": "Callback functions that enrich sync kwargs before sync execution.",
-        },
-        "wrapper": {
-            "doc": "The wrapper host that controls this host.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "wrapped": {
-            "doc": "The wrapped host controlled by this host as a wrapper.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "attrs_protected": {
-            "doc": (
-                "Read-only: Public attrs currently marked as directly protected on this host."
-            ),
-            "kind": "property",
-            "is_public_settable": False,
-        },
-        "attrs_wrapped": {
-            "doc": (
-                "Read-only: Public attrs currently blocked because they are wrapped."
-            ),
-            "kind": "property",
-            "is_public_settable": False,
-        },
-        "attrs_forbidden": {
-            "doc": (
-                "Read-only union of wrapped attrs and host-declared protected attrs."
-            ),
-            "kind": "property",
-            "is_public_settable": False,
-        },
+            kind="opts",
+        ),
+        "impl_sync_func": AttrDef(
+            doc="A dictionary of callback functions for post-commit synchronization.",
+            kind="impl",
+        ),
+        "impl_enrich_kwargs_wrapped_func": AttrDef(
+            doc="Callback functions that enrich forwarded kwargs for wrapped hosts.",
+            kind="impl",
+        ),
+        "impl_enrich_kwargs_sync_func": AttrDef(
+            doc="Callback functions that enrich sync kwargs before sync execution.",
+            kind="impl",
+        ),
+        "wrapper": AttrDef(
+            doc="The wrapper host that controls this host.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "wrapped": AttrDef(
+            doc="The wrapped host controlled by this host as a wrapper.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "attrs_protected": AttrDef(
+            doc="Read-only: Public attrs currently marked as directly protected on this host.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "attrs_wrapped": AttrDef(
+            doc="Read-only: Public attrs currently blocked because they are wrapped.",
+            kind="property",
+            is_public_settable=False,
+        ),
+        "attrs_forbidden": AttrDef(
+            doc="Read-only union of wrapped attrs and host-declared protected attrs.",
+            kind="property",
+            is_public_settable=False,
+        ),
     }
 
     __slots__ = (
@@ -640,49 +651,6 @@ class HostBase(ClassBase):
         "impl_enrich_kwargs_wrapped_func",
         "impl_enrich_kwargs_sync_func",
     )
-
-    # ------------------------------------------------------------------
-    # Initialization + self-checks
-    # ------------------------------------------------------------------
-
-    def _helper_check_attr_naming(self) -> None:
-        """Validate HostBase managed-field naming against the host conventions."""
-        bridge_names = {"opts", "opts_defaults", "opts_backup"}
-        managed_prefixes = ("raw_", "state_", "calc_", "entity_", "impl_")
-
-        for attr_name in self.impl_attrs:
-            is_public_settable = self._helper_is_public_settable_attr(attr_name)
-
-            if attr_name in bridge_names:
-                continue
-
-            if attr_name.startswith(("raw_", "state_")):
-                continue
-
-            if attr_name.startswith(("calc_", "entity_", "impl_")):
-                if is_public_settable:
-                    raise ValueError(
-                        f"HostBase field {attr_name!r} must not be public settable."
-                    )
-                continue
-
-            if (
-                self._helper_is_relation_attr(attr_name)
-                or self._helper_is_property_attr(attr_name)
-                or self._helper_is_extra_attr(attr_name)
-            ):
-                if attr_name.startswith(managed_prefixes):
-                    raise ValueError(
-                        f"HostBase field {attr_name!r} should use a direct public "
-                        "name instead of a managed-field prefix."
-                    )
-                continue
-
-            raise ValueError(
-                f"HostBase managed field {attr_name!r} must be declared as raw_, "
-                f"state_, calc_, entity_, impl_, a relation/property/extra direct "
-                "name, or an opts bridge field."
-            )
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_check_opts(
@@ -713,6 +681,14 @@ class HostBase(ClassBase):
 
         return opts
 
+    # ------------------------------------------------------------------
+    # Initialization
+    # ------------------------------------------------------------------
+
+    def _helper_make_assign_state(self) -> HostAssignState:
+        """Return a ``HostAssignState`` instance for one public-settable field."""
+        return HostAssignState()
+
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.__init__ because a host must bind a paired
     # OptsBase instance and initialize host-side runtime stores in addition to
@@ -728,18 +704,18 @@ class HostBase(ClassBase):
         **kwargs,
     ):
         # Initialize the ClassBase identity and base relation skeleton first.
+        # Naming/kind consistency is validated by __init_subclass__ at import
+        # time, so no runtime _helper_check_attr_naming() call is needed here.
         super().__init__(name=name, name_replace=name_replace)
-        self._helper_check_attr_naming()
 
-        # Split out host-side initialization kwargs so opt kwargs can be
+        # Split out host-side initialization kwargs so opts kwargs can be
         # merged into the paired opts object separately.
+        attr_defs = type(self).__attr_defs__
         kwargs_host = {}
         for key in list(kwargs):
-            if key in self.impl_attrs and (
-                key.startswith("raw_") or key.startswith("state_")
-            ):
+            if key in attr_defs and attr_defs[key].kind in ("raw", "state"):
                 kwargs_host[key] = kwargs.pop(key)
-            elif f"raw_{key}" in self.impl_attrs:
+            elif f"raw_{key}" in attr_defs:
                 kwargs_host[key] = kwargs.pop(key)
 
         # Normalize or create the paired opts instance, then merge any
@@ -785,19 +761,12 @@ class HostBase(ClassBase):
     def _helper_collect_host_flagged_names(self, flag_name: str) -> set[str]:
         """Collect public host names whose runtime flag is currently true."""
         names: set[str] = set()
-        for attr_name, attr_info in self.impl_attrs.items():
-            if not attr_info.get(flag_name, False):
+        for attr_name, state in self.impl_assign_state.items():
+            if not getattr(state, flag_name, False):
                 continue
+            names.add(attr_name)
             if attr_name.startswith("raw_"):
-                names.update([attr_name, attr_name[4:]])
-            elif attr_name.startswith("state_"):
-                names.add(attr_name)
-            elif self._helper_is_extra_attr(attr_name):
-                names.add(attr_name)
-            elif self._helper_is_property_attr(attr_name) and attr_info.get(
-                "is_public_settable", False
-            ):
-                names.add(attr_name)
+                names.add(attr_name[4:])
         return names
 
     def _helper_collect_opts_flagged_names(self, flag_name: str) -> set[str]:
@@ -963,13 +932,13 @@ class HostBase(ClassBase):
         if not kwargs:
             return {}, False
 
+        attr_defs = type(self).__attr_defs__
         kwargs_applied_raw: dict[str, Any] = {}
         is_reapply_opts = False
         for key in list(kwargs):
             is_host_attr = (
-                (key in self.impl_attrs)
-                and (key.startswith("raw_") or key.startswith("state_"))
-            ) or (f"raw_{key}" in self.impl_attrs)
+                key in attr_defs and attr_defs[key].kind in ("raw", "state")
+            ) or (f"raw_{key}" in attr_defs)
             if is_host_attr:
                 kwargs_applied_here, is_reapply_opts_here = self._helper_commit_pop_raw(
                     kwargs,
@@ -992,20 +961,20 @@ class HostBase(ClassBase):
 
         kwargs_applied_extra: dict[str, Any] = {}
         for key in list(kwargs):
-            if key not in self.impl_attrs or not self._helper_is_extra_attr(key):
+            if key not in self.impl_extra:
                 continue
 
-            attr_info = self.impl_attrs[key]
+            entry = self.impl_extra[key]
+            state = self.impl_assign_state.get(key)
             attr_value = kwargs.pop(key)
-            validator = attr_info.get("validator")
             try:
-                if attr_info.get("is_protected", False):
+                if state is not None and state.is_protected:
                     raise AttributeError(
                         f"Extra attribute {key!r} is protected and cannot be modified."
                     )
-                if validator is not None:
-                    attr_value = validator(attr_value, attr_info["doc"])
-                self._helper_store_extra_attr(key, attr_value)
+                if entry.validator is not None:
+                    attr_value = entry.validator(attr_value, entry.doc)
+                entry.value = attr_value
             except (TypeError, ValueError, KeyError, AttributeError):
                 logger.exception(f"Validation failed for extra attribute {key!r}.")
                 logger.recovery(f"Ignore this modification of extra attribute {key!r}.")
@@ -1055,14 +1024,13 @@ class HostBase(ClassBase):
         if recovery_msg is None:
             recovery_msg = f"Ignore this modification of {attr_name_return!r}."
 
+        defn = type(self).__attr_defs__[host_attr_name]
         if validator is None:
-            validator = self.impl_attrs[host_attr_name].get("validator")
+            validator = defn.validator
 
         try:
             if validator is not None:
-                attr_value = validator(
-                    attr_value, self.impl_attrs[host_attr_name]["doc"]
-                )
+                attr_value = validator(attr_value, defn.doc)
 
             if host_attr_name == "raw_name":
                 self.act_set_name(attr_value)
@@ -1073,9 +1041,7 @@ class HostBase(ClassBase):
             logger.recovery(recovery_msg)
             return {}, False
 
-        return {attr_name_return: attr_value}, bool(
-            self.impl_attrs[host_attr_name].get("is_reapply_opts_after_raw", False)
-        )
+        return {attr_name_return: attr_value}, defn.is_reapply_opts_after_raw
 
     def _helper_commit_self(
         self,
@@ -1345,12 +1311,12 @@ class HostBase(ClassBase):
                 return f"{attr_name!r}: {descriptions_opts[attr_name]}"
             raise KeyError(
                 f"Attribute {attr_name!r} was not found in "
-                f"{type(self).__name__}.impl_attrs or {type(opts).__name__}.__attrs__."
+                f"{type(self).__name__}.__attr_defs__ or {type(opts).__name__}.__attrs__."
             )
 
         raise KeyError(
             f"Attribute {attr_name!r} was not found in "
-            f"{type(self).__name__}.impl_attrs. "
+            f"{type(self).__name__}.__attr_defs__. "
             "The opts attrs are not available yet because self.opts has not been "
             "initialized; the attribute may belong to opts."
         )
@@ -1372,31 +1338,18 @@ class HostBase(ClassBase):
         attrs_extra = []
         attrs_properties = []
 
-        for attr_name, attr_info in self.impl_attrs.items():
-            if self._helper_is_property_attr(attr_name):
-                if attr_info.get("is_public_settable", False):
-                    if attr_name not in attrs_forbidden:
-                        attrs_properties.append(attr_name)
+        # impl_assign_state contains exactly the public-settable host fields.
+        for attr_name, state in self.impl_assign_state.items():
+            if attr_name in attrs_forbidden or state.is_protected:
                 continue
-
-            if not (
-                attr_name.startswith("raw_")
-                or attr_name.startswith("state_")
-                or self._helper_is_extra_attr(attr_name)
-            ):
-                continue
-            if not self._helper_is_public_settable_attr(attr_name):
-                continue
-            if attr_info.get("is_protected", False):
-                continue
-            if attr_name in attrs_forbidden:
-                continue
-
-            if self._helper_is_extra_attr(attr_name):
+            if attr_name in self.impl_extra:
                 attrs_extra.append(attr_name)
-                continue
-
-            attrs_host.append(attr_name)
+            elif self._helper_is_property_attr(attr_name):
+                defn = type(self).__attr_defs__.get(attr_name)
+                if defn and defn.is_public_settable:
+                    attrs_properties.append(attr_name)
+            else:
+                attrs_host.append(attr_name)
 
         for attr_name in type(self.opts).__attrs__:
             if attr_name in attrs_forbidden:
@@ -1499,47 +1452,45 @@ class HostBase(ClassBase):
         for attr in as_list(attrs, name="attrs"):
             try:
                 attr = as_str(attr, name=attr_name)
-                if attr.startswith("raw_"):
-                    if attr in self.impl_attrs:
-                        self.impl_attrs[attr][flag_name] = is_enabled
-                    else:
-                        raise AttributeError(
-                            f"Attribute {attr!r} is not a valid public host attr."
-                        )
-                elif attr.startswith("state_"):
-                    if attr in self.impl_attrs:
-                        self.impl_attrs[attr][flag_name] = is_enabled
-                    else:
-                        raise AttributeError(
-                            f"Attribute {attr!r} is not a valid public host state attr."
-                        )
-                elif attr in type(self.opts).__attrs__:
+
+                # Opts attr — stored in opts.impl_attr_flags, not impl_assign_state.
+                if attr in type(self.opts).__attrs__:
                     self.opts.impl_attr_flags[attr][flag_name] = is_enabled
-                elif attr in self.impl_attrs and self._helper_is_extra_attr(attr):
-                    self.impl_attrs[attr][flag_name] = is_enabled
-                elif (
-                    attr in self.impl_attrs
-                    and self._helper_is_property_attr(attr)
-                    and self.impl_attrs[attr].get("is_public_settable", False)
-                ):
-                    self.impl_attrs[attr][flag_name] = is_enabled
-                elif f"raw_{attr}" in self.impl_attrs:
-                    self.impl_attrs[f"raw_{attr}"][flag_name] = is_enabled
-                else:
+                    continue
+
+                # Resolve to the canonical key in impl_assign_state.
+                # Accept both the raw_ form and the public alias.
+                target_key = attr
+                if target_key not in self.impl_assign_state:
+                    raw_key = f"raw_{attr}"
+                    if raw_key in self.impl_assign_state:
+                        target_key = raw_key
+                    else:
+                        raise AttributeError(
+                            f"Attribute {attr!r} is not a valid protectable host "
+                            "or opts attr. Host-side protection is limited to "
+                            "raw aliases, raw_ attrs, state_ attrs, extra attrs, "
+                            "writable properties, and opts attrs."
+                        )
+
+                state = self.impl_assign_state[target_key]
+                if not hasattr(state, flag_name):
                     raise AttributeError(
-                        f"Attribute {attr!r} is not a valid protectable host or opts attr. "
-                        "Host-side protection is limited to raw aliases, raw_ attrs, "
-                        "state_ attrs, extra attrs, writable properties, and opts attrs."
+                        f"AssignState for {target_key!r} has no flag {flag_name!r}. "
+                        "HostBase uses HostAssignState which carries both "
+                        "'is_protected' and 'is_wrapped'."
                     )
+                setattr(state, flag_name, is_enabled)
+
             except (TypeError, ValueError, KeyError, AttributeError):
                 logger.exception("Invalid attr name.")
                 logger.recovery("Automatically ignore this attr.")
 
     def _helper_clear_protection_flag(self, flag_name: str) -> None:
         """Clear one runtime protection flag everywhere on this host and its opts."""
-        for attr_info in self.impl_attrs.values():
-            if attr_info.get(flag_name, False):
-                attr_info[flag_name] = False
+        for state in self.impl_assign_state.values():
+            if getattr(state, flag_name, False):
+                setattr(state, flag_name, False)
         for flag_info in self.opts.impl_attr_flags.values():
             if flag_info.get(flag_name, False):
                 flag_info[flag_name] = False
@@ -1550,13 +1501,11 @@ class HostBase(ClassBase):
     ) -> tuple[set[str], set[str]]:
         """Collect host and opts attr names whose runtime flag is true."""
         host_names = {
-            attr_name
-            for attr_name, attr_info in self.impl_attrs.items()
-            if attr_info.get(flag_name, False)
+            n for n, state in self.impl_assign_state.items()
+            if getattr(state, flag_name, False)
         }
         opts_names = {
-            attr_name
-            for attr_name, flag_info in self.opts.impl_attr_flags.items()
+            n for n, flag_info in self.opts.impl_attr_flags.items()
             if flag_info.get(flag_name, False)
         }
         return host_names, opts_names
@@ -1632,7 +1581,7 @@ class HostBase(ClassBase):
             yield
         finally:
             for attr_name in host_backup:
-                self.impl_attrs[attr_name]["is_wrapped"] = True
+                self.impl_assign_state[attr_name].is_wrapped = True
             for attr_name in opts_backup:
                 self.opts.impl_attr_flags[attr_name]["is_wrapped"] = True
 

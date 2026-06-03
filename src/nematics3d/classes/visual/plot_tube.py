@@ -14,6 +14,7 @@ from nematics3d.general import closest_point_on_polyline, fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
+from ..class_base import AttrDef
 from ..host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
@@ -364,26 +365,29 @@ class PlotTube(PlotGlyph):
 
     # fmt: off
     __attr_defs__ = {
-        **dict(PlotGlyph.__attr_defs__),
-        "raw_line_index": {
-            "doc":                       "Optional polyline membership indices.",
-            "is_reapply_opts_after_raw": True,
-        },
-        "calc_line_index": {
-            "doc": (
+        "raw_line_index": AttrDef(
+            doc="Optional polyline membership indices.",
+            kind="raw",
+            is_reapply_opts_after_raw=True,
+        ),
+        "calc_line_index": AttrDef(
+            doc=(
                 "The effective polyline membership indices used for the "
                 "current glyph build after clip-mode preprocessing."
             ),
-        },
-        "calc_keep_index": {
-            "doc": "Indices of raw centerline points kept after center-based point filtering.",
-        },
+            kind="calc",
+        ),
+        "calc_keep_index": AttrDef(
+            doc="Indices of raw centerline points kept after center-based point filtering.",
+            kind="calc",
+        ),
     }
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
+        and name not in HostBase.__slots__
     )
     # -------------------------------
     # Initialization

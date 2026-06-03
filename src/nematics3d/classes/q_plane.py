@@ -22,6 +22,7 @@ from nematics3d.general import (
 from nematics3d.geometry import wrap_to_pi
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
+from .class_base import AttrDef
 from .interpolate_plane import InterpolatePlane
 from .grid_field import GridInterpolator
 from .opts import merge_opts_all
@@ -77,82 +78,63 @@ class QPlane(InterpolatePlane):
     plane basis. Use `plane.show_relations()` to inspect the bound grid.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(InterpolatePlane.__attr_defs__),
-        "raw_name": {
-            **dict(InterpolatePlane.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this Q-plane object.",
-        },
-        "calc_result": {
-            **dict(InterpolatePlane.__attr_defs__["calc_result"]),
-            "kind": "calc",
-        },
-        "calc_n": {
-            "doc": "Director field arrays derived from Q-diagonalization.",
-            "kind": "calc",
-        },
-        "calc_S": {
-            "doc": "Scalar-order values derived from Q-diagonalization.",
-            "kind": "calc",
-        },
-        "calc_is_near_defect": {
-            "doc": "Boolean mask indicating whether each sampled point is near a defect.",
-            "kind": "calc",
-        },
-        "calc_defect_pos": {
-            "doc": "Detected defect positions on this Q plane.",
-            "kind": "calc",
-        },
-        "calc_defect_pos_all": {
-            "doc": (
+    __attr_defs__ = {
+        "calc_n": AttrDef(
+            doc="Director field arrays derived from Q-diagonalization.",
+            kind="calc",
+        ),
+        "calc_S": AttrDef(
+            doc="Scalar-order values derived from Q-diagonalization.",
+            kind="calc",
+        ),
+        "calc_is_near_defect": AttrDef(
+            doc="Boolean mask indicating whether each sampled point is near a defect.",
+            kind="calc",
+        ),
+        "calc_defect_pos": AttrDef(
+            doc="Detected defect positions on this Q plane.",
+            kind="calc",
+        ),
+        "calc_defect_pos_all": AttrDef(
+            doc=(
                 "Detected defect positions on this Q plane before optional "
                 "bounds filtering."
             ),
-            "kind": "calc",
-        },
-        "state_is_interactable": {
-            "doc": "Whether to create a control window when the instance is double right-clicked.",
-        },
-        "default_visual_opts": {
-            "doc": "Default opts_defaults_override mappings used for derived visuals.",
-        },
-        "visual_nb": {
-            "doc": "The PlotRod visual showing directors in the bulk region of this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_nd": {
-            "doc": "The PlotRod visual showing directors near detected defects on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_defect": {
-            "doc": "The PlotSphere visual showing detected defect positions on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "visual_S": {
-            "doc": "The PlotDelaunay visual showing scalar order on this Q plane.",
-            "kind": "relation",
-            "is_weak_by_default": False,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
+            kind="calc",
+        ),
+        "state_is_interactable": AttrDef(
+            doc="Whether to create a control window when the instance is double right-clicked.",
+            kind="state",
+        ),
+        "default_visual_opts": AttrDef(
+            doc="Default opts_defaults_override mappings used for derived visuals.",
+            kind="default",
+        ),
+        "visual_nb": AttrDef(
+            doc="The PlotRod visual showing directors in the bulk region of this Q plane.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "visual_nd": AttrDef(
+            doc="The PlotRod visual showing directors near detected defects on this Q plane.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "visual_defect": AttrDef(
+            doc="The PlotSphere visual showing detected defect positions on this Q plane.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
+        "visual_S": AttrDef(
+            doc="The PlotDelaunay visual showing scalar order on this Q plane.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
     }
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in InterpolatePlane.__slots__
     )
 
@@ -585,17 +567,11 @@ class QPlanePolar(QPlane):
     through the same main interfaces as `QPlane`.
     """
 
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(QPlane.__attr_defs__),
-        "raw_name": {
-            **dict(QPlane.__attr_defs__["raw_name"]),
-            "doc": "The name identifier of this polar Q-plane object.",
-        },
-    }
+    __attr_defs__ = {}
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
         and name not in QPlane.__slots__
     )
 

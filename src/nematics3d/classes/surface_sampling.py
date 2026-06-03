@@ -12,6 +12,7 @@ from scipy.spatial import cKDTree
 
 from ..datatypes import UNSET, Unset, as_Number
 from ..logging_decorator import logging_and_warning_decorator
+from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
 from .visual.plot_polydata import as_polydata_input, make_clean_polydata
 
@@ -259,69 +260,72 @@ class SurfaceSampling(HostBase):
     """
 
     # fmt: off
-    __attr_defs__: ClassVar[Mapping[str, dict[str, Any]]] = {
-        **dict(HostBase.__attr_defs__),
-        "raw_surface": {
-            "doc": (
+    __attr_defs__ = {
+        "raw_surface": AttrDef(
+            doc=(
                 "The canonical input surface stored as cleaned pyvista.PolyData. "
                 "Any legal PyVista/VTK PolyData-like object with valid surface "
                 "geometry may be provided."
             ),
-            "validator": lambda v, d: _as_surface_polydata_input(v, name=d),
-            "is_reapply_opts_after_raw": True,
-        },
-        "calc_surface_clean": {
-            "doc": (
+            kind="raw",
+            validator=lambda v, d: _as_surface_polydata_input(v, name=d),
+            is_reapply_opts_after_raw=True,
+        ),
+        "calc_surface_clean": AttrDef(
+            doc=(
                 "The cleaned surface currently used for sampling after later "
                 "host-side preprocessing such as surface extraction or triangulation."
             ),
-        },
-        "calc_surface_area": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_surface_area": AttrDef(
+            doc=(
                 "Resolved total area of the cleaned surface used to infer the "
                 "target sample count from the requested spacing."
             ),
-        },
-        "calc_sample_count_target": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_sample_count_target": AttrDef(
+            doc=(
                 "Resolved target number of sample points inferred from the current "
                 "surface area and opts spacing before candidate oversampling."
             ),
-        },
-        "calc_surface_points": {
-            "doc": "Point coordinates of the cleaned input surface as an (N, 3) array.",
-        },
-        "calc_surface_normals": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_surface_points": AttrDef(
+            doc="Point coordinates of the cleaned input surface as an (N, 3) array.",
+            kind="calc",
+        ),
+        "calc_surface_normals": AttrDef(
+            doc=(
                 "Resolved surface normals associated with calc_surface_points as "
                 "an (N, 3) array."
             ),
-        },
-        "calc_sample_points": {
-            "doc": (
+            kind="calc",
+        ),
+        "calc_sample_points": AttrDef(
+            doc=(
                 "The final sampled point coordinates exposed by this host as an "
                 "(N, 3) array."
             ),
-        },
-        "field": {
-            "doc": "The interpolated field object attached to this surface sampling.",
-            "kind": "relation",
-            "is_weak_by_default": True,
-            "is_weak": None,
-            "relation_value": None,
-            "doc_runtime": None,
-        },
-        "result": {
-            "doc": "Read-only: Alias of `calc_sample_points`.",
-            "kind": "property",
-        },
+            kind="calc",
+        ),
+        "field": AttrDef(
+            doc="The interpolated field object attached to this surface sampling.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
+        "result": AttrDef(
+            doc="Read-only: Alias of `calc_sample_points`.",
+            kind="property",
+        ),
     }
     # fmt: on
 
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.get("kind") not in ("relation", "property")
+        if spec.kind not in ("relation", "property", "opts")
     )
 
     # ==================== OVERRIDE ====================
