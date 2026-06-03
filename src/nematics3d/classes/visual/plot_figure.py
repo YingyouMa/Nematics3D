@@ -434,6 +434,8 @@ class PlotFigure(HostBase):
 
             object.__setattr__(self, "entity_console", console)
 
+            self._helper_setup_orientation_menu()
+
             original_close_event = main_window.closeEvent
 
             def _close_event_with_interacts(event):
@@ -671,6 +673,54 @@ class PlotFigure(HostBase):
     # Plotter backend helpers
     # -------------------------------
 
+    def _helper_setup_orientation_menu(self):
+        """Append director orientation marker actions to the existing View menu.
+
+        Finds the 'Orientation Marker' submenu that pyvistaqt creates and adds
+        a separator followed by four director-specific entries:
+        Axes / Sphere / Sphere + Axes / Remove.
+        Only runs when the backend is a BackgroundPlotter (interactive mode).
+        """
+        main_menu = getattr(self.pl, "main_menu", None)
+        if main_menu is None:
+            return
+
+        # Locate the View menu
+        view_menu = None
+        for action in main_menu.actions():
+            if action.text() == "View":
+                view_menu = action.menu()
+                break
+        if view_menu is None:
+            return
+
+        # Locate the existing Orientation Marker submenu
+        orien_menu = None
+        for action in view_menu.actions():
+            if action.text() == "Orientation Marker":
+                orien_menu = action.menu()
+                break
+        if orien_menu is None:
+            return
+
+        orien_menu.addSeparator()
+        orien_menu.addAction(
+            "Director: Axes",
+            lambda: self.act_add_axes_widget(style="axes"),
+        )
+        orien_menu.addAction(
+            "Director: Sphere",
+            lambda: self.act_add_axes_widget(style="sphere"),
+        )
+        orien_menu.addAction(
+            "Director: Sphere + Axes",
+            lambda: self.act_add_axes_widget(style="sphere_axes"),
+        )
+        orien_menu.addAction(
+            "Director: Remove",
+            self.act_remove_axes_widget,
+        )
+
     def _helper_init_overlay_renderer(self) -> vtk.vtkRenderer:
         """
         Initialize a foreground overlay renderer (layer=1) that shares the main camera.
@@ -797,6 +847,73 @@ class PlotFigure(HostBase):
 
         return actor
 
+    @staticmethod
+    def _helper_build_sphere_axes_widget_actor(
+        *,
+        colors=None,
+        labels=("", "", ""),
+        axis_length=1.4,
+        tip_fraction=0.5,
+        theta_resolution=60,
+        phi_resolution=60,
+    ) -> vtk.vtkAssembly:
+        """Build a vtkAssembly combining a director-colored sphere with protruding axes.
+
+        The sphere has radius 1.0. axis_length controls how far the axes extend
+        beyond the origin; tip_fraction sets what portion of the total length is
+        the arrowhead cone (vs the shaft cylinder).
+        """
+        sphere_actor = PlotFigure._helper_build_sphere_widget_actor(
+            theta_resolution=theta_resolution,
+            phi_resolution=phi_resolution,
+        )
+
+        if colors is None:
+            colors = PlotFigure._helper_get_director_axes_colors()
+
+        tip_fraction = float(np.clip(tip_fraction, 0.01, 0.99))
+        shaft_fraction = 1.0 - tip_fraction
+
+        axes_actor = vtk.vtkAxesActor()
+        axes_actor.SetTotalLength(axis_length, axis_length, axis_length)
+        axes_actor.SetNormalizedShaftLength(shaft_fraction, shaft_fraction, shaft_fraction)
+        axes_actor.SetNormalizedTipLength(tip_fraction, tip_fraction, tip_fraction)
+        axes_actor.SetXAxisLabelText(str(labels[0]))
+        axes_actor.SetYAxisLabelText(str(labels[1]))
+        axes_actor.SetZAxisLabelText(str(labels[2]))
+
+        actor_parts = (
+            (
+                colors[0],
+                axes_actor.GetXAxisShaftProperty(),
+                axes_actor.GetXAxisTipProperty(),
+                axes_actor.GetXAxisCaptionActor2D(),
+            ),
+            (
+                colors[1],
+                axes_actor.GetYAxisShaftProperty(),
+                axes_actor.GetYAxisTipProperty(),
+                axes_actor.GetYAxisCaptionActor2D(),
+            ),
+            (
+                colors[2],
+                axes_actor.GetZAxisShaftProperty(),
+                axes_actor.GetZAxisTipProperty(),
+                axes_actor.GetZAxisCaptionActor2D(),
+            ),
+        )
+        for color, shaft_prop, tip_prop, caption_actor in actor_parts:
+            color = as_ColorRGB(color, name="axes color")
+            shaft_prop.SetColor(*color)
+            tip_prop.SetColor(*color)
+            caption_actor.GetCaptionTextProperty().SetColor(*color)
+
+        assembly = vtk.vtkAssembly()
+        assembly.AddPart(sphere_actor)
+        assembly.AddPart(axes_actor)
+
+        return assembly
+
     def act_remove_axes_widget(self):
         """Disable and forget the current orientation axes widget, if any."""
         widget = getattr(self, "entity_axes_widget", None)
@@ -815,6 +932,8 @@ class PlotFigure(HostBase):
         style="axes",
         colors=None,
         labels=("x", "y", "z"),
+        axis_length=1.4,
+        tip_fraction=0.5,
         interactive=False,
         viewport=(0.0, 0.0, 0.2, 0.2),
     ):
@@ -822,14 +941,18 @@ class PlotFigure(HostBase):
 
         Parameters
         ----------
-        style : {"axes", "sphere"}
+        style : {"axes", "sphere", "sphere_axes"}
             "axes" (default) shows the classic three-arrow vtkAxesActor.
             "sphere" shows a director-colored sphere: the visible face color
             directly encodes the current viewing direction in the director
             colormap.
+            "sphere_axes" combines both: a director-colored sphere with the
+            three colored axes protruding beyond its surface.
         """
-        if style not in ("axes", "sphere"):
-            raise ValueError(f"`style` must be 'axes' or 'sphere', got {style!r}.")
+        if style not in ("axes", "sphere", "sphere_axes"):
+            raise ValueError(
+                f"`style` must be 'axes', 'sphere', or 'sphere_axes', got {style!r}."
+            )
         if len(viewport) != 4:
             raise ValueError("`viewport` must be a 4-sequence of floats.")
         viewport = tuple(float(value) for value in viewport)
@@ -840,6 +963,13 @@ class PlotFigure(HostBase):
 
         if style == "sphere":
             actor = self._helper_build_sphere_widget_actor()
+        elif style == "sphere_axes":
+            actor = self._helper_build_sphere_axes_widget_actor(
+                colors=colors,
+                labels=labels,
+                axis_length=axis_length,
+                tip_fraction=tip_fraction,
+            )
         else:
             actor = self._helper_build_axes_widget_actor(
                 colors=colors,
