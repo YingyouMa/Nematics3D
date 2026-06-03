@@ -470,6 +470,11 @@ class PlotGlyph(HostBase):
             kind="relation",
             is_weak_by_default=True,
         ),
+        "bounds_visual_source": AttrDef(
+            doc="The Bounds instance driving this glyph as a bounds-frame visual.",
+            kind="relation",
+            is_weak_by_default=True,
+        ),
         "impl_name_pv": AttrDef(
             doc="The unique identifier of this glyph stored in the PyVista plotter.",
             kind="impl",
@@ -531,9 +536,13 @@ class PlotGlyph(HostBase):
         **kwargs,
     ):
 
-        coords = type(self).__attr_defs__["raw_coords"].validator(
-            coords,
-            type(self).__attr_defs__["raw_coords"].doc,
+        coords = (
+            type(self)
+            .__attr_defs__["raw_coords"]
+            .validator(
+                coords,
+                type(self).__attr_defs__["raw_coords"].doc,
+            )
         )
         object.__setattr__(self, "raw_coords", coords)
         if len(coords) == 0:
@@ -541,20 +550,32 @@ class PlotGlyph(HostBase):
                 f"{type(self).__name__} received empty coords with shape {coords.shape}; "
                 "it will initialize as an empty glyph until coordinates are provided."
             )
-        clip_mode = type(self).__attr_defs__["state_clip_mode"].validator(
-            clip_mode,
-            type(self).__attr_defs__["state_clip_mode"].doc,
+        clip_mode = (
+            type(self)
+            .__attr_defs__["state_clip_mode"]
+            .validator(
+                clip_mode,
+                type(self).__attr_defs__["state_clip_mode"].doc,
+            )
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
-        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"].validator(
-            is_clip_inside,
-            type(self).__attr_defs__["state_is_clip_inside"].doc,
+        is_clip_inside = (
+            type(self)
+            .__attr_defs__["state_is_clip_inside"]
+            .validator(
+                is_clip_inside,
+                type(self).__attr_defs__["state_is_clip_inside"].doc,
+            )
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "calc_coords", coords.copy())
-        category = type(self).__attr_defs__["raw_category"].validator(
-            category,
-            type(self).__attr_defs__["raw_category"].doc,
+        category = (
+            type(self)
+            .__attr_defs__["raw_category"]
+            .validator(
+                category,
+                type(self).__attr_defs__["raw_category"].doc,
+            )
         )
         object.__setattr__(self, "raw_category", category)
         if name is None:
