@@ -982,18 +982,19 @@ class PlotGlyph(HostBase):
         prop.interpolation = shading
         object.__setattr__(self.opts, "shading_type", shading)
 
-        prop.ambient = self.opts.ambient
-        prop.diffuse = self.opts.diffuse
-        prop.specular = self.opts.specular
-        prop.specular_power = self.opts.specular_power
-        prop.specular_color = self.opts.specular_color
-
         if shading == "pbr":
             prop.metallic = self.opts.metallic
             prop.roughness = self.opts.roughness
 
-        actor.visibility = self.opts.is_visible
-        actor.pickable = self.opts.is_pickable
+        _skip = {"shading_type", "metallic", "roughness"}
+        for key, attr_path in self.opts.impl_actor_attr.items():
+            if key in _skip:
+                continue
+            parts = attr_path.split(".")
+            obj = actor
+            for part in parts[:-1]:
+                obj = getattr(obj, part)
+            setattr(obj, parts[-1], getattr(self.opts, key))
 
         object.__setattr__(self, "entity_actor", actor)
         self._helper_register_pick(actor)
