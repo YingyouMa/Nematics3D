@@ -96,14 +96,14 @@ class OptsPolyData(OptsGlyph):
 
     is_show_edges: bool | Unset = UNSET
     edge_color: tuple[float, float, float] | Unset = UNSET
-    line_width: float | Unset = UNSET
+    edge_width: float | Unset = UNSET
     style: str | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **dict(OptsGlyph.__attrs__),
         "is_show_edges": "Whether polygon edges should be rendered on the mesh.",
         "edge_color": "Edge color used when is_show_edges is enabled.",
-        "line_width": "Displayed edge line width.",
+        "edge_width": "Displayed edge line width.",
         "style": "Mesh representation style: 'surface' or 'wireframe'.",
     }
 
@@ -111,7 +111,7 @@ class OptsPolyData(OptsGlyph):
         **dict(OptsGlyph.impl_validators),
         "is_show_edges": lambda v, d: as_bool(v, name=d),
         "edge_color": lambda v, d: as_ColorRGB(v, name=d),
-        "line_width": lambda v, d: as_Number(
+        "edge_width": lambda v, d: as_Number(
             v,
             name=d,
             value_range=(0.0, np.inf),
@@ -125,7 +125,7 @@ class OptsPolyData(OptsGlyph):
             "ambient": 0.5,
             "is_show_edges": False,
             "edge_color": (0.0, 0.0, 0.0),
-            "line_width": 1.0,
+            "edge_width": 1.0,
             "style": "surface",
         }
     )
@@ -134,7 +134,7 @@ class OptsPolyData(OptsGlyph):
         **dict(OptsGlyph.impl_actor_attr),
         "is_show_edges": "prop.show_edges",
         "edge_color": "prop.edge_color",
-        "line_width": "prop.line_width",
+        "edge_width": "prop.line_width",
         "style": "prop.style",
     }
 
