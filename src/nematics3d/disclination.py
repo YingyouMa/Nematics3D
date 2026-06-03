@@ -182,6 +182,145 @@ def defect_detect(
 
 
 @logging_and_warning_decorator()
+def defect_detect_surface(
+    surface,
+    interpolator,
+    threshold: float = 0,
+    logger=None,
+) -> np.ndarray:
+    """
+    Detect surface defects on a triangulated PolyData surface.
+
+    For each internal edge of the surface triangulation, the two adjacent
+    triangles form a quadrilateral. The four directors at the quad vertices
+    are walked around the loop with nematic sign-alignment, and a defect is
+    flagged when the inner product of the first and last aligned director
+    falls below ``threshold``.
+
+    Parameters
+    ----------
+    surface : pyvista.PolyData
+        A triangulated surface (e.g. ``SurfaceSampling.calc_surface_clean``).
+        Every cell must be a triangle.
+
+    interpolator : GridInterpolator
+        Q-tensor interpolator used to evaluate the field at the surface
+        vertices.
+
+    threshold : float, optional
+        Inner-product threshold below which a quad loop is classified as a
+        defect. Default is 0.
+
+    logger : Logger, optional
+        Automatically handled by ``logging_and_warning_decorator``.
+
+    Returns
+    -------
+    defect_coords : np.ndarray, shape (D, 3)
+        Physical coordinates of detected defect centres (quad centroids).
+    """
+    import pyvista as pv
+    from .field import Q_diagonalize, align_stack
+
+    # ------------------------------------------------------------------ #
+    # 1. Evaluate director field at surface vertices                       #
+    # ------------------------------------------------------------------ #
+    surface = surface.triangulate().clean()
+    vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
+
+    Q = interpolator.interpolate(vertices)
+    _, n = Q_diagonalize(Q)                              # (V, 3)
+
+    logger.debug(
+        f"Evaluated director at {len(vertices)} surface vertices."
+    )
+
+    # ------------------------------------------------------------------ #
+    # 2. Build edge → [tri_idx, opposite_vertex] mapping                  #
+    # ------------------------------------------------------------------ #
+    faces = np.asarray(surface.faces, dtype=int).reshape(-1, 4)
+    triangles = faces[:, 1:]                             # (T, 3)
+
+    # Each internal edge is shared by exactly two triangles.
+    # Map (min_v, max_v) → list of (tri_idx, opposite_vertex_idx)
+    edge_map = {}
+    for tri_idx, (a, b, c) in enumerate(triangles):
+        for edge, opp in (
+            ((min(a, b), max(a, b)), c),
+            ((min(b, c), max(b, c)), a),
+            ((min(a, c), max(a, c)), b),
+        ):
+            if edge not in edge_map:
+                edge_map[edge] = []
+            edge_map[edge].append((tri_idx, opp))
+
+    # ------------------------------------------------------------------ #
+    # 3. Collect quads from internal edges                                 #
+    # ------------------------------------------------------------------ #
+    # For each internal edge (i, j) with opposing vertices k and l,
+    # sort the four points by polar angle in the local tangent plane so
+    # they form a proper (non-self-intersecting) loop.
+    quad_list = []
+    for (vi, vj), entries in edge_map.items():
+        if len(entries) != 2:
+            continue                                     # boundary edge
+        vk = entries[0][1]
+        vl = entries[1][1]
+        four = np.array([vi, vj, vk, vl], dtype=int)
+
+        # Project to local tangent plane centred at the quad centroid.
+        pts4 = vertices[four]                            # (4, 3)
+        centroid = pts4.mean(axis=0)
+        rel = pts4 - centroid                            # (4, 3)
+
+        # Build an orthonormal 2-D frame from the first relative vector.
+        u = rel[0]
+        u_norm = np.linalg.norm(u)
+        if u_norm < 1e-14:
+            continue
+        u = u / u_norm
+
+        # Normal from cross product of two independent edge vectors.
+        normal = np.cross(rel[0], rel[1])
+        n_norm = np.linalg.norm(normal)
+        if n_norm < 1e-14:
+            continue
+        normal = normal / n_norm
+        v = np.cross(normal, u)
+
+        # Polar angles and sort.
+        px = rel @ u
+        py = rel @ v
+        order = np.argsort(np.arctan2(py, px))
+        quad_list.append(four[order])
+
+    if not quad_list:
+        logger.debug("No internal edges found; returning empty result.")
+        return np.empty((0, 3), dtype=float)
+
+    quads = np.array(quad_list, dtype=int)               # (Q, 4)
+    logger.debug(f"Formed {len(quads)} quad loops from internal edges.")
+
+    # ------------------------------------------------------------------ #
+    # 4. Vectorised loop integrals                                         #
+    # ------------------------------------------------------------------ #
+    # stack shape: (4, Q, 3)
+    directors = np.stack([n[quads[:, k]] for k in range(4)], axis=0).copy()
+    aligned = align_stack(directors)
+
+    dot_first_last = np.einsum("qi,qi->q", aligned[0], aligned[3])
+    defect_mask = dot_first_last < threshold
+
+    defect_coords = vertices[quads[defect_mask]].mean(axis=1)
+
+    logger.debug(
+        f"Detected {defect_mask.sum()} defect quads "
+        f"(threshold={threshold})."
+    )
+    return defect_coords
+
+
+@logging_and_warning_decorator()
 def defect_classify_into_lines(
     defect_indices: DefectIndex,
     box_size_periodic: DimensionFlagInput = np.inf,

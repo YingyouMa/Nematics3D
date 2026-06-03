@@ -1156,9 +1156,8 @@ def as_plotfigure(figure, opts_figure=None, logger=None):
             figure = PlotFigure(opts=opts_figure)
         elif isinstance(figure, PlotFigure):
             if not figure.is_alive:
-                logger.warning(
-                    "The provided PlotFigure is no longer alive. "
-                    "A new figure will be created instead."
+                logger.error(
+                    "The provided PlotFigure is no longer alive."
                 )
                 logger.recovery("Create a new figure instead.")
                 figure = PlotFigure(opts=opts_figure)
