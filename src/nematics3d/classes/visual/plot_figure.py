@@ -703,6 +703,11 @@ class PlotFigure(HostBase):
         if orien_menu is None:
             return
 
+        # Remove the default pyvistaqt entries (Show All / Hide All)
+        for action in orien_menu.actions():
+            if action.text() in ("Show All", "Hide All"):
+                orien_menu.removeAction(action)
+
         orien_menu.addSeparator()
         orien_menu.addAction(
             "Director: Axes",
@@ -852,8 +857,8 @@ class PlotFigure(HostBase):
         *,
         colors=None,
         labels=("", "", ""),
-        axis_length=1.4,
-        tip_fraction=0.5,
+        axis_length=1.6,
+        tip_fraction=0.3,
         theta_resolution=60,
         phi_resolution=60,
     ) -> vtk.vtkAssembly:
@@ -932,8 +937,8 @@ class PlotFigure(HostBase):
         style="axes",
         colors=None,
         labels=("x", "y", "z"),
-        axis_length=1.4,
-        tip_fraction=0.5,
+        axis_length=1.6,
+        tip_fraction=0.3,
         interactive=False,
         viewport=(0.0, 0.0, 0.2, 0.2),
     ):
