@@ -3,7 +3,7 @@ import time
 import datetime
 import vtk
 import numpy as np
-from qtpy import QtCore, QtWidgets
+from qtpy import QtCore, QtGui, QtWidgets
 from dataclasses import dataclass, field
 
 from nematics3d.logging_decorator import logging_and_warning_decorator
@@ -115,6 +115,7 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         self._sliders: dict[str, object] = {}
         self._snapshots: dict[str, dict[str, object]] = {}
         self._snapshot_names_saved_from_dialog: list[str] = []
+        self._opts_snapshot_dialog = None
         self._sync_task_name = self._helper_make_snapshot_name(
             prefix="figure_opts_sync"
         )
@@ -189,7 +190,6 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         (
             self.panel_distance,
             self.distance_input,
-            self.btn_distance_apply,
         ) = self._make_scalar_apply_row(
             parent=group_camera,
             layout=layout_camera,
@@ -198,8 +198,8 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
             value_min=0.0,
             value_max=1.0e12,
             decimals=2,
-            callback=self._apply_distance,
         )
+        self.distance_input.valueChanged.connect(self._apply_distance)
 
         (
             self.panel_focal_point,
@@ -251,12 +251,12 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         self.btn_load_choose.clicked.connect(self._on_choose_snapshot_to_restore)
         layout_snapshot.addWidget(self.btn_load_choose, 1, 1)
 
-        buttons = QtWidgets.QDialogButtonBox(
-            QtWidgets.QDialogButtonBox.Close,
-            parent=self,
+        self.btn_show_opts_snapshot = QtWidgets.QPushButton(
+            "Show Current Opts",
+            self,
         )
-        buttons.rejected.connect(self.reject)
-        self.layout.addWidget(buttons)
+        self.btn_show_opts_snapshot.clicked.connect(self._open_opts_snapshot_dialog)
+        self.layout.addWidget(self.btn_show_opts_snapshot)
 
     def _make_scalar_apply_row(
         self,
@@ -268,7 +268,6 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         value_min,
         value_max,
         decimals,
-        callback,
     ):
         panel = QtWidgets.QWidget(parent)
         panel_layout = QtWidgets.QHBoxLayout(panel)
@@ -282,13 +281,8 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         box.setRange(float(value_min), float(value_max))
         box.setValue(float(value))
         panel_layout.addWidget(box)
-
-        btn_apply = QtWidgets.QPushButton("Apply", panel)
-        panel_layout.addWidget(btn_apply)
         layout.addWidget(panel)
-
-        btn_apply.clicked.connect(lambda: callback(box))
-        return panel, box, btn_apply
+        return panel, box
 
     def _make_vector_apply_row(
         self,
@@ -436,6 +430,8 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
     def _apply_camera_slider_changes(self, *_args):
         if self._is_gui_updating:
             return
+        for key in ("azimuth", "elevation", "roll"):
+            self._sliders[key].set_label()
         self.figure.act_commit(
             azimuth=float(self._sliders["azimuth"].get_value()),
             elevation=float(self._sliders["elevation"].get_value()),
@@ -445,6 +441,8 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
     def _apply_bg_color_changes(self, *_args):
         if self._is_gui_updating:
             return
+        for key in ("bg_color_r", "bg_color_g", "bg_color_b"):
+            self._sliders[key].set_label()
         self.figure.act_commit(
             bg_color=(
                 float(self._sliders["bg_color_r"].get_value()),
@@ -453,13 +451,62 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
             )
         )
 
-    def _apply_distance(self, box: QtWidgets.QDoubleSpinBox):
-        self.figure.act_commit(distance=float(box.value()))
+    def _apply_distance(self, *_args):
+        if self._is_gui_updating:
+            return
+        self.figure.act_commit(distance=float(self.distance_input.value()))
 
     def _apply_focal_point(self, boxes):
         self.figure.act_commit(
             focal_point=np.array([box.value() for box in boxes], dtype=float)
         )
+
+    def _helper_build_opts_snapshot_text(self) -> str:
+        figure = self.figure
+        if figure is None or not figure.is_alive:
+            return "PlotFigure is no longer available."
+        return repr(figure.opts)
+
+    def _open_opts_snapshot_dialog(self):
+        dialog_existing = self._opts_snapshot_dialog
+        if dialog_existing is not None:
+            dialog_existing.close()
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle("Current PlotFigure Opts Snapshot")
+        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        label = QtWidgets.QLabel(
+            "This text is a one-time snapshot when the window opens. "
+            "It does not update live.",
+            dialog,
+        )
+        label.setWordWrap(True)
+        label_font = QtGui.QFont(label.font())
+        label_font.setPointSize(max(label_font.pointSize(), 12))
+        label.setFont(label_font)
+        layout.addWidget(label)
+
+        text = QtWidgets.QPlainTextEdit(dialog)
+        text.setReadOnly(True)
+        text.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        font = QtGui.QFont("Consolas")
+        font.setStyleHint(QtGui.QFont.Monospace)
+        font.setPointSize(13)
+        text.setFont(font)
+        text.setPlainText(self._helper_build_opts_snapshot_text())
+        layout.addWidget(text)
+
+        dialog.destroyed.connect(
+            lambda *_args: setattr(self, "_opts_snapshot_dialog", None)
+        )
+        self._opts_snapshot_dialog = dialog
+        dialog.resize(760, 540)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     def _on_save_current_snapshot(self):
         name = self._helper_make_snapshot_name()
@@ -506,6 +553,8 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
         try:
             if self.figure is not None:
                 self.figure.act_detach_sync_task(self._sync_task_name)
+            if self._opts_snapshot_dialog is not None:
+                self._opts_snapshot_dialog.close()
         finally:
             super().closeEvent(event)
 
@@ -603,6 +652,19 @@ class PickManager:
             if text == "settings":
                 return action.menu()
         return menu_bar.addMenu("Settings")
+
+    def _helper_close_dialogs(self):
+        for attr_name in (
+            "_entity_settings_dialog",
+            "_entity_figure_opts_dialog",
+        ):
+            dialog = getattr(self, attr_name, None)
+            if dialog is None:
+                continue
+            try:
+                dialog.close()
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
 
     def _helper_open_settings_dialog(self):
         dialog_existing = self._entity_settings_dialog

@@ -528,12 +528,18 @@ class PlotFigure(HostBase):
     def _helper_close_interacts(self):
         interacts = self.interacts
         if interacts is None:
+            pm = getattr(self, "entity_pick_manager", None)
+            if pm is not None and hasattr(pm, "_helper_close_dialogs"):
+                pm._helper_close_dialogs()
             return
         for panel in list(interacts):
             try:
                 panel.close()
             except (AttributeError, RuntimeError, ReferenceError):
                 pass
+        pm = getattr(self, "entity_pick_manager", None)
+        if pm is not None and hasattr(pm, "_helper_close_dialogs"):
+            pm._helper_close_dialogs()
 
     def _helper_close_scalar_bars(self):
         scalar_bars = self.scalar_bars
