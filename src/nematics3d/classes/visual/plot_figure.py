@@ -939,7 +939,7 @@ class PlotFigure(HostBase):
         labels=("x", "y", "z"),
         axis_length=1.6,
         tip_fraction=0.3,
-        interactive=False,
+        interactive=True,
         viewport=(0.0, 0.0, 0.2, 0.2),
     ):
         """Add a corner orientation widget whose axis colors match director colors.
