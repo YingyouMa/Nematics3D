@@ -689,6 +689,11 @@ class PanelBase(QtWidgets.QWidget):
 
         self.host.act_attach_sync_task(name=self.str_now, func=self._sync_func)
 
+        self._opts_snapshot_dialog = None
+        self.btn_show_opts = QtWidgets.QPushButton("Show Current Opts", self)
+        self.btn_show_opts.clicked.connect(self._open_opts_snapshot_dialog)
+        self.layout.addWidget(self.btn_show_opts)
+
         console = getattr(self.fig, "console", None) if self.fig is not None else None
         if console is not None and self.name != "panel_unregistered":
             console.println(f"Opened the control panel for {self.host!s}.")
@@ -888,6 +893,54 @@ class PanelBase(QtWidgets.QWidget):
         self._helper_restore_snapshot(name)
         self._helper_after_restore_snapshot(name)
         self._helper_notify_snapshot(f"Restored snapshot {name!r}.")
+
+    def _helper_build_opts_snapshot_text(self) -> str:
+        host = self.host
+        opts = getattr(host, "opts", None)
+        if opts is None:
+            return f"{host!s} has no opts."
+        return repr(opts)
+
+    def _open_opts_snapshot_dialog(self):
+        dialog_existing = self._opts_snapshot_dialog
+        if dialog_existing is not None:
+            dialog_existing.close()
+
+        dialog = QtWidgets.QDialog(self)
+        dialog.setWindowTitle(f"Current Opts Snapshot — {self.host!s}")
+        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+
+        layout = QtWidgets.QVBoxLayout(dialog)
+
+        label = QtWidgets.QLabel(
+            "This text is a one-time snapshot when the window opens. "
+            "It does not update live.",
+            dialog,
+        )
+        label.setWordWrap(True)
+        label_font = QtGui.QFont(label.font())
+        label_font.setPointSize(max(label_font.pointSize(), 12))
+        label.setFont(label_font)
+        layout.addWidget(label)
+
+        text = QtWidgets.QPlainTextEdit(dialog)
+        text.setReadOnly(True)
+        text.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
+        font = QtGui.QFont("Consolas")
+        font.setStyleHint(QtGui.QFont.Monospace)
+        font.setPointSize(13)
+        text.setFont(font)
+        text.setPlainText(self._helper_build_opts_snapshot_text())
+        layout.addWidget(text)
+
+        dialog.destroyed.connect(
+            lambda *_args: setattr(self, "_opts_snapshot_dialog", None)
+        )
+        self._opts_snapshot_dialog = dialog
+        dialog.resize(760, 540)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
 
     # -------------------------------
     # Qt lifecycle

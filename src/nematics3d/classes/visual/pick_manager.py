@@ -228,7 +228,7 @@ class _FigureOptionsDialog(QtWidgets.QDialog):
             slider = self._sliders[key]
             slider.slider.valueChanged.connect(self._apply_bg_color_changes)
 
-        group_snapshot = QtWidgets.QGroupBox("Snapshots", self)
+        group_snapshot = QtWidgets.QGroupBox("Save / Load", self)
         layout_snapshot = QtWidgets.QGridLayout(group_snapshot)
         self.layout.addWidget(group_snapshot)
 
