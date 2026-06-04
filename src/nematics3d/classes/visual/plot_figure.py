@@ -857,8 +857,8 @@ class PlotFigure(HostBase):
         *,
         colors=None,
         labels=("", "", ""),
-        axis_length=1.6,
-        tip_fraction=0.3,
+        axis_length=1.96,
+        tip_fraction=0.245,
         theta_resolution=60,
         phi_resolution=60,
     ) -> vtk.vtkAssembly:
@@ -937,8 +937,8 @@ class PlotFigure(HostBase):
         style="axes",
         colors=None,
         labels=("x", "y", "z"),
-        axis_length=1.6,
-        tip_fraction=0.3,
+        axis_length=1.96,
+        tip_fraction=0.245,
         interactive=True,
         viewport=(0.0, 0.0, 0.2, 0.2),
     ):
