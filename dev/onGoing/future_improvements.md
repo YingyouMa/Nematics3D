@@ -3,13 +3,9 @@
 - Measure the runtime overhead of the logging decorator, especially in hot paths and repeated small function calls.
 - Explore a repository-wide switch that can disable the logging decorator globally when performance is the priority.
 - Rebuild `PlaneGrid.act_debug_plot()` around the new `bounds` relation and `Bounds.act_visualize()` instead of the legacy `PlotExtent` path.
-- Clean up the `Bounds` subscription model, especially the relation between a `Bounds` host and its own visualized bounds objects, so shared-bounds behavior stays easy to inspect and reason about.
+- Add a `bounds` relation to `SurfaceSampling` so it can be clipped to a `Bounds` object in the same way `PlaneGrid` does: only surface area inside the bounds participates in sampling, and the sampled points update automatically when the bounds geometry changes. The subscription and sync-task wiring between `SurfaceSampling`, its attached glyph, and the bounds should follow the same pattern used by `PlaneGrid` and its downstream glyphs.
 
 - Decide whether `PlaneGridPolar.act_debug_plot()` should be restored, redesigned around the current plotting stack, or removed permanently.
-- Design a future smoothing stage for `SmoothedLineFunc` that stays consistent with `SmoothedLine`, especially for periodic and wrap-mode behavior.
-- Add a direct numeric input box alongside `PanelBase` sliders so control panels support fine-grained value entry in addition to drag-based adjustment.
-- Unify the Qt binding used by `ScopedConsoleDock` with the rest of the visual Qt stack, which currently prefers `qtpy` while `console.py` still imports `PyQt5` directly.
-- Make the `ScopedConsoleDock` public output API internally consistent by deciding whether `clear()` should follow the same signal-based UI-update path as `write()` / `println()`.
 - Add a `clip_mode="none"` option for glyph/plot objects so a bound `bounds` object can remain attached while clipping is temporarily disabled for visual comparison.
 - Improve scalar bar control and management so visual tests and multi-glyph figures can enable, suppress, reuse, and update scalar bars more predictably.
 - Add a scene-state snapshot workflow so the current interactive figure/object state can be saved and restored later as a named checkpoint.

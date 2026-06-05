@@ -6,6 +6,9 @@ class ScopedConsoleDock(QtWidgets.QDockWidget):
     _sig_append = (
         QtCore.Signal(str) if hasattr(QtCore, "Signal") else QtCore.pyqtSignal(str)
     )
+    _sig_clear = (
+        QtCore.Signal() if hasattr(QtCore, "Signal") else QtCore.pyqtSignal()
+    )
 
     def __init__(
         self,
@@ -26,6 +29,7 @@ class ScopedConsoleDock(QtWidgets.QDockWidget):
         self._text.setFont(font)
 
         self._sig_append.connect(self._append_text)
+        self._sig_clear.connect(self._text.clear)
 
     def write(self, msg: str) -> None:
         """Append raw text (no newline added)."""
@@ -37,7 +41,7 @@ class ScopedConsoleDock(QtWidgets.QDockWidget):
         self._sig_append.emit((msg or "") + "\n")
 
     def clear(self) -> None:
-        self._text.clear()
+        self._sig_clear.emit()
 
     @QtCore.Slot(str) if hasattr(QtCore, "Slot") else QtCore.pyqtSlot(str)
     def _append_text(self, text: str) -> None:
