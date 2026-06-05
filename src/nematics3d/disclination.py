@@ -19,6 +19,7 @@ from .datatypes import (
 )
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
+from .field import align_stack, add_periodic_boundary, Q_diagonalize
 
 # from .debug.debug_store import DEBUG_VARS
 
@@ -55,8 +56,6 @@ def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
     """
 
     n = check_Sn(n, "n")
-
-    from .field import align_stack
 
     a_orig = n[:-1, :-1]
     b_orig = n[1:, :-1]
@@ -130,8 +129,6 @@ def defect_detect(
 
     n_origin = check_Sn(n_origin, "n")
 
-    from .field import add_periodic_boundary
-
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
 
@@ -184,8 +181,11 @@ def defect_detect(
 @logging_and_warning_decorator()
 def defect_detect_surface(
     surface,
-    interpolator,
+    ndata,
     threshold: float = 0,
+    *,
+    is_simplify: bool = True,
+    is_return_mask: bool = False,
     logger=None,
 ) -> np.ndarray:
     """
@@ -203,13 +203,31 @@ def defect_detect_surface(
         A triangulated surface (e.g. ``SurfaceSampling.calc_surface_clean``).
         Every cell must be a triangle.
 
-    interpolator : GridInterpolator
-        Q-tensor interpolator used to evaluate the field at the surface
-        vertices.
+    ndata : GridInterpolator or np.ndarray, shape (V, 3)
+        Source of the director field at the surface vertices.  Pass a
+        ``GridInterpolator`` to evaluate the Q-tensor and derive directors
+        internally, or pass a pre-computed director array directly to skip
+        the interpolation step.  The array must have the same number of rows
+        as the surface has vertices.
 
     threshold : float, optional
         Inner-product threshold below which a quad loop is classified as a
         defect. Default is 0.
+
+    is_simplify : bool, optional
+        When ``True``, consolidate redundant detections caused by a single
+        defect triggering all three edges of the same triangle.  Any triangle
+        whose three edges all produce defect quads is replaced by a single
+        point at the triangle centroid; the three individual quad centroids
+        are dropped.  Quads that do not belong to such a fully-defective
+        triangle are kept as-is.  Default is ``True``.
+
+    is_return_mask : bool, optional
+        When ``True``, a second return value is added: a boolean array of
+        shape ``(V,)`` marking which surface vertices participate in any
+        detected defect quad or defect triangle.  The caller can index the
+        surface vertex coordinates or interpolated directors directly with
+        this mask.  Default is ``False``.
 
     logger : Logger, optional
         Automatically handled by ``logging_and_warning_decorator``.
@@ -217,19 +235,31 @@ def defect_detect_surface(
     Returns
     -------
     defect_coords : np.ndarray, shape (D, 3)
-        Physical coordinates of detected defect centres (quad centroids).
+        Physical coordinates of detected defect centres.
+    near_defect_mask : np.ndarray of bool, shape (V,)
+        Only returned when ``is_return_mask=True``.  ``True`` for each surface
+        vertex that belongs to a defect quad or defect triangle.
     """
-    import pyvista as pv
-    from .field import Q_diagonalize, align_stack
-
     # ------------------------------------------------------------------ #
     # 1. Evaluate director field at surface vertices                       #
     # ------------------------------------------------------------------ #
-    surface = surface.triangulate().clean()
-    vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
-
-    Q = interpolator.interpolate(vertices)
-    _, n = Q_diagonalize(Q)                              # (V, 3)
+    if isinstance(ndata, np.ndarray):
+        # Surface is assumed to already be a clean triangulated mesh whose
+        # vertex order matches the supplied director array.  Skipping
+        # .clean() avoids vertex reordering that would break the mapping.
+        surface = surface.triangulate()
+        vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
+        n = np.asarray(ndata, dtype=float)
+        if n.shape != (len(vertices), 3):
+            raise ValueError(
+                f"`ndata` array has shape {n.shape} but surface has "
+                f"{len(vertices)} vertices; expected shape ({len(vertices)}, 3)."
+            )
+    else:
+        surface = surface.triangulate().clean()
+        vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
+        Q = ndata.interpolate(vertices)
+        _, n = Q_diagonalize(Q)                              # (V, 3)
 
     logger.debug(
         f"Evaluated director at {len(vertices)} surface vertices."
@@ -261,11 +291,12 @@ def defect_detect_surface(
     # sort the four points by polar angle in the local tangent plane so
     # they form a proper (non-self-intersecting) loop.
     quad_list = []
+    quad_tri_pairs = []                                  # (tri_idx_0, tri_idx_1) per quad
     for (vi, vj), entries in edge_map.items():
         if len(entries) != 2:
             continue                                     # boundary edge
-        vk = entries[0][1]
-        vl = entries[1][1]
+        tri_idx_0, vk = entries[0]
+        tri_idx_1, vl = entries[1]
         four = np.array([vi, vj, vk, vl], dtype=int)
 
         # Project to local tangent plane centred at the quad centroid.
@@ -293,10 +324,14 @@ def defect_detect_surface(
         py = rel @ v
         order = np.argsort(np.arctan2(py, px))
         quad_list.append(four[order])
+        quad_tri_pairs.append((tri_idx_0, tri_idx_1))
 
     if not quad_list:
         logger.debug("No internal edges found; returning empty result.")
-        return np.empty((0, 3), dtype=float)
+        empty_coords = np.empty((0, 3), dtype=float)
+        if is_return_mask:
+            return empty_coords, np.zeros(len(vertices), dtype=bool)
+        return empty_coords
 
     quads = np.array(quad_list, dtype=int)               # (Q, 4)
     logger.debug(f"Formed {len(quads)} quad loops from internal edges.")
@@ -311,13 +346,77 @@ def defect_detect_surface(
     dot_first_last = np.einsum("qi,qi->q", aligned[0], aligned[3])
     defect_mask = dot_first_last < threshold
 
-    defect_coords = vertices[quads[defect_mask]].mean(axis=1)
-
     logger.debug(
         f"Detected {defect_mask.sum()} defect quads "
         f"(threshold={threshold})."
     )
-    return defect_coords
+
+    if not is_simplify:
+        defect_coords = vertices[quads[defect_mask]].mean(axis=1)
+        if is_return_mask:
+            near_defect_mask = np.zeros(len(vertices), dtype=bool)
+            near_defect_mask[quads[defect_mask].ravel()] = True
+            return defect_coords, near_defect_mask
+        return defect_coords
+
+    # ------------------------------------------------------------------ #
+    # 5. Simplify: replace fully-defective triangles with their centroid  #
+    # ------------------------------------------------------------------ #
+    # Count how many defect quads each triangle participates in.
+    defect_quad_indices = np.where(defect_mask)[0]
+    tri_defect_edge_count = np.zeros(len(triangles), dtype=int)
+    for q_idx in defect_quad_indices:
+        t0, t1 = quad_tri_pairs[q_idx]
+        tri_defect_edge_count[t0] += 1
+        tri_defect_edge_count[t1] += 1
+
+    # A triangle is "fully defective" when all three of its edges are
+    # defect edges (count == 3).
+    fully_defective_tris = np.where(tri_defect_edge_count == 3)[0]
+    fully_defective_set = set(fully_defective_tris.tolist())
+
+    # Collect triangle centroids for fully-defective triangles.
+    tri_coords = []
+    for t_idx in fully_defective_tris:
+        tri_coords.append(vertices[triangles[t_idx]].mean(axis=0))
+
+    # Keep quad centroids for defect quads that do NOT belong to any
+    # fully-defective triangle.
+    quad_coords = []
+    for q_idx in defect_quad_indices:
+        t0, t1 = quad_tri_pairs[q_idx]
+        if t0 not in fully_defective_set and t1 not in fully_defective_set:
+            quad_coords.append(vertices[quads[q_idx]].mean(axis=0))
+
+    parts = []
+    if tri_coords:
+        parts.append(np.array(tri_coords, dtype=float))
+    if quad_coords:
+        parts.append(np.array(quad_coords, dtype=float))
+
+    if not parts:
+        empty_coords = np.empty((0, 3), dtype=float)
+        if is_return_mask:
+            return empty_coords, np.zeros(len(vertices), dtype=bool)
+        return empty_coords
+
+    defect_coords = np.vstack(parts)
+    logger.debug(
+        f"After simplification: {len(fully_defective_tris)} triangle centres "
+        f"+ {len(quad_coords)} residual quad centres = {len(defect_coords)} total."
+    )
+
+    if not is_return_mask:
+        return defect_coords
+
+    near_defect_mask = np.zeros(len(vertices), dtype=bool)
+    for t_idx in fully_defective_tris:
+        near_defect_mask[triangles[t_idx]] = True
+    for q_idx in defect_quad_indices:
+        t0, t1 = quad_tri_pairs[q_idx]
+        if t0 not in fully_defective_set and t1 not in fully_defective_set:
+            near_defect_mask[quads[q_idx]] = True
+    return defect_coords, near_defect_mask
 
 
 @logging_and_warning_decorator()

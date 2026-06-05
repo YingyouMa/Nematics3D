@@ -28,6 +28,7 @@ from .classes.q_plane import *
 from .classes.vector_plane import *
 from .classes.q_surface import *
 from .general import *
+from .geometry import triangulate_surface_points, check_triangulation_quality, TriangulationQuality
 from .logging_decorator import logging_and_warning_decorator
 from .classes.visual import qt
 

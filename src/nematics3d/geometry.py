@@ -8,6 +8,7 @@ from typing import ClassVar
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
+from scipy.optimize import minimize
 
 from .classes.result_base import ResultBase
 from .datatypes import Tensor, Vect, as_Vect, as_axes, as_dimension_info, as_points
@@ -448,3 +449,185 @@ def find_plane_normal(points, is_return_metric=False):
         "linearity_risk": linearity_risk,
     }
     return normal, metric
+
+
+# ===========================================================================
+# Surface triangulation
+# ---------------------------------------------------------------------------
+# Build a closed triangulated surface from a point cloud lying on a
+# roughly star-shaped surface, using spherical projection and convex hull.
+# ===========================================================================
+
+
+@dataclass(slots=True, frozen=True, repr=False)
+class TriangulationQuality(ResultBase):
+    """Quality metrics for a spherical-projection surface triangulation."""
+
+    __result_name__: ClassVar[str] = "Triangulation quality from spherical projection"
+
+    __field_docs__: ClassVar[dict[str, str]] = {
+        "flip_ratio": (
+            "Fraction of triangles whose outward normal points inward. "
+            "Non-zero only when the star-shape assumption is violated. "
+            "Values above ~0.05 suggest the input is poorly suited for this method."
+        ),
+        "radial_cv": (
+            "Coefficient of variation of point distances from the reference center. "
+            "Zero for a perfect sphere; larger values indicate elongated or irregular "
+            "shapes where projection distortion is higher."
+        ),
+        "n_flipped": "Number of inward-facing triangles.",
+        "n_triangles": "Total number of triangles in the mesh.",
+    }
+
+    flip_ratio: float
+    radial_cv: float
+    n_flipped: int
+    n_triangles: int
+
+
+def check_triangulation_quality(
+    points: np.ndarray,
+    mesh: "pv.PolyData",
+    *,
+    is_optimize_center: bool = False,
+) -> TriangulationQuality:
+    """Assess how suitable a point cloud is for spherical-projection triangulation.
+
+    Parameters
+    ----------
+    points : array-like, shape (N, 3)
+        The original point cloud passed to ``triangulate_surface_points``.
+    mesh : pyvista.PolyData
+        The triangulated mesh returned by ``triangulate_surface_points``.
+    is_optimize_center : bool, optional
+        When ``False`` (default) the centroid is used as the reference center.
+        When ``True`` the center is refined by the largest-inscribed-sphere
+        heuristic, matching the behaviour of ``triangulate_surface_points``
+        when called with the same flag.
+
+    Returns
+    -------
+    TriangulationQuality
+        Dataclass result with ``flip_ratio``, ``radial_cv``, ``n_flipped``,
+        and ``n_triangles``.
+    """
+    points = as_points(points, name="points", dim=3, min_num=4)
+
+    centroid = points.mean(axis=0)
+    if is_optimize_center:
+        def neg_min_dist(c):
+            return -np.min(np.linalg.norm(points - c, axis=1))
+
+        result = minimize(
+            neg_min_dist,
+            x0=centroid,
+            method="Nelder-Mead",
+            options={"xatol": 1e-4, "fatol": 1e-4, "maxiter": 10000},
+        )
+        center = result.x
+    else:
+        center = centroid
+
+    faces = np.asarray(mesh.faces, dtype=int).reshape(-1, 4)[:, 1:]  # (T, 3)
+
+    # flip_ratio: fraction of triangles whose normal points inward.
+    v0, v1, v2 = points[faces[:, 0]], points[faces[:, 1]], points[faces[:, 2]]
+    tri_centers = (v0 + v1 + v2) / 3
+    normals = np.cross(v1 - v0, v2 - v0)
+    outward = tri_centers - center
+    n_flipped = int(np.sum(np.einsum("ij,ij->i", normals, outward) < 0))
+    n_triangles = len(faces)
+
+    # radial_cv: coefficient of variation of distances from center.
+    radii = np.linalg.norm(points - center, axis=1)
+    radial_cv = float(radii.std() / radii.mean()) if radii.mean() > 1e-14 else 0.0
+
+    return TriangulationQuality(
+        flip_ratio=n_flipped / n_triangles,
+        radial_cv=radial_cv,
+        n_flipped=n_flipped,
+        n_triangles=n_triangles,
+    )
+
+
+def triangulate_surface_points(
+    points: np.ndarray,
+    *,
+    is_optimize_center: bool = False,
+) -> "pv.PolyData":
+    """Build a triangulated closed surface mesh from a point cloud on a
+    roughly star-shaped surface.
+
+    The algorithm projects the input points onto a unit sphere centred at a
+    reference point, computes the convex hull of the projected points, and
+    transfers the resulting triangle connectivity back to the original
+    coordinates.  The vertices of the returned mesh are exactly the input
+    points.
+
+    This approach is correct when the surface is *star-shaped* with respect
+    to the reference point, i.e. every ray from the reference point intersects
+    the surface exactly once.  Small concavities are acceptable provided they
+    do not violate this condition.
+
+    Parameters
+    ----------
+    points : array-like, shape (N, 3)
+        Point cloud lying on the target closed surface.
+    is_optimize_center : bool, optional
+        When ``False`` (default) the centroid of the point cloud is used as
+        the reference point for the spherical projection.  When ``True`` the
+        reference point is refined by maximising the minimum distance to all
+        input points (largest-inscribed-sphere heuristic), which reduces the
+        risk of triangle flipping near mildly non-star-shaped regions at the
+        cost of a short Nelder-Mead optimisation.
+
+    Returns
+    -------
+    pyvista.PolyData
+        Triangulated surface whose vertices are exactly ``points``.
+    """
+    import pyvista as pv
+
+    points = as_points(points, name="points", dim=3, min_num=4)
+
+    centroid = points.mean(axis=0)
+
+    if is_optimize_center:
+        def neg_min_dist(c):
+            return -np.min(np.linalg.norm(points - c, axis=1))
+
+        result = minimize(
+            neg_min_dist,
+            x0=centroid,
+            method="Nelder-Mead",
+            options={"xatol": 1e-4, "fatol": 1e-4, "maxiter": 10000},
+        )
+        center = result.x
+    else:
+        center = centroid
+
+    directions = points - center
+    norms = np.linalg.norm(directions, axis=1, keepdims=True)
+    if np.any(norms < 1e-14):
+        raise ValueError(
+            "One or more points coincide with the reference center; the "
+            "spherical projection is undefined.  Consider using "
+            "is_optimize_center=True or providing a different point cloud."
+        )
+    sphere_points = directions / norms
+
+    try:
+        hull = ConvexHull(sphere_points)
+    except QhullError as exc:
+        raise ValueError(
+            "ConvexHull failed on the spherically projected points.  The "
+            "surface may be degenerate or too few points were supplied."
+        ) from exc
+
+    faces = hull.simplices  # (T, 3)
+    padding = np.full((len(faces), 1), 3, dtype=int)
+    face_array = np.hstack([padding, faces]).ravel()
+    mesh = pv.PolyData(points, face_array)
+
+    return mesh
