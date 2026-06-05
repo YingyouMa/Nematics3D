@@ -188,7 +188,6 @@ class QSurface(InterpolateSurface):
             if self.calc_defect_pos is not None and len(self.calc_defect_pos) > 0:
                 self.visual_defect.act_commit(
                     coords=self.calc_defect_pos,
-                    is_visible=True,
                 )
             else:
                 self.visual_defect.opts.is_visible = False
