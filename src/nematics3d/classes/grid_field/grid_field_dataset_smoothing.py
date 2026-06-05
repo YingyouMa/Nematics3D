@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 
 from nematics3d.datatypes import (
     as_Number,
@@ -343,19 +344,23 @@ def _helper_gaussian_smooth_values(
     truncate: float,
     boundary: tuple[str, str, str],
 ) -> np.ndarray:
-    """Return Gaussian-smoothed values via separable real-space convolution."""
-    result = np.asarray(values, dtype=float)
-    for axis, (sigma_axis, boundary_mode) in enumerate(zip(sigma_index, boundary)):
-        kernel = self._helper_build_gaussian_kernel_1d(
-            sigma_axis,
+    """Return Gaussian-smoothed values via scipy.ndimage.gaussian_filter."""
+    if len(set(boundary)) == 1:
+        result = gaussian_filter(
+            np.asarray(values, dtype=float),
+            sigma=sigma_index,
+            mode=boundary[0],
             truncate=truncate,
         )
-        result = self._helper_convolve_gaussian_axis(
-            result,
-            kernel=kernel,
-            axis=axis,
-            mode=boundary_mode,
-        )
+    else:
+        result = np.asarray(values, dtype=float)
+        for axis, (sigma_axis, boundary_mode) in enumerate(zip(sigma_index, boundary)):
+            result = gaussian_filter(
+                result,
+                sigma=[s if i == axis else 0.0 for i, s in enumerate(sigma_index[:3])],
+                mode=boundary_mode,
+                truncate=truncate,
+            )
     return result
 
 
