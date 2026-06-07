@@ -49,7 +49,7 @@ from ..datatypes import UNSET, Unset, as_list, as_str
 from ..format import repr_field_line, save_opts_json
 from ..general import pop_exclusive
 from ..logging_decorator import logging_and_warning_decorator
-from .class_base import AssignState, AttrDef, ClassBase
+from .class_base import AttrDef, ClassBase
 from .opts import (
     build_dict_override,
     diff_dict_values,
@@ -517,18 +517,6 @@ class OptsBase:
 #   in `impl_...`; user-attached side storage belongs in extra attrs.
 
 
-@dataclass(slots=True)
-class HostAssignState(AssignState):
-    """Per-instance assignment-control flags for one public-settable host field.
-
-    Extends ``AssignState`` with ``is_wrapped``, which blocks assignment when
-    this host is controlled by a wrapper host.  ``ClassBase`` never needs to
-    know about ``is_wrapped``; only ``HostBase`` and its subclasses use it.
-    """
-
-    is_wrapped: bool = False
-
-
 class HostBase(ClassBase):
     """
     Shared host controller for objects driven by an associated ``OptsBase``.
@@ -684,10 +672,6 @@ class HostBase(ClassBase):
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
-
-    def _helper_make_assign_state(self) -> HostAssignState:
-        """Return a ``HostAssignState`` instance for one public-settable field."""
-        return HostAssignState()
 
     # ==================== OVERRIDE ====================
     # HostBase overrides ClassBase.__init__ because a host must bind a paired
@@ -1477,8 +1461,7 @@ class HostBase(ClassBase):
                 if not hasattr(state, flag_name):
                     raise AttributeError(
                         f"AssignState for {target_key!r} has no flag {flag_name!r}. "
-                        "HostBase uses HostAssignState which carries both "
-                        "'is_protected' and 'is_wrapped'."
+                        "Valid flags are 'is_protected' and 'is_wrapped'."
                     )
                 setattr(state, flag_name, is_enabled)
 

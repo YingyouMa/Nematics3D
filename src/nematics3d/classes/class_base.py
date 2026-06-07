@@ -68,6 +68,8 @@ class AttrDef:
     is_reapply_opts_after_raw:
         If ``True``, opts are re-applied after this raw field is set.
         Interpreted by ``HostBase``; ignored by ``ClassBase``.
+        ClassBase subclasses that do not pair an opts object should leave
+        this ``False`` (the default).
     is_public_settable:
         Explicit override for whether the public surface is writable.
         Required for ``kind="property"``; inferred automatically for
@@ -102,13 +104,14 @@ class RelationState:
 class AssignState:
     """Mutable per-instance assignment-control flags for one public-settable field.
 
-    Subclasses that need additional assignment-control fields (e.g.
-    ``is_wrapped`` in ``HostBase``) should subclass ``AssignState`` and add
-    their own fields.  ``ClassBase`` never needs to know about those extra
-    fields.
+    ``is_protected`` blocks direct public assignment unconditionally.
+    ``is_wrapped`` blocks assignment when this object is controlled by a
+    wrapper host — it is only meaningful for ``HostBase`` instances and is
+    ignored by plain ``ClassBase`` objects.
     """
 
     is_protected: bool = False
+    is_wrapped: bool = False  # HostBase only; ignored by ClassBase
 
 
 @dataclass(slots=True)
@@ -359,12 +362,7 @@ class ClassBase:
         )
 
     def _helper_make_assign_state(self) -> AssignState:
-        """Return a fresh ``AssignState`` for one public-settable field.
-
-        Subclasses that use a wider ``AssignState`` subclass (e.g.
-        ``HostAssignState``) should override this method to return their
-        own instance instead.
-        """
+        """Return a fresh ``AssignState`` for one public-settable field."""
         return AssignState()
 
     @classmethod
