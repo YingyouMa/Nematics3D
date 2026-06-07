@@ -30,6 +30,9 @@ dependencies = [
     "PyQt5==5.15.11",
 ]
 
+[project.optional-dependencies]
+tutorials = ["jupyter", "notebook"]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
