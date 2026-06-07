@@ -16,7 +16,7 @@ cd Nematics3D
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-pip install .
+pip install ".[tutorials]"
 ```
 
 Here `.venv` is only an example environment-folder name. You can replace it with any folder name you prefer, as long as the activation command is updated consistently.
@@ -26,10 +26,18 @@ If you prefer conda, you can create an environment first and then install the pa
 ```bash
 conda create -n Nematics3D python=3.12
 conda activate Nematics3D
-pip install .
+pip install ".[tutorials]"
 ```
 
 Here `Nematics3D` is only an example conda environment name. You can replace it with any name you prefer.
+
+The `[tutorials]` extra installs Jupyter, which is required to run the official tutorial notebooks. If you do not need the tutorials and prefer a lighter installation, you can omit it:
+
+```bash
+pip install .
+```
+
+In that case, the tutorial notebooks cannot be run locally, but they can still be read on GitHub or in VS Code. All library functionality remains available and is documented through docstrings.
 
 You can verify the installation with:
 
