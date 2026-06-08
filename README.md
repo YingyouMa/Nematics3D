@@ -32,10 +32,13 @@ pip install ".[gui,tutorials]"
 
 ### Server (no display)
 
-On a headless server or HPC cluster, use the `headless` extra instead of `gui`. This installs a version of VTK built for off-screen rendering, which does not require a display:
+On a headless server or HPC cluster, the off-screen build of VTK must be installed via conda-forge (it is not available on PyPI). Use the following workflow:
 
 ```bash
-pip install ".[headless]"
+conda create -n Nematics3D_headless python=3.12
+conda activate Nematics3D_headless
+conda install -c conda-forge "vtk-base=9.3.1=osmesa*" pyvista==0.46.4 numpy scipy
+pip install --no-deps .
 ```
 
 ### Extras
@@ -43,10 +46,9 @@ pip install ".[headless]"
 | Extra | What it adds | When to use |
 |---|---|---|
 | `gui` | VTK + PyQt5 + interactive viewer | Local machine with a display |
-| `headless` | VTK (off-screen build) | Server / HPC / no display |
 | `tutorials` | Jupyter + notebook | Running tutorial notebooks locally |
 
-Extras can be combined: `pip install ".[gui,tutorials]"`. The `gui` and `headless` extras are mutually exclusive — install only one.
+Extras can be combined: `pip install ".[gui,tutorials]"`.
 
 In that case, the tutorial notebooks cannot be run locally, but they can still be read on GitHub or in VS Code. All library functionality remains available and is documented through docstrings.
 
