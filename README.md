@@ -9,6 +9,7 @@ Nematics3D provides a Python interface for working with 3D nematic fields. It su
 
 Nematics3D is currently tested with Python 3.12. Compatibility with other Python versions has not yet been confirmed. A dedicated virtual environment is recommended for installation.
 
+### Local machine (with display)
 
 ```bash
 git clone https://github.com/YingyouMa/nematics3d.git
@@ -16,7 +17,7 @@ cd Nematics3D
 python -m venv .venv
 .venv\Scripts\activate
 python -m pip install --upgrade pip
-pip install ".[tutorials]"
+pip install ".[gui,tutorials]"
 ```
 
 Here `.venv` is only an example environment-folder name. You can replace it with any folder name you prefer, as long as the activation command is updated consistently.
@@ -26,16 +27,26 @@ If you prefer conda, you can create an environment first and then install the pa
 ```bash
 conda create -n Nematics3D python=3.12
 conda activate Nematics3D
-pip install ".[tutorials]"
+pip install ".[gui,tutorials]"
 ```
 
-Here `Nematics3D` is only an example conda environment name. You can replace it with any name you prefer.
+### Server (no display)
 
-The `[tutorials]` extra installs Jupyter, which is required to run the official tutorial notebooks. If you do not need the tutorials and prefer a lighter installation, you can omit it:
+On a headless server or HPC cluster, use the `headless` extra instead of `gui`. This installs a version of VTK built for off-screen rendering, which does not require a display:
 
 ```bash
-pip install .
+pip install ".[headless]"
 ```
+
+### Extras
+
+| Extra | What it adds | When to use |
+|---|---|---|
+| `gui` | VTK + PyQt5 + interactive viewer | Local machine with a display |
+| `headless` | VTK (off-screen build) | Server / HPC / no display |
+| `tutorials` | Jupyter + notebook | Running tutorial notebooks locally |
+
+Extras can be combined: `pip install ".[gui,tutorials]"`. The `gui` and `headless` extras are mutually exclusive — install only one.
 
 In that case, the tutorial notebooks cannot be run locally, but they can still be read on GitHub or in VS Code. All library functionality remains available and is documented through docstrings.
 
