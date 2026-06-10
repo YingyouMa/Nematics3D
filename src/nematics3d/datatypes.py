@@ -780,6 +780,41 @@ QField5 = np.ndarray
 # Q[..., 0,0] = Q_xx, Q[..., 0,1] = Q_xy, Q[..., 1,0] = Q_xy, etc.
 QField9 = np.ndarray
 
+# Validity mask field, shape: (Nx, Ny, Nz), dtype bool
+# Subtype of GeneralField
+# True marks voxels where the field data is physically meaningful;
+# False marks voxels whose values must not enter any derived analysis.
+MaskField = np.ndarray
+
+
+def as_lattice_mask(
+    input_data,
+    name: str = "lattice mask",
+    *,
+    shape: tuple[int, ...] | None = None,
+) -> MaskField:
+    """Convert input into a boolean 3D lattice validity mask.
+
+    Accepts boolean arrays or numeric arrays containing only 0/1 values,
+    with exactly three lattice axes. Optionally require one exact shape.
+    """
+    values = np.asarray(input_data)
+    if values.dtype == bool:
+        values = values.astype(np.uint8)
+    values = as_real_lattice_field(
+        values,
+        name=name,
+        extra_ndim=0,
+        shape=shape,
+        is_finite=True,
+        value_range=(0.0, 1.0),
+    )
+    if not np.all((values == 0.0) | (values == 1.0)):
+        raise ValueError(
+            f"{name!r} must contain only boolean-like values (True/False or 0/1)."
+        )
+    return values.astype(bool)
+
 
 def _validate_qfield_single_shape(
     shape: tuple[int, ...],

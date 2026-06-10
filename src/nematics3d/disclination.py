@@ -11,10 +11,13 @@ from typing import Union, Sequence, Optional, List, Tuple
 from .datatypes import (
     Vect,
     nField,
+    MaskField,
+    as_lattice_mask,
     DimensionPeriodicInput,
     DimensionFlagInput,
     as_dimension_info,
     DefectIndex,
+    as_DefectIndex,
     check_Sn,
 )
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
@@ -176,6 +179,80 @@ def defect_detect(
     defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
 
     return defect_indices
+
+
+def defect_validity_from_mask(
+    defect_indices: DefectIndex,
+    mask: MaskField,
+    is_boundary_periodic: DimensionFlagInput = 0,
+) -> np.ndarray:
+    """
+    Judge which defects are fully supported by valid voxels.
+
+    Each defect index has one integer and two half-integer components, so the
+    defect sits at the center of a plaquette of four neighboring grid points.
+    A defect is valid only if all four corner voxels are valid in ``mask``;
+    touching even one invalid voxel marks the defect as invalid, because the
+    winding number computed from undefined directors carries no physical
+    meaning.
+
+    Parameters
+    ----------
+    defect_indices : DefectIndex
+        Array of shape (N_defects, 3) in lattice-index coordinates, with one
+        integer and two half-integer components per row.
+
+    mask : MaskField
+        Boolean validity field of shape (Nx, Ny, Nz). True marks voxels whose
+        director data is physically meaningful.
+
+    is_boundary_periodic : DimensionFlagInput, optional
+        Accepts a bool or a sequence of 3 bools.
+        Whether to apply periodic boundary conditions in each dimension.
+        Along periodic dimensions the plaquette corner indices wrap around;
+        along non-periodic dimensions out-of-range corners raise an error.
+        Default is 0 (no periodicity).
+
+    Returns
+    -------
+    validity : np.ndarray, shape (N_defects,), dtype bool
+        True for each defect whose four supporting voxels are all valid.
+    """
+    defect_indices = as_DefectIndex(defect_indices)
+    mask = as_lattice_mask(mask, name="defect validity mask")
+    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
+
+    lower = np.floor(defect_indices).astype(int)
+    upper = np.ceil(defect_indices).astype(int)
+
+    shape = np.array(mask.shape)
+    for axis in range(3):
+        if is_boundary_periodic[axis]:
+            lower[:, axis] %= shape[axis]
+            upper[:, axis] %= shape[axis]
+
+    if np.any(lower < 0) or np.any(upper >= shape):
+        raise ValueError(
+            "Defect indices reach outside the mask along a non-periodic "
+            f"dimension. Mask shape is {mask.shape}; defect index range is "
+            f"[{defect_indices.min(axis=0)}, {defect_indices.max(axis=0)}]."
+        )
+
+    # The plaquette corners are every lower/upper combination per axis. The
+    # integer component has lower == upper, so the 8 combinations collapse to
+    # the 4 distinct corner voxels of the loop.
+    validity = np.ones(len(defect_indices), dtype=bool)
+    for ix in (0, 1):
+        for iy in (0, 1):
+            for iz in (0, 1):
+                corners = (lower, upper)
+                validity &= mask[
+                    corners[ix][:, 0],
+                    corners[iy][:, 1],
+                    corners[iz][:, 2],
+                ]
+
+    return validity
 
 
 @logging_and_warning_decorator()

@@ -113,6 +113,8 @@ from ..datatypes import (
     as_qfield5,
     SField,
     nField,
+    MaskField,
+    as_lattice_mask,
     check_Sn,
     Number,
     as_Number,
@@ -132,7 +134,11 @@ from ..grid import (
     as_grid_transform,
     apply_linear_transform,
 )
-from ..disclination import defect_detect, defect_classify_into_lines
+from ..disclination import (
+    defect_detect,
+    defect_classify_into_lines,
+    defect_validity_from_mask,
+)
 from .visual.plot_tube import OptsTube
 from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
@@ -176,6 +182,13 @@ class InputQ:
     n
         Director field with shape `(..., 3)`. Used to reconstruct `Q` when a
         raw Q-tensor field is not supplied or should be overridden.
+    mask
+        Boolean validity field with shape matching the lattice grid
+        `(Nx, Ny, Nz)`. True marks voxels where the Q data is physically
+        meaningful; False marks voxels whose values must not enter any
+        derived analysis. For example, defects supported by invalid voxels
+        are excluded from defect analysis. If omitted, every voxel is
+        treated as valid.
     box_periodic_flag
         Periodic-boundary-condition flags for the three lattice directions.
     grid_offset
@@ -194,6 +207,7 @@ class InputQ:
     Q: Union[QField5, QField9] | Unset = UNSET
     S: SField | Unset = UNSET
     n: nField | Unset = UNSET
+    mask: MaskField | Unset = UNSET
     box_periodic_flag: DimensionFlagInput = False
     grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
@@ -205,6 +219,10 @@ class InputQ:
         "Q": "Q field (tensor order parameter)",
         "S": "S field (scalar order parameter)",
         "n": "director field",
+        "mask": (
+            "validity mask marking which voxels carry physically meaningful "
+            "Q data"
+        ),
         "box_periodic_flag": (
             "flag indicating whether periodic boundary condition is applied "
             "along each dimension"
@@ -233,6 +251,7 @@ class InputQ:
         "Q": lambda v, d: as_qfield5(v, name=d),
         "n": lambda v, d: check_Sn(v, "n"),
         "S": lambda v, d: check_Sn(v, "S"),
+        "mask": lambda v, d: as_lattice_mask(v, name=d),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
@@ -278,6 +297,10 @@ class QFieldObject(ClassBase):
     - `calc_bounds`: Bounds object describing the Q-field box.
     - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
       in index and world coordinates.
+    - `raw_mask`: boolean validity mask of the lattice, or None when every
+      voxel is valid. Stored as the dataset field named "mask".
+    - `calc_defect_indices_masked`: detected defects excluded because their
+      supporting plaquette touches invalid voxels of the validity mask.
 
     Common inspection helpers:
 
@@ -320,6 +343,14 @@ class QFieldObject(ClassBase):
         ),
         "raw_n": AttrDef(
             doc="Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
+            kind="raw",
+        ),
+        "raw_mask": AttrDef(
+            doc=(
+                "Validity mask on lattice (bool, shape: (Nx, Ny, Nz)), or None "
+                "when every voxel is valid. False marks voxels whose Q data is "
+                "physically meaningless and must not enter derived analysis."
+            ),
             kind="raw",
         ),
         "raw_box_periodic_flag": AttrDef(
@@ -385,6 +416,15 @@ class QFieldObject(ClassBase):
         ),
         "calc_defect_grid": AttrDef(
             doc="Real-space coordinates of detected defect points.",
+            kind="calc",
+        ),
+        "calc_defect_indices_masked": AttrDef(
+            doc=(
+                "Indices (lattice coordinates) of detected defect points that "
+                "were discarded because their supporting plaquette touches "
+                "invalid voxels of the validity mask. Kept for inspection of "
+                "the mask boundary; excluded from all downstream analysis."
+            ),
             kind="calc",
         ),
         "dataset": AttrDef(
@@ -505,17 +545,19 @@ class QFieldObject(ClassBase):
             # initialization styles in one call.
             ignored_attached_inputs = [
                 attr_name
-                for attr_name in ("Q", "S", "n")
+                for attr_name in ("Q", "S", "n", "mask")
                 if getattr(attached_defaults, attr_name) is not UNSET
             ]
             if ignored_attached_inputs:
                 logger.warning(
                     "Attached-analysis initialization received extra raw field "
                     f"input(s) {ignored_attached_inputs!r}. These values are "
-                    "ignored because the attached `field` already defines the "
-                    "Q/S/n data used by this object. If you want to change the "
-                    "underlying field data, please create a new QFieldObject "
-                    "from raw inputs instead."
+                    "ignored because the attached `field` and its dataset "
+                    "already define the Q/S/n/mask data used by this object. "
+                    "If you want to change the underlying field data, please "
+                    "create a new QFieldObject from raw inputs instead. To "
+                    "attach a validity mask, add it to the dataset as a field "
+                    "named 'mask' before initializing this object."
                 )
 
             for attr_name in (
@@ -563,6 +605,9 @@ class QFieldObject(ClassBase):
             )
             object.__setattr__(self, "raw_grid_offset", dataset.raw_grid_offset)
             object.__setattr__(self, "raw_grid_transform", dataset.raw_grid_transform)
+            # In attached mode the dataset is the only mask source; a direct
+            # `mask` input was already warned about and ignored above.
+            object.__setattr__(self, "raw_mask", UNSET)
         else:
             # Standalone path: accept raw Q/S/n-style input, normalize it into a
             # canonical Q field, and then continue exactly as if that field had
@@ -650,6 +695,45 @@ class QFieldObject(ClassBase):
         # object. We mirror it onto `raw_Q` so existing methods can keep reading
         # `self.raw_Q` without caring how the field was supplied.
         object.__setattr__(self, "raw_Q", field.raw_values)
+
+        # The validity mask is stored as one normal dataset field named
+        # "mask", so weighted smoothing (e.g. `act_gaussian_smooth(...,
+        # weights="mask")`) and defect-validity filtering share a single
+        # canonical source. `raw_mask` mirrors that field as a boolean view,
+        # the same way `raw_Q` mirrors the canonical Q field; it is None when
+        # every voxel is valid.
+        try:
+            mask_field = dataset.fields["mask"]
+        except KeyError:
+            mask_field = None
+        if mask_field is not None:
+            object.__setattr__(
+                self,
+                "raw_mask",
+                as_lattice_mask(
+                    mask_field.raw_values,
+                    name="dataset field 'mask' values",
+                    shape=np.shape(self.raw_Q)[:3],
+                ),
+            )
+        elif self.raw_mask is not UNSET:
+            mask_values = as_lattice_mask(
+                self.raw_mask,
+                name="validity mask",
+                shape=np.shape(self.raw_Q)[:3],
+            )
+            dataset.act_add_field("mask", mask_values.astype(float))
+            object.__setattr__(self, "raw_mask", mask_values)
+        else:
+            object.__setattr__(self, "raw_mask", None)
+
+        if self.raw_mask is not None:
+            logger.info(
+                "Validity mask is active: "
+                f"{int(np.count_nonzero(~self.raw_mask))} of "
+                f"{self.raw_mask.size} voxels are invalid and will be "
+                "excluded from defect analysis."
+            )
         # Register the box bounds as a normal derived object so they show up in
         # the same object registry as other geometry derived from this Q field.
         bounds = self.calc_bounds
@@ -713,16 +797,42 @@ class QFieldObject(ClassBase):
         This updates both `calc_defect_indices` in lattice-index coordinates
         and `calc_defect_grid` in real-space coordinates using the current
         grid transform and offset.
+
+        If a validity mask is attached, a defect whose supporting plaquette
+        touches any invalid voxel is physically meaningless and is excluded
+        from `calc_defect_indices` (and therefore from all downstream line
+        classification, smoothing, and visualization). The excluded points
+        are kept in `calc_defect_indices_masked` for inspection of the mask
+        boundary.
         """
-        object.__setattr__(
-            self,
-            "calc_defect_indices",
-            defect_detect(
-                self.raw_n,
-                is_boundary_periodic=self.raw_box_periodic_flag,
-            ),
+        defect_indices = defect_detect(
+            self.raw_n,
+            is_boundary_periodic=self.raw_box_periodic_flag,
         )
-        logger.info(f"{len(self.calc_defect_indices)} defects are found.")
+        logger.info(f"{len(defect_indices)} defects are found.")
+
+        if self.raw_mask is None:
+            defect_indices_masked = np.empty((0, 3), dtype=float)
+        else:
+            validity = defect_validity_from_mask(
+                defect_indices,
+                self.raw_mask,
+                is_boundary_periodic=self.raw_box_periodic_flag,
+            )
+            defect_indices_masked = defect_indices[~validity]
+            defect_indices = defect_indices[validity]
+            logger.info(
+                f"{len(defect_indices_masked)} defects are supported by "
+                "invalid voxels of the validity mask. They are physically "
+                "meaningless and excluded from defect analysis; the excluded "
+                "points are kept in `calc_defect_indices_masked`. "
+                f"{len(defect_indices)} valid defects remain."
+            )
+
+        object.__setattr__(self, "calc_defect_indices", defect_indices)
+        object.__setattr__(
+            self, "calc_defect_indices_masked", defect_indices_masked
+        )
 
         object.__setattr__(
             self,
