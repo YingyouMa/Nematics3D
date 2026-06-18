@@ -18,6 +18,11 @@ from .datatypes import (
 from .geometry import rotation_matrix_from_vectors
 from .logging_decorator import logging_and_warning_decorator
 
+# Reserved name of the per-voxel validity mask field on a GridFieldDataset.
+# A mask marks which voxels carry physically meaningful data; it is bound once
+# at dataset construction and is otherwise protected from manual field edits.
+VALIDITY_FIELD_NAME = "mask"
+
 
 def generate_coordinate_grid(
     shape_source: Tuple[int, ...], shape_target: Tuple[int, ...]

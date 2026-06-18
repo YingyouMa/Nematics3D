@@ -7,12 +7,14 @@ import numpy as np
 
 from nematics3d.datatypes import (
     DimensionFlagInput,
+    MaskField,
     Tensor,
     UNSET,
     Unset,
     Vect,
     as_Vect,
     as_dimension_info,
+    as_lattice_mask,
 )
 from nematics3d.grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 
@@ -63,12 +65,18 @@ class InputGridField:
     grid_transform
         3x3 linear transform that maps lattice indices to real-space
         coordinates, or ``GRID_TRANSFORM_IDENTITY`` for the identity map.
+    mask
+        Optional per-voxel validity mask of shape ``(Nx, Ny, Nz)``. True marks
+        voxels whose data is physically meaningful. The mask can only be
+        supplied here, at dataset construction; once bound it is immutable, and
+        a dataset built without a mask can never gain one later.
     """
 
     shape: tuple[int, int, int] | Unset = UNSET
     box_periodic_flag: DimensionFlagInput = False
     grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
+    mask: MaskField | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         "shape": "lattice grid shape (Nx, Ny, Nz)",
@@ -84,6 +92,10 @@ class InputGridField:
             "grid transform matrix to map lattice indices to real-space "
             "coordinates (3x3)"
         ),
+        "mask": (
+            "per-voxel validity mask marking which voxels carry physically "
+            "meaningful data"
+        ),
     }
 
     _validators: ClassVar[Mapping[str, object]] = {
@@ -91,6 +103,7 @@ class InputGridField:
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
+        "mask": lambda v, d: as_lattice_mask(v, name=d),
     }
 
     # Keep the InputQ-style assignment contract: validation runs both during

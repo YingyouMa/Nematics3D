@@ -114,7 +114,6 @@ from ..datatypes import (
     SField,
     nField,
     MaskField,
-    as_lattice_mask,
     check_Sn,
     Number,
     as_Number,
@@ -247,11 +246,14 @@ class InputQ:
         ),
     }
 
+    # `mask` is intentionally absent here: unlike Q/n/S, it is not used by
+    # QFieldObject directly but forwarded as-is to the shared dataset, where
+    # InputGridField validates it. Keeping a validator here would only duplicate
+    # that check.
     _validators = {
         "Q": lambda v, d: as_qfield5(v, name=d),
         "n": lambda v, d: check_Sn(v, "n"),
         "S": lambda v, d: check_Sn(v, "S"),
-        "mask": lambda v, d: as_lattice_mask(v, name=d),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
@@ -297,8 +299,8 @@ class QFieldObject(ClassBase):
     - `calc_bounds`: Bounds object describing the Q-field box.
     - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
       in index and world coordinates.
-    - `raw_mask`: boolean validity mask of the lattice, or None when every
-      voxel is valid. Stored as the dataset field named "mask".
+    - `mask`: boolean validity mask of the lattice, or None when the dataset
+      has no mask. A read-only view of the dataset "mask" field.
     - `calc_defect_indices_masked`: detected defects excluded because their
       supporting plaquette touches invalid voxels of the validity mask.
 
@@ -343,14 +345,6 @@ class QFieldObject(ClassBase):
         ),
         "raw_n": AttrDef(
             doc="Raw director field n on lattice (shape: (Nx, Ny, Nz, 3)).",
-            kind="raw",
-        ),
-        "raw_mask": AttrDef(
-            doc=(
-                "Validity mask on lattice (bool, shape: (Nx, Ny, Nz)), or None "
-                "when every voxel is valid. False marks voxels whose Q data is "
-                "physically meaningless and must not enter derived analysis."
-            ),
             kind="raw",
         ),
         "raw_box_periodic_flag": AttrDef(
@@ -451,6 +445,15 @@ class QFieldObject(ClassBase):
             doc="The grid interpolator object associated with this Q field.",
             kind="relation",
             is_weak_by_default=False,
+        ),
+        "mask": AttrDef(
+            doc=(
+                "Read-only: validity mask on lattice (bool, shape (Nx, Ny, Nz)) "
+                "viewing the dataset 'mask' field, or None when the dataset has "
+                "no mask. False marks voxels whose Q data is physically "
+                "meaningless and must not enter derived analysis."
+            ),
+            kind="property",
         ),
         "lines": AttrDef(
             doc="Read-only: Classified disclination lines.",
@@ -605,9 +608,9 @@ class QFieldObject(ClassBase):
             )
             object.__setattr__(self, "raw_grid_offset", dataset.raw_grid_offset)
             object.__setattr__(self, "raw_grid_transform", dataset.raw_grid_transform)
-            # In attached mode the dataset is the only mask source; a direct
-            # `mask` input was already warned about and ignored above.
-            object.__setattr__(self, "raw_mask", UNSET)
+            # In attached mode the validity mask, like the Q data, comes entirely
+            # from the existing dataset (bound when that dataset was built). A
+            # direct `mask` input was already warned about and ignored above.
         else:
             # Standalone path: accept raw Q/S/n-style input, normalize it into a
             # canonical Q field, and then continue exactly as if that field had
@@ -618,8 +621,14 @@ class QFieldObject(ClassBase):
             inputValue = merge_opts_all({"": inputValue}, kwargs, type(self).__name__)[
                 ""
             ]
+            # The validity mask is not a QFieldObject raw slot; it is bound to
+            # the shared dataset at construction below. Capture it here and skip
+            # it in the raw_* mirroring loop.
+            mask_input = inputValue.mask
             for f in fields(inputValue):
                 k = f.name
+                if k == "mask":
+                    continue
                 v = getattr(inputValue, k)
                 if k.startswith("default"):
                     object.__setattr__(self, k, v)
@@ -667,6 +676,7 @@ class QFieldObject(ClassBase):
                     box_periodic_flag=self.raw_box_periodic_flag,
                     grid_offset=self.raw_grid_offset,
                     grid_transform=self.raw_grid_transform,
+                    mask=mask_input,
                 ),
                 name=f"{self.name} dataset",
             )
@@ -696,42 +706,17 @@ class QFieldObject(ClassBase):
         # `self.raw_Q` without caring how the field was supplied.
         object.__setattr__(self, "raw_Q", field.raw_values)
 
-        # The validity mask is stored as one normal dataset field named
-        # "mask", so weighted smoothing (e.g. `act_gaussian_smooth(...,
-        # weights="mask")`) and defect-validity filtering share a single
-        # canonical source. `raw_mask` mirrors that field as a boolean view,
-        # the same way `raw_Q` mirrors the canonical Q field; it is None when
-        # every voxel is valid.
-        try:
-            mask_field = dataset.fields["mask"]
-        except KeyError:
-            mask_field = None
-        if mask_field is not None:
-            object.__setattr__(
-                self,
-                "raw_mask",
-                as_lattice_mask(
-                    mask_field.raw_values,
-                    name="dataset field 'mask' values",
-                    shape=np.shape(self.raw_Q)[:3],
-                ),
-            )
-        elif self.raw_mask is not UNSET:
-            mask_values = as_lattice_mask(
-                self.raw_mask,
-                name="validity mask",
-                shape=np.shape(self.raw_Q)[:3],
-            )
-            dataset.act_add_field("mask", mask_values.astype(float))
-            object.__setattr__(self, "raw_mask", mask_values)
-        else:
-            object.__setattr__(self, "raw_mask", None)
-
-        if self.raw_mask is not None:
+        # The validity mask lives as a single dataset field bound at dataset
+        # construction, so weighted smoothing (e.g. `act_gaussian_smooth(...,
+        # weights="mask")`), defect-validity filtering, and interpolation
+        # validity all share one canonical source. `self.mask` is a read-only
+        # view of that field (None when the dataset has no mask).
+        mask = self.mask
+        if mask is not None:
             logger.info(
                 "Validity mask is active: "
-                f"{int(np.count_nonzero(~self.raw_mask))} of "
-                f"{self.raw_mask.size} voxels are invalid and will be "
+                f"{int(np.count_nonzero(~mask))} of "
+                f"{mask.size} voxels are invalid and will be "
                 "excluded from defect analysis."
             )
         # Register the box bounds as a normal derived object so they show up in
@@ -811,12 +796,13 @@ class QFieldObject(ClassBase):
         )
         logger.info(f"{len(defect_indices)} defects are found.")
 
-        if self.raw_mask is None:
+        mask = self.mask
+        if mask is None:
             defect_indices_masked = np.empty((0, 3), dtype=float)
         else:
             validity = defect_validity_from_mask(
                 defect_indices,
-                self.raw_mask,
+                mask,
                 is_boundary_periodic=self.raw_box_periodic_flag,
             )
             defect_indices_masked = defect_indices[~validity]
@@ -1007,6 +993,7 @@ class QFieldObject(ClassBase):
         points: np.ndarray,
         is_index=False,
         is_out_warning=False,
+        is_return_validity=False,
     ):
         """
         Interpolate the Q field at arbitrary sample points.
@@ -1023,6 +1010,12 @@ class QFieldObject(ClassBase):
             If True, warn when any sample point falls outside non-periodic
             dimensions and return those out-of-domain input points with the
             interpolated values.
+        is_return_validity
+            If True, also return a boolean array marking which sample points are
+            physically valid: only points whose full trilinear support is valid
+            in the validity mask and that lie inside the non-periodic domain.
+            When the dataset has no mask, every in-domain point is valid. The
+            interpolated values themselves are never masked.
         """
         if self.interpolator is None:
             self.act_add_interpolator()
@@ -1030,6 +1023,7 @@ class QFieldObject(ClassBase):
             points,
             is_index=is_index,
             is_out_warning=is_out_warning,
+            is_return_validity=is_return_validity,
         )
 
     # -------------------------------
@@ -1877,6 +1871,11 @@ class QFieldObject(ClassBase):
     def calc_box_size_periodic_index(self):
         """Return the dataset-owned periodic box size in index units."""
         return self.dataset.calc_box_size_periodic_index
+
+    @property
+    def mask(self):
+        """Return the dataset validity mask as a bool array, or None if absent."""
+        return self.dataset._helper_read_validity_mask()
 
     @property
     def lines(self):

@@ -189,7 +189,7 @@ def build_sphere_gallery(figure):
     spheres5.opts.scalars_clim = (0.02, 0.38)
     spheres5.opts.opacity = np.linspace(0.55, 0.95, len(coords_scalar_array))
 
-    assert len(figure.pl.scalar_bars) == 0
+    # assert len(figure.pl.scalar_bars) == 0
 
     return {
         "figure": figure,

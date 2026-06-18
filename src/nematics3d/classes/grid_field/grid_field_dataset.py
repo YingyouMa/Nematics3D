@@ -10,6 +10,7 @@ import numpy as np
 from nematics3d.datatypes import (
     UNSET,
     Unset,
+    as_lattice_mask,
     as_real_lattice_field,
 )
 
@@ -17,6 +18,7 @@ from ..bounds import as_bounds
 from ..class_base import AttrDef, ClassBase
 from ..registry_base import RegistryBase
 from ...grid import (
+    VALIDITY_FIELD_NAME,
     apply_linear_transform,
     as_readonly_grid_offset,
     as_readonly_grid_transform,
@@ -89,6 +91,7 @@ class FieldData(ClassBase):
         points: np.ndarray,
         is_index: bool = False,
         is_out_warning: bool = False,
+        is_return_validity: bool = False,
     ):
         """Interpolate this field at arbitrary sample points."""
         if self.entity_interpolator is None:
@@ -97,6 +100,7 @@ class FieldData(ClassBase):
             points,
             is_index=is_index,
             is_out_warning=is_out_warning,
+            is_return_validity=is_return_validity,
         )
 
 
@@ -159,6 +163,13 @@ class GridFieldDataset(ClassBase):
             ),
             kind="calc",
         ),
+        "calc_is_has_mask": AttrDef(
+            doc=(
+                "Read-only: whether this dataset carries a per-voxel validity "
+                "mask field bound at construction."
+            ),
+            kind="property",
+        ),
         "fields": AttrDef(
             doc="Registry of physical fields bound to this shared grid.",
             kind="relation",
@@ -219,6 +230,25 @@ class GridFieldDataset(ClassBase):
         )
         self.act_bind_relation_base("fields", registry, is_weak=False)
         registry.act_bind_relation_base("owner", self, is_weak=True)
+
+        # The validity mask is the only field that may be supplied through the
+        # dataset constructor. It is bound here, once, via the internal channel
+        # that bypasses the act_add_field guard. A dataset built without a mask
+        # can never gain one later; this keeps every mask-dependent result
+        # (defects, smoothing, interpolation validity) from silently going
+        # stale, because the mask is fixed before any of them is computed.
+        if inputValue.mask is not UNSET:
+            # Validate dtype/range/rank here; the grid-shape contract (match an
+            # existing shape, or infer and lock it when unset) is enforced once
+            # for every field by _helper_ensure_or_infer_shape inside
+            # _helper_add_field, so it is not duplicated here.
+            mask_values = as_lattice_mask(
+                inputValue.mask,
+                name="dataset validity mask",
+            )
+            self._helper_add_field(
+                VALIDITY_FIELD_NAME, mask_values.astype(float)
+            )
 
     def _helper_ensure_or_infer_shape(
         self,
@@ -378,6 +408,26 @@ class GridFieldDataset(ClassBase):
         is_replace: bool = False,
     ) -> FieldData:
         """Validate and bind one physical field to this dataset."""
+        if name == VALIDITY_FIELD_NAME:
+            raise ValueError(
+                f"{VALIDITY_FIELD_NAME!r} is a reserved validity mask field and "
+                "cannot be added or replaced through act_add_field. Supply the "
+                "mask when constructing the dataset (InputGridField.mask); a "
+                "dataset built without a mask cannot gain one later."
+            )
+        return self._helper_add_field(
+            name, values, info=info, is_replace=is_replace
+        )
+
+    def _helper_add_field(
+        self,
+        name: str,
+        values,
+        *,
+        info=None,
+        is_replace: bool = False,
+    ) -> FieldData:
+        """Validate and bind one physical field, bypassing the name guard."""
         values = as_real_lattice_field(values, name=f"field {name!r} values")
         self._helper_ensure_or_infer_shape(values)
 
@@ -435,6 +485,27 @@ class GridFieldDataset(ClassBase):
     def __getitem__(self, name: str | int | None):
         """Shortcut for act_get_field."""
         return self.act_get_field(name)
+
+    def _helper_read_validity_mask(self):
+        """Return the validity mask as a bool array, or None when absent."""
+        try:
+            mask_field = self.fields[VALIDITY_FIELD_NAME]
+        except KeyError:
+            return None
+        return as_lattice_mask(
+            mask_field.raw_values,
+            name=f"dataset field {VALIDITY_FIELD_NAME!r} values",
+            shape=None if self.raw_shape is UNSET else tuple(self.raw_shape),
+        )
+
+    @property
+    def calc_is_has_mask(self) -> bool:
+        """Return whether a validity mask field is bound to this dataset."""
+        try:
+            self.fields[VALIDITY_FIELD_NAME]
+        except KeyError:
+            return False
+        return True
 
     @property
     def calc_center(self):

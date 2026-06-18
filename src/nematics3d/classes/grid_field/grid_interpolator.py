@@ -8,9 +8,14 @@ import numpy as np
 from scipy.interpolate import RegularGridInterpolator
 
 from nematics3d.datatypes import as_points
-from nematics3d.grid import apply_linear_transform
+from nematics3d.grid import VALIDITY_FIELD_NAME, apply_linear_transform
 from ..class_base import AttrDef, ClassBase
 from ...logging_decorator import logging_and_warning_decorator
+
+# A trilinear blend of a 0/1 mask equals 1.0 only when all eight supporting
+# voxels are valid. This tolerance absorbs floating-point summation error so an
+# all-valid support still counts as fully valid under the strict rule.
+_VALIDITY_EPS = 1e-9
 
 
 class GridInterpolator(ClassBase):
@@ -80,13 +85,24 @@ class GridInterpolator(ClassBase):
         points: np.ndarray,
         is_index: bool = False,
         is_out_warning: bool = False,
+        is_return_validity: bool = False,
         logger=None,
     ):
         """
         Interpolate field values at arbitrary sample points.
 
-        If `is_out_warning` is True, also return the input points that lie
-        outside non-periodic dimensions before clipping.
+        The returned values are always the plain interpolated field values; no
+        validity masking is applied to them, so existing callers are unaffected.
+
+        Extra outputs are appended in a fixed order when requested:
+
+        - If ``is_out_warning`` is True, also return the input points that lie
+          outside non-periodic dimensions before clipping.
+        - If ``is_return_validity`` is True, also return a boolean array marking
+          which query points are physically valid. A point is valid only when
+          all voxels supporting its trilinear interpolation are valid in the
+          dataset validity mask and the point is inside the non-periodic domain.
+          When the dataset carries no mask, every in-domain point is valid.
         """
 
         pts = as_points(points, name="interpolation query points", dim=3)
@@ -132,6 +148,39 @@ class GridInterpolator(ClassBase):
                 pts[:, d] = np.clip(pts[:, d], 0, shape[d] - 1)
 
         result = self.entity_backend(pts)
+
+        outputs = [result]
         if is_out_warning:
-            return result, out_points
-        return result
+            outputs.append(out_points)
+        if is_return_validity:
+            outputs.append(self._helper_validity_at(pts, out_mask))
+
+        if len(outputs) == 1:
+            return result
+        return tuple(outputs)
+
+    def _helper_validity_at(
+        self,
+        pts_index: np.ndarray,
+        out_mask: np.ndarray,
+    ) -> np.ndarray:
+        """
+        Return strict per-point validity for already-prepared index points.
+
+        ``pts_index`` are lattice-index coordinates already wrapped/clipped onto
+        the grid; ``out_mask`` flags points that were outside the non-periodic
+        domain before clipping. A point is valid only when its trilinear support
+        is fully valid in the dataset mask and it lies inside the domain.
+        """
+        dataset = self.owner.owner
+        try:
+            mask_field = dataset.fields[VALIDITY_FIELD_NAME]
+        except KeyError:
+            # No mask: every in-domain point is valid.
+            return ~out_mask
+
+        support = mask_field.act_add_interpolator().interpolate(
+            pts_index,
+            is_index=True,
+        )
+        return (np.asarray(support) >= 1.0 - _VALIDITY_EPS) & ~out_mask
