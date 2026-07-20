@@ -1096,7 +1096,7 @@ class PlotGlyph(HostBase):
         if getattr(bar, "source", None) is not self:
             bar.act_bind_relation_base("source", self, is_weak=True)
 
-        bar.act_commit()
+        bar.act_commit(is_reapply_opts=True)
         return bar
 
     def _helper_update_rgba(self):

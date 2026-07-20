@@ -1,0 +1,75 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}   % math formulas
+\usepackage{amssymb}   % math symbols
+\usepackage{graphicx}  % images (not used here, just loaded)
+\usepackage{hyperref}  % hyperlinks and cross references
+
+\title{Local \LaTeX{} Environment Test}
+\author{Yingyou Ma}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+Hello! This is a test document for verifying the local VS Code + MiKTeX + latexmk
+setup. If you can see this text and the formulas and table below are typeset
+correctly, the whole pipeline (compile $\to$ PDF preview) is working.
+
+\section{Math Formulas}
+Inline formulas work fine, e.g. Einstein's $E = mc^2$ and Euler's identity
+$e^{i\pi} + 1 = 0$.
+
+Display equation with automatic numbering:
+\begin{equation}
+    \int_0^\infty e^{-x^2}\, dx = \frac{\sqrt{\pi}}{2}.
+    \label{eq:gauss}
+\end{equation}
+
+A system of aligned equations:
+\begin{align}
+    \nabla \cdot \mathbf{E} &= \frac{\rho}{\varepsilon_0}, \\
+    \nabla \times \mathbf{B} &= \mu_0 \mathbf{J} + \mu_0 \varepsilon_0 \frac{\partial \mathbf{E}}{\partial t}.
+\end{align}
+
+We can reference the earlier equation~\eqref{eq:gauss}; cross references work too.
+
+\section{Lists}
+Unordered list:
+\begin{itemize}
+    \item Compiler: MiKTeX
+    \item Scheduler: latexmk
+    \item Dependency: Strawberry Perl
+\end{itemize}
+
+Ordered list:
+\begin{enumerate}
+    \item Save the file (\texttt{Ctrl+S}) to trigger auto build
+    \item The PDF opens in the preview
+    \item Double-click the PDF to jump back to the source
+\end{enumerate}
+
+\section{Table}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{lcc}
+        \hline
+        Component & Installed & Role \\
+        \hline
+        MiKTeX          & Yes & Compile \\
+        LaTeX Workshop  & Yes & VS Code extension \\
+        Strawberry Perl & Yes & Run latexmk \\
+        \hline
+    \end{tabular}
+    \caption{Overview of the local \LaTeX{} environment components}
+    \label{tab:components}
+\end{table}
+
+As shown in Table~\ref{tab:components}, all components are in place.
+
+\section{Conclusion}
+Everything works! You can now start writing \LaTeX{} locally.
+
+\end{document}

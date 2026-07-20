@@ -177,6 +177,7 @@ def _build_scene(frame_number: int, sigma: float, *, is_off_screen: bool):
 
     q_obj.act_visualize_disclination_lines(figure=figure, is_extent=False, line_radius=0.2)
 
+    is_first_scalar_bar = True
     for line in q_obj.lines:
         if not line.smooths:
             continue
@@ -197,8 +198,12 @@ def _build_scene(frame_number: int, sigma: float, *, is_off_screen: bool):
             scalars=beta_values,
             scalars_cmap=BETA_SCALARS_CMAP,
             scalars_clim=BETA_SCALARS_CLIM,
+            is_scalar_bar=is_first_scalar_bar,
             scalar_bar_title="beta",
         )
+        if is_first_scalar_bar:
+            figure.scalar_bars[0].act_commit(is_interactive=True)
+            is_first_scalar_bar = False
 
     figure.pl.enable_depth_peeling()
 
