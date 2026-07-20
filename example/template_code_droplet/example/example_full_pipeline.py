@@ -48,8 +48,8 @@ from visualize_frame import visualize_frame
 # Returns a dict with keys: mat, output_dir, mask, bounds, director, metadata
 # – each value is the Path (as string) of the corresponding output file.
 
-MAT_PATH = Path(__file__).parent / "data" / "sample01_ds=35_dz=0.45_Frame0095_DT_diag.mat"
-OUTPUT_DIR = Path(__file__).parent / "npy"
+MAT_PATH = Path(__file__).parent / "data" / "sample01_ds=35_dz=0.45_Frame0095_DT_diag.mat"  # This is just an example
+OUTPUT_DIR = Path(__file__).parent / "npy"                                                  # This is just an example
 
 result = process_mat_file(MAT_PATH, OUTPUT_DIR)
 print("Preprocessing done:")
@@ -84,4 +84,4 @@ for key, val in result.items():
 import visualize_frame as vf
 vf.INPUT_ROOT = OUTPUT_DIR
 
-visualize_frame(95)
+q_obj = visualize_frame(95)
