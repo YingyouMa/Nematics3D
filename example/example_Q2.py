@@ -57,7 +57,7 @@ def _auto_quick_Q_visual_params(field, grid_normal):
     }
 
 
-def quick_visualize_Q(
+def quick_visualize_q(
     S=nematics3d.UNSET,
     n=nematics3d.UNSET,
     Q=nematics3d.UNSET,
@@ -137,6 +137,6 @@ def quick_visualize_Q(
 Nx, Ny, Nz = 32, 64, 64
 S_input = S[:Nx, :Ny, :Nz]
 n_input = n[:Nx, :Ny, :Nz]
-Q, figure = quick_visualize_Q(
+Q, figure = quick_visualize_q(
     S_input, n_input, box_periodic_flag=False, is_visualize_lines=True
 )

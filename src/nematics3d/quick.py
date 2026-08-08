@@ -87,7 +87,7 @@ def _auto_quick_Q_visual_params(field, grid_normal):
 
 
 @logging_and_warning_decorator(start_finish_level=5)
-def quick_visualize_Q(
+def quick_visualize_q(
     S=UNSET,
     n=UNSET,
     Q=UNSET,
@@ -102,7 +102,7 @@ def quick_visualize_Q(
 ):
     if is_off_screen and save_path is None:
         logger.warning(
-            "quick_visualize_Q was called with is_off_screen=True but "
+            "quick_visualize_q was called with is_off_screen=True but "
             "save_path=None. No visible window or saved image will be produced, "
             "so this call is ignored."
         )
@@ -188,14 +188,14 @@ def _find_repo_root_for_quick_demo():
             return candidate
 
     raise FileNotFoundError(
-        "Could not locate the repository root for the quick_visualize_Q demo."
+        "Could not locate the repository root for the quick_visualize_q demo."
     )
 
 
-def _run_quick_visualize_Q_tutorial_demo():
+def _run_quick_visualize_q_tutorial_demo():
     repo_root = _find_repo_root_for_quick_demo()
     data_path = repo_root / "example" / "data" / "Q_example_workflow.npy"
-    output_dir = repo_root / "tutorials" / "output" / "quick_visualize_Q"
+    output_dir = repo_root / "tutorials" / "output" / "quick_visualize_q"
     save_path = output_dir / "quick_py_main_preview.png"
 
     Q_data = np.load(data_path)
@@ -211,11 +211,11 @@ def _run_quick_visualize_Q_tutorial_demo():
         "is_off_screen": False,
     }
 
-    q_obj, figure = quick_visualize_Q(**demo_kwargs)
+    q_obj, figure = quick_visualize_q(**demo_kwargs)
     print(f"Loaded tutorial data from: {data_path}")
     print(f"Saved preview image to: {save_path}")
     return q_obj, figure
 
 
 if __name__ == "__main__":
-    _run_quick_visualize_Q_tutorial_demo()
+    _run_quick_visualize_q_tutorial_demo()
