@@ -1,4 +1,5 @@
 import io
+import logging
 import sys
 import types
 import unittest
@@ -8,7 +9,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 PKG_DIR = SRC_DIR / "nematics3d"
 
 sys.path.insert(0, str(SRC_DIR))
@@ -45,8 +46,8 @@ class TestQDiagonalizeResult(unittest.TestCase):
                 1.0,
             )
         )
-        self.assertEqual(result.isotropic_indices.size, 0)
-        self.assertEqual(result.uniaxial_indices.size, 0)
+        self.assertEqual(result.isotropic_indices, [])
+        self.assertEqual(result.uniaxial_indices, [])
         self.assertIsNone(result.eigenvalues)
         self.assertIsNone(result.eigenvectors)
         self.assertIsNone(result.biaxial_order)
@@ -175,12 +176,80 @@ class TestQDiagonalizeResult(unittest.TestCase):
         )
 
         self.assertTrue(np.allclose(result.S, 0.0))
-        self.assertTrue(np.array_equal(result.isotropic_indices, np.array([[0], [1]])))
+        self.assertEqual(result.isotropic_indices, [(0,), (1,)])
         self.assertTrue(np.allclose(result.biaxial_order, 0.0))
         self.assertTrue(
             np.allclose(result.eigenvectors, np.broadcast_to(np.eye(3), (2, 3, 3)))
         )
         self.assertTrue(np.allclose(result.n, np.array([[1.0, 0.0, 0.0]] * 2)))
+
+    def test_single_isotropic_tensor_uses_empty_coordinate_tuple(self):
+        result = q_diagonalize(
+            np.zeros((3, 3), dtype=float),
+            log_mode="none",
+        )
+
+        self.assertEqual(result.isotropic_indices, [()])
+        self.assertEqual(result.uniaxial_indices, [])
+
+    def test_empty_q_tensor_input_is_rejected(self):
+        empty_inputs = (
+            np.empty((0, 5), dtype=float),
+            np.empty((0, 3, 3), dtype=float),
+        )
+
+        for empty_input in empty_inputs:
+            with self.subTest(shape=empty_input.shape):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "must contain at least one Q tensor",
+                ):
+                    q_diagonalize(empty_input, log_mode="none")
+
+    def test_debug_logging_reports_stages_counts_and_elapsed_time(self):
+        q_tensor = np.stack([make_uniaxial_q_tensor([1.0, 1.0, 1.0], 0.75)] * 2)
+        screen_output = io.StringIO()
+
+        with redirect_stdout(screen_output):
+            q_diagonalize(q_tensor, log_level=logging.DEBUG)
+
+        debug_output = screen_output.getvalue()
+        self.assertIn("Computing tensor invariants for 2 Q tensor(s)", debug_output)
+        self.assertIn("Computed tensor invariants for 2 Q tensor(s) in", debug_output)
+        self.assertIn(
+            "Computing the largest eigenvalue for 2 Q tensor(s)", debug_output
+        )
+        self.assertIn("Computed the director for 2 Q tensor(s) in", debug_output)
+        self.assertIn("seconds", debug_output)
+
+    def test_isotropic_warning_points_to_result_indices(self):
+        screen_output = io.StringIO()
+
+        with redirect_stdout(screen_output):
+            q_diagonalize(np.zeros((3, 3), dtype=float))
+
+        warning_output = screen_output.getvalue()
+        self.assertIn("[WARNING]", warning_output)
+        self.assertIn("1 near-isotropic grid point(s)", warning_output)
+        self.assertIn("result.isotropic_indices", warning_output)
+
+    def test_fallback_is_debug_only_and_log_none_suppresses_output(self):
+        x_aligned_biaxial_tensor = np.diag([0.6, -0.1, -0.5])
+
+        default_output = io.StringIO()
+        with redirect_stdout(default_output):
+            q_diagonalize(x_aligned_biaxial_tensor)
+        self.assertEqual(default_output.getvalue(), "")
+
+        debug_output = io.StringIO()
+        with redirect_stdout(debug_output):
+            q_diagonalize(x_aligned_biaxial_tensor, log_level=logging.DEBUG)
+        self.assertIn("Recomputed the dominant eigenpair", debug_output.getvalue())
+
+        suppressed_output = io.StringIO()
+        with redirect_stdout(suppressed_output):
+            q_diagonalize(x_aligned_biaxial_tensor, log_mode="none")
+        self.assertEqual(suppressed_output.getvalue(), "")
 
     def test_positive_uniaxial_result_canonicalizes_degenerate_eigensystem(self):
         input_director = np.array([0.3, 0.4, np.sqrt(0.75)])
@@ -225,7 +294,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
             log_mode="none",
         )
 
-        self.assertTrue(np.array_equal(result.uniaxial_indices, np.array([[0]])))
+        self.assertEqual(result.uniaxial_indices, [(0,)])
 
 
 if __name__ == "__main__":

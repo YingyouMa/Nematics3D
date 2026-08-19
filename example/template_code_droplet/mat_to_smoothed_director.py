@@ -32,18 +32,19 @@ from scipy.ndimage import label as ndimage_label
 
 
 # ── tuneable constants ────────────────────────────────────────────────────────
-_TRUNCATE = None          # Gaussian truncation radius (None = scipy default)
-_WEIGHTS_FLOOR = 1e-12    # floor weight to avoid divide-by-zero in smoothing
-_DIAG_Z_CHUNK = 6         # z-slice chunk size during Q diagonalisation
-_READ_Z_CHUNK = 8         # z-slice chunk size when reading the MAT file
-_IMAG_WARN_TOL = 1e-3     # |imag| threshold that triggers a per-voxel warning
-_IMAG_WARN_COUNT = 32     # number of offending voxels before we raise an error
+_TRUNCATE = None  # Gaussian truncation radius (None = scipy default)
+_WEIGHTS_FLOOR = 1e-12  # floor weight to avoid divide-by-zero in smoothing
+_DIAG_Z_CHUNK = 6  # z-slice chunk size during Q diagonalisation
+_READ_Z_CHUNK = 8  # z-slice chunk size when reading the MAT file
+_IMAG_WARN_TOL = 1e-3  # |imag| threshold that triggers a per-voxel warning
+_IMAG_WARN_COUNT = 32  # number of offending voxels before we raise an error
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────
 
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.field import Q_diagonalize, align_directors
+from nematics3d.field import align_directors
+from nematics3d.q_diagonalization import q_diagonalize
 
 
 def _iter_chunks(length: int, size: int) -> Iterable[tuple[int, int]]:
@@ -164,8 +165,12 @@ def _build_smoothed_q5(
 
 
 def _diagonalize(
-    q_path: Path, n_raw: np.ndarray, mask: np.ndarray, out_path: Path,
-    Q_diagonalize, align_directors,
+    q_path: Path,
+    n_raw: np.ndarray,
+    mask: np.ndarray,
+    out_path: Path,
+    q_diagonalize,
+    align_directors,
 ) -> None:
     q = np.load(q_path, mmap_mode="r")
     n_out = np.lib.format.open_memmap(
@@ -175,7 +180,7 @@ def _diagonalize(
         q_c = np.asarray(q[:, :, z0:z1, :], dtype=np.float32)
         n_c = np.asarray(n_raw[:, :, z0:z1, :], dtype=np.float32)
         m_c = np.asarray(mask[:, :, z0:z1] > 0, dtype=bool)
-        _, n_d = Q_diagonalize(q_c)
+        n_d = q_diagonalize(q_c).n
         n_d = np.asarray(align_directors(n_c, n_d), dtype=np.float32)
         n_d[~m_c] = n_c[~m_c]
         n_out[:, :, z0:z1, :] = n_d
@@ -205,7 +210,9 @@ def _read_mat(mat_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
 
         for z0, z1 in _iter_chunks(nz, _READ_Z_CHUNK):
             s = np.s_[:, :, z0:z1]
-            m_block = np.transpose(np.asarray(mask_h5[z0:z1], dtype=np.uint8), (1, 2, 0))
+            m_block = np.transpose(
+                np.asarray(mask_h5[z0:z1], dtype=np.uint8), (1, 2, 0)
+            )
             m_out[s] = m_block
             for comp, src in enumerate((vx, vy, vz)):
                 block = _to_float32(src[z0:z1], label=f"component {comp} z[{z0}:{z1}]")
@@ -237,6 +244,7 @@ def _read_mat(mat_path: Path) -> tuple[np.ndarray, np.ndarray, dict]:
 
 
 # ── public API ────────────────────────────────────────────────────────────────
+
 
 def process_mat_file(
     mat_path: str | Path,
@@ -281,7 +289,9 @@ def process_mat_file(
     tmp_q_path = output_dir / f"_tmp_qfield5_weighted_gaussian_{sigma_tag}_xyz.npy"
 
     if not is_overwrite:
-        existing = [p for p in (mask_path, bounds_path, director_path, meta_path) if p.exists()]
+        existing = [
+            p for p in (mask_path, bounds_path, director_path, meta_path) if p.exists()
+        ]
         if existing:
             raise FileExistsError(
                 "Outputs already exist; pass is_overwrite=True to replace: "
@@ -303,7 +313,9 @@ def process_mat_file(
     dataset = GridFieldDataset(
         inputValue=InputGridField(
             shape=n_raw.shape[:3],
-            grid_transform=np.asarray(meta["grid_transform_for_QFieldObject"], dtype=float),
+            grid_transform=np.asarray(
+                meta["grid_transform_for_QFieldObject"], dtype=float
+            ),
             grid_offset=np.asarray(meta["grid_offset_for_QFieldObject"], dtype=float),
         ),
         name=f"{mat_path.stem} weighted Gaussian sigma={sigma}",
@@ -315,7 +327,14 @@ def process_mat_file(
         _build_smoothed_q5(n_raw, weights, dataset, tmp_q_path, sigma)
 
         print("Diagonalising ...")
-        _diagonalize(tmp_q_path, n_raw, mask_large, director_path, Q_diagonalize, align_directors)
+        _diagonalize(
+            tmp_q_path,
+            n_raw,
+            mask_large,
+            director_path,
+            q_diagonalize,
+            align_directors,
+        )
     finally:
         if tmp_q_path.exists():
             try:
@@ -350,7 +369,9 @@ def process_mat_file(
         },
         "diagonalisation": {"z_chunk_size": _DIAG_Z_CHUNK},
     }
-    meta_path.write_text(json.dumps(meta_out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    meta_path.write_text(
+        json.dumps(meta_out, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"  Director saved → {director_path}")
     print(f"  Metadata saved → {meta_path}")
 
@@ -374,8 +395,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("mat_path", type=Path, help="Source MAT file.")
     parser.add_argument("output_dir", type=Path, help="Parent output directory.")
-    parser.add_argument("--sigma", type=float, default=1.45, help="Gaussian sigma in um.")
+    parser.add_argument(
+        "--sigma", type=float, default=1.45, help="Gaussian sigma in um."
+    )
     parser.add_argument("--no-overwrite", dest="is_overwrite", action="store_false")
     a = parser.parse_args()
-    result = process_mat_file(a.mat_path, a.output_dir, a.sigma, is_overwrite=a.is_overwrite)
+    result = process_mat_file(
+        a.mat_path, a.output_dir, a.sigma, is_overwrite=a.is_overwrite
+    )
     print(json.dumps(result, indent=2, ensure_ascii=False))

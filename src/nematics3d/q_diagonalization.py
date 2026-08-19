@@ -1,5 +1,6 @@
 """Analytic Q-tensor diagonalization and named result objects."""
 
+import time
 from dataclasses import dataclass
 from typing import ClassVar, Union
 
@@ -22,10 +23,10 @@ class QDiagonalizationResult(ResultBase):
         "S":               "Scalar order: 3/2 times the largest eigenvalue.",
         "n":               "Unit eigenvector for the largest eigenvalue.",
         "isotropic_indices": (
-            "Coordinate indices of points handled as numerically isotropic."
+            "Index tuples of points handled as numerically isotropic."
         ),
         "uniaxial_indices": (
-            "Indices where the canonical uniaxial frame was applied; its "
+            "Index tuples where the canonical uniaxial frame was applied; its "
             "degenerate axes may be spatially discontinuous."
         ),
         "eigenvalues":     "Descending eigenspectrum when biaxial output is requested.",
@@ -36,8 +37,8 @@ class QDiagonalizationResult(ResultBase):
 
     S: np.ndarray  # noqa: N815 - conventional public symbol for scalar order
     n: np.ndarray
-    isotropic_indices: np.ndarray
-    uniaxial_indices: np.ndarray
+    isotropic_indices: list[tuple[int, ...]]
+    uniaxial_indices: list[tuple[int, ...]]
     eigenvalues: np.ndarray | None = None
     eigenvectors: np.ndarray | None = None
     biaxial_order: np.ndarray | None = None
@@ -78,18 +79,42 @@ def q_diagonalize(
     Negative-``S`` oblate (flat) uniaxial states are not currently supported.
     Uniaxial recovery assumes a unique largest eigenvalue and a repeated lower
     eigenvalue pair, as occurs for positive-``S`` prolate states.
+
+    Raises
+    ------
+    TypeError
+        If ``qtensor`` does not have a floating-point dtype.
+    ValueError
+        If ``qtensor`` is empty, has an unsupported shape, contains non-finite
+        values, or supplies full matrices that are not symmetric and traceless.
     """
     # Normalize both accepted Q representations to full (..., 3, 3) matrices.
+    stage_start = time.perf_counter()
+    logger.debug(
+        "Validating and preparing Q-tensor input with shape " f"{np.shape(qtensor)}."
+    )
     full_tensor = as_qfield9(
         qtensor,
         name="Q tensor to diagonalize",
         is_strict_3d_field=False,
     )
+    if full_tensor.size == 0:
+        raise ValueError(
+            "'qtensor' must contain at least one Q tensor; "
+            f"got shape {full_tensor.shape}."
+        )
     calculation_dtype = np.result_type(full_tensor.dtype, np.float64)
     full_tensor = np.asarray(full_tensor, dtype=calculation_dtype)
+    tensor_count = full_tensor.size // 9
+    logger.debug(
+        f"Prepared {tensor_count} Q tensor(s) in "
+        f"{time.perf_counter() - stage_start:.3f} seconds."
+    )
 
     # Build scale-aware tolerances so the isotropic decision follows the input
     # dtype and remains meaningful when Q has unusually large components.
+    stage_start = time.perf_counter()
+    logger.debug(f"Computing tensor invariants for {tensor_count} Q tensor(s).")
     machine_epsilon = np.finfo(full_tensor.dtype).eps
     tensor_abs_max = np.max(np.abs(full_tensor), axis=(-2, -1))
     tensor_scale = np.maximum(1.0, tensor_abs_max)
@@ -157,12 +182,21 @@ def q_diagonalize(
         local_dict={"cosine_argument": cosine_argument},
         optimization="moderate",
     )
+    logger.debug(
+        f"Computed tensor invariants for {tensor_count} Q tensor(s) in "
+        f"{time.perf_counter() - stage_start:.3f} seconds."
+    )
 
     # This mask remains empty unless complete biaxial output requests the
     # canonical positive-S uniaxial eigensystem described below.
     is_uniaxial = np.zeros(full_tensor.shape[:-2], dtype=bool)
 
     if is_biaxial:
+        stage_start = time.perf_counter()
+        logger.debug(
+            "Computing the complete eigensystem and biaxial order for "
+            f"{tensor_count} Q tensor(s)."
+        )
         # Evaluate all three analytic roots and sort them from largest to
         # smallest so every eigenvector column has a stable meaning.
         root_offsets = np.array(
@@ -303,16 +337,23 @@ def q_diagonalize(
 
         fallback_count = int(np.count_nonzero(is_eigensystem_fallback))
         if fallback_count:
-            logger.warning(
-                "q_diagonalize detected "
+            logger.debug(
                 f"{fallback_count} grid point(s) where the complete analytic "
                 "eigensystem became degenerate or numerically unstable. "
                 "Recomputed only those points with np.linalg.eigh."
             )
+        logger.debug(
+            "Computed the complete eigensystem and biaxial order for "
+            f"{tensor_count} Q tensor(s) in "
+            f"{time.perf_counter() - stage_start:.3f} seconds."
+        )
     else:
         # The common uniaxial path computes only the dominant eigenpair and does
         # not allocate complete eigenvalue or eigenvector arrays.
-        logger.debug("Computing the largest eigenvalue from tensor invariants.")
+        stage_start = time.perf_counter()
+        logger.debug(
+            f"Computing the largest eigenvalue for {tensor_count} Q tensor(s)."
+        )
         largest_eigenvalue = ne.evaluate(
             "where(is_near_isotropic, 0.0, " "spectral_radius * cos(phase_angle))",
             local_dict={
@@ -322,8 +363,16 @@ def q_diagonalize(
             },
             optimization="moderate",
         )
+        logger.debug(
+            f"Computed the largest eigenvalue for {tensor_count} Q tensor(s) in "
+            f"{time.perf_counter() - stage_start:.3f} seconds."
+        )
 
-        logger.debug("Computing the director associated with the largest eigenvalue.")
+        stage_start = time.perf_counter()
+        logger.debug(
+            "Computing the director associated with the largest eigenvalue for "
+            f"{tensor_count} Q tensor(s)."
+        )
         # Construct the cofactor vector spanning the null space of
         # Q - lambda_max I, writing each component directly into its output.
         director_expression_inputs = {
@@ -425,24 +474,36 @@ def q_diagonalize(
 
         fallback_count = int(np.count_nonzero(is_director_fallback))
         if fallback_count:
-            logger.warning(
-                "q_diagonalize detected "
+            logger.debug(
                 f"{fallback_count} grid point(s) where the analytic director "
                 "formula became degenerate or numerically unstable. Recomputed "
                 "the dominant eigenpair with np.linalg.eigh at those points."
             )
+        logger.debug(
+            f"Computed the director for {tensor_count} Q tensor(s) in "
+            f"{time.perf_counter() - stage_start:.3f} seconds."
+        )
 
     # Emit recovery diagnostics only after all requested arrays are finalized.
     isotropic_count = int(np.count_nonzero(is_near_isotropic))
     if isotropic_count:
         logger.warning(
-            "q_diagonalize detected "
             f"{isotropic_count} near-isotropic grid point(s). Set S "
-            "to 0 and assigned the default director [1, 0, 0] at those points."
+            "to 0 and assigned the default director [1, 0, 0] at those points. "
+            "Inspect result.isotropic_indices before interpreting the director."
         )
 
-    isotropic_indices = np.argwhere(is_near_isotropic)
-    uniaxial_indices = np.argwhere(is_uniaxial)
+    # Store coordinates as tuples so zero-dimensional single-tensor inputs are
+    # unambiguous: a match is [()] and no match is []. Convert NumPy integers
+    # to built-in ints so the diagnostics are plain Python data.
+    isotropic_indices = [
+        tuple(int(coordinate) for coordinate in index)
+        for index in np.argwhere(is_near_isotropic)
+    ]
+    uniaxial_indices = [
+        tuple(int(coordinate) for coordinate in index)
+        for index in np.argwhere(is_uniaxial)
+    ]
 
     return QDiagonalizationResult(
         S=scalar_order,

@@ -1,9 +1,6 @@
 """Q-tensor interpolation on sampled surfaces with director visualization."""
 
-from copy import deepcopy
 from typing import Any, Mapping
-
-from nematics3d.field import Q_diagonalize, n_color_immerse
 
 from .class_base import AttrDef, ClassBase
 from .grid_field import GridInterpolator
@@ -39,8 +36,7 @@ class InterpolateSurface(ClassBase):
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.kind not in ("relation", "property")
-        and name not in ClassBase.__slots__
+        if spec.kind not in ("relation", "property") and name not in ClassBase.__slots__
     )
 
     def __init__(
@@ -90,5 +86,3 @@ class InterpolateSurface(ClassBase):
     @property
     def result(self):
         return self.calc_result
-
-

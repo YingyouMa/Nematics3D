@@ -11,7 +11,8 @@ from .surface_sampling import SurfaceSampling, OptsSurfaceSampling
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
-from nematics3d.field import Q_diagonalize, n_color_immerse
+from nematics3d.field import n_color_immerse
+from nematics3d.q_diagonalization import q_diagonalize
 from nematics3d.geometry import triangulate_surface_points
 from nematics3d.disclination import defect_detect_surface
 from .grid_field import GridInterpolator
@@ -140,7 +141,8 @@ class QSurface(InterpolateSurface):
 
         # Interpolate Q tensor and derive director and scalar order.
         Q = self.interpolator.interpolate(coords)
-        S, n = Q_diagonalize(Q)
+        diagonalization = q_diagonalize(Q)
+        S, n = diagonalization.S, diagonalization.n
 
         # Detect defects and mark near-defect directors.
         # Pass the pre-computed director array to avoid a second interpolation.

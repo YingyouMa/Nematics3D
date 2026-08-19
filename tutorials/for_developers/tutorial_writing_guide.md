@@ -21,7 +21,7 @@ Examples:
 This rule applies to headings, paragraphs, lists, table prose, captions, and
 other explanatory text. It does not apply to code identifiers or literal code:
 
-- keep `Q_diagonalize()` as code;
+- keep `q_diagonalize()` as code;
 - keep `QFieldObject` as code;
 - keep a Python variable such as `Q_data` in a code span;
 - do not put LaTeX inside executable code cells.

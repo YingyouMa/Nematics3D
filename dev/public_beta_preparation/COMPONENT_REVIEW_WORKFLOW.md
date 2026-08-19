@@ -517,10 +517,11 @@ A component is `Confirmed` only when all of the following are true:
 - [ ] The final diff has been inspected manually.
 - [ ] Validation evidence and the reviewed commit are recorded.
 
-## First application: `Q_diagonalize`
+## First application: `q_diagonalize`
 
 The first planned use of this workflow is
-`nematics3d.field.Q_diagonalize` in `src/nematics3d/field.py`.
+`nematics3d.q_diagonalization.q_diagonalize` in
+`src/nematics3d/q_diagonalization.py`.
 
 Its focused review should include:
 
@@ -528,7 +529,7 @@ Its focused review should include:
    and invalid-input behavior.
 2. Preserve and improve the existing isotropic and analytic-director fallback
    tests.
-3. Add `getQ` to `Q_diagonalize` round-trip tests.
+3. Add `getQ` to `q_diagonalize` round-trip tests.
 4. Compare randomized symmetric traceless tensors with `np.linalg.eigh` or
    `Q_diagonalize_linalg`.
 5. Verify eigenvalue, eigenvector, normalization, and sign-equivalence

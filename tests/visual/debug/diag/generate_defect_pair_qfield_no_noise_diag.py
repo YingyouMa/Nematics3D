@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import numpy as np
-import nematics3d as n3d
-from nematics3d.field import Q_diagonalize, getQ
+
+from nematics3d.field import getQ
+from nematics3d.q_diagonalization import q_diagonalize
 
 
 NX = NY = NZ = 128
@@ -43,7 +44,8 @@ def main():
     S_input = np.full((NX, NY, NZ), S_VALUE, dtype=np.float64)
     Q = getQ(director, S=S_input, log_mode="none")
 
-    S_diag, n_diag = Q_diagonalize(Q)
+    diagonalization = q_diagonalize(Q)
+    S_diag, n_diag = diagonalization.S, diagonalization.n
 
     is_finite_S = np.isfinite(S_diag)
     is_finite_n = np.isfinite(n_diag).all(axis=-1)

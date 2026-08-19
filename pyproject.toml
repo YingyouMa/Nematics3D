@@ -33,6 +33,20 @@ dependencies = [
 
 [project.optional-dependencies]
 tutorials = ["jupyter", "notebook"]
+test = [
+    "black==25.1.0",
+    "build>=1.2,<2",
+    "pytest>=9,<10",
+    "ruff==0.12.5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "visual: tests that require rendering, GUI, or off-screen graphics support",
+    "slow: tests that are unsuitable for the required per-push core suite",
+    "benchmark: performance measurements that do not gate correctness",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

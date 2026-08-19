@@ -22,7 +22,8 @@ from .datatypes import (
 )
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
-from .field import align_stack, add_periodic_boundary, Q_diagonalize
+from .field import align_stack, add_periodic_boundary
+from .q_diagonalization import q_diagonalize
 
 # from .debug.debug_store import DEBUG_VARS
 
@@ -325,7 +326,7 @@ def defect_detect_surface(
         # vertex order matches the supplied director array.  Skipping
         # .clean() avoids vertex reordering that would break the mapping.
         surface = surface.triangulate()
-        vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
+        vertices = np.asarray(surface.points, dtype=float)  # (V, 3)
         n = np.asarray(ndata, dtype=float)
         if n.shape != (len(vertices), 3):
             raise ValueError(
@@ -334,19 +335,17 @@ def defect_detect_surface(
             )
     else:
         surface = surface.triangulate().clean()
-        vertices = np.asarray(surface.points, dtype=float)   # (V, 3)
+        vertices = np.asarray(surface.points, dtype=float)  # (V, 3)
         Q = ndata.interpolate(vertices)
-        _, n = Q_diagonalize(Q)                              # (V, 3)
+        n = q_diagonalize(Q).n  # (V, 3)
 
-    logger.debug(
-        f"Evaluated director at {len(vertices)} surface vertices."
-    )
+    logger.debug(f"Evaluated director at {len(vertices)} surface vertices.")
 
     # ------------------------------------------------------------------ #
     # 2. Build edge → [tri_idx, opposite_vertex] mapping                  #
     # ------------------------------------------------------------------ #
     faces = np.asarray(surface.faces, dtype=int).reshape(-1, 4)
-    triangles = faces[:, 1:]                             # (T, 3)
+    triangles = faces[:, 1:]  # (T, 3)
 
     # Each internal edge is shared by exactly two triangles.
     # Map (min_v, max_v) → list of (tri_idx, opposite_vertex_idx)
@@ -368,18 +367,18 @@ def defect_detect_surface(
     # sort the four points by polar angle in the local tangent plane so
     # they form a proper (non-self-intersecting) loop.
     quad_list = []
-    quad_tri_pairs = []                                  # (tri_idx_0, tri_idx_1) per quad
+    quad_tri_pairs = []  # (tri_idx_0, tri_idx_1) per quad
     for (vi, vj), entries in edge_map.items():
         if len(entries) != 2:
-            continue                                     # boundary edge
+            continue  # boundary edge
         tri_idx_0, vk = entries[0]
         tri_idx_1, vl = entries[1]
         four = np.array([vi, vj, vk, vl], dtype=int)
 
         # Project to local tangent plane centred at the quad centroid.
-        pts4 = vertices[four]                            # (4, 3)
+        pts4 = vertices[four]  # (4, 3)
         centroid = pts4.mean(axis=0)
-        rel = pts4 - centroid                            # (4, 3)
+        rel = pts4 - centroid  # (4, 3)
 
         # Build an orthonormal 2-D frame from the first relative vector.
         u = rel[0]
@@ -410,7 +409,7 @@ def defect_detect_surface(
             return empty_coords, np.zeros(len(vertices), dtype=bool)
         return empty_coords
 
-    quads = np.array(quad_list, dtype=int)               # (Q, 4)
+    quads = np.array(quad_list, dtype=int)  # (Q, 4)
     logger.debug(f"Formed {len(quads)} quad loops from internal edges.")
 
     # ------------------------------------------------------------------ #
@@ -424,8 +423,7 @@ def defect_detect_surface(
     defect_mask = dot_first_last < threshold
 
     logger.debug(
-        f"Detected {defect_mask.sum()} defect quads "
-        f"(threshold={threshold})."
+        f"Detected {defect_mask.sum()} defect quads " f"(threshold={threshold})."
     )
 
     if not is_simplify:
@@ -561,8 +559,7 @@ def defect_classify_into_lines(
     grid_transform = as_grid_transform(grid_transform)
 
     logger.debug(
-        "Start line classfication. \n"
-        f"box_size_periodic: {box_size_periodic}."
+        "Start line classfication. \n" f"box_size_periodic: {box_size_periodic}."
     )
 
     defect_indices_hash = make_hash_table(defect_indices)

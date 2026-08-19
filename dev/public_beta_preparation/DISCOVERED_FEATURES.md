@@ -12,14 +12,14 @@ here, then update the relevant release checklist and component review record.
 | Field | Value |
 | --- | --- |
 | Status | Proposed |
-| Discovered while reviewing | `nematics3d.field.Q_diagonalize()` |
+| Discovered while reviewing | `nematics3d.q_diagonalize()` |
 | Primary implementation | `src/nematics3d/datatypes.py::as_qfield9()` |
 | Downstream beneficiary | Every function that consumes the validated full Q-tensor representation |
 | Discovered date | 2026-08-18 |
 
 ### Motivation
 
-`Q_diagonalize()` mathematically assumes that each full input matrix is a
+`q_diagonalize()` mathematically assumes that each full input matrix is a
 finite, symmetric, traceless Q tensor. Its current call to `as_qfield9()` checks
 the floating dtype and trailing shape, but a full `(..., 3, 3)` input currently
 passes through without checking finiteness, symmetry, or trace.
@@ -133,7 +133,7 @@ the default validator.
 - [ ] Final API and tolerance policy documented.
 - [ ] Implementation completed.
 - [ ] Focused validator tests added and passing.
-- [ ] `Q_diagonalize()` tests confirm that invalid full tensors fail at the
+- [ ] `q_diagonalize()` tests confirm that invalid full tensors fail at the
       conversion boundary.
 - [ ] Representative existing Q datasets remain accepted.
 - [ ] Performance and temporary-memory impact measured on a large field.

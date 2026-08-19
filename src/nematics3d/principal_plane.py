@@ -20,8 +20,9 @@ from .classes.bounds import (
 )
 from .classes.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
-from .field import Q_diagonalize, Q_diagonalize_linalg, getQ
+from .field import Q_diagonalize_linalg, getQ
 from .geometry import align_axes_to_reference, axes_angle_changes_deg
+from .q_diagonalization import q_diagonalize
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -246,7 +247,7 @@ def nml_principal_plane_analysis(
         q_values = np.asarray(q_values, dtype=float)
         if q_values.size == 0:
             raise ValueError("Interpolated Q values cannot be empty.")
-        _, directors = Q_diagonalize(q_values)
+        directors = q_diagonalize(q_values).n
         mean_q = np.mean(
             getQ(np.asarray(directors, dtype=float).reshape(-1, 3), S=1), axis=0
         )

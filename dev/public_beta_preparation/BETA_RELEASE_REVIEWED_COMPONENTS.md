@@ -51,10 +51,10 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | --- | --- |
 | Kind | Internal base class |
 | Source | [`src/nematics3d/classes/result_base.py`](../../src/nematics3d/classes/result_base.py) |
-| Tests | [`tests/test_q_diagonalization.py`](../../tests/test_q_diagonalization.py) |
+| Tests | [`tests/core/test_q_diagonalization.py`](../../tests/core/test_q_diagonalization.py) |
 | Tutorial | [`tutorials/classes/ResultBase/ResultBase.ipynb`](../../tutorials/classes/ResultBase/ResultBase.ipynb) |
 | Review scope | Dataclass field discovery, attribute and key access, dictionary-like inspection, shallow dictionary conversion, field descriptions, representation, error behavior exercised by the concrete diagonalization result, documentation, formatting, and logging |
-| Validation | `conda run -n Nematics3D pytest -q tests/test_q_diagonalization.py` (8 passed); `black --check src/nematics3d/classes/result_base.py tests/test_q_diagonalization.py`; `ruff check --select E,F,W,N,I src/nematics3d/classes/result_base.py tests/test_q_diagonalization.py`; in-memory syntax compile; notebook validation; `git diff --check` |
+| Validation | `conda run -n Nematics3D pytest -q tests/core/test_q_diagonalization.py` (13 passed, 2 subtests passed); `black --check src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; `ruff check --select E,F,W,N,I src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; in-memory syntax compile; notebook validation; `git diff --check` |
 | Reviewed commit | `55517d5322eafe206369e8881ee6da038121ac84` |
 | Reviewed date | 2026-08-19 |
 | Reviewer | Yingyou Ma and Codex |
@@ -72,7 +72,7 @@ Summary of changes and evidence:
 - Documented the user interface, repository-developer subclassing conventions,
   direct construction relationships, logging decision, and the restriction
   against field names that hide inherited interface methods.
-- The focused diagonalization test file passes all eight tests, and the reviewed
+- The focused diagonalization test file passes all thirteen tests, and the reviewed
   source and test file pass Black, Ruff, syntax, notebook, and whitespace
   validation.
 
@@ -91,4 +91,4 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-08-19 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/test_q_diagonalization.py` | `55517d5322eafe206369e8881ee6da038121ac84` | Confirmed |
+| 2026-08-19 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `55517d5322eafe206369e8881ee6da038121ac84` | Confirmed |

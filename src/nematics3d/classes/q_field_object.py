@@ -124,10 +124,8 @@ from ..datatypes import (
     Unset,
     as_bool,
 )
-from ..field import (
-    Q_diagonalize,
-    getQ,
-)
+from ..field import getQ
+from ..q_diagonalization import q_diagonalize
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
     as_grid_transform,
@@ -219,8 +217,7 @@ class InputQ:
         "S": "S field (scalar order parameter)",
         "n": "director field",
         "mask": (
-            "validity mask marking which voxels carry physically meaningful "
-            "Q data"
+            "validity mask marking which voxels carry physically meaningful " "Q data"
         ),
         "box_periodic_flag": (
             "flag indicating whether periodic boundary condition is applied "
@@ -598,9 +595,9 @@ class QFieldObject(ClassBase):
             # class can keep using the same readable surfaces regardless of how
             # this object was initialized.
             object.__setattr__(self, "raw_Q", q_values)
-            temp_S, temp_n = Q_diagonalize(self.raw_Q)
-            object.__setattr__(self, "raw_S", temp_S)
-            object.__setattr__(self, "raw_n", temp_n)
+            diagonalization = q_diagonalize(self.raw_Q)
+            object.__setattr__(self, "raw_S", diagonalization.S)
+            object.__setattr__(self, "raw_n", diagonalization.n)
             object.__setattr__(
                 self,
                 "raw_box_periodic_flag",
@@ -661,9 +658,9 @@ class QFieldObject(ClassBase):
                 )
             else:
                 if self.raw_Q is not UNSET:
-                    temp_S, temp_n = Q_diagonalize(self.raw_Q)
-                    object.__setattr__(self, "raw_S", temp_S)
-                    object.__setattr__(self, "raw_n", temp_n)
+                    diagonalization = q_diagonalize(self.raw_Q)
+                    object.__setattr__(self, "raw_S", diagonalization.S)
+                    object.__setattr__(self, "raw_n", diagonalization.n)
                 else:
                     raise NameError("No data is input to initialize Q field.")
 
@@ -816,9 +813,7 @@ class QFieldObject(ClassBase):
             )
 
         object.__setattr__(self, "calc_defect_indices", defect_indices)
-        object.__setattr__(
-            self, "calc_defect_indices_masked", defect_indices_masked
-        )
+        object.__setattr__(self, "calc_defect_indices_masked", defect_indices_masked)
 
         object.__setattr__(
             self,

@@ -832,10 +832,78 @@ def _validate_qfield_single_shape(
         )
 
 
+def _validate_qfield9_tensor(
+    qtensor: QField9,
+    *,
+    name: str,
+    symmetry_tolerance: float | None,
+    trace_tolerance: float | None,
+) -> None:
+    """Validate the numerical and defining tensor properties of QField9."""
+    if not np.all(np.isfinite(qtensor)):
+        invalid_indices = np.argwhere(~np.all(np.isfinite(qtensor), axis=(-2, -1)))
+        raise ValueError(
+            f"{name!r} must be finite everywhere. Non-finite tensor indices "
+            f"include {invalid_indices[:5].tolist()}."
+        )
+
+    machine_epsilon = np.finfo(qtensor.dtype).eps
+    tensor_scale = np.maximum(1.0, np.max(np.abs(qtensor), axis=(-2, -1)))
+    default_tolerance = 32 * machine_epsilon * tensor_scale
+
+    tolerance_inputs = {
+        "symmetry_tolerance": symmetry_tolerance,
+        "trace_tolerance": trace_tolerance,
+    }
+    for tolerance_name, tolerance in tolerance_inputs.items():
+        if tolerance is not None and (not np.isfinite(tolerance) or tolerance < 0):
+            raise ValueError(
+                f"{tolerance_name!r} must be a finite, non-negative number or None."
+            )
+
+    effective_symmetry_tolerance = (
+        default_tolerance if symmetry_tolerance is None else float(symmetry_tolerance)
+    )
+    effective_trace_tolerance = (
+        default_tolerance if trace_tolerance is None else float(trace_tolerance)
+    )
+
+    symmetry_error = np.max(
+        np.abs(qtensor - np.swapaxes(qtensor, -2, -1)),
+        axis=(-2, -1),
+    )
+    is_asymmetric = symmetry_error > effective_symmetry_tolerance
+    if np.any(is_asymmetric):
+        invalid_indices = np.argwhere(is_asymmetric)
+        maximum_error = float(np.max(symmetry_error[is_asymmetric]))
+        raise ValueError(
+            f"{name!r} must be symmetric. Detected "
+            f"{invalid_indices.shape[0]} asymmetric tensor(s); maximum asymmetry "
+            f"is {maximum_error:.6g}. Invalid indices include "
+            f"{invalid_indices[:5].tolist()}."
+        )
+
+    trace_error = np.abs(np.trace(qtensor, axis1=-2, axis2=-1))
+    is_not_traceless = trace_error > effective_trace_tolerance
+    if np.any(is_not_traceless):
+        invalid_indices = np.argwhere(is_not_traceless)
+        maximum_error = float(np.max(trace_error[is_not_traceless]))
+        raise ValueError(
+            f"{name!r} must be traceless. Detected "
+            f"{invalid_indices.shape[0]} tensor(s) with nonzero trace; maximum "
+            f"absolute trace is {maximum_error:.6g}. Invalid indices include "
+            f"{invalid_indices[:5].tolist()}."
+        )
+
+
 def as_qfield9(
     qtensor: Union[QField5, QField9],
     name="QField",
     is_strict_3d_field: bool = True,
+    *,
+    is_validate_tensor: bool = True,
+    symmetry_tolerance: float | None = None,
+    trace_tolerance: float | None = None,
 ) -> QField9:
     #! strict3d
     """
@@ -853,6 +921,15 @@ def as_qfield9(
     ----------
     qtensor : QField
         Input Q-tensor field, either in 5-component or 3Ãƒâ€”3 form.
+    is_validate_tensor : bool, optional
+        Whether to require finite values and validate that a supplied 3Ãƒâ€”3
+        representation is symmetric and traceless. The five-component
+        representation guarantees symmetry and zero trace by construction.
+    symmetry_tolerance : float, optional
+        Absolute symmetry tolerance. By default, use a scale-aware tolerance
+        based on the input dtype at each tensor.
+    trace_tolerance : float, optional
+        Absolute trace tolerance. By default, use the same scale-aware rule.
 
     Returns
     -------
@@ -870,7 +947,8 @@ def as_qfield9(
 
     if not np.issubdtype(qtensor.dtype, np.floating):
         raise TypeError(
-            f"QField must be a float-type NumPy array, got dtype {qtensor.dtype}. Name of QField: {name}"
+            "QField must be a float-type NumPy array, got dtype "
+            f"{qtensor.dtype}. Name of QField: {name}"
         )
 
     shape = qtensor.shape
@@ -884,17 +962,25 @@ def as_qfield9(
                 expected_label="(Nx, Ny, Nz, 5)",
             )
         # Convert from 5-component representation to full 3x3 tensor
-        Q = np.zeros((*shape[:-1], 3, 3), dtype=qtensor.dtype)
-        Q[..., 0, 0] = qtensor[..., 0]  # Q_xx
-        Q[..., 0, 1] = qtensor[..., 1]  # Q_xy
-        Q[..., 0, 2] = qtensor[..., 2]  # Q_xz
-        Q[..., 1, 0] = qtensor[..., 1]  # Q_yx = Q_xy
-        Q[..., 1, 1] = qtensor[..., 3]  # Q_yy
-        Q[..., 1, 2] = qtensor[..., 4]  # Q_yz
-        Q[..., 2, 0] = qtensor[..., 2]  # Q_zx = Q_xz
-        Q[..., 2, 1] = qtensor[..., 4]  # Q_zy = Q_yz
-        Q[..., 2, 2] = -Q[..., 0, 0] - Q[..., 1, 1]  # Q_zz from traceless condition
-        return Q
+        full_tensor = np.zeros((*shape[:-1], 3, 3), dtype=qtensor.dtype)
+        full_tensor[..., 0, 0] = qtensor[..., 0]  # Q_xx
+        full_tensor[..., 0, 1] = qtensor[..., 1]  # Q_xy
+        full_tensor[..., 0, 2] = qtensor[..., 2]  # Q_xz
+        full_tensor[..., 1, 0] = qtensor[..., 1]  # Q_yx = Q_xy
+        full_tensor[..., 1, 1] = qtensor[..., 3]  # Q_yy
+        full_tensor[..., 1, 2] = qtensor[..., 4]  # Q_yz
+        full_tensor[..., 2, 0] = qtensor[..., 2]  # Q_zx = Q_xz
+        full_tensor[..., 2, 1] = qtensor[..., 4]  # Q_zy = Q_yz
+        full_tensor[..., 2, 2] = -full_tensor[..., 0, 0] - full_tensor[..., 1, 1]
+        if is_validate_tensor and not np.all(np.isfinite(full_tensor)):
+            invalid_indices = np.argwhere(
+                ~np.all(np.isfinite(full_tensor), axis=(-2, -1))
+            )
+            raise ValueError(
+                f"{name!r} must be finite everywhere. Non-finite tensor indices "
+                f"include {invalid_indices[:5].tolist()}."
+            )
+        return full_tensor
 
     if len(shape) >= 2 and shape[-2:] == (3, 3):
         if is_strict_3d_field:
@@ -904,8 +990,15 @@ def as_qfield9(
                 expected_ndim=5,
                 expected_label="(Nx, Ny, Nz, 3, 3)",
             )
-        Q = qtensor
-        return Q  # Already in QField9 form
+        full_tensor = qtensor
+        if is_validate_tensor:
+            _validate_qfield9_tensor(
+                full_tensor,
+                name=name,
+                symmetry_tolerance=symmetry_tolerance,
+                trace_tolerance=trace_tolerance,
+            )
+        return full_tensor  # Already in QField9 form
 
     raise ValueError(
         "Invalid QField shape: expected (Nx, Ny, Nz, 5) or "

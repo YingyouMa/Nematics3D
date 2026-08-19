@@ -10,10 +10,10 @@ from pyvistaqt import BackgroundPlotter
 from nematics3d.datatypes import as_bool
 from nematics3d.disclination import defect_detect, defect_vicinity_grid
 from nematics3d.field import (
-    Q_diagonalize,
     align_directors,
     n_color_immerse,
 )
+from nematics3d.q_diagonalization import q_diagonalize
 from nematics3d.general import (
     find_rotation_axis,
     mark_points_membership,
@@ -201,9 +201,10 @@ class QPlane(InterpolatePlane):
         grid_all_flatten = np.reshape(grid_all, (-1, 3))
 
         Q_all = self.interpolator.interpolate(grid_all_flatten)
-        S_all, n_all = Q_diagonalize(Q_all)
-        object.__setattr__(self, "calc_n", n_all[plane_grid.calc_box_mask])
-        object.__setattr__(self, "calc_S", S_all[plane_grid.calc_box_mask])
+        diagonalization = q_diagonalize(Q_all)
+        n_all = diagonalization.n
+        object.__setattr__(self, "calc_n", diagonalization.n[plane_grid.calc_box_mask])
+        object.__setattr__(self, "calc_S", diagonalization.S[plane_grid.calc_box_mask])
         object.__setattr__(self, "calc_result", Q_all[plane_grid.calc_box_mask])
 
         defect_centers, adjacent_mask = self._helper_detect_defect(n_all)
@@ -860,7 +861,7 @@ class QPlanePolar(QPlane):
             plane_grid.entity_grid_all[s:e],
             is_out_warning=True,
         )
-        _, directors = Q_diagonalize(q_layer)
+        directors = q_diagonalize(q_layer).n
         directors = np.asarray(directors, dtype=float).copy()
 
         for i in range(1, len(directors)):
