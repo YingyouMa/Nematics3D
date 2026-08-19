@@ -43,11 +43,7 @@ Similarly, formatting-only work is not enough to add a component to this file.
 - Do not silently delete stale entries. Move them to the stale section with an
   explanation so the review history remains visible.
 
-## Completed reviews awaiting commit
-
-The component work below is complete in the current working tree. Move an entry
-to the confirmed section and replace its pending commit marker with the full SHA
-after the reviewed files are committed without further changes.
+## Confirmed reviewed components
 
 ### `nematics3d.classes.result_base.ResultBase`
 
@@ -59,7 +55,7 @@ after the reviewed files are committed without further changes.
 | Tutorial | [`tutorials/classes/ResultBase/ResultBase.ipynb`](../../tutorials/classes/ResultBase/ResultBase.ipynb) |
 | Review scope | Dataclass field discovery, attribute and key access, dictionary-like inspection, shallow dictionary conversion, field descriptions, representation, error behavior exercised by the concrete diagonalization result, documentation, formatting, and logging |
 | Validation | `conda run -n Nematics3D pytest -q tests/test_q_diagonalization.py` (8 passed); `black --check src/nematics3d/classes/result_base.py tests/test_q_diagonalization.py`; `ruff check --select E,F,W,N,I src/nematics3d/classes/result_base.py tests/test_q_diagonalization.py`; in-memory syntax compile; notebook validation; `git diff --check` |
-| Reviewed commit | Pending commit of the current reviewed working tree |
+| Reviewed commit | `55517d5322eafe206369e8881ee6da038121ac84` |
 | Reviewed date | 2026-08-19 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Validation intentionally uses `QDiagonalizationResult` as the sole concrete result subclass. Other result subclasses and their scientific functions are outside this review. The existing `get()` behavior was retained by explicit decision. |
@@ -80,33 +76,6 @@ Summary of changes and evidence:
   source and test file pass Black, Ruff, syntax, notebook, and whitespace
   validation.
 
-## Confirmed reviewed components
-
-No component has been confirmed yet during this beta-release cleanup.
-
-When the first component is confirmed, replace the sentence above with entries
-using this template:
-
-### `<qualified component name>`
-
-| Field | Evidence |
-| --- | --- |
-| Kind | Function / class / module / Python file |
-| Source | [`path/to/source.py`](path/to/source.py) |
-| Tests | [`tests/path/to/test_file.py`](tests/path/to/test_file.py) |
-| Review scope | Correctness, API, edge cases, documentation, style |
-| Validation | `exact command that passed` |
-| Reviewed commit | `<full commit SHA>` |
-| Reviewed date | `YYYY-MM-DD` |
-| Reviewer | `<name or handle>` |
-| Remaining limitations | None, or a precise documented limitation |
-
-Summary of changes and evidence:
-
-- Describe the behavior that was inspected.
-- Describe important fixes or tests added during the review.
-- State why the validation is sufficient for the declared scope.
-
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -122,4 +91,4 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
-| - | - | - | - | - | No confirmed reviews yet |
+| 2026-08-19 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/test_q_diagonalization.py` | `55517d5322eafe206369e8881ee6da038121ac84` | Confirmed |
