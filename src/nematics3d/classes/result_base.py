@@ -10,11 +10,13 @@ from nematics3d.logging_decorator import logging_and_warning_decorator
 
 
 class ResultBase:
-    """Mixin for stable algorithm results represented as dataclasses.
+    """Internal mixin for stable algorithm results represented as dataclasses.
 
     ResultBase gives result objects a small dict-like inspection surface while
     preserving normal attribute access. Subclasses should be dataclasses using
     ``repr=False`` so this base class can provide the aligned representation.
+    User-facing APIs return concrete result subclasses rather than exposing this
+    base class as a public construction or extension interface.
     """
 
     __result_name__: ClassVar[str | None] = "result"
@@ -46,6 +48,8 @@ class ResultBase:
         """Return a shallow dictionary view of this result."""
         return {key: getattr(self, key) for key in self.keys()}
 
+    # These display helpers intentionally log their user-requested output at
+    # INFO. Entry/exit tracing remains at DETAIL to avoid normal logging noise.
     @logging_and_warning_decorator(start_finish_level=5)
     def show_readable_attrs(self, is_return=False, is_desc=True, logger=None):
         """Show readable result fields and optional field descriptions."""

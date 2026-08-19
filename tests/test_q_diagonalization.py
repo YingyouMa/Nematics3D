@@ -1,0 +1,232 @@
+import io
+import sys
+import types
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+import numpy as np
+
+SRC_DIR = Path(__file__).resolve().parents[1] / "src"
+PKG_DIR = SRC_DIR / "nematics3d"
+
+sys.path.insert(0, str(SRC_DIR))
+
+if "nematics3d" not in sys.modules:
+    pkg = types.ModuleType("nematics3d")
+    pkg.__path__ = [str(PKG_DIR)]
+    sys.modules["nematics3d"] = pkg
+
+from nematics3d.classes.result_base import ResultBase  # noqa: E402
+from nematics3d.q_diagonalization import q_diagonalize  # noqa: E402
+
+
+def make_uniaxial_q_tensor(director, scalar_order):
+    director = np.asarray(director, dtype=float)
+    director /= np.linalg.norm(director)
+    return scalar_order * (np.outer(director, director) - np.eye(3) / 3)
+
+
+class TestQDiagonalizeResult(unittest.TestCase):
+    def test_default_result_uses_named_fast_outputs(self):
+        input_director = np.array([1.0, 1.0, 1.0], dtype=float)
+        input_director /= np.linalg.norm(input_director)
+        input_scalar_order = np.array(0.75)
+        q_tensor = make_uniaxial_q_tensor(input_director, input_scalar_order)
+
+        result = q_diagonalize(q_tensor, log_mode="none")
+
+        self.assertIsInstance(result, ResultBase)
+        self.assertTrue(np.allclose(result.S, input_scalar_order))
+        self.assertTrue(
+            np.allclose(
+                np.abs(np.dot(result.n, input_director)),
+                1.0,
+            )
+        )
+        self.assertEqual(result.isotropic_indices.size, 0)
+        self.assertEqual(result.uniaxial_indices.size, 0)
+        self.assertIsNone(result.eigenvalues)
+        self.assertIsNone(result.eigenvectors)
+        self.assertIsNone(result.biaxial_order)
+
+    def test_result_base_attribute_and_dictionary_interfaces(self):
+        q_tensor = make_uniaxial_q_tensor([1.0, 1.0, 1.0], 0.75)
+        result = q_diagonalize(q_tensor, log_mode="none")
+
+        expected_keys = (
+            "S",
+            "n",
+            "isotropic_indices",
+            "uniaxial_indices",
+            "eigenvalues",
+            "eigenvectors",
+            "biaxial_order",
+        )
+        self.assertEqual(result.keys(), expected_keys)
+        self.assertEqual(tuple(result), expected_keys)
+        self.assertEqual(len(result), len(expected_keys))
+        self.assertIn("S", result)
+        self.assertNotIn("missing", result)
+
+        self.assertIs(result.S, result["S"])
+        self.assertIs(result.n, result["n"])
+        self.assertIs(result.get("n"), result.n)
+        self.assertEqual(result.get("missing", "fallback"), "fallback")
+        with self.assertRaises(KeyError):
+            result["missing"]
+
+        values = result.values()
+        items = result.items()
+        self.assertEqual(len(values), len(expected_keys))
+        self.assertEqual(tuple(key for key, _ in items), expected_keys)
+        self.assertIs(values[1], result.n)
+        self.assertIs(items[1][1], result.n)
+
+        result_dict = result.asdict()
+        self.assertEqual(tuple(result_dict), expected_keys)
+        self.assertIs(result_dict["n"], result.n)
+
+    def test_result_base_representation_and_field_descriptions(self):
+        q_tensor = make_uniaxial_q_tensor([1.0, 1.0, 1.0], 0.75)
+        result = q_diagonalize(q_tensor, log_mode="none")
+
+        representation = repr(result)
+        self.assertTrue(
+            representation.startswith(
+                "QDiagonalizationResult: Q-tensor diagonalization\n"
+            )
+        )
+        self.assertIn("S", representation)
+        self.assertIn("isotropic_indices", representation)
+
+        descriptions = result.show_readable_attrs(
+            is_return=True,
+            log_mode="none",
+        )
+        self.assertIn("- S", descriptions)
+        self.assertIn("Scalar order", descriptions)
+        self.assertEqual(
+            result.show_attr_doc("n", is_return=True, log_mode="none"),
+            "Unit eigenvector for the largest eigenvalue.",
+        )
+        with self.assertRaises(KeyError):
+            result.show_attr_doc("missing", log_mode="none")
+
+    def test_result_base_field_description_logging(self):
+        q_tensor = make_uniaxial_q_tensor([1.0, 1.0, 1.0], 0.75)
+        result = q_diagonalize(q_tensor, log_mode="none")
+
+        screen_output = io.StringIO()
+        with redirect_stdout(screen_output):
+            returned_doc = result.show_attr_doc("S", is_return=True)
+
+        self.assertIn("Scalar order", returned_doc)
+        self.assertIn("[INFO]", screen_output.getvalue())
+        self.assertIn("Scalar order", screen_output.getvalue())
+        self.assertNotIn("STARTED", screen_output.getvalue())
+
+        suppressed_output = io.StringIO()
+        with redirect_stdout(suppressed_output):
+            returned_doc = result.show_attr_doc(
+                "S",
+                is_return=True,
+                log_mode="none",
+            )
+
+        self.assertIn("Scalar order", returned_doc)
+        self.assertEqual(suppressed_output.getvalue(), "")
+
+    def test_biaxial_result_returns_complete_descending_eigensystem(self):
+        random_generator = np.random.default_rng(0)
+        input_axes, _ = np.linalg.qr(random_generator.normal(size=(3, 3)))
+        expected_eigenvalues = np.array([0.6, -0.1, -0.5])
+        q_tensor = input_axes @ np.diag(expected_eigenvalues) @ input_axes.T
+
+        with patch(
+            "nematics3d.q_diagonalization.np.linalg.eigh",
+            side_effect=AssertionError(
+                "The stable biaxial path must remain fully analytic."
+            ),
+        ):
+            result = q_diagonalize(
+                q_tensor,
+                is_biaxial=True,
+                log_mode="none",
+            )
+
+        self.assertTrue(np.allclose(result.eigenvalues, expected_eigenvalues))
+        self.assertTrue(np.allclose(result.S, 0.9))
+        self.assertTrue(np.allclose(result.biaxial_order, 0.6))
+        self.assertTrue(np.allclose(result.n, result.eigenvectors[..., :, 0]))
+        reconstructed_tensor = (
+            result.eigenvectors @ np.diag(result.eigenvalues) @ result.eigenvectors.T
+        )
+        self.assertTrue(np.allclose(reconstructed_tensor, q_tensor))
+
+    def test_biaxial_isotropic_result_uses_deterministic_frame(self):
+        q_tensor = np.zeros((2, 3, 3), dtype=float)
+
+        result = q_diagonalize(
+            q_tensor,
+            is_biaxial=True,
+            log_mode="none",
+        )
+
+        self.assertTrue(np.allclose(result.S, 0.0))
+        self.assertTrue(np.array_equal(result.isotropic_indices, np.array([[0], [1]])))
+        self.assertTrue(np.allclose(result.biaxial_order, 0.0))
+        self.assertTrue(
+            np.allclose(result.eigenvectors, np.broadcast_to(np.eye(3), (2, 3, 3)))
+        )
+        self.assertTrue(np.allclose(result.n, np.array([[1.0, 0.0, 0.0]] * 2)))
+
+    def test_positive_uniaxial_result_canonicalizes_degenerate_eigensystem(self):
+        input_director = np.array([0.3, 0.4, np.sqrt(0.75)])
+        input_scalar_order = 1.0
+        q_tensor = make_uniaxial_q_tensor(input_director, input_scalar_order)
+
+        with patch(
+            "nematics3d.q_diagonalization.np.linalg.eigh",
+            side_effect=AssertionError(
+                "A stable positive-S uniaxial point must remain analytic."
+            ),
+        ):
+            result = q_diagonalize(
+                q_tensor,
+                is_biaxial=True,
+                log_mode="none",
+            )
+
+        self.assertTrue(np.allclose(result.S, input_scalar_order))
+        self.assertEqual(result.biaxial_order, 0.0)
+        self.assertTrue(
+            np.allclose(result.eigenvalues, np.array([2 / 3, -1 / 3, -1 / 3]))
+        )
+        self.assertTrue(
+            np.allclose(result.eigenvectors.T @ result.eigenvectors, np.eye(3))
+        )
+        reconstructed_tensor = (
+            result.eigenvectors @ np.diag(result.eigenvalues) @ result.eigenvectors.T
+        )
+        self.assertTrue(np.allclose(reconstructed_tensor, q_tensor))
+        self.assertTrue(np.allclose(abs(np.dot(result.n, input_director)), 1.0))
+
+    def test_uniaxial_indices_identify_only_canonicalized_grid_points(self):
+        input_director = np.array([0.3, 0.4, np.sqrt(0.75)])
+        uniaxial_tensor = make_uniaxial_q_tensor(input_director, 1.0)
+        biaxial_tensor = np.diag([0.6, -0.1, -0.5])
+        q_tensor = np.stack([uniaxial_tensor, biaxial_tensor])
+
+        result = q_diagonalize(
+            q_tensor,
+            is_biaxial=True,
+            log_mode="none",
+        )
+
+        self.assertTrue(np.array_equal(result.uniaxial_indices, np.array([[0]])))
+
+
+if __name__ == "__main__":
+    unittest.main()
