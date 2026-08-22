@@ -1042,9 +1042,11 @@ def as_qfield5(
     qtensor: Union[QField5, QField9],
     name="QField",
     is_strict_3d_field: bool = True,
+    *,
+    is_validate_tensor: bool = True,
 ) -> QField5:
     """
-    Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
+    Convert a Q-tensor field into compact five-component form (QField5).
 
     Accepts either:
     - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
@@ -1052,26 +1054,40 @@ def as_qfield5(
 
     Set ``is_strict_3d_field=False`` to allow the more general shapes
     ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, batched tensors, or
-    single Q tensors.
+    single Q tensors. Strict 3D fields must have nonzero spatial dimensions;
+    empty arrays with a supported trailing shape remain valid in non-strict mode.
 
-    Assumes the input is a symmetric, traceless 3Ãƒâ€”3 tensor field.
+    Full input is assumed to follow the symmetric, traceless Q-tensor contract,
+    but this converter does not verify symmetry or trace. It extracts
+    ``(Q_xx, Q_xy, Q_xz, Q_yy, Q_yz)`` directly.
 
     Parameters
     ----------
-    qtensor : QField
-        Input Q-tensor field, either in 5-component or 3Ãƒâ€”3 form.
+    qtensor : QField5 or QField9
+        Input Q-tensor field, either in five-component or 3×3 form.
+    name : str, optional
+        Human-readable input name included in validation errors.
+    is_strict_3d_field : bool, optional
+        If True, require exactly three nonzero spatial axes, giving shape
+        ``(Nx, Ny, Nz, 5)`` or ``(Nx, Ny, Nz, 3, 3)``. If False, preserve any
+        leading dimensions, including empty dimensions.
+    is_validate_tensor : bool, optional
+        If True, require every input value to be finite. If False, skip this
+        numerical check; dtype and shape validation still apply.
 
     Returns
     -------
     QField5
-        5-component vector form of Q-tensor with shape (..., 5)
+        Compact five-component form with shape ``(..., 5)``. Full input
+        produces a new array; five-component NumPy input is returned unchanged.
 
     Raises
     ------
     TypeError
-        If the input is not a float-type NumPy array.
+        If the input dtype is not floating-point.
     ValueError
-        If the input shape is not (..., 3, 3)
+        If the shape is unsupported, a strict spatial axis is empty, or a
+        checked value is non-finite.
     """
     qtensor = np.asarray(qtensor)
 
@@ -1089,6 +1105,12 @@ def as_qfield5(
                 name=name,
                 expected_ndim=5,
                 expected_label="(Nx, Ny, Nz, 3, 3)",
+            )
+        if is_validate_tensor and not np.all(np.isfinite(qtensor)):
+            invalid_indices = np.argwhere(~np.all(np.isfinite(qtensor), axis=(-2, -1)))
+            raise ValueError(
+                f"{name!r} must be finite everywhere. Non-finite tensor indices "
+                f"include {invalid_indices[:5].tolist()}."
             )
 
         Q5 = np.empty(shape[:-2] + (5,), dtype=qtensor.dtype)
@@ -1110,6 +1132,12 @@ def as_qfield5(
                 expected_label="(Nx, Ny, Nz, 5)",
             )
         Q5 = qtensor
+        if is_validate_tensor and not np.all(np.isfinite(Q5)):
+            invalid_indices = np.argwhere(~np.all(np.isfinite(Q5), axis=-1))
+            raise ValueError(
+                f"{name!r} must be finite everywhere. Non-finite tensor indices "
+                f"include {invalid_indices[:5].tolist()}."
+            )
         return Q5
 
     raise ValueError(

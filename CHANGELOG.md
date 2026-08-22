@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Changed
+ - Finalized `as_qfield5()` finite-value, strict-shape, empty-field, and
+   validation-bypass contracts for compact and full Q-tensor inputs.
  - Finalized `as_qfield9()` validation for compact and full Q-tensor inputs,
    including finite, symmetry, trace, strict-shape, empty-field, and tolerance
    contracts.

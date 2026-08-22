@@ -7,7 +7,7 @@ import numpy as np
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-from nematics3d.datatypes import as_qfield9  # noqa: E402
+from nematics3d.datatypes import as_qfield5, as_qfield9  # noqa: E402
 
 
 class TestAsQField9Validation(unittest.TestCase):
@@ -181,6 +181,78 @@ class TestAsQField9Validation(unittest.TestCase):
                         is_strict_3d_field=False,
                         is_validate_tensor=False,
                         **{tolerance_name: tolerance},
+                    )
+
+
+class TestAsQField5Validation(unittest.TestCase):
+    def test_extracts_compact_components_without_tensor_property_checks(self):
+        qtensor = np.array(
+            [
+                [1.0, 2.0, 3.0],
+                [4.0, 5.0, 6.0],
+                [7.0, 8.0, 9.0],
+            ]
+        )
+
+        result = as_qfield5(qtensor, is_strict_3d_field=False)
+
+        np.testing.assert_array_equal(result, [1.0, 2.0, 3.0, 5.0, 6.0])
+
+    def test_rejects_non_finite_values_in_both_representations(self):
+        invalid_inputs = (
+            (np.full((2, 5), np.inf), r"finite.*\[\[0\], \[1\]\]"),
+            (np.full((2, 3, 3), np.nan), r"finite.*\[\[0\], \[1\]\]"),
+        )
+
+        for qtensor, message in invalid_inputs:
+            with self.subTest(shape=qtensor.shape):
+                with self.assertRaisesRegex(ValueError, message):
+                    as_qfield5(qtensor, is_strict_3d_field=False)
+
+    def test_strict_empty_fields_are_rejected_but_non_strict_batches_are_allowed(self):
+        strict_shapes = (
+            (0, 2, 3, 5),
+            (2, 0, 3, 3, 3),
+        )
+        for shape in strict_shapes:
+            with self.subTest(mode="strict", shape=shape):
+                with self.assertRaisesRegex(ValueError, "nonzero spatial dimensions"):
+                    as_qfield5(np.zeros(shape))
+
+        non_strict_shapes = (
+            ((0, 5), (0, 5)),
+            ((0, 3, 3), (0, 5)),
+        )
+        for shape, expected_shape in non_strict_shapes:
+            with self.subTest(mode="non-strict", shape=shape):
+                result = as_qfield5(
+                    np.zeros(shape),
+                    is_strict_3d_field=False,
+                )
+                self.assertEqual(result.shape, expected_shape)
+
+    def test_validation_can_be_skipped_but_dtype_and_shape_checks_remain(self):
+        compact = np.full((2, 5), np.nan)
+        self.assertIs(
+            as_qfield5(
+                compact,
+                is_strict_3d_field=False,
+                is_validate_tensor=False,
+            ),
+            compact,
+        )
+
+        invalid_inputs = (
+            (np.zeros((3, 3), dtype=int), TypeError, "float-type"),
+            (np.zeros((2, 4), dtype=float), ValueError, "Invalid QField shape"),
+        )
+        for qtensor, error_type, message in invalid_inputs:
+            with self.subTest(shape=qtensor.shape, dtype=qtensor.dtype):
+                with self.assertRaisesRegex(error_type, message):
+                    as_qfield5(
+                        qtensor,
+                        is_strict_3d_field=False,
+                        is_validate_tensor=False,
                     )
 
 
