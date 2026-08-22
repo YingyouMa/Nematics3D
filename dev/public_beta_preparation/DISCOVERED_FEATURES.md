@@ -11,11 +11,12 @@ here, then update the relevant release checklist and component review record.
 
 | Field | Value |
 | --- | --- |
-| Status | Proposed |
+| Status | Implemented and locally verified |
 | Discovered while reviewing | `nematics3d.q_diagonalize()` |
 | Primary implementation | `src/nematics3d/datatypes.py::as_qfield9()` |
 | Downstream beneficiary | Every function that consumes the validated full Q-tensor representation |
 | Discovered date | 2026-08-18 |
+| Completed date | 2026-08-22 |
 
 ### Motivation
 
@@ -130,11 +131,27 @@ the default validator.
 
 ### Completion evidence
 
-- [ ] Final API and tolerance policy documented.
-- [ ] Implementation completed.
-- [ ] Focused validator tests added and passing.
+- [x] Final API and tolerance policy documented in the function docstring.
+- [x] Implementation completed.
+- [x] Focused validator tests added and passing: 11 tests in
+      `tests/core/test_datatypes_qfield.py`.
 - [ ] `q_diagonalize()` tests confirm that invalid full tensors fail at the
-      conversion boundary.
-- [ ] Representative existing Q datasets remain accepted.
-- [ ] Performance and temporary-memory impact measured on a large field.
-- [ ] Component review and commit recorded.
+      conversion boundary. Deferred by maintainer decision on 2026-08-22.
+- [x] Representative existing Q dataset remains accepted:
+      `example/data/Q_example_workflow.npy`, a `(200, 100, 100, 5)` `float32`
+      field containing 2,000,000 tensors.
+- [x] Performance and temporary-memory impact measured on that field. Compact
+      conversion took 0.116 s with 85.8 MiB peak Python allocation. Validation
+      of its 68.7 MiB full representation took 0.120 s with 76.3 MiB peak extra
+      Python allocation and preserved zero-copy return behavior.
+- [x] Local component review recorded in `COMPONENT_REVIEW_WORKFLOW.md`.
+- [ ] Reviewed commit linked. Pending the maintainer's next commit.
+
+### Validation notes
+
+- Black, focused tests, and the relevant `q_diagonalize()` tests pass in the
+  `Nematics3D` conda environment.
+- A broader `pytest -m "not visual and not slow"` run was attempted on
+  2026-08-22. Collection is currently blocked by pre-existing `ClassBase` and
+  `HostBase` test incompatibilities, and unmarked VTK tests also emit Windows
+  OpenGL cleanup errors. These failures do not originate in `as_qfield9()`.

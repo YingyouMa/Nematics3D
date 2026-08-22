@@ -1,7 +1,6 @@
 import io
 import logging
 import sys
-import types
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -10,17 +9,10 @@ from unittest.mock import patch
 import numpy as np
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-PKG_DIR = SRC_DIR / "nematics3d"
-
 sys.path.insert(0, str(SRC_DIR))
 
-if "nematics3d" not in sys.modules:
-    pkg = types.ModuleType("nematics3d")
-    pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["nematics3d"] = pkg
-
+from nematics3d import q_diagonalize  # noqa: E402
 from nematics3d.classes.result_base import ResultBase  # noqa: E402
-from nematics3d.q_diagonalization import q_diagonalize  # noqa: E402
 
 
 def make_uniaxial_q_tensor(director, scalar_order):
@@ -154,6 +146,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
             result = q_diagonalize(
                 q_tensor,
                 is_biaxial=True,
+                is_right_handed=True,
                 log_mode="none",
             )
 
@@ -165,6 +158,72 @@ class TestQDiagonalizeResult(unittest.TestCase):
             result.eigenvectors @ np.diag(result.eigenvalues) @ result.eigenvectors.T
         )
         self.assertTrue(np.allclose(reconstructed_tensor, q_tensor))
+
+    def test_complete_eigenvector_frames_can_be_made_right_handed(self):
+        random_generator = np.random.default_rng(42)
+        q_tensors = []
+        expected_eigenvalues = np.array([0.6, -0.1, -0.5])
+        for _ in range(8):
+            axes, _ = np.linalg.qr(random_generator.normal(size=(3, 3)))
+            q_tensors.append(axes @ np.diag(expected_eigenvalues) @ axes.T)
+
+        result = q_diagonalize(
+            np.stack(q_tensors),
+            is_biaxial=True,
+            is_right_handed=True,
+            log_mode="none",
+        )
+
+        self.assertTrue(np.all(np.linalg.det(result.eigenvectors) > 0.0))
+        reconstructed_tensors = np.einsum(
+            "...ik,...k,...jk->...ij",
+            result.eigenvectors,
+            result.eigenvalues,
+            result.eigenvectors,
+        )
+        self.assertTrue(np.allclose(reconstructed_tensors, q_tensors))
+
+    def test_random_symmetric_traceless_tensors_match_numpy_eigh(self):
+        random_generator = np.random.default_rng(20260819)
+        random_matrices = random_generator.normal(size=(64, 3, 3))
+        symmetric_tensors = 0.5 * (
+            random_matrices + np.swapaxes(random_matrices, -1, -2)
+        )
+        traces = np.trace(symmetric_tensors, axis1=-2, axis2=-1)
+        q_tensors = symmetric_tensors - traces[..., None, None] * np.eye(3) / 3.0
+
+        result = q_diagonalize(
+            q_tensors,
+            is_biaxial=True,
+            is_right_handed=True,
+            log_mode="none",
+        )
+        expected_eigenvalues, expected_eigenvectors = np.linalg.eigh(q_tensors)
+        expected_eigenvalues = expected_eigenvalues[..., ::-1]
+        expected_eigenvectors = expected_eigenvectors[..., :, ::-1]
+
+        self.assertTrue(np.allclose(result.eigenvalues, expected_eigenvalues))
+        axis_overlaps = np.einsum(
+            "...ij,...ij->...j",
+            result.eigenvectors,
+            expected_eigenvectors,
+        )
+        self.assertTrue(np.allclose(np.abs(axis_overlaps), 1.0))
+        self.assertTrue(np.allclose(result.S, 1.5 * expected_eigenvalues[..., 0]))
+        self.assertTrue(np.all(np.linalg.det(result.eigenvectors) > 0.0))
+
+    def test_right_handed_frames_require_complete_biaxial_output(self):
+        q_tensor = make_uniaxial_q_tensor([1.0, 0.0, 0.0], 1.0)
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "is_right_handed=True.*is_biaxial=True",
+        ):
+            q_diagonalize(
+                q_tensor,
+                is_right_handed=True,
+                log_mode="none",
+            )
 
     def test_biaxial_isotropic_result_uses_deterministic_frame(self):
         q_tensor = np.zeros((2, 3, 3), dtype=float)
@@ -265,6 +324,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
             result = q_diagonalize(
                 q_tensor,
                 is_biaxial=True,
+                is_right_handed=True,
                 log_mode="none",
             )
 
@@ -276,6 +336,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
         self.assertTrue(
             np.allclose(result.eigenvectors.T @ result.eigenvectors, np.eye(3))
         )
+        self.assertGreater(np.linalg.det(result.eigenvectors), 0.0)
         reconstructed_tensor = (
             result.eigenvectors @ np.diag(result.eigenvalues) @ result.eigenvectors.T
         )

@@ -830,6 +830,11 @@ def _validate_qfield_single_shape(
             f"This input matches the {expected_label} representation by its "
             f"trailing dimensions, but has shape {shape}."
         )
+    if any(axis_size == 0 for axis_size in shape[:3]):
+        raise ValueError(
+            f"{name!r} must have nonzero spatial dimensions when "
+            f"is_strict_3d_field=True, but has shape {shape}."
+        )
 
 
 def _validate_qfield9_tensor(
@@ -851,16 +856,6 @@ def _validate_qfield9_tensor(
     tensor_scale = np.maximum(1.0, np.max(np.abs(qtensor), axis=(-2, -1)))
     default_tolerance = 32 * machine_epsilon * tensor_scale
 
-    tolerance_inputs = {
-        "symmetry_tolerance": symmetry_tolerance,
-        "trace_tolerance": trace_tolerance,
-    }
-    for tolerance_name, tolerance in tolerance_inputs.items():
-        if tolerance is not None and (not np.isfinite(tolerance) or tolerance < 0):
-            raise ValueError(
-                f"{tolerance_name!r} must be a finite, non-negative number or None."
-            )
-
     effective_symmetry_tolerance = (
         default_tolerance if symmetry_tolerance is None else float(symmetry_tolerance)
     )
@@ -868,10 +863,22 @@ def _validate_qfield9_tensor(
         default_tolerance if trace_tolerance is None else float(trace_tolerance)
     )
 
-    symmetry_error = np.max(
-        np.abs(qtensor - np.swapaxes(qtensor, -2, -1)),
-        axis=(-2, -1),
-    )
+    # Compare only the three independent off-diagonal pairs. Reuse two
+    # leading-shape arrays instead of materializing a full (..., 3, 3)
+    # difference and absolute-value array for large fields.
+    symmetry_error = np.empty(qtensor.shape[:-2], dtype=qtensor.dtype)
+    symmetry_scratch = np.empty_like(symmetry_error)
+
+    np.subtract(qtensor[..., 0, 1], qtensor[..., 1, 0], out=symmetry_error)
+    np.abs(symmetry_error, out=symmetry_error)
+
+    np.subtract(qtensor[..., 0, 2], qtensor[..., 2, 0], out=symmetry_scratch)
+    np.abs(symmetry_scratch, out=symmetry_scratch)
+    np.maximum(symmetry_error, symmetry_scratch, out=symmetry_error)
+
+    np.subtract(qtensor[..., 1, 2], qtensor[..., 2, 1], out=symmetry_scratch)
+    np.abs(symmetry_scratch, out=symmetry_scratch)
+    np.maximum(symmetry_error, symmetry_scratch, out=symmetry_error)
     is_asymmetric = symmetry_error > effective_symmetry_tolerance
     if np.any(is_asymmetric):
         invalid_indices = np.argwhere(is_asymmetric)
@@ -905,9 +912,8 @@ def as_qfield9(
     symmetry_tolerance: float | None = None,
     trace_tolerance: float | None = None,
 ) -> QField9:
-    #! strict3d
     """
-    Convert a Q-tensor field into full 3Ãƒâ€”3 matrix form (QField9).
+    Convert a Q-tensor field into full 3×3 matrix form (QField9).
 
     Accepts either:
     - a 5-component representation (QField5), shape (Nx, Ny, Nz, 5), or
@@ -915,33 +921,48 @@ def as_qfield9(
 
     Set ``is_strict_3d_field=False`` to allow the more general shapes
     ``(..., 5)`` and ``(..., 3, 3)`` for point sets, slices, batched tensors, or
-    single Q tensors.
+    single Q tensors. Strict 3D fields must have nonzero spatial dimensions;
+    empty arrays with a supported trailing shape remain valid in non-strict mode.
 
     Parameters
     ----------
-    qtensor : QField
-        Input Q-tensor field, either in 5-component or 3Ãƒâ€”3 form.
+    qtensor : QField5 or QField9
+        Input Q-tensor field, either in 5-component or 3×3 form.
+    name : str, optional
+        Human-readable input name included in validation errors.
+    is_strict_3d_field : bool, optional
+        If True, require exactly three nonzero spatial axes, giving shape
+        ``(Nx, Ny, Nz, 5)`` or ``(Nx, Ny, Nz, 3, 3)``. If False, preserve any
+        leading dimensions, including empty dimensions.
     is_validate_tensor : bool, optional
-        Whether to require finite values and validate that a supplied 3Ãƒâ€”3
-        representation is symmetric and traceless. The five-component
-        representation guarantees symmetry and zero trace by construction.
+        If True, require finite values and validate that a supplied 3×3
+        representation is symmetric and traceless. If False, skip these
+        numerical checks; dtype and shape validation still apply. The
+        five-component representation guarantees symmetry and zero trace by
+        construction, so only its finite values require numerical validation.
     symmetry_tolerance : float, optional
-        Absolute symmetry tolerance. By default, use a scale-aware tolerance
-        based on the input dtype at each tensor.
+        Absolute tolerance for ``max(abs(Q - Q.T))``. It must be finite and
+        non-negative. By default, each full tensor uses
+        ``32 * eps(dtype) * max(1, max(abs(Q)))``.
     trace_tolerance : float, optional
-        Absolute trace tolerance. By default, use the same scale-aware rule.
+        Absolute tolerance for ``abs(trace(Q))``. It must be finite and
+        non-negative. By default, use the same per-tensor scale-aware rule as
+        ``symmetry_tolerance``.
 
     Returns
     -------
     QField9
-        Converted Q-tensor field in full 3Ãƒâ€”3 matrix form.
+        Full 3×3 matrix form. Five-component input produces a new array. A
+        full NumPy array is returned unchanged, preserving zero-copy behavior.
 
     Raises
     ------
     TypeError
-        If the input is not numerical
+        If the input dtype is not floating-point.
     ValueError
-        If the input is not a valid QField5 or QField9 structure.
+        If the shape is unsupported, a strict spatial axis is empty, a checked
+        value is non-finite, a full tensor is not symmetric or traceless within
+        tolerance, or a supplied tolerance is invalid.
     """
     qtensor = np.asarray(qtensor)
 
@@ -950,6 +971,16 @@ def as_qfield9(
             "QField must be a float-type NumPy array, got dtype "
             f"{qtensor.dtype}. Name of QField: {name}"
         )
+
+    tolerance_inputs = {
+        "symmetry_tolerance": symmetry_tolerance,
+        "trace_tolerance": trace_tolerance,
+    }
+    for tolerance_name, tolerance in tolerance_inputs.items():
+        if tolerance is not None and (not np.isfinite(tolerance) or tolerance < 0):
+            raise ValueError(
+                f"{tolerance_name!r} must be a finite, non-negative number or None."
+            )
 
     shape = qtensor.shape
 

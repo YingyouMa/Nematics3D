@@ -30,6 +30,9 @@ import h5py
 import numpy as np
 from scipy.ndimage import label as ndimage_label
 
+from nematics3d import q_diagonalize
+from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.field import align_directors
 
 # ── tuneable constants ────────────────────────────────────────────────────────
 _TRUNCATE = None  # Gaussian truncation radius (None = scipy default)
@@ -41,10 +44,6 @@ _IMAG_WARN_COUNT = 32  # number of offending voxels before we raise an error
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────
-
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.field import align_directors
-from nematics3d.q_diagonalization import q_diagonalize
 
 
 def _iter_chunks(length: int, size: int) -> Iterable[tuple[int, int]]:

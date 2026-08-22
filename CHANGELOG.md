@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+### Changed
+ - Finalized `as_qfield9()` validation for compact and full Q-tensor inputs,
+   including finite, symmetry, trace, strict-shape, empty-field, and tolerance
+   contracts.
+ - Reduced full-tensor symmetry-check memory by comparing the three independent
+   off-diagonal pairs with reusable work arrays.
+
 ## [0.1.7]
 ### Added
  - as_Number

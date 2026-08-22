@@ -49,6 +49,7 @@ def q_diagonalize(
     qtensor: Union[QField5, QField9],
     *,
     is_biaxial: bool = False,
+    is_right_handed: bool = False,
     logger=None,
 ) -> QDiagonalizationResult:
     """Diagonalize a Q-tensor field and return named physical quantities.
@@ -65,6 +66,10 @@ def q_diagonalize(
         Q-tensor data with trailing shape ``(..., 5)`` or ``(..., 3, 3)``.
     is_biaxial : bool, optional
         Whether to compute and return the complete biaxial eigensystem.
+    is_right_handed : bool, optional
+        Whether each returned eigenvector frame must be right-handed. This
+        option requires ``is_biaxial=True`` because the default path does not
+        construct the two secondary eigenvectors.
 
     Returns
     -------
@@ -86,8 +91,12 @@ def q_diagonalize(
         If ``qtensor`` does not have a floating-point dtype.
     ValueError
         If ``qtensor`` is empty, has an unsupported shape, contains non-finite
-        values, or supplies full matrices that are not symmetric and traceless.
+        values, supplies full matrices that are not symmetric and traceless, or
+        requests a right-handed frame without complete biaxial output.
     """
+    if is_right_handed and not is_biaxial:
+        raise ValueError("'is_right_handed=True' requires 'is_biaxial=True'.")
+
     # Normalize both accepted Q representations to full (..., 3, 3) matrices.
     stage_start = time.perf_counter()
     logger.debug(
@@ -327,6 +336,16 @@ def q_diagonalize(
         if np.any(is_near_isotropic):
             eigenvalues[is_near_isotropic] = 0.0
             eigenvectors[is_near_isotropic] = np.eye(3, dtype=full_tensor.dtype)
+
+        # Eigenvector signs are arbitrary. When requested, reverse the final
+        # axis of every left-handed frame without changing its eigensystem.
+        if is_right_handed:
+            is_left_handed = np.linalg.det(eigenvectors) < 0.0
+            eigenvectors[..., :, -1] = np.where(
+                is_left_handed[..., None],
+                -eigenvectors[..., :, -1],
+                eigenvectors[..., :, -1],
+            )
 
         # Repository convention: S = 3 lambda_0 / 2 and
         # b = 3 |lambda_1 - lambda_2| / 2.

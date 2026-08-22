@@ -2,15 +2,13 @@
 Field-level utilities for structured Q-tensor and director data.
 """
 
-from typing import Tuple, Union, List
+from typing import List, Tuple
 
 import numpy as np
 
 # from .general import *
 from .datatypes import (
-    QField5,
     QField9,
-    as_qfield9,
     nField,
     SField,
     check_Sn,
@@ -19,47 +17,6 @@ from .datatypes import (
     as_dimension_info,
 )
 from .logging_decorator import logging_and_warning_decorator
-
-
-def Q_diagonalize_linalg(
-    qtensor: Union[QField5, QField9],
-    *,
-    is_right_handed: bool = False,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Diagonalize Q tensors with ``np.linalg.eigh``.
-
-    This helper keeps the full eigensystem instead of only returning the
-    dominant director.  Eigenvalues are sorted descending, and eigenvectors are
-    returned as columns in the matching order.  The input may be any valid
-    ``(..., 5)`` or ``(..., 3, 3)`` Q representation accepted by
-    ``as_qfield9(..., is_strict_3d_field=False)``.
-
-    Set ``is_right_handed=True`` when the returned eigenvector frames should
-    satisfy ``axis0 x axis1 = axis2``.  The default is ``False`` because this
-    extra convention requires a determinant calculation and is not needed for
-    every caller.
-    """
-
-    Q = as_qfield9(
-        qtensor,
-        name="Q tensor to diagonalize",
-        is_strict_3d_field=False,
-    )
-    eigenvalues, eigenvectors = np.linalg.eigh(Q)
-    order = np.argsort(eigenvalues, axis=-1)[..., ::-1]
-
-    eigenvalues = np.take_along_axis(eigenvalues, order, axis=-1)
-    eigenvectors = np.take_along_axis(eigenvectors, order[..., None, :], axis=-1)
-
-    if is_right_handed:
-        is_left_handed = np.linalg.det(eigenvectors) < 0
-        eigenvectors[..., :, -1] = np.where(
-            is_left_handed[..., None],
-            -eigenvectors[..., :, -1],
-            eigenvectors[..., :, -1],
-        )
-
-    return eigenvalues, eigenvectors
 
 
 @logging_and_warning_decorator()

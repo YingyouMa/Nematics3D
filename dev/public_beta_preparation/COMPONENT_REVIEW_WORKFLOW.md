@@ -517,6 +517,40 @@ A component is `Confirmed` only when all of the following are true:
 - [ ] The final diff has been inspected manually.
 - [ ] Validation evidence and the reviewed commit are recorded.
 
+## Completed local review: `as_qfield9`
+
+Review date: 2026-08-22
+
+Scope:
+
+- `src/nematics3d/datatypes.py::as_qfield9()` and its private validation helpers.
+- Focused tests in `tests/core/test_datatypes_qfield.py`.
+- Conversion and validation only; projection, eigensolver behavior, and a
+  user-facing tutorial are outside this component's scope.
+
+Recorded evidence:
+
+- The final dtype, shape, empty-field, finite-value, symmetry, trace, tolerance,
+  bypass, and zero-copy contracts are documented in the function docstring.
+- Symmetry validation compares three independent off-diagonal pairs and reuses
+  two leading-shape work arrays.
+- Black and the 11 focused tests pass in the `Nematics3D` conda environment.
+- The 16 relevant `q_diagonalize()` tests also pass; a dedicated downstream
+  invalid-input boundary test was explicitly deferred by maintainer decision.
+- `example/data/Q_example_workflow.npy` remains accepted. Its 2,000,000 compact
+  `float32` tensors converted in 0.116 s. The resulting 68.7 MiB full field
+  validated in 0.120 s with 76.3 MiB peak extra Python allocation and a
+  zero-copy return.
+- The broader non-visual/non-slow pytest attempt is currently blocked during
+  collection by pre-existing `ClassBase` and `HostBase` test incompatibilities;
+  unmarked VTK tests also emit Windows OpenGL cleanup errors.
+- The final local diff was inspected. A reviewed commit link remains pending
+  until the maintainer commits this work.
+
+Disposition: implementation and local review complete; suitable for internal
+use without a dedicated tutorial. Add the reviewed commit reference after the
+maintainer's next commit.
+
 ## First application: `q_diagonalize`
 
 The first planned use of this workflow is
@@ -530,8 +564,7 @@ Its focused review should include:
 2. Preserve and improve the existing isotropic and analytic-director fallback
    tests.
 3. Add `getQ` to `q_diagonalize` round-trip tests.
-4. Compare randomized symmetric traceless tensors with `np.linalg.eigh` or
-   `Q_diagonalize_linalg`.
+4. Compare randomized symmetric traceless tensors with `np.linalg.eigh`.
 5. Verify eigenvalue, eigenvector, normalization, and sign-equivalence
    invariants.
 6. Test zero, near-zero, degenerate, near-degenerate, large-scale, and

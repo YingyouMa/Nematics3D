@@ -20,7 +20,7 @@ from .classes.bounds import (
 )
 from .classes.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
-from .field import Q_diagonalize_linalg, getQ
+from .field import getQ
 from .geometry import align_axes_to_reference, axes_angle_changes_deg
 from .q_diagonalization import q_diagonalize
 
@@ -251,10 +251,13 @@ def nml_principal_plane_analysis(
         mean_q = np.mean(
             getQ(np.asarray(directors, dtype=float).reshape(-1, 3), S=1), axis=0
         )
-        eigenvalues, new_axes = Q_diagonalize_linalg(
+        diagonalization = q_diagonalize(
             mean_q,
+            is_biaxial=True,
             is_right_handed=True,
         )
+        eigenvalues = diagonalization.eigenvalues
+        new_axes = diagonalization.eigenvectors
 
         # Eigenvectors are sign-ambiguous and nematic directors satisfy
         # n == -n.  Sign-align to the previous frame before measuring rotation,
