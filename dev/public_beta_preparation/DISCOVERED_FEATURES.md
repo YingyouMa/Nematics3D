@@ -145,7 +145,7 @@ the default validator.
       of its 68.7 MiB full representation took 0.120 s with 76.3 MiB peak extra
       Python allocation and preserved zero-copy return behavior.
 - [x] Local component review recorded in `COMPONENT_REVIEW_WORKFLOW.md`.
-- [ ] Reviewed commit linked. Pending the maintainer's next commit.
+- [x] Reviewed implementation commit recorded: `f757ffb`.
 
 ### Validation notes
 

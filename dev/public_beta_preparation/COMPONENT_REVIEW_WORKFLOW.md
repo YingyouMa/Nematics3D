@@ -544,12 +544,11 @@ Recorded evidence:
 - The broader non-visual/non-slow pytest attempt is currently blocked during
   collection by pre-existing `ClassBase` and `HostBase` test incompatibilities;
   unmarked VTK tests also emit Windows OpenGL cleanup errors.
-- The final local diff was inspected. A reviewed commit link remains pending
-  until the maintainer commits this work.
+- The final local diff was inspected and recorded in implementation commit
+  `f757ffb`.
 
 Disposition: implementation and local review complete; suitable for internal
-use without a dedicated tutorial. Add the reviewed commit reference after the
-maintainer's next commit.
+use without a dedicated tutorial.
 
 ## First application: `q_diagonalize`
 
