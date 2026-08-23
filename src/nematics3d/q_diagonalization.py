@@ -44,6 +44,314 @@ class QDiagonalizationResult(ResultBase):
     biaxial_order: np.ndarray | None = None
 
 
+def _dominant_eigenpair_q_sd(qxx, qyy, qxy, qxz, qyz):
+    """Return only the largest eigenvalue and its unit eigenvector."""
+    arrays = np.broadcast_arrays(qxx, qyy, qxy, qxz, qyz)
+    shape = arrays[0].shape
+    a, d, b, c, e = (
+        np.ascontiguousarray(value, dtype=np.float64).reshape(-1) for value in arrays
+    )
+    tensor_count = a.size
+
+    is_zero = ne.evaluate("(a == 0) & (d == 0) & (b == 0) & (c == 0) & (e == 0)")
+    p = ne.evaluate("sqrt((a*a + d*d + a*d + b*b + c*c + e*e) / 3)")
+    safe_p = np.where(is_zero, 1.0, p)  # noqa: F841 - used by NumExpr
+    determinant = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "-a*d*(a+d) + 2*b*c*e - a*e*e - d*c*c + (a+d)*b*b"
+    )
+    cosine = ne.evaluate("where(is_zero, 0, 0.5*determinant/safe_p**3)")
+    np.clip(cosine, -1.0, 1.0, out=cosine)
+    phase = ne.evaluate("arccos(cosine) / 3")  # noqa: F841 - used by NumExpr
+    largest_value = ne.evaluate("where(is_zero, 0, 2*p*cos(phase))")
+    del cosine, determinant, p, phase, safe_p
+
+    r00 = ne.evaluate("a-largest_value")  # noqa: F841 - used by NumExpr
+    r11 = ne.evaluate("d-largest_value")  # noqa: F841 - used by NumExpr
+    r22 = ne.evaluate("-a-d-largest_value")  # noqa: F841 - used by NumExpr
+    # Stream the three adjugate rows through one best-candidate buffer. This
+    # preserves strongest-row selection without retaining all six cofactors.
+    director = np.empty((3, tensor_count), dtype=np.float64)
+    ne.evaluate("r11*r22-e*e", out=director[0])
+    ne.evaluate("c*e-b*r22", out=director[1])
+    ne.evaluate("b*e-c*r11", out=director[2])
+    best_norm = ne.evaluate(
+        "x*x+y*y+z*z", local_dict={"x": director[0], "y": director[1], "z": director[2]}
+    )
+
+    candidate = np.empty_like(director)
+    ne.evaluate("c*e-b*r22", out=candidate[0])
+    ne.evaluate("r00*r22-c*c", out=candidate[1])
+    ne.evaluate("b*c-r00*e", out=candidate[2])
+    candidate_norm = ne.evaluate(
+        "x*x+y*y+z*z",
+        local_dict={"x": candidate[0], "y": candidate[1], "z": candidate[2]},
+    )
+    is_stronger = candidate_norm > best_norm
+    for component in range(3):
+        np.copyto(director[component], candidate[component], where=is_stronger)
+    np.copyto(best_norm, candidate_norm, where=is_stronger)
+
+    ne.evaluate("b*e-c*r11", out=candidate[0])
+    ne.evaluate("b*c-r00*e", out=candidate[1])
+    ne.evaluate("r00*r11-b*b", out=candidate[2])
+    ne.evaluate(
+        "x*x+y*y+z*z",
+        local_dict={
+            "x": candidate[0],
+            "y": candidate[1],
+            "z": candidate[2],
+        },
+        out=candidate_norm,
+    )
+    is_stronger = candidate_norm > best_norm
+    for component in range(3):
+        np.copyto(director[component], candidate[component], where=is_stronger)
+    del a, arrays, b, best_norm, c, candidate, candidate_norm, d, e, is_stronger
+    del r00, r11, r22
+
+    director_norm = ne.evaluate(
+        "sqrt(vx*vx+vy*vy+vz*vz)",
+        local_dict={"vx": director[0], "vy": director[1], "vz": director[2]},
+    )
+    is_bad_vector = director_norm == 0.0
+    director_norm[is_bad_vector] = 1.0
+    director /= director_norm
+    director[:, is_bad_vector] = np.array([[1.0], [0.0], [0.0]])
+    director[:, is_zero] = np.array([[1.0], [0.0], [0.0]])
+    return largest_value.reshape(shape), np.moveaxis(director, 0, -1).reshape(
+        shape + (3,)
+    )
+
+
+def _eigh3_q_sd(qxx, qyy, qxy, qxz, qyz):
+    """Solve symmetric traceless 3x3 eigensystems in ascending order."""
+    arrays = np.broadcast_arrays(qxx, qyy, qxy, qxz, qyz)
+    shape = arrays[0].shape
+    a, d, b, c, e = (
+        np.ascontiguousarray(value, dtype=np.float64).reshape(-1) for value in arrays
+    )
+    tensor_count = a.size
+
+    is_zero = ne.evaluate("(a == 0) & (d == 0) & (b == 0) & (c == 0) & (e == 0)")
+    p = ne.evaluate("sqrt((a*a + d*d + a*d + b*b + c*c + e*e) / 3)")
+    safe_p = np.where(is_zero, 1.0, p)  # noqa: F841 - used by NumExpr
+    determinant = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "-a*d*(a+d) + 2*b*c*e - a*e*e - d*c*c + (a+d)*b*b"
+    )
+    cosine = ne.evaluate("where(is_zero, 0, 0.5*determinant/safe_p**3)")
+    np.clip(cosine, -1.0, 1.0, out=cosine)
+    phase = ne.evaluate("arccos(cosine) / 3")
+    is_upper_isolated = cosine >= 0.0
+    isolated_value = ne.evaluate(
+        "where(is_upper_isolated, 2*p*cos(phase), "
+        "2*p*cos(phase + two_pi_over_three))",
+        local_dict={
+            "is_upper_isolated": is_upper_isolated,
+            "p": p,
+            "phase": phase,
+            "two_pi_over_three": 2.0 * np.pi / 3.0,
+        },
+    )
+    del cosine, determinant, p, phase, safe_p
+
+    r00 = ne.evaluate("a-isolated_value")  # noqa: F841 - used by NumExpr
+    r11 = ne.evaluate("d-isolated_value")  # noqa: F841 - used by NumExpr
+    r22 = ne.evaluate("-a-d-isolated_value")  # noqa: F841 - used by NumExpr
+    adj00 = ne.evaluate("r11*r22-e*e")  # noqa: F841 - used by NumExpr
+    adj11 = ne.evaluate("r00*r22-c*c")  # noqa: F841 - used by NumExpr
+    adj22 = ne.evaluate("r00*r11-b*b")  # noqa: F841 - used by NumExpr
+    adj01 = ne.evaluate("c*e-b*r22")  # noqa: F841 - used by NumExpr
+    adj02 = ne.evaluate("b*e-c*r11")  # noqa: F841 - used by NumExpr
+    adj12 = ne.evaluate("b*c-r00*e")  # noqa: F841 - used by NumExpr
+    norm0 = ne.evaluate("adj00**2+adj01**2+adj02**2")
+    norm1 = ne.evaluate("adj01**2+adj11**2+adj12**2")
+    norm2 = ne.evaluate("adj02**2+adj12**2+adj22**2")
+    choose0 = (norm0 >= norm1) & (norm0 >= norm2)
+    choose1 = (~choose0) & (norm1 >= norm2)  # noqa: F841 - used by NumExpr
+
+    isolated_vector = np.empty((3, tensor_count), dtype=np.float64)
+    ne.evaluate(
+        "where(choose0,adj00,where(choose1,adj01,adj02))",
+        out=isolated_vector[0],
+    )
+    ne.evaluate(
+        "where(choose0,adj01,where(choose1,adj11,adj12))",
+        out=isolated_vector[1],
+    )
+    ne.evaluate(
+        "where(choose0,adj02,where(choose1,adj12,adj22))",
+        out=isolated_vector[2],
+    )
+    del (
+        adj00,
+        adj01,
+        adj02,
+        adj11,
+        adj12,
+        adj22,
+        choose0,
+        choose1,
+        norm0,
+        norm1,
+        norm2,
+        r00,
+        r11,
+        r22,
+    )
+    vector_norm = ne.evaluate(
+        "sqrt(vx*vx+vy*vy+vz*vz)",
+        local_dict={
+            "vx": isolated_vector[0],
+            "vy": isolated_vector[1],
+            "vz": isolated_vector[2],
+        },
+    )
+    is_bad_vector = vector_norm == 0.0
+    safe_norm = np.where(is_bad_vector, 1.0, vector_norm)
+    isolated_vector /= safe_norm
+    is_canonical = is_zero | is_bad_vector
+    isolated_vector[:, is_canonical] = np.array([[1.0], [0.0], [0.0]])
+    del vector_norm
+    del is_bad_vector, is_canonical, safe_norm
+
+    # Delay the complete output allocation until the adjugate work arrays have
+    # been released; otherwise both large stages overlap at peak memory.
+    vectors_soa = np.empty((3, 3, tensor_count), dtype=np.float64)
+    vectors_soa[0] = isolated_vector
+    del isolated_vector
+    isolated_vector = vectors_soa[0]
+    vx, vy, vz = isolated_vector
+
+    abs_vector = np.abs(isolated_vector)
+    use_x = (abs_vector[0] <= abs_vector[1]) & (abs_vector[0] <= abs_vector[2])
+    use_y = (~use_x) & (abs_vector[1] <= abs_vector[2])  # noqa: F841
+    projection = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "where(use_x,vx,where(use_y,vy,vz))"
+    )
+    inverse_plane_norm = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "1/sqrt(1-projection*projection)"
+    )
+    plane_u = vectors_soa[1]
+    ne.evaluate("(where(use_x,1,0)-projection*vx)*inverse_plane_norm", out=plane_u[0])
+    ne.evaluate("(where(use_y,1,0)-projection*vy)*inverse_plane_norm", out=plane_u[1])
+    ne.evaluate(
+        "(where((~use_x)&(~use_y),1,0)-projection*vz)*inverse_plane_norm",
+        out=plane_u[2],
+    )
+    del abs_vector, inverse_plane_norm, projection, use_x, use_y
+    ux, uy, uz = plane_u
+    plane_w = vectors_soa[2]
+    plane_w[0] = vy * uz - vz * uy
+    plane_w[1] = vz * ux - vx * uz
+    plane_w[2] = vx * uy - vy * ux
+    wx, wy, wz = plane_w
+
+    block_a = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "a*ux**2+d*uy**2-(a+d)*uz**2+2*(b*ux*uy+c*ux*uz+e*uy*uz)"
+    )
+    block_b = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "wx*(a*ux+b*uy+c*uz)+wy*(b*ux+d*uy+e*uz)" "+wz*(c*ux+e*uy-(a+d)*uz)"
+    )
+    del a, arrays, b, c, d, e, wx, wy, wz
+    difference = ne.evaluate("2*block_a+isolated_value")
+    discriminant = ne.evaluate("sqrt(difference**2+4*block_b**2)")
+    lower_value = ne.evaluate("0.5*(-isolated_value-discriminant)")
+    upper_value = ne.evaluate("0.5*(-isolated_value+discriminant)")
+
+    is_degenerate = discriminant == 0.0
+    is_positive = difference >= 0.0  # noqa: F841 - used by NumExpr
+    safe_discriminant = np.where(  # noqa: F841 - used by NumExpr
+        is_degenerate, 1.0, discriminant
+    )
+    denominator = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "where(is_positive,safe_discriminant+difference,"
+        "safe_discriminant-difference)"
+    )
+    tangent = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "where(is_degenerate,0,2*block_b/denominator)"
+    )
+    inverse_rotation_norm = ne.evaluate(  # noqa: F841 - used by NumExpr
+        "1/sqrt(1+tangent*tangent)"
+    )
+    cosine_rotation = ne.evaluate(
+        "where(is_positive,inverse_rotation_norm,abs(tangent)*inverse_rotation_norm)"
+    )
+    sine_rotation = ne.evaluate(
+        "where(is_positive,tangent*inverse_rotation_norm,"
+        "where(block_b>=0,inverse_rotation_norm,-inverse_rotation_norm))"
+    )
+    cosine_rotation[is_degenerate] = 1.0
+    sine_rotation[is_degenerate] = 0.0
+    del (
+        block_a,
+        block_b,
+        denominator,
+        difference,
+        discriminant,
+        inverse_rotation_norm,
+        is_degenerate,
+        is_positive,
+        safe_discriminant,
+        tangent,
+    )
+
+    eigenvalues = np.empty((tensor_count, 3), dtype=np.float64)
+    eigenvalues[:, 0] = isolated_value
+    np.copyto(eigenvalues[:, 0], lower_value, where=is_upper_isolated)
+    eigenvalues[:, 1] = lower_value
+    np.copyto(eigenvalues[:, 1], upper_value, where=is_upper_isolated)
+    eigenvalues[:, 2] = upper_value
+    np.copyto(eigenvalues[:, 2], isolated_value, where=is_upper_isolated)
+    for component in range(3):
+        # Preserve the upper vector temporarily, then overwrite the plane
+        # buffers with the two rotated eigenvectors in place.
+        upper_component = ne.evaluate(
+            "cosine_rotation*u+sine_rotation*w",
+            local_dict={
+                "sine_rotation": sine_rotation,
+                "cosine_rotation": cosine_rotation,
+                "u": plane_u[component],
+                "w": plane_w[component],
+            },
+        )
+        ne.evaluate(
+            "-sine_rotation*u+cosine_rotation*w",
+            local_dict={
+                "sine_rotation": sine_rotation,
+                "cosine_rotation": cosine_rotation,
+                "u": plane_u[component],
+                "w": plane_w[component],
+            },
+            out=plane_u[component],
+        )
+        plane_w[component] = upper_component
+        del upper_component
+
+        # The buffers currently hold [isolated, lower, upper]. Only tensors
+        # whose isolated root is the largest need the cyclic ascending reorder.
+        isolated_component = isolated_vector[component].copy()
+        np.copyto(
+            isolated_vector[component],
+            plane_u[component],
+            where=is_upper_isolated,
+        )
+        np.copyto(
+            plane_u[component],
+            plane_w[component],
+            where=is_upper_isolated,
+        )
+        np.copyto(
+            plane_w[component],
+            isolated_component,
+            where=is_upper_isolated,
+        )
+        del isolated_component
+    eigenvectors = np.transpose(vectors_soa, (2, 1, 0))
+    eigenvalues[is_zero] = 0.0
+    eigenvectors[is_zero] = np.eye(3)
+    return eigenvalues.reshape(shape + (3,)), eigenvectors.reshape(shape + (3, 3))
+
+
 @logging_and_warning_decorator()
 def q_diagonalize(
     qtensor: Union[QField5, QField9],
@@ -52,483 +360,148 @@ def q_diagonalize(
     is_right_handed: bool = False,
     logger=None,
 ) -> QDiagonalizationResult:
-    """Diagonalize a Q-tensor field and return named physical quantities.
+    """Diagonalize a symmetric traceless Q-tensor field robustly.
 
-    The default path computes only the scalar order and dominant director using
-    the vectorized invariant-based algorithm. Set ``is_biaxial=True`` to also
-    return the complete descending eigenspectrum, matching eigenvector columns,
-    and the biaxial order parameter defined by
-    ``b = 1.5 * abs(lambda_1 - lambda_2)``.
+    The solver uses an isolated eigenpair followed by a symmetric 2x2 solve in
+    its orthogonal plane. This keeps the complete frame orthonormal near a
+    repeated eigenvalue, including perfectly axis-aligned uniaxial tensors.
 
     Parameters
     ----------
     qtensor : QField5 or QField9
         Q-tensor data with trailing shape ``(..., 5)`` or ``(..., 3, 3)``.
     is_biaxial : bool, optional
-        Whether to compute and return the complete biaxial eigensystem.
+        Whether to return the complete descending eigensystem and biaxial order.
     is_right_handed : bool, optional
-        Whether each returned eigenvector frame must be right-handed. This
-        option requires ``is_biaxial=True`` because the default path does not
-        construct the two secondary eigenvectors.
+        Whether complete eigenvector frames must be right-handed. Requires
+        ``is_biaxial=True``.
 
     Returns
     -------
     QDiagonalizationResult
-        Named ``S`` and ``n`` arrays plus the coordinate indices of numerical
-        isotropic points and points receiving canonical uniaxial treatment.
-        Complete eigenvalue, eigenvector, and biaxial-order arrays are included
-        only when requested.
-
-    Notes
-    -----
-    Negative-``S`` oblate (flat) uniaxial states are not currently supported.
-    Uniaxial recovery assumes a unique largest eigenvalue and a repeated lower
-    eigenvalue pair, as occurs for positive-``S`` prolate states.
+        Scalar order, dominant director, recovery indices, and optionally the
+        complete eigensystem and biaxial order.
 
     Raises
     ------
     TypeError
         If ``qtensor`` does not have a floating-point dtype.
     ValueError
-        If ``qtensor`` is empty, has an unsupported shape, contains non-finite
-        values, supplies full matrices that are not symmetric and traceless, or
-        requests a right-handed frame without complete biaxial output.
+        If the input is empty or invalid, or a right-handed frame is requested
+        without complete biaxial output.
     """
     if is_right_handed and not is_biaxial:
         raise ValueError("'is_right_handed=True' requires 'is_biaxial=True'.")
 
-    # Normalize both accepted Q representations to full (..., 3, 3) matrices.
     stage_start = time.perf_counter()
-    logger.debug(
-        "Validating and preparing Q-tensor input with shape " f"{np.shape(qtensor)}."
-    )
     full_tensor = as_qfield9(
-        qtensor,
-        name="Q tensor to diagonalize",
-        is_strict_3d_field=False,
+        qtensor, name="Q tensor to diagonalize", is_strict_3d_field=False
     )
     if full_tensor.size == 0:
         raise ValueError(
             "'qtensor' must contain at least one Q tensor; "
             f"got shape {full_tensor.shape}."
         )
+    tensor_count = full_tensor.size // 9
+    logger.debug(f"Computing tensor invariants for {tensor_count} Q tensor(s).")
     calculation_dtype = np.result_type(full_tensor.dtype, np.float64)
     full_tensor = np.asarray(full_tensor, dtype=calculation_dtype)
-    tensor_count = full_tensor.size // 9
-    logger.debug(
-        f"Prepared {tensor_count} Q tensor(s) in "
-        f"{time.perf_counter() - stage_start:.3f} seconds."
-    )
-
-    # Build scale-aware tolerances so the isotropic decision follows the input
-    # dtype and remains meaningful when Q has unusually large components.
-    stage_start = time.perf_counter()
-    logger.debug(f"Computing tensor invariants for {tensor_count} Q tensor(s).")
-    machine_epsilon = np.finfo(full_tensor.dtype).eps
     tensor_abs_max = np.max(np.abs(full_tensor), axis=(-2, -1))
-    tensor_scale = np.maximum(1.0, tensor_abs_max)
-    isotropic_tolerance = 32 * machine_epsilon * tensor_scale
-
-    # Expose the six independent symmetric components as zero-copy views. These
-    # views let NumExpr avoid field-sized temporary arrays.
-    tensor_xx = full_tensor[..., 0, 0]
-    tensor_xy = full_tensor[..., 0, 1]
-    tensor_xz = full_tensor[..., 0, 2]
-    tensor_yy = full_tensor[..., 1, 1]
-    tensor_yz = full_tensor[..., 1, 2]
-    tensor_zz = full_tensor[..., 2, 2]
-
-    tensor_components = {
-        "tensor_xx": tensor_xx,
-        "tensor_xy": tensor_xy,
-        "tensor_xz": tensor_xz,
-        "tensor_yy": tensor_yy,
-        "tensor_yz": tensor_yz,
-        "tensor_zz": tensor_zz,
-    }
-    # For traceless symmetric Q, p = tr(Q^2) / 2 and r = 2 sqrt(p / 3).
-    tensor_quadratic_invariant = ne.evaluate(
-        "0.5 * (tensor_xx**2 + tensor_yy**2 + tensor_zz**2 "
-        "+ 2 * (tensor_xy**2 + tensor_xz**2 + tensor_yz**2))",
-        local_dict=tensor_components,
-        optimization="moderate",
+    isotropic_tolerance = (
+        32 * np.finfo(full_tensor.dtype).eps * np.maximum(1.0, tensor_abs_max)
     )
-    spectral_radius = ne.evaluate(
-        "2 * sqrt(tensor_quadratic_invariant / 3.0)",
-        local_dict={
-            "tensor_quadratic_invariant": tensor_quadratic_invariant,
-        },
-        optimization="moderate",
-    )
-    is_near_isotropic = spectral_radius <= isotropic_tolerance
-
-    # Fuse the symmetric 3x3 determinant into one chunked expression instead of
-    # invoking a general stacked-matrix determinant routine.
-    tensor_determinant = ne.evaluate(
-        "tensor_xx * tensor_yy * tensor_zz "
-        "+ 2 * tensor_xy * tensor_xz * tensor_yz "
-        "- tensor_xx * tensor_yz**2 "
-        "- tensor_yy * tensor_xz**2 "
-        "- tensor_zz * tensor_xy**2",
-        local_dict=tensor_components,
-        optimization="moderate",
-    )
-    # The cubic solution uses cos(3 theta) = 4 det(Q) / r^3. Isotropic points
-    # receive a harmless zero argument because their direction is undefined.
-    cosine_argument = ne.evaluate(
-        "where(is_near_isotropic, 0.0, " "4 * tensor_determinant / spectral_radius**3)",
-        local_dict={
-            "is_near_isotropic": is_near_isotropic,
-            "tensor_determinant": tensor_determinant,
-            "spectral_radius": spectral_radius,
-        },
-        optimization="moderate",
-    )
-    # Roundoff may move a mathematically valid cosine slightly outside [-1, 1].
-    np.clip(cosine_argument, -1.0, 1.0, out=cosine_argument)
-    phase_angle = ne.evaluate(
-        "arccos(cosine_argument) / 3.0",
-        local_dict={"cosine_argument": cosine_argument},
-        optimization="moderate",
-    )
+    is_isotropic = tensor_abs_max <= isotropic_tolerance
+    del isotropic_tolerance
     logger.debug(
         f"Computed tensor invariants for {tensor_count} Q tensor(s) in "
         f"{time.perf_counter() - stage_start:.3f} seconds."
     )
 
-    # This mask remains empty unless complete biaxial output requests the
-    # canonical positive-S uniaxial eigensystem described below.
-    is_uniaxial = np.zeros(full_tensor.shape[:-2], dtype=bool)
+    stage_start = time.perf_counter()
+    logger.debug(f"Computing the largest eigenvalue for {tensor_count} Q tensor(s).")
+    tensor_components = (
+        full_tensor[..., 0, 0],
+        full_tensor[..., 1, 1],
+        full_tensor[..., 0, 1],
+        full_tensor[..., 0, 2],
+        full_tensor[..., 1, 2],
+    )
+    if not is_biaxial:
+        del tensor_abs_max
+    if is_biaxial:
+        ascending_values, ascending_vectors = _eigh3_q_sd(*tensor_components)
+        ascending_values[is_isotropic] = 0.0
+        ascending_vectors[is_isotropic] = np.eye(3)
+        descending_values = ascending_values[..., ::-1]
+        descending_vectors = ascending_vectors[..., :, ::-1]
+        descending_vectors[is_isotropic] = np.eye(3)
+        largest_value = descending_values[..., 0]
+        director = descending_vectors[..., :, 0]
+    else:
+        largest_value, director = _dominant_eigenpair_q_sd(*tensor_components)
+        largest_value[is_isotropic] = 0.0
+        director[is_isotropic] = np.array([1.0, 0.0, 0.0])
+    if is_biaxial:
+        scalar_order = 1.5 * largest_value
+    else:
+        largest_value *= 1.5
+        scalar_order = largest_value
+    logger.debug(
+        f"Computed the director for {tensor_count} Q tensor(s) in "
+        f"{time.perf_counter() - stage_start:.3f} seconds."
+    )
 
     if is_biaxial:
-        stage_start = time.perf_counter()
-        logger.debug(
-            "Computing the complete eigensystem and biaxial order for "
-            f"{tensor_count} Q tensor(s)."
-        )
-        # Evaluate all three analytic roots and sort them from largest to
-        # smallest so every eigenvector column has a stable meaning.
-        root_offsets = np.array(
-            [0.0, 2 * np.pi / 3, 4 * np.pi / 3],
-            dtype=full_tensor.dtype,
-        )
-        eigenvalues = spectral_radius[..., None] * np.cos(
-            phase_angle[..., None] + root_offsets
-        )
-        descending_order = np.argsort(eigenvalues, axis=-1)[..., ::-1]
-        eigenvalues = np.take_along_axis(eigenvalues, descending_order, axis=-1)
-
-        # Repeated roots of the analytic cubic lose roughly square-root
-        # precision. Treat a sufficiently close lower pair as the positive-S
-        # uniaxial limit and later replace it with the exact degenerate pair.
-        lower_eigenvalue_gap = np.abs(eigenvalues[..., 1] - eigenvalues[..., 2])
+        spectral_scale = np.max(np.abs(descending_values), axis=-1)
         uniaxial_tolerance = np.maximum(
-            32 * np.sqrt(machine_epsilon) * spectral_radius,
-            64 * machine_epsilon * tensor_scale,
+            32 * np.sqrt(np.finfo(full_tensor.dtype).eps) * spectral_scale,
+            64 * np.finfo(full_tensor.dtype).eps * np.maximum(1.0, tensor_abs_max),
         )
-        is_uniaxial = (~is_near_isotropic) & (
-            lower_eigenvalue_gap <= uniaxial_tolerance
+        is_uniaxial = (~is_isotropic) & (
+            np.abs(descending_values[..., 1] - descending_values[..., 2])
+            <= uniaxial_tolerance
         )
-
-        # Apply the cofactor/null-space formula to every eigenvalue at once.
-        analytic_eigenvectors = np.stack(
-            [
-                full_tensor[..., 0, 2, None]
-                * (full_tensor[..., 1, 1, None] - eigenvalues)
-                - full_tensor[..., 0, 1, None] * full_tensor[..., 1, 2, None],
-                full_tensor[..., 1, 2, None]
-                * (full_tensor[..., 0, 0, None] - eigenvalues)
-                - full_tensor[..., 0, 1, None] * full_tensor[..., 0, 2, None],
-                full_tensor[..., 0, 1, None] ** 2
-                - (full_tensor[..., 0, 0, None] - eigenvalues)
-                * (full_tensor[..., 1, 1, None] - eigenvalues),
-            ],
-            axis=-2,
-        )
-        analytic_eigenvector_norms = np.linalg.norm(analytic_eigenvectors, axis=-2)
-        analytic_eigenvector_tolerance = (
-            32 * machine_epsilon * np.maximum(1.0, tensor_scale**2)
-        )
-        eigenvalue_tolerance = 64 * machine_epsilon * np.maximum(1.0, spectral_radius)
-        eigenvalue_gaps = np.abs(np.diff(eigenvalues, axis=-1))
-        is_principal_eigenvector_stable = (~is_near_isotropic) & (
-            analytic_eigenvector_norms[..., 0] > analytic_eigenvector_tolerance
-        )
-        is_distinct_biaxial = (~is_near_isotropic) & (~is_uniaxial)
-        # Only a genuinely biaxial point needs three independently stable
-        # analytic eigenvectors. A uniaxial point needs only its unique director.
-        is_complete_eigensystem_stable = (
-            is_distinct_biaxial
-            & np.all(
-                analytic_eigenvector_norms > analytic_eigenvector_tolerance[..., None],
-                axis=-1,
-            )
-            & np.all(
-                eigenvalue_gaps > eigenvalue_tolerance[..., None],
-                axis=-1,
-            )
-        )
-
-        # Identity is the deterministic isotropic frame and initialized storage
-        # for points that will be overwritten below.
-        eigenvectors = np.broadcast_to(
-            np.eye(3, dtype=full_tensor.dtype),
-            full_tensor.shape,
-        ).copy()
-        if np.any(is_complete_eigensystem_stable):
-            normalized_eigenvectors = (
-                analytic_eigenvectors / analytic_eigenvector_norms[..., None, :]
-            )
-            eigenvectors[is_complete_eigensystem_stable] = normalized_eigenvectors[
-                is_complete_eigensystem_stable
-            ]
-
-        is_analytic_uniaxial = is_uniaxial & is_principal_eigenvector_stable
-        if np.any(is_analytic_uniaxial):
-            eigenvectors[is_analytic_uniaxial, :, 0] = (
-                analytic_eigenvectors[is_analytic_uniaxial, :, 0]
-                / analytic_eigenvector_norms[is_analytic_uniaxial, 0, None]
-            )
-
-        is_eigensystem_fallback = (
-            is_distinct_biaxial & (~is_complete_eigensystem_stable)
-        ) | (is_uniaxial & (~is_principal_eigenvector_stable))
-        # Only exceptional points reach the general eigensolver; the full field
-        # is never passed to np.linalg.eigh.
-        if np.any(is_eigensystem_fallback):
-            fallback_tensor = full_tensor[is_eigensystem_fallback]
-            fallback_eigenvalues, fallback_eigenvectors = np.linalg.eigh(
-                fallback_tensor
-            )
-            fallback_order = np.argsort(fallback_eigenvalues, axis=-1)[..., ::-1]
-            eigenvalues[is_eigensystem_fallback] = np.take_along_axis(
-                fallback_eigenvalues,
-                fallback_order,
-                axis=-1,
-            )
-            eigenvectors[is_eigensystem_fallback] = np.take_along_axis(
-                fallback_eigenvectors,
-                fallback_order[..., None, :],
-                axis=-1,
-            )
-
-        if np.any(is_uniaxial):
-            # Canonicalize the positive-S uniaxial spectrum exactly. This also
-            # prevents a spurious nonzero biaxial order from cubic-root noise.
-            eigenvalues[is_uniaxial, 1] = -0.5 * eigenvalues[is_uniaxial, 0]
-            eigenvalues[is_uniaxial, 2] = -0.5 * eigenvalues[is_uniaxial, 0]
-
-            # The two degenerate eigenvectors are not physically unique. Choose
-            # a deterministic right-handed orthonormal complement by crossing
-            # the director with the coordinate axis least parallel to it.
-            uniaxial_directors = eigenvectors[is_uniaxial, :, 0]
-            reference_axis_indices = np.argmin(
-                np.abs(uniaxial_directors),
-                axis=-1,
-            )
-            reference_axes = np.eye(3, dtype=full_tensor.dtype)[reference_axis_indices]
-            secondary_axes = np.cross(uniaxial_directors, reference_axes)
-            secondary_axes /= np.linalg.norm(secondary_axes, axis=-1)[..., None]
-            tertiary_axes = np.cross(uniaxial_directors, secondary_axes)
-            eigenvectors[is_uniaxial, :, 1] = secondary_axes
-            eigenvectors[is_uniaxial, :, 2] = tertiary_axes
-
-        if np.any(is_near_isotropic):
-            eigenvalues[is_near_isotropic] = 0.0
-            eigenvectors[is_near_isotropic] = np.eye(3, dtype=full_tensor.dtype)
-
-        # Eigenvector signs are arbitrary. When requested, reverse the final
-        # axis of every left-handed frame without changing its eigensystem.
         if is_right_handed:
-            is_left_handed = np.linalg.det(eigenvectors) < 0.0
-            eigenvectors[..., :, -1] = np.where(
+            is_left_handed = np.linalg.det(descending_vectors) < 0.0
+            descending_vectors[..., :, -1] = np.where(
                 is_left_handed[..., None],
-                -eigenvectors[..., :, -1],
-                eigenvectors[..., :, -1],
+                -descending_vectors[..., :, -1],
+                descending_vectors[..., :, -1],
             )
-
-        # Repository convention: S = 3 lambda_0 / 2 and
-        # b = 3 |lambda_1 - lambda_2| / 2.
-        scalar_order = 1.5 * eigenvalues[..., 0]
-        director = eigenvectors[..., :, 0]
-        biaxial_order = 1.5 * np.abs(eigenvalues[..., 1] - eigenvalues[..., 2])
-        biaxial_order = np.where(is_uniaxial, 0.0, biaxial_order)
-
-        fallback_count = int(np.count_nonzero(is_eigensystem_fallback))
-        if fallback_count:
-            logger.debug(
-                f"{fallback_count} grid point(s) where the complete analytic "
-                "eigensystem became degenerate or numerically unstable. "
-                "Recomputed only those points with np.linalg.eigh."
-            )
-        logger.debug(
-            "Computed the complete eigensystem and biaxial order for "
-            f"{tensor_count} Q tensor(s) in "
-            f"{time.perf_counter() - stage_start:.3f} seconds."
-        )
     else:
-        # The common uniaxial path computes only the dominant eigenpair and does
-        # not allocate complete eigenvalue or eigenvector arrays.
-        stage_start = time.perf_counter()
-        logger.debug(
-            f"Computing the largest eigenvalue for {tensor_count} Q tensor(s)."
-        )
-        largest_eigenvalue = ne.evaluate(
-            "where(is_near_isotropic, 0.0, " "spectral_radius * cos(phase_angle))",
-            local_dict={
-                "is_near_isotropic": is_near_isotropic,
-                "spectral_radius": spectral_radius,
-                "phase_angle": phase_angle,
-            },
-            optimization="moderate",
-        )
-        logger.debug(
-            f"Computed the largest eigenvalue for {tensor_count} Q tensor(s) in "
-            f"{time.perf_counter() - stage_start:.3f} seconds."
-        )
+        is_uniaxial = np.zeros(full_tensor.shape[:-2], dtype=bool)
 
-        stage_start = time.perf_counter()
-        logger.debug(
-            "Computing the director associated with the largest eigenvalue for "
-            f"{tensor_count} Q tensor(s)."
-        )
-        # Construct the cofactor vector spanning the null space of
-        # Q - lambda_max I, writing each component directly into its output.
-        director_expression_inputs = {
-            **tensor_components,
-            "largest_eigenvalue": largest_eigenvalue,
-        }
-        analytic_director = np.empty(
-            (3,) + largest_eigenvalue.shape,
-            dtype=full_tensor.dtype,
-        )
-        director_numerator_expressions = (
-            "tensor_xz * (tensor_yy - largest_eigenvalue) " "- tensor_xy * tensor_yz",
-            "tensor_yz * (tensor_xx - largest_eigenvalue) " "- tensor_xy * tensor_xz",
-            "tensor_xy**2 "
-            "- (tensor_xx - largest_eigenvalue) "
-            "* (tensor_yy - largest_eigenvalue)",
-        )
-        for component_index, expression in enumerate(director_numerator_expressions):
-            # NumExpr cannot accept a NumPy scalar as `out`; a single Q tensor
-            # therefore uses return-and-assign while lattice arrays write in place.
-            if largest_eigenvalue.ndim:
-                ne.evaluate(
-                    expression,
-                    local_dict=director_expression_inputs,
-                    out=analytic_director[component_index],
-                    optimization="moderate",
-                )
-            else:
-                analytic_director[component_index] = ne.evaluate(
-                    expression,
-                    local_dict=director_expression_inputs,
-                    optimization="moderate",
-                )
-        analytic_director_norm = ne.evaluate(
-            "sqrt(director_x**2 + director_y**2 + director_z**2)",
-            local_dict={
-                "director_x": analytic_director[0],
-                "director_y": analytic_director[1],
-                "director_z": analytic_director[2],
-            },
-            optimization="moderate",
-        )
-        analytic_director_tolerance = (
-            32 * machine_epsilon * np.maximum(1.0, tensor_scale**2)
-        )
-        # Reject vectors too small to normalize reliably, including the known
-        # x-aligned degeneracy of this particular cofactor formula.
-        is_analytic_director_stable = (~is_near_isotropic) & (
-            analytic_director_norm > analytic_director_tolerance
-        )
-
-        director = np.empty(full_tensor.shape[:-1], dtype=full_tensor.dtype)
-        normalization_inputs = {
-            "is_analytic_director_stable": is_analytic_director_stable,
-            "analytic_director_norm": analytic_director_norm,
-        }
-        # Normalize stable vectors and assign [1, 0, 0] elsewhere until any
-        # non-isotropic fallback points are replaced below.
-        for component_index in range(3):
-            default_component = 1.0 if component_index == 0 else 0.0
-            normalization_expression = (
-                "where(is_analytic_director_stable, "
-                "director_component / analytic_director_norm, "
-                "default_component)"
-            )
-            expression_inputs = {
-                **normalization_inputs,
-                "director_component": analytic_director[component_index],
-                "default_component": default_component,
-            }
-            if largest_eigenvalue.ndim:
-                ne.evaluate(
-                    normalization_expression,
-                    local_dict=expression_inputs,
-                    out=director[..., component_index],
-                    optimization="moderate",
-                )
-            else:
-                director[..., component_index] = ne.evaluate(
-                    normalization_expression,
-                    local_dict=expression_inputs,
-                    optimization="moderate",
-                )
-
-        is_director_fallback = (~is_near_isotropic) & (~is_analytic_director_stable)
-        # Recompute only degenerate non-isotropic points with the robust solver.
-        if np.any(is_director_fallback):
-            fallback_tensor = full_tensor[is_director_fallback]
-            fallback_eigenvalues, fallback_eigenvectors = np.linalg.eigh(
-                fallback_tensor
-            )
-            largest_eigenvalue[is_director_fallback] = fallback_eigenvalues[..., -1]
-            director[is_director_fallback] = fallback_eigenvectors[..., :, -1]
-
-        scalar_order = 1.5 * largest_eigenvalue
-        eigenvalues = None
-        eigenvectors = None
-        biaxial_order = None
-
-        fallback_count = int(np.count_nonzero(is_director_fallback))
-        if fallback_count:
-            logger.debug(
-                f"{fallback_count} grid point(s) where the analytic director "
-                "formula became degenerate or numerically unstable. Recomputed "
-                "the dominant eigenpair with np.linalg.eigh at those points."
-            )
-        logger.debug(
-            f"Computed the director for {tensor_count} Q tensor(s) in "
-            f"{time.perf_counter() - stage_start:.3f} seconds."
-        )
-
-    # Emit recovery diagnostics only after all requested arrays are finalized.
-    isotropic_count = int(np.count_nonzero(is_near_isotropic))
+    isotropic_count = int(np.count_nonzero(is_isotropic))
     if isotropic_count:
         logger.warning(
-            f"{isotropic_count} near-isotropic grid point(s). Set S "
-            "to 0 and assigned the default director [1, 0, 0] at those points. "
-            "Inspect result.isotropic_indices before interpreting the director."
+            f"{isotropic_count} near-isotropic grid point(s). Set S to 0 and "
+            "assigned the default director [1, 0, 0] at those points. Inspect "
+            "result.isotropic_indices before interpreting the director."
         )
-
-    # Store coordinates as tuples so zero-dimensional single-tensor inputs are
-    # unambiguous: a match is [()] and no match is []. Convert NumPy integers
-    # to built-in ints so the diagnostics are plain Python data.
     isotropic_indices = [
         tuple(int(coordinate) for coordinate in index)
-        for index in np.argwhere(is_near_isotropic)
+        for index in np.argwhere(is_isotropic)
     ]
     uniaxial_indices = [
         tuple(int(coordinate) for coordinate in index)
         for index in np.argwhere(is_uniaxial)
     ]
 
+    if is_biaxial:
+        eigenvalues = descending_values
+        eigenvectors = descending_vectors
+        biaxial_order = 1.5 * np.abs(eigenvalues[..., 1] - eigenvalues[..., 2])
+        biaxial_order = np.where(is_uniaxial, 0.0, biaxial_order)
+    else:
+        eigenvalues = None
+        eigenvectors = None
+        biaxial_order = None
+
     return QDiagonalizationResult(
         S=scalar_order,
         n=director,
         isotropic_indices=isotropic_indices,
-        uniaxial_indices=uniaxial_indices,
+        uniaxial_indices=uniaxial_indices if is_biaxial else [],
         eigenvalues=eigenvalues,
         eigenvectors=eigenvectors,
         biaxial_order=biaxial_order,

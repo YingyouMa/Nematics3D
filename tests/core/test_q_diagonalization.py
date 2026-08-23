@@ -44,6 +44,18 @@ class TestQDiagonalizeResult(unittest.TestCase):
         self.assertIsNone(result.eigenvectors)
         self.assertIsNone(result.biaxial_order)
 
+    def test_default_path_does_not_compute_complete_eigensystem(self):
+        q_tensor = make_uniaxial_q_tensor([1.0, 0.0, 0.0], 1.0)
+
+        with patch(
+            "nematics3d.q_diagonalization._eigh3_q_sd",
+            side_effect=AssertionError("The default path must stay principal-only."),
+        ):
+            result = q_diagonalize(q_tensor, log_mode="none")
+
+        self.assertTrue(np.allclose(result.S, 1.0))
+        self.assertTrue(np.allclose(np.abs(result.n), [1.0, 0.0, 0.0]))
+
     def test_result_base_attribute_and_dictionary_interfaces(self):
         q_tensor = make_uniaxial_q_tensor([1.0, 1.0, 1.0], 0.75)
         result = q_diagonalize(q_tensor, log_mode="none")
@@ -292,23 +304,77 @@ class TestQDiagonalizeResult(unittest.TestCase):
         self.assertIn("1 near-isotropic grid point(s)", warning_output)
         self.assertIn("result.isotropic_indices", warning_output)
 
-    def test_fallback_is_debug_only_and_log_none_suppresses_output(self):
+    def test_x_aligned_tensor_uses_robust_analytic_path(self):
         x_aligned_biaxial_tensor = np.diag([0.6, -0.1, -0.5])
 
-        default_output = io.StringIO()
-        with redirect_stdout(default_output):
-            q_diagonalize(x_aligned_biaxial_tensor)
-        self.assertEqual(default_output.getvalue(), "")
+        with patch(
+            "nematics3d.q_diagonalization.np.linalg.eigh",
+            side_effect=AssertionError("The robust analytic path must not fall back."),
+        ):
+            result = q_diagonalize(
+                x_aligned_biaxial_tensor,
+                is_biaxial=True,
+                log_mode="none",
+            )
 
-        debug_output = io.StringIO()
-        with redirect_stdout(debug_output):
-            q_diagonalize(x_aligned_biaxial_tensor, log_level=logging.DEBUG)
-        self.assertIn("Recomputed the dominant eigenpair", debug_output.getvalue())
+        self.assertTrue(np.allclose(result.eigenvalues, [0.6, -0.1, -0.5]))
+        self.assertTrue(
+            np.allclose(result.eigenvectors.T @ result.eigenvectors, np.eye(3))
+        )
+        reconstructed_tensor = (
+            result.eigenvectors @ np.diag(result.eigenvalues) @ result.eigenvectors.T
+        )
+        self.assertTrue(np.allclose(reconstructed_tensor, x_aligned_biaxial_tensor))
 
-        suppressed_output = io.StringIO()
-        with redirect_stdout(suppressed_output):
-            q_diagonalize(x_aligned_biaxial_tensor, log_mode="none")
-        self.assertEqual(suppressed_output.getvalue(), "")
+    def test_x_aligned_perfect_uniaxial_tensor_has_orthonormal_frame(self):
+        x_aligned_uniaxial_tensor = make_uniaxial_q_tensor([1.0, 0.0, 0.0], 1.0)
+
+        with patch(
+            "nematics3d.q_diagonalization.np.linalg.eigh",
+            side_effect=AssertionError("Perfect uniaxial input must remain analytic."),
+        ):
+            result = q_diagonalize(
+                x_aligned_uniaxial_tensor,
+                is_biaxial=True,
+                is_right_handed=True,
+                log_mode="none",
+            )
+
+        self.assertTrue(np.allclose(result.S, 1.0))
+        self.assertTrue(np.allclose(np.abs(result.n), [1.0, 0.0, 0.0]))
+        self.assertTrue(
+            np.allclose(result.eigenvectors.T @ result.eigenvectors, np.eye(3))
+        )
+        self.assertGreater(np.linalg.det(result.eigenvectors), 0.0)
+
+    def test_near_degenerate_secondary_axes_remain_orthonormal(self):
+        random_generator = np.random.default_rng(20260823)
+        q_tensors = []
+        for gap in np.logspace(-14, -3, 32):
+            axes, _ = np.linalg.qr(random_generator.normal(size=(3, 3)))
+            eigenvalues = np.array([0.5, -0.25 + gap / 2, -0.25 - gap / 2])
+            q_tensors.append(axes @ np.diag(eigenvalues) @ axes.T)
+
+        q_tensors = np.stack(q_tensors)
+        result = q_diagonalize(q_tensors, is_biaxial=True, log_mode="none")
+        reconstructed = np.einsum(
+            "...ik,...k,...jk->...ij",
+            result.eigenvectors,
+            result.eigenvalues,
+            result.eigenvectors,
+        )
+
+        self.assertTrue(np.allclose(reconstructed, q_tensors, atol=1e-12))
+        frames = np.swapaxes(result.eigenvectors, -1, -2) @ result.eigenvectors
+        self.assertTrue(np.allclose(frames, np.eye(3), atol=1e-12))
+        secondary_overlap = np.abs(
+            np.einsum(
+                "...i,...i->...",
+                result.eigenvectors[..., :, 1],
+                result.eigenvectors[..., :, 2],
+            )
+        )
+        self.assertTrue(np.all(secondary_overlap < 1e-12))
 
     def test_positive_uniaxial_result_canonicalizes_degenerate_eigensystem(self):
         input_director = np.array([0.3, 0.4, np.sqrt(0.75)])
