@@ -5,7 +5,7 @@ module yet, it can live here for now.
 
 import numpy as np
 from typing import Union, Sequence, Iterable, Tuple, Hashable, Mapping, Optional
-from .datatypes import Tensor, Vect, as_Vect
+from .datatypes import Tensor, Vect
 from nematics3d.format import fmt_value, is_equal, is_equal_array, is_given_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from .geometry import (

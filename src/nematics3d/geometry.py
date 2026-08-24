@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.optimize import minimize
 
 from .classes.result_base import ResultBase
-from .datatypes import Tensor, Vect, as_Vect, as_axes, as_dimension_info, as_points
+from .datatypes import Tensor, Vect, as_axes, as_dimension_info, as_points, as_vector
 
 
 # ===========================================================================
@@ -188,7 +188,7 @@ def box_corners_from_center_axes_radii(center, axes, radii) -> np.ndarray:
     ``axes`` is a ``(3, 3)`` orthonormal frame stored as column vectors.  The
     returned corners have shape ``(8, 3)``.
     """
-    center = as_Vect(center, name="box center", dim=3)
+    center = as_vector(center, name="box center", d=3)
     axes = as_axes(axes, name="box axes")
     radii = as_dimension_info(radii, name="box radii").astype(float)
     if np.any(radii <= 0):
@@ -362,15 +362,15 @@ def rotation_matrix_from_vectors(
     minimal rotation that maps the source direction to the target
     direction.
     """
-    source_vector = as_Vect(
+    source_vector = as_vector(
         source_vector,
         name="The vector used as the starting source when constructing the rotation matrix",
-        is_norm=True,
+        is_normalized=True,
     )
-    target_vector = as_Vect(
+    target_vector = as_vector(
         target_vector,
         name="The vector used as the ending target when constructing the rotation matrix",
-        is_norm=True,
+        is_normalized=True,
     )
 
     rot, _ = R.align_vectors([target_vector], [source_vector])
@@ -516,6 +516,7 @@ def check_triangulation_quality(
 
     centroid = points.mean(axis=0)
     if is_optimize_center:
+
         def neg_min_dist(c):
             return -np.min(np.linalg.norm(points - c, axis=1))
 
@@ -594,6 +595,7 @@ def triangulate_surface_points(
     centroid = points.mean(axis=0)
 
     if is_optimize_center:
+
         def neg_min_dist(c):
             return -np.min(np.linalg.norm(points - c, axis=1))
 

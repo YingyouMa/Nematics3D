@@ -16,7 +16,7 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_Number,
-    as_Vect,
+    as_vector,
     as_axes,
     as_dimension_info,
     as_points,
@@ -109,10 +109,10 @@ class OptsBounds(OptsBase):
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **OptsBase.impl_validators,
-        "origin": lambda v, d: as_Vect(v, name=d, dim=3),
-        "axis1": lambda v, d: as_Vect(v, name=d, dim=3, is_norm=True),
+        "origin": lambda v, d: as_vector(v, name=d, d=3),
+        "axis1": lambda v, d: as_vector(v, name=d, d=3, is_normalized=True),
         "axis2": lambda v, d: (
-            None if v is None else as_Vect(v, name=d, dim=3, is_norm=True)
+            None if v is None else as_vector(v, name=d, d=3, is_normalized=True)
         ),
         "length1": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "length2": lambda v, d: (
@@ -841,10 +841,10 @@ def bounds_minimal_wrapping_points(
     if origin is None:
         origin = np.zeros(3, dtype=float)
     else:
-        origin = as_Vect(
+        origin = as_vector(
             origin,
             name="origin used to project points into the supplied axes",
-            dim=3,
+            d=3,
         )
 
     if min_lengths is None:

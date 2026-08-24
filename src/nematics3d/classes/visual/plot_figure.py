@@ -18,7 +18,7 @@ from nematics3d.datatypes import (
     as_ColorRGB,
     as_bool,
     as_Number,
-    as_Vect,
+    as_vector,
     as_str,
 )
 from nematics3d.logging_decorator import logging_and_warning_decorator
@@ -96,8 +96,8 @@ class OptsFigure(OptsBase):
         "elevation":        lambda v, d: as_Number(v, name=d, value_range=(-90, 90)),
         "roll":             lambda v, d: as_Number(v, name=d, value_range=(-180, 180)),
         "distance":         lambda v, d: as_Number(v, name=d, value_range=(0, np.inf)),
-        "focal_point":      lambda v, d: as_Vect(v, name=d, dim=3),
-        "size":             lambda v, d: as_Vect(v, name=d, dim=2),
+        "focal_point":      lambda v, d: as_vector(v, name=d, d=3),
+        "size":             lambda v, d: as_vector(v, name=d, d=2),
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
     }
 
@@ -881,7 +881,9 @@ class PlotFigure(HostBase):
 
         axes_actor = vtk.vtkAxesActor()
         axes_actor.SetTotalLength(axis_length, axis_length, axis_length)
-        axes_actor.SetNormalizedShaftLength(shaft_fraction, shaft_fraction, shaft_fraction)
+        axes_actor.SetNormalizedShaftLength(
+            shaft_fraction, shaft_fraction, shaft_fraction
+        )
         axes_actor.SetNormalizedTipLength(tip_fraction, tip_fraction, tip_fraction)
         axes_actor.SetXAxisLabelText(str(labels[0]))
         axes_actor.SetYAxisLabelText(str(labels[1]))
@@ -1291,9 +1293,7 @@ def as_plotfigure(figure, opts_figure=None, logger=None):
             figure = PlotFigure(opts=opts_figure)
         elif isinstance(figure, PlotFigure):
             if not figure.is_alive:
-                logger.error(
-                    "The provided PlotFigure is no longer alive."
-                )
+                logger.error("The provided PlotFigure is no longer alive.")
                 logger.recovery("Create a new figure instead.")
                 figure = PlotFigure(opts=opts_figure)
             else:

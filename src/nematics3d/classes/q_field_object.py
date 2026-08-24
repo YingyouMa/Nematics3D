@@ -106,7 +106,7 @@ import pyvista as pv
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
-    as_Vect,
+    as_vector,
     Tensor,
     QField5,
     QField9,
@@ -252,7 +252,7 @@ class InputQ:
         "n": lambda v, d: check_Sn(v, "n"),
         "S": lambda v, d: check_Sn(v, "S"),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
-        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "default_miminum_line_length_smooth": lambda v, d: as_Number(
             v, name=d, value_range=(1, np.inf)

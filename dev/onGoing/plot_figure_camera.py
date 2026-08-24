@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import numpy as np
 import weakref
-from nematics3d.datatypes import as_Number, Vect, as_Vect
+from nematics3d.datatypes import Vect, as_Number, as_vector
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 
@@ -47,10 +47,10 @@ class OptsCamera:
             name=self.__descriptions__["distance"],
             value_range=(0, np.inf),
         ),
-        "focal_point": lambda self, v: as_Vect(
+        "focal_point": lambda self, v: as_vector(
             v,
             name=self.__descriptions__["focal_point"],
-            dim=3,
+            d=3,
         ),
     }
 
@@ -147,8 +147,8 @@ class FigureCamera:
 
     @position.setter
     def position(self, v):
-        self._internal_cam.position = as_Vect(
-            v, name="The position of the camera", dim=3
+        self._internal_cam.position = as_vector(
+            v, name="The position of the camera", d=3
         )
         self._internal_plotter.render()
 
@@ -158,8 +158,8 @@ class FigureCamera:
 
     @view_up.setter
     def view_up(self, v):
-        self._internal_cam.up = as_Vect(
-            v, name="The upward direction of the camera", dim=3
+        self._internal_cam.up = as_vector(
+            v, name="The upward direction of the camera", d=3
         )
         self._internal_plotter.render()
 

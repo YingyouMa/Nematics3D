@@ -12,7 +12,7 @@ from nematics3d.datatypes import (
     UNSET,
     Unset,
     Vect,
-    as_Vect,
+    as_vector,
     as_dimension_info,
     as_lattice_mask,
 )
@@ -101,7 +101,7 @@ class InputGridField:
     _validators: ClassVar[Mapping[str, object]] = {
         "shape": lambda v, d: as_grid_shape(v, name=d),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
-        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "mask": lambda v, d: as_lattice_mask(v, name=d),
     }

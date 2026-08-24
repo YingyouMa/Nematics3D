@@ -15,7 +15,7 @@ from nematics3d.datatypes import (
     Unset,
     as_ColorRGB,
     as_Number,
-    as_Vect,
+    as_vector,
     as_bool,
     as_str,
 )
@@ -69,7 +69,7 @@ def _as_optional_color(value, desc):
 def _as_optional_position(value, desc):
     if value is None:
         return None
-    position = tuple(float(x) for x in as_Vect(value, dim=2, name=desc))
+        position = tuple(float(x) for x in as_vector(value, d=2, name=desc))
     if any((x < 0.0) or (x > 1.0) for x in position):
         raise ValueError(f"{desc} must lie inside the normalized viewport [0, 1].")
     return position

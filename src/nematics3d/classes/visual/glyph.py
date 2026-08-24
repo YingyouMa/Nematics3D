@@ -20,7 +20,7 @@ from nematics3d.datatypes import (
     as_bool,
     as_ColorRGB,
     as_ColorRGB_array,
-    as_Vect,
+    as_vector,
     as_points,
 )
 from nematics3d.format import save_opts_json
@@ -221,7 +221,7 @@ class OptsGlyph(OptsBase):
             v, d, pool=("coords", "u_percent")
         ),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
-        "scalars_clim":         lambda v, d: (v if v is None else as_Vect(v, name=d, dim=2)),
+        "scalars_clim":         lambda v, d: (v if v is None else as_vector(v, name=d, d=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
         "scalar_bar_title":     lambda v, d: as_str(v, name=d),
         "sides":                lambda v, d: as_Number(

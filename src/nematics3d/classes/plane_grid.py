@@ -12,7 +12,7 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_Number,
-    as_Vect,
+    as_vector,
     as_bool,
     as_str,
 )
@@ -75,20 +75,22 @@ class OptsPlaneGrid(OptsBase):
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
-        "normal": lambda v, d: as_Vect(v, name=d, is_norm=True),
+        "normal": lambda v, d: as_vector(v, name=d, is_normalized=True),
         "spacing": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
         "spacing_extra": lambda v, d: (
             None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
         ),
         "size": lambda v, d: as_Number(v, name=d),
         "size_extra": lambda v, d: None if v is None else as_Number(v, name=d),
-        "origin": lambda v, d: as_Vect(v, name=d),
+        "origin": lambda v, d: as_vector(v, name=d),
         "alignment": lambda v, d: as_str(
             v,
             name=d,
             pool=("center", "bottom-left"),
         ),
-        "axis1": lambda v, d: None if v is None else as_Vect(v, name=d, is_norm=True),
+        "axis1": lambda v, d: (
+            None if v is None else as_vector(v, name=d, is_normalized=True)
+        ),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
     }
 

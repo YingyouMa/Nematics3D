@@ -12,7 +12,7 @@ from ..general import sort_line_indices
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
-    as_Vect,
+    as_vector,
     Tensor,
     DefectIndex,
     as_DefectIndex,
@@ -144,7 +144,7 @@ class InputLine:
             None if v is None else as_DefectIndex(v, is_return_row=True)
         ),
         "box_size_periodic_index": lambda v, d: as_dimension_info(v, name=d),
-        "grid_offset": lambda v, d: None if v is None else as_Vect(v, name=d),
+        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 
@@ -1727,10 +1727,10 @@ class DefectSectionGrid(HostBase):
                     f"{desc} Got unknown registered normal name {state_normal!r}."
                 )
             return state_normal
-        return as_Vect(
+        return as_vector(
             state_normal,
             name="The direct normal of defect section grid",
-            is_norm=True,
+            is_normalized=True,
         )
 
     def _helper_resolve_normal(self, tangent):
@@ -1741,10 +1741,10 @@ class DefectSectionGrid(HostBase):
             normal = self.impl_normals[normal]
             if callable(normal):
                 normal = normal()
-        normal = as_Vect(
+        normal = as_vector(
             normal,
             name="The resolved normal of defect section grid",
-            is_norm=True,
+            is_normalized=True,
         )
         object.__setattr__(self, "calc_normal", normal)
         return normal
@@ -1849,10 +1849,10 @@ class DefectSectionGrid(HostBase):
             return
 
         try:
-            value = as_Vect(
+            value = as_vector(
                 value,
                 name=f"The normal {key!r} of defect section grid",
-                is_norm=True,
+                is_normalized=True,
             )
         except (TypeError, ValueError):
             logger.warning(

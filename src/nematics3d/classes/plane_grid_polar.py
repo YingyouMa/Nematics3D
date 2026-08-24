@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Mapping
 
 import numpy as np
 
-from nematics3d.datatypes import UNSET, Unset, Vect, as_Number, as_Vect, as_bool
+from nematics3d.datatypes import UNSET, Unset, Vect, as_Number, as_bool, as_vector
 from nematics3d.grid import resolve_plane_physical_axes
 from nematics3d.general import select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
@@ -59,10 +59,10 @@ class OptsPlaneGridPolar(OptsBase):
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
-        "origin": lambda v, d: as_Vect(v, name=d),
-        "normal": lambda v, d: as_Vect(v, name=d, is_norm=True),
+        "origin": lambda v, d: as_vector(v, name=d),
+        "normal": lambda v, d: as_vector(v, name=d, is_normalized=True),
         "theta0_axis": lambda v, d: (
-            None if v is None else as_Vect(v, name=d, is_norm=True)
+            None if v is None else as_vector(v, name=d, is_normalized=True)
         ),
         "r_min": lambda v, d: (
             None if v is None else as_Number(v, name=d, value_range=(0, np.inf))
