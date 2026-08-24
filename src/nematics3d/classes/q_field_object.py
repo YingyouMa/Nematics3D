@@ -114,7 +114,8 @@ from ..datatypes import (
     SField,
     nField,
     MaskField,
-    check_Sn,
+    as_director_field,
+    as_scalar_field,
     Number,
     as_Number,
     DimensionFlagInput,
@@ -249,8 +250,8 @@ class InputQ:
     # that check.
     _validators = {
         "Q": lambda v, d: as_qfield5(v, name=d),
-        "n": lambda v, d: check_Sn(v, "n"),
-        "S": lambda v, d: check_Sn(v, "S"),
+        "n": lambda v, d: as_director_field(v, name=d, is_spatial_3d_required=True),
+        "S": lambda v, d: as_scalar_field(v, name=d, is_spatial_3d_required=True),
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),

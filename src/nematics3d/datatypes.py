@@ -831,43 +831,118 @@ def as_real_lattice_field(
 nField = np.ndarray
 
 
-def check_Sn(
-    data, datatype: Literal["n", "S"], is_3d_strict: bool = True, is_norm=True
-):
+@logging_and_warning_decorator(start_finish_level=5)
+def as_director_field(
+    input_data,
+    name="director field",
+    is_spatial_3d_required=False,
+    is_normalized=True,
+    is_zero_allowed=True,
+    replace=None,
+    logger=None,
+) -> nField:
+    """Validate a real, finite director field with trailing shape ``(3,)``.
 
-    data = np.asarray(data, dtype=np.float64)
-    shape = np.shape(data)
+    Arbitrary leading dimensions are accepted unless
+    ``is_spatial_3d_required=True``, which requires shape ``(Nx, Ny, Nz, 3)``.
+    Normalization is applied independently at every field point. Allowed zero
+    directors remain zero during normalization.
+    """
 
-    if datatype == "n":
-        if shape[-1] != 3:
+    def validate(value):
+        raw_value = np.asarray(value)
+        if raw_value.ndim == 0 or raw_value.shape[-1] != 3:
             raise ValueError(
-                f"Director field must end with shape (..., 3), got {shape}"
+                f"{name!r} must have trailing shape (..., 3). "
+                f"Got shape {raw_value.shape}."
             )
-        if is_3d_strict and len(shape) != 4:
+        if is_spatial_3d_required and raw_value.ndim != 4:
             raise ValueError(
-                f"Strict 3D director field must have shape (Nx, Ny, Nz, 3), got {shape}"
+                f"{name!r} must have shape (Nx, Ny, Nz, 3). "
+                f"Got shape {raw_value.shape}."
             )
-        if is_norm:
-            norms = np.linalg.norm(data, axis=-1, keepdims=True)
-            normalized = np.zeros_like(data)
-            np.divide(data, norms, out=normalized, where=norms > 0)
-            data = normalized
-    elif datatype == "S":
-        if is_3d_strict and len(shape) != 3:
+        if not all(isinstance(component, numbers.Real) for component in raw_value.flat):
+            raise TypeError(f"{name!r} must contain only real numbers. Got {value!r}.")
+
+        director = np.asarray(raw_value, dtype=float)
+        if not np.isfinite(director).all():
             raise ValueError(
-                f"Strict 3D scalar field must have shape (Nx, Ny, Nz), got {shape}"
+                f"{name!r} must contain only finite values. Got {value!r}."
             )
 
-    else:
-        raise TypeError(f"Unsupported datatype '{datatype}': expected 'S' or 'n'")
+        norms = np.linalg.norm(director, axis=-1, keepdims=True)
+        is_zero = norms <= 1e-12
+        if not is_zero_allowed and np.any(is_zero):
+            raise ValueError(f"{name!r} must not contain zero directors.")
+        if is_normalized:
+            normalized = np.zeros_like(director)
+            np.divide(director, norms, out=normalized, where=~is_zero)
+            director = normalized
+        return director
 
-    return data
+    try:
+        return validate(input_data)
+    except (TypeError, ValueError):
+        if replace is None:
+            raise
+
+        logger.exception(f"Invalid {name!r}; attempting the configured replacement.")
+        logger.recovery(f"Use {replace!r} as {name!r} in the following.")
+        return validate(replace)
 
 
-# Scalar order parameter field, shape: (Nx, Ny, Nz)
-# Subtype of GeneralField
+# Generic scalar field with arbitrary leading shape.
+ScalarField = np.ndarray
+
+# Scalar order parameter field, commonly shape (Nx, Ny, Nz).
+# This domain-specific semantic subtype is validated structurally through
+# as_scalar_field(); physical restrictions on S belong to the calling function.
 # In the perfect ordered state, S is defined to be 1.
-SField = np.ndarray
+SField = ScalarField
+
+
+@logging_and_warning_decorator(start_finish_level=5)
+def as_scalar_field(
+    input_data,
+    name="scalar field",
+    is_spatial_3d_required=False,
+    replace=None,
+    logger=None,
+) -> ScalarField:
+    """Validate a real, finite scalar field with arbitrary leading shape.
+
+    Scalars and arrays of any rank are accepted unless
+    ``is_spatial_3d_required=True``, which requires shape ``(Nx, Ny, Nz)``.
+    No physical value range is imposed.
+    """
+
+    def validate(value):
+        raw_value = np.asarray(value)
+        if is_spatial_3d_required and raw_value.ndim != 3:
+            raise ValueError(
+                f"{name!r} must have shape (Nx, Ny, Nz). "
+                f"Got shape {raw_value.shape}."
+            )
+        if not all(isinstance(component, numbers.Real) for component in raw_value.flat):
+            raise TypeError(f"{name!r} must contain only real numbers. Got {value!r}.")
+
+        scalar_field = np.asarray(raw_value, dtype=float)
+        if not np.isfinite(scalar_field).all():
+            raise ValueError(
+                f"{name!r} must contain only finite values. Got {value!r}."
+            )
+        return scalar_field
+
+    try:
+        return validate(input_data)
+    except (TypeError, ValueError):
+        if replace is None:
+            raise
+
+        logger.exception(f"Invalid {name!r}; attempting the configured replacement.")
+        logger.recovery(f"Use {replace!r} as {name!r} in the following.")
+        return validate(replace)
+
 
 # Tensor order parameter in 5-component representation, shape: (Nx, Ny, Nz, 5)
 # Subtype of GeneralField

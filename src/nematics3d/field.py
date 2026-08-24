@@ -11,7 +11,8 @@ from .datatypes import (
     QField9,
     nField,
     SField,
-    check_Sn,
+    as_director_field,
+    as_scalar_field,
     GeneralField,
     DimensionFlagInput,
     as_dimension_info,
@@ -44,11 +45,11 @@ def getQ(n: nField, S: SField = None, logger=None) -> QField9:
         The computed Q-tensor field of shape (..., 3, 3), symmetric and traceless.
     """
 
-    n = check_Sn(n, "n", is_3d_strict=False)
+    n = as_director_field(n, name="n")
 
     Q = np.einsum("...i, ...j -> ...ij", n, n) - np.eye(3) / 3
     if S is not None:
-        S = check_Sn(S, "S", is_3d_strict=False)
+        S = as_scalar_field(S, name="S")
         Q = np.einsum("..., ...ij -> ...ij", S, Q)
     else:
         logger.warning(">>> No S input. Set to be 1.")
@@ -119,8 +120,8 @@ def align_directors(n_reference: nField, n_target: nField) -> nField:
     Align target director to have similar orientation as reference.
     This is used to handle the nematic symmetry of directors.
     """
-    n_reference = check_Sn(n_reference, "n", is_3d_strict=False)
-    n_target = check_Sn(n_target, "n", is_3d_strict=False)
+    n_reference = as_director_field(n_reference, name="n_reference")
+    n_target = as_director_field(n_target, name="n_target")
     dots = np.einsum("...i,...i->...", n_reference, n_target)
     signs = np.where(dots < 0, -1, 1)
     return np.einsum("...,...i->...i", signs, n_target)
@@ -179,7 +180,7 @@ def n_color_immerse(n: nField) -> List[Tuple]:
      (0.51845357, 0.4489875 , 0.47062625)]
     """
 
-    n = check_Sn(n, "n", is_3d_strict=False, is_norm=True)
+    n = as_director_field(n, name="n", is_normalized=True)
 
     RGB = np.zeros((*(np.shape(n)[:-1]), 3))
 

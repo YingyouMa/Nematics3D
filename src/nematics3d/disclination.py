@@ -18,7 +18,7 @@ from .datatypes import (
     as_dimension_info,
     DefectIndex,
     as_DefectIndex,
-    check_Sn,
+    as_director_field,
 )
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
@@ -59,7 +59,7 @@ def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
         Coordinates of detected defects in reoriented space.
     """
 
-    n = check_Sn(n, "n")
+    n = as_director_field(n, name="n", is_spatial_3d_required=True)
 
     a_orig = n[:-1, :-1]
     b_orig = n[1:, :-1]
@@ -131,7 +131,7 @@ def defect_detect(
         in `datatype.py`.
     """
 
-    n_origin = check_Sn(n_origin, "n")
+    n_origin = as_director_field(n_origin, name="n_origin", is_spatial_3d_required=True)
 
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
