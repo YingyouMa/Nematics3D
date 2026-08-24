@@ -55,7 +55,7 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | Tutorial | None; these are compact developer-facing input helpers |
 | Review scope | Dimension semantics, real finite values, exact shape, arbitrary positive dimensions, zero-vector policy, optional normalization, validated replacement recovery, logging, naming, public exports, and all active repository callers |
 | Validation | Direct `as_vector()` smoke checks for normalized 3-vectors, arbitrary 5-vectors, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/test_datatypes_check_sn.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `python -m pytest tests/classes/test_q_plane.py -q` (1 passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` |
+| Reviewed commit | `cf3ea14da0be0a82f12fdffaab515087885fbe53` |
 | Reviewed date | 2026-08-24 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Vect(d)` records dimension only as reader-facing semantic metadata and does not provide static shape checking. Near-zero rejection uses the repository's existing absolute norm threshold of `1e-12`. Generated build artifacts are not source-of-truth callers and were not rewritten. |
@@ -81,7 +81,7 @@ Summary of changes and evidence:
 | Tutorial | None; these are compact developer-facing input helpers |
 | Review scope | Shape semantics, arbitrary positive-rank shapes, real finite values, exact shape, validated replacement recovery, logging, naming, public exports, `as_axes()` integration, grid transforms, plot extents, and all active repository callers |
 | Validation | Direct `as_tensor()` smoke checks for a 2x2 matrix, a rank-three tensor, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/classes/test_q_plane.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` |
+| Reviewed commit | `cf3ea14da0be0a82f12fdffaab515087885fbe53` |
 | Reviewed date | 2026-08-24 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Tensor(shape)` records shape only as reader-facing semantic metadata and does not provide static shape checking. Scalar shape `()` and dimensions of size zero are intentionally unsupported. Generated build artifacts are not source-of-truth callers and were not rewritten. |
@@ -96,6 +96,32 @@ Summary of changes and evidence:
   replacement validation for matrices and higher-rank tensors.
 - Updated `as_axes()`, grid-transform validation, and plot-extent validation to
   use the normalized interface.
+
+### `nematics3d.datatypes.as_director_field` and `as_scalar_field`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public field-input validators with domain-specific `nField` and `SField` aliases |
+| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Tests | [`tests/test_datatypes_director_field.py`](../../tests/test_datatypes_director_field.py) and downstream Q-field tests |
+| Tutorial | None; these are compact input helpers used by public scientific functions |
+| Review scope | Arbitrary leading dimensions, optional strict 3D spatial shapes, real finite values, per-point director normalization, allowed and rejected zero directors, generic `ScalarField` output, domain-specific `SField`, validated replacement recovery, logging, naming, deletion of the mixed-purpose `check_Sn()`, and all active callers |
+| Validation | Direct smoke checks for normalized and zero directors, scalar input, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/test_datatypes_director_field.py tests/classes/test_q_plane.py tests/core/test_q_diagonalization.py -q` (12 passed, 8 subtests passed); `python -m pytest tests/classes/test_q_field_object_phase2.py -q` (10 passed, 1 unrelated pre-existing `FieldData.interpolator` failure); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
+| Reviewed commit | `cf3ea14da0be0a82f12fdffaab515087885fbe53` |
+| Reviewed date | 2026-08-24 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `nField` and `SField` intentionally remain domain-style naming exceptions. Allowed director norms at or below `1e-12` are represented as zero during normalization. Physical value restrictions on scalar order are intentionally delegated to calling scientific functions. The wider `QFieldObject` test retains a pre-existing failure because `FieldData` has no `interpolator` attribute. |
+
+Summary of changes and evidence:
+
+- Split the mixed string-dispatched `check_Sn()` helper into explicit director
+  and scalar-field validators and removed the old API without an alias.
+- Preserved strict spatial-grid validation where existing callers required it
+  while keeping field utilities compatible with arbitrary leading dimensions.
+- Added generic `ScalarField` output semantics and retained `SField` only as a
+  liquid-crystal scalar-order alias.
+- Migrated `QFieldObject`, defect analysis, field construction, director
+  alignment, and color mapping to the explicit validators.
 
 ### `nematics3d.classes.result_base.ResultBase`
 
@@ -179,7 +205,8 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` | Confirmed |
-| 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` | Confirmed |
+| 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `cf3ea14da0be0a82f12fdffaab515087885fbe53` | Confirmed |
+| 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `cf3ea14da0be0a82f12fdffaab515087885fbe53` | Confirmed |
+| 2026-08-24 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes.py` | `tests/test_datatypes_director_field.py` and downstream tests | `cf3ea14da0be0a82f12fdffaab515087885fbe53` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
