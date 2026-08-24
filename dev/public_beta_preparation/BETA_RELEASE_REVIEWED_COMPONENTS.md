@@ -45,6 +45,58 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.datatypes.Vect` and `as_vector`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public semantic annotation and vector-input validator |
+| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Tests | None; the validator is intentionally covered by direct contract checks and existing downstream tests rather than a dedicated test file |
+| Tutorial | None; these are compact developer-facing input helpers |
+| Review scope | Dimension semantics, real finite values, exact shape, arbitrary positive dimensions, zero-vector policy, optional normalization, validated replacement recovery, logging, naming, public exports, and all active repository callers |
+| Validation | Direct `as_vector()` smoke checks for normalized 3-vectors, arbitrary 5-vectors, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/test_datatypes_check_sn.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `python -m pytest tests/classes/test_q_plane.py -q` (1 passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
+| Reviewed commit | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` |
+| Reviewed date | 2026-08-24 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `Vect(d)` records dimension only as reader-facing semantic metadata and does not provide static shape checking. Near-zero rejection uses the repository's existing absolute norm threshold of `1e-12`. Generated build artifacts are not source-of-truth callers and were not rewritten. |
+
+Summary of changes and evidence:
+
+- Retained the compact `Vect(d)` annotation so vector dimensions remain visible
+  in function signatures while making its reader-facing role explicit.
+- Replaced the mixed-case `as_Vect()` API with `as_vector()` and migrated every
+  active source and development caller without a compatibility alias.
+- Unified exact-shape, real-number, finite-value, zero-vector, normalization,
+  and replacement validation for any positive vector dimension.
+- Confirmed that replacement values follow the same contract and cannot return
+  an invalid fallback silently.
+
+### `nematics3d.datatypes.Tensor` and `as_tensor`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public semantic annotation and tensor-input validator |
+| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Tests | None; the validator is intentionally covered by direct contract checks and existing downstream tests rather than a dedicated test file |
+| Tutorial | None; these are compact developer-facing input helpers |
+| Review scope | Shape semantics, arbitrary positive-rank shapes, real finite values, exact shape, validated replacement recovery, logging, naming, public exports, `as_axes()` integration, grid transforms, plot extents, and all active repository callers |
+| Validation | Direct `as_tensor()` smoke checks for a 2x2 matrix, a rank-three tensor, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/classes/test_q_plane.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
+| Reviewed commit | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` |
+| Reviewed date | 2026-08-24 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `Tensor(shape)` records shape only as reader-facing semantic metadata and does not provide static shape checking. Scalar shape `()` and dimensions of size zero are intentionally unsupported. Generated build artifacts are not source-of-truth callers and were not rewritten. |
+
+Summary of changes and evidence:
+
+- Retained the compact `Tensor(shape)` annotation so exact shapes remain
+  visible in function signatures while making its reader-facing role explicit.
+- Replaced the mixed-case `as_Tensor()` API with `as_tensor()` and migrated
+  every active caller without a compatibility alias.
+- Unified shape-definition, exact-shape, real-number, finite-value, and
+  replacement validation for matrices and higher-rank tensors.
+- Updated `as_axes()`, grid-transform validation, and plot-extent validation to
+  use the normalized interface.
+
 ### `nematics3d.classes.result_base.ResultBase`
 
 | Field | Evidence |
@@ -127,5 +179,7 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` | Confirmed |
+| 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `ea653a2e3ba7a1d847055339bef2b429fe1143d5` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
