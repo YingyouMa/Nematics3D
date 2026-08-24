@@ -10,7 +10,7 @@ from .datatypes import (
     DimensionPeriodicInput,
     Vect,
     as_readonly_array,
-    as_Tensor,
+    as_tensor,
     as_vector,
     as_dimension_info,
     as_points,
@@ -274,7 +274,7 @@ def as_grid_transform(transform, name="grid_transform"):
     if is_grid_transform_identity(transform):
         return transform
 
-    transform = as_Tensor(transform, (3, 3), name=name)
+    transform = as_tensor(transform, (3, 3), name=name)
     axis_lengths = np.linalg.norm(transform, axis=0)
     if np.any(axis_lengths <= 1e-12):
         raise ValueError(f"{name} must have three nonzero column vectors.")
@@ -359,7 +359,7 @@ def apply_linear_transform(
     if is_grid_transform_identity(transform):
         transform_use = transform
     else:
-        transform_use = as_Tensor(transform, (ndim, ndim), name="grid transform")
+        transform_use = as_tensor(transform, (ndim, ndim), name="grid transform")
 
     if offset is None:
         offset_use = None

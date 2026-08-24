@@ -5,7 +5,7 @@ from types import MappingProxyType
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.datatypes import (
     Tensor,
-    as_Tensor,
+    as_tensor,
 )
 from .plot_tube import PlotTube, OptsTube
 from .plot_figure import PlotFigure
@@ -69,7 +69,7 @@ class PlotExtent(PlotTube):
         opts : OptsTube, optional
             Rendering options. Defaults are overridden for extent style.
         """
-        corners = as_Tensor(
+        corners = as_tensor(
             corners, (8, 3), name="The original 8 corner points defining the extent."
         )
         coords, line_index = self._helper_build_edges_from_corners(corners)
