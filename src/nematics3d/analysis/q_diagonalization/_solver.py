@@ -2,14 +2,20 @@
 
 import time
 from dataclasses import dataclass
+from numbers import Integral
 from typing import ClassVar, Union
 
 import numexpr as ne
 import numpy as np
 
-from .classes.result_base import ResultBase
-from .datatypes import QField5, QField9, as_qfield9
-from .logging_decorator import logging_and_warning_decorator
+from ...classes.result_base import ResultBase
+from ...datatypes import QField5, QField9, as_qfield5, as_qfield9
+from ...logging_decorator import logging_and_warning_decorator
+from ._backend import (
+    _resolve_worker_count,
+    diagonalize_qfield5,
+    is_c_backend_available,
+)
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -25,23 +31,16 @@ class QDiagonalizationResult(ResultBase):
         "isotropic_indices": (
             "Index tuples of points handled as numerically isotropic."
         ),
-        "uniaxial_indices": (
-            "Index tuples where the canonical uniaxial frame was applied; its "
-            "degenerate axes may be spatially discontinuous."
-        ),
         "eigenvalues":     "Descending eigenspectrum when biaxial output is requested.",
         "eigenvectors":    "Eigenvector columns matching the descending eigenvalues.",
-        "biaxial_order":   "Biaxial order: 3/2 |lambda_1 - lambda_2|.",
     }
     # fmt: on
 
     S: np.ndarray  # noqa: N815 - conventional public symbol for scalar order
     n: np.ndarray
     isotropic_indices: list[tuple[int, ...]]
-    uniaxial_indices: list[tuple[int, ...]]
     eigenvalues: np.ndarray | None = None
     eigenvectors: np.ndarray | None = None
-    biaxial_order: np.ndarray | None = None
 
 
 def _dominant_eigenpair_q_sd(qxx, qyy, qxy, qxz, qyz):
@@ -358,87 +357,235 @@ def q_diagonalize(
     *,
     is_biaxial: bool = False,
     is_right_handed: bool = False,
+    is_use_c_backend: bool | None = None,
+    worker_count: int | None = None,
     logger=None,
 ) -> QDiagonalizationResult:
     """Diagonalize a symmetric traceless Q-tensor field robustly.
 
     The solver uses an isolated eigenpair followed by a symmetric 2x2 solve in
     its orthogonal plane. This keeps the complete frame orthonormal near a
-    repeated eigenvalue, including perfectly axis-aligned uniaxial tensors.
+    repeated eigenvalue.
 
     Parameters
     ----------
     qtensor : QField5 or QField9
         Q-tensor data with trailing shape ``(..., 5)`` or ``(..., 3, 3)``.
     is_biaxial : bool, optional
-        Whether to return the complete descending eigensystem and biaxial order.
+        Whether to return the complete descending eigensystem.
     is_right_handed : bool, optional
         Whether complete eigenvector frames must be right-handed. Requires
         ``is_biaxial=True``.
+    is_use_c_backend : bool or None, optional
+        Backend selection. ``None`` uses the compiled C backend when available
+        and otherwise falls back to NumExpr. ``True`` requires the C backend;
+        ``False`` forces NumExpr.
+    worker_count : int or None, optional
+        Positive worker count. The C backend uses a Python thread pool whose C
+        loops release the GIL. The NumExpr backend temporarily uses this many
+        NumExpr threads. ``None`` selects each backend's automatic behavior.
 
     Returns
     -------
     QDiagonalizationResult
         Scalar order, dominant director, recovery indices, and optionally the
-        complete eigensystem and biaxial order.
+        complete eigensystem.
 
     Raises
     ------
     TypeError
-        If ``qtensor`` does not have a floating-point dtype.
+        If ``qtensor`` does not have a floating-point dtype, or a backend
+        option has the wrong type.
     ValueError
         If the input is empty or invalid, or a right-handed frame is requested
-        without complete biaxial output.
+        without complete biaxial output, or ``worker_count`` is invalid.
+    ImportError
+        If the compiled backend is required but unavailable.
     """
+    input_tensor = np.asarray(qtensor)
+    logger.debug(
+        f"Received Q-tensor input: shape={input_tensor.shape}, "
+        f"dtype={input_tensor.dtype}.\n"
+        "Options: "
+        f"is_biaxial={is_biaxial}, "
+        f"is_right_handed={is_right_handed}, "
+        f"is_use_c_backend={is_use_c_backend}, "
+        f"worker_count={worker_count}."
+    )
+
     if is_right_handed and not is_biaxial:
         raise ValueError("'is_right_handed=True' requires 'is_biaxial=True'.")
 
+    if is_use_c_backend is not None and not isinstance(is_use_c_backend, bool):
+        raise TypeError("'is_use_c_backend' must be True, False, or None.")
+    if worker_count is not None:
+        if isinstance(worker_count, bool) or not isinstance(worker_count, Integral):
+            raise TypeError("'worker_count' must be a positive integer or None.")
+        worker_count = int(worker_count)
+        if worker_count < 1:
+            raise ValueError("'worker_count' must be a positive integer or None.")
+
+    is_c_available = is_c_backend_available()
+    if is_use_c_backend is True and not is_c_available:
+        raise ImportError(
+            "'is_use_c_backend=True' requires the compiled Nematics3D "
+            "Q-diagonalization extension, but it could not be imported."
+        )
+    is_using_c = is_c_available if is_use_c_backend is None else is_use_c_backend
+    if not is_using_c and worker_count is not None and worker_count > ne.MAX_THREADS:
+        raise ValueError(
+            f"'worker_count' cannot exceed the NumExpr limit of {ne.MAX_THREADS} "
+            "when the Python backend is selected."
+        )
+
+    logger.debug("Preparing and validating Q-tensor input.")
     stage_start = time.perf_counter()
-    full_tensor = as_qfield9(
-        qtensor, name="Q tensor to diagonalize", is_strict_3d_field=False
-    )
-    if full_tensor.size == 0:
+    if input_tensor.ndim >= 1 and input_tensor.shape[-1] == 5:
+        input_representation = "compact five-component"
+        compact_tensor = as_qfield5(
+            input_tensor,
+            name="Q tensor to diagonalize",
+            is_strict_3d_field=False,
+        )
+    else:
+        input_representation = "full 3x3"
+        full_tensor = as_qfield9(
+            input_tensor,
+            name="Q tensor to diagonalize",
+            is_strict_3d_field=False,
+        )
+        compact_tensor = as_qfield5(
+            full_tensor,
+            name="Q tensor to diagonalize",
+            is_strict_3d_field=False,
+            is_validate_tensor=False,
+        )
+        del full_tensor
+    if compact_tensor.size == 0:
         raise ValueError(
             "'qtensor' must contain at least one Q tensor; "
-            f"got shape {full_tensor.shape}."
+            f"got shape {input_tensor.shape}."
         )
-    tensor_count = full_tensor.size // 9
-    logger.debug(f"Computing tensor invariants for {tensor_count} Q tensor(s).")
-    calculation_dtype = np.result_type(full_tensor.dtype, np.float64)
-    full_tensor = np.asarray(full_tensor, dtype=calculation_dtype)
-    tensor_abs_max = np.max(np.abs(full_tensor), axis=(-2, -1))
+    tensor_count = compact_tensor.size // 5
+    logger.debug(
+        f"Prepared {tensor_count:,} Q tensor(s) from {input_representation} "
+        f"input in {time.perf_counter() - stage_start:.3f} seconds."
+    )
+
+    if is_using_c:
+        actual_worker_count = _resolve_worker_count(worker_count, tensor_count)
+        backend_label = "compiled C"
+        worker_label = f"{actual_worker_count} worker(s)"
+    else:
+        actual_worker_count = (
+            ne.get_num_threads() if worker_count is None else worker_count
+        )
+        backend_label = "NumExpr"
+        worker_label = f"{actual_worker_count} thread(s)"
+    calculation_label = "complete-eigensystem" if is_biaxial else "principal-eigenpair"
+    logger.debug(
+        f"Selected {backend_label} {calculation_label} solver with {worker_label}."
+    )
+
+    logger.debug(f"Classifying {tensor_count:,} Q tensor(s) for near isotropy.")
+    stage_start = time.perf_counter()
+    calculation_dtype = np.result_type(compact_tensor.dtype, np.float64)
+    qxx = compact_tensor[..., 0]
+    qyy = compact_tensor[..., 3]
+    tensor_abs_max = np.maximum(
+        np.max(np.abs(compact_tensor), axis=-1),
+        np.abs(qxx + qyy),
+    )
     isotropic_tolerance = (
-        32 * np.finfo(full_tensor.dtype).eps * np.maximum(1.0, tensor_abs_max)
+        32 * np.finfo(calculation_dtype).eps * np.maximum(1.0, tensor_abs_max)
     )
     is_isotropic = tensor_abs_max <= isotropic_tolerance
-    del isotropic_tolerance
+    del isotropic_tolerance, tensor_abs_max
+    isotropic_count = int(np.count_nonzero(is_isotropic))
     logger.debug(
-        f"Computed tensor invariants for {tensor_count} Q tensor(s) in "
+        f"Classified {tensor_count:,} Q tensor(s) in "
+        f"{time.perf_counter() - stage_start:.3f} seconds: "
+        f"{isotropic_count:,} near-isotropic and "
+        f"{tensor_count - isotropic_count:,} non-isotropic."
+    )
+
+    logger.debug(
+        f"Computing {tensor_count:,} {calculation_label} result(s) with the "
+        f"{backend_label} solver."
+    )
+    stage_start = time.perf_counter()
+    tensor_components = (
+        compact_tensor[..., 0],
+        compact_tensor[..., 3],
+        compact_tensor[..., 1],
+        compact_tensor[..., 2],
+        compact_tensor[..., 4],
+    )
+    if is_using_c:
+        backend_values, backend_vectors, actual_worker_count = diagonalize_qfield5(
+            compact_tensor,
+            is_biaxial=is_biaxial,
+            worker_count=worker_count,
+        )
+    else:
+        previous_numexpr_threads = ne.get_num_threads()
+        if worker_count is not None:
+            ne.set_num_threads(worker_count)
+        try:
+            if is_biaxial:
+                backend_values, backend_vectors = _eigh3_q_sd(*tensor_components)
+            else:
+                backend_values, backend_vectors = _dominant_eigenpair_q_sd(
+                    *tensor_components
+                )
+        finally:
+            if worker_count is not None:
+                ne.set_num_threads(previous_numexpr_threads)
+    logger.debug(
+        f"Computed {tensor_count:,} {calculation_label} result(s) in "
         f"{time.perf_counter() - stage_start:.3f} seconds."
     )
 
-    stage_start = time.perf_counter()
-    logger.debug(f"Computing the largest eigenvalue for {tensor_count} Q tensor(s).")
-    tensor_components = (
-        full_tensor[..., 0, 0],
-        full_tensor[..., 1, 1],
-        full_tensor[..., 0, 1],
-        full_tensor[..., 0, 2],
-        full_tensor[..., 1, 2],
-    )
-    if not is_biaxial:
-        del tensor_abs_max
     if is_biaxial:
-        ascending_values, ascending_vectors = _eigh3_q_sd(*tensor_components)
+        logger.debug("Ordering and normalizing complete eigensystem outputs.")
+        stage_start = time.perf_counter()
+        ascending_values, ascending_vectors = backend_values, backend_vectors
         ascending_values[is_isotropic] = 0.0
         ascending_vectors[is_isotropic] = np.eye(3)
         descending_values = ascending_values[..., ::-1]
         descending_vectors = ascending_vectors[..., :, ::-1]
         descending_vectors[is_isotropic] = np.eye(3)
+        logger.debug(
+            "Ordered and normalized complete eigensystem outputs in "
+            f"{time.perf_counter() - stage_start:.3f} seconds."
+        )
+
+    if is_biaxial and is_right_handed:
+        logger.debug(
+            f"Converting {tensor_count:,} complete eigenvector frame(s) to "
+            "right-handed orientation."
+        )
+        stage_start = time.perf_counter()
+        is_left_handed = np.linalg.det(descending_vectors) < 0.0
+        left_handed_count = int(np.count_nonzero(is_left_handed))
+        descending_vectors[..., :, -1] = np.where(
+            is_left_handed[..., None],
+            -descending_vectors[..., :, -1],
+            descending_vectors[..., :, -1],
+        )
+        logger.debug(
+            f"Converted {tensor_count:,} eigenvector frame(s) in "
+            f"{time.perf_counter() - stage_start:.3f} seconds: "
+            f"{left_handed_count:,} frame(s) required an orientation flip."
+        )
+
+    logger.debug("Finalizing diagonalization results.")
+    stage_start = time.perf_counter()
+    if is_biaxial:
         largest_value = descending_values[..., 0]
         director = descending_vectors[..., :, 0]
     else:
-        largest_value, director = _dominant_eigenpair_q_sd(*tensor_components)
+        largest_value, director = backend_values, backend_vectors
         largest_value[is_isotropic] = 0.0
         director[is_isotropic] = np.array([1.0, 0.0, 0.0])
     if is_biaxial:
@@ -446,63 +593,33 @@ def q_diagonalize(
     else:
         largest_value *= 1.5
         scalar_order = largest_value
+    isotropic_indices = [
+        tuple(int(coordinate) for coordinate in index)
+        for index in np.argwhere(is_isotropic)
+    ]
+    if is_biaxial:
+        eigenvalues = descending_values
+        eigenvectors = descending_vectors
+    else:
+        eigenvalues = None
+        eigenvectors = None
+
+    result = QDiagonalizationResult(
+        S=scalar_order,
+        n=director,
+        isotropic_indices=isotropic_indices,
+        eigenvalues=eigenvalues,
+        eigenvectors=eigenvectors,
+    )
     logger.debug(
-        f"Computed the director for {tensor_count} Q tensor(s) in "
+        f"Finalized diagonalization results in "
         f"{time.perf_counter() - stage_start:.3f} seconds."
     )
 
-    if is_biaxial:
-        spectral_scale = np.max(np.abs(descending_values), axis=-1)
-        uniaxial_tolerance = np.maximum(
-            32 * np.sqrt(np.finfo(full_tensor.dtype).eps) * spectral_scale,
-            64 * np.finfo(full_tensor.dtype).eps * np.maximum(1.0, tensor_abs_max),
-        )
-        is_uniaxial = (~is_isotropic) & (
-            np.abs(descending_values[..., 1] - descending_values[..., 2])
-            <= uniaxial_tolerance
-        )
-        if is_right_handed:
-            is_left_handed = np.linalg.det(descending_vectors) < 0.0
-            descending_vectors[..., :, -1] = np.where(
-                is_left_handed[..., None],
-                -descending_vectors[..., :, -1],
-                descending_vectors[..., :, -1],
-            )
-    else:
-        is_uniaxial = np.zeros(full_tensor.shape[:-2], dtype=bool)
-
-    isotropic_count = int(np.count_nonzero(is_isotropic))
     if isotropic_count:
         logger.warning(
             f"{isotropic_count} near-isotropic grid point(s). Set S to 0 and "
             "assigned the default director [1, 0, 0] at those points. Inspect "
             "result.isotropic_indices before interpreting the director."
         )
-    isotropic_indices = [
-        tuple(int(coordinate) for coordinate in index)
-        for index in np.argwhere(is_isotropic)
-    ]
-    uniaxial_indices = [
-        tuple(int(coordinate) for coordinate in index)
-        for index in np.argwhere(is_uniaxial)
-    ]
-
-    if is_biaxial:
-        eigenvalues = descending_values
-        eigenvectors = descending_vectors
-        biaxial_order = 1.5 * np.abs(eigenvalues[..., 1] - eigenvalues[..., 2])
-        biaxial_order = np.where(is_uniaxial, 0.0, biaxial_order)
-    else:
-        eigenvalues = None
-        eigenvectors = None
-        biaxial_order = None
-
-    return QDiagonalizationResult(
-        S=scalar_order,
-        n=director,
-        isotropic_indices=isotropic_indices,
-        uniaxial_indices=uniaxial_indices if is_biaxial else [],
-        eigenvalues=eigenvalues,
-        eigenvectors=eigenvectors,
-        biaxial_order=biaxial_order,
-    )
+    return result

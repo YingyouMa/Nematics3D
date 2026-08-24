@@ -12,7 +12,7 @@ from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
 from nematics3d.field import n_color_immerse
-from nematics3d.q_diagonalization import q_diagonalize
+from nematics3d.analysis.q_diagonalization import q_diagonalize
 from nematics3d.geometry import triangulate_surface_points
 from nematics3d.disclination import defect_detect_surface
 from .grid_field import GridInterpolator

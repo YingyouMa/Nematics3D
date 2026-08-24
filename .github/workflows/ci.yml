@@ -38,14 +38,16 @@ jobs:
       - name: Check Black formatting
         run: >-
           black --check
-          src/nematics3d/q_diagonalization.py
+          setup.py
+          src/nematics3d/analysis/q_diagonalization
           src/nematics3d/classes/result_base.py
           tests/core
 
       - name: Run Ruff
         run: >-
           ruff check --select E,F,W,N,I
-          src/nematics3d/q_diagonalization.py
+          setup.py
+          src/nematics3d/analysis/q_diagonalization
           src/nematics3d/classes/result_base.py
           tests/core
 
@@ -113,7 +115,12 @@ jobs:
           import nematics3d
 
           q_tensor = np.diag([0.5, -0.25, -0.25])
-          result = nematics3d.q_diagonalize(q_tensor, log_mode="none")
+          result = nematics3d.q_diagonalize(
+              q_tensor,
+              is_use_c_backend=True,
+              worker_count=1,
+              log_mode="none",
+          )
 
           assert np.isclose(result.S, 0.75)
           assert np.isclose(abs(result.n[0]), 1.0)

@@ -22,7 +22,7 @@ from .classes.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
 from .field import getQ
 from .geometry import align_axes_to_reference, axes_angle_changes_deg
-from .q_diagonalization import q_diagonalize
+from .analysis.q_diagonalization import q_diagonalize
 
 
 @dataclass(slots=True, frozen=True, repr=False)

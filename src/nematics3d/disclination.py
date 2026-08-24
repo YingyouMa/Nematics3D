@@ -23,7 +23,7 @@ from .datatypes import (
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
 from .field import align_stack, add_periodic_boundary
-from .q_diagonalization import q_diagonalize
+from .analysis.q_diagonalization import q_diagonalize
 
 # from .debug.debug_store import DEBUG_VARS
 

@@ -14,6 +14,7 @@ from .fourier import (
     act_mean_subtracted_values,
     act_radial_spectrum,
 )
+from .q_diagonalization import QDiagonalizationResult, q_diagonalize
 from .relaxation import (
     FitRelaxationResult,
     RelaxationLengthResult,
@@ -27,6 +28,7 @@ __all__ = [
     "FitRelaxationResult",
     "FourierResult",
     "RadialSpectrumResult",
+    "QDiagonalizationResult",
     "RelaxationLengthResult",
     "ThresholdRelaxationResult",
     "act_correlation",
@@ -38,4 +40,5 @@ __all__ = [
     "act_mean_subtracted_values",
     "act_radial_spectrum",
     "act_relaxation_length",
+    "q_diagonalize",
 ]

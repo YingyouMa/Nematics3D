@@ -553,8 +553,8 @@ use without a dedicated tutorial.
 ## First application: `q_diagonalize`
 
 The first planned use of this workflow is
-`nematics3d.q_diagonalization.q_diagonalize` in
-`src/nematics3d/q_diagonalization.py`.
+`nematics3d.analysis.q_diagonalization.q_diagonalize` in
+`src/nematics3d/analysis/q_diagonalization/`.
 
 Its focused review should include:
 

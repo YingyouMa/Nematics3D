@@ -125,7 +125,7 @@ from ..datatypes import (
     as_bool,
 )
 from ..field import getQ
-from ..q_diagonalization import q_diagonalize
+from ..analysis.q_diagonalization import q_diagonalize
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
     as_grid_transform,

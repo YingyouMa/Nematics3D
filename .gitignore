@@ -3,4 +3,6 @@ build/
 dist/
 dist_test/
 *.egg-info/
+*.pyd
+*.so
 example/data/record.txt

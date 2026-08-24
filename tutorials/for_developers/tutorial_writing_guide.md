@@ -1,6 +1,6 @@
 # Tutorial Writing Guide
 
-This guide records the writing and formatting conventions for Nematics3D
+This guide records the writing and formatting conventions for `Nematics3D`
 tutorials. Apply these rules to new tutorials and to existing tutorials when
 they are substantially revised.
 
@@ -30,6 +30,29 @@ When a sentence refers to both the mathematical quantity and a Python object,
 distinguish them explicitly. For example:
 
 > The mathematical tensor $Q$ is stored in the Python array `Q_data`.
+
+## Software and package names in prose
+
+Whenever a repository, project, software package, or numerical library name
+appears in tutorial prose, render it as inline code. Examples include
+`Nematics3D`, `NumPy`, `NumExpr`, `SciPy`, `PyVista`, and `BLAS`. This makes
+software names visually distinct from surrounding prose and keeps their
+spelling consistent across tutorials.
+
+This rule applies to headings, paragraphs, lists, tables, captions, and link
+descriptions. Do not leave software names unformatted or use bold text or
+italics in place of inline code.
+
+Keep import names and longer API identifiers in inline code as well, but
+preserve their exact spelling and capitalization:
+
+- write "`Nematics3D` provides this convention", not "Nematics3D provides
+  this convention";
+- write "the `NumPy` implementation", not "the NumPy implementation";
+- write "the `NumExpr` backend", not "the NumExpr backend";
+- write "import the `nematics3d` package" when referring specifically to the
+  Python package;
+- keep identifiers such as `nematics3d.q_diagonalize()` in code style.
 
 ## Skippable setup sections
 

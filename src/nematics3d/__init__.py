@@ -1,5 +1,5 @@
 from .field import *
-from .q_diagonalization import *
+from .analysis.q_diagonalization import *
 from .grid import *
 from .principal_plane import *
 from .disclination import *
@@ -29,7 +29,11 @@ from .classes.q_plane import *
 from .classes.vector_plane import *
 from .classes.q_surface import *
 from .general import *
-from .geometry import triangulate_surface_points, check_triangulation_quality, TriangulationQuality
+from .geometry import (
+    triangulate_surface_points,
+    check_triangulation_quality,
+    TriangulationQuality,
+)
 from .logging_decorator import logging_and_warning_decorator
 from .classes.visual import qt
 
