@@ -41,7 +41,7 @@ director_xy = np.stack(
 )
 director = np.repeat(director_xy[:, :, None, :], NZ, axis=2)
 S = np.full((NX, NY, NZ), S_VALUE, dtype=np.float64)
-Q = n3d.getQ(director, S=S)
+Q = n3d.get_q(director, S=S)
 
 rng = np.random.default_rng(RNG_SEED)
 noise_2d = rng.standard_normal((NX, NY, 5))

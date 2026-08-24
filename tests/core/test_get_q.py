@@ -1,0 +1,82 @@
+import numpy as np
+import pytest
+
+from nematics3d.analysis.q_diagonalization import q_diagonalize
+from nematics3d.field import get_q
+
+
+def test_get_q_constructs_uniaxial_tensor_and_broadcasts_fields():
+    directors = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]])
+    scalar_order = np.array([[0.6], [0.3]])
+
+    result = get_q(directors[:, None, :], S=scalar_order)
+
+    assert result.shape == (2, 1, 3, 3)
+    np.testing.assert_allclose(np.trace(result, axis1=-2, axis2=-1), 0.0, atol=1e-15)
+    np.testing.assert_allclose(result, np.swapaxes(result, -1, -2))
+    np.testing.assert_allclose(result[0, 0], np.diag([0.4, -0.2, -0.2]))
+    np.testing.assert_allclose(result[1, 0], np.diag([-0.1, 0.2, -0.1]))
+
+
+def test_get_q_defaults_to_unit_scalar_order():
+    expected = np.diag([2.0 / 3.0, -1.0 / 3.0, -1.0 / 3.0])
+    np.testing.assert_allclose(get_q([1.0, 0.0, 0.0]), expected)
+
+
+@pytest.mark.parametrize("biaxial_order", [-0.2, 0.2])
+def test_get_q_constructs_signed_biaxial_tensor(biaxial_order):
+    result = get_q(
+        [1.0, 0.0, 0.0],
+        S=0.6,
+        m=[0.0, 1.0, 0.0],
+        P=biaxial_order,
+    )
+
+    expected = np.diag([0.4, -0.2 + biaxial_order, -0.2 - biaxial_order])
+    np.testing.assert_allclose(result, expected, atol=1e-15)
+    np.testing.assert_allclose(np.trace(result), 0.0, atol=1e-15)
+
+
+def test_get_q_round_trips_complete_diagonalization():
+    axes, _ = np.linalg.qr(np.random.default_rng(7).normal(size=(3, 3)))
+    n = axes[:, 0]
+    m = axes[:, 1]
+    original = get_q(n, S=0.75, m=m, P=0.2)
+
+    result = q_diagonalize(original, is_biaxial=True, log_mode="none")
+    recovered_p = (result.eigenvalues[..., 1] - result.eigenvalues[..., 2]) / 2.0
+    reconstructed = get_q(
+        result.n,
+        S=result.S,
+        m=result.eigenvectors[..., :, 1],
+        P=recovered_p,
+    )
+
+    np.testing.assert_allclose(reconstructed, original, atol=1e-12)
+
+
+def test_get_q_is_invariant_to_director_signs():
+    positive = get_q([1.0, 0.0, 0.0], S=0.7, m=[0.0, 1.0, 0.0], P=0.1)
+    negative = get_q([-1.0, 0.0, 0.0], S=0.7, m=[0.0, -1.0, 0.0], P=0.1)
+    np.testing.assert_allclose(positive, negative)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"m": [0.0, 1.0, 0.0]}, "must be supplied together"),
+        ({"P": 0.1}, "must be supplied together"),
+        ({"m": [1.0, 1.0, 0.0], "P": 0.1}, "must be orthogonal"),
+    ],
+)
+def test_get_q_rejects_invalid_biaxial_inputs(kwargs, message):
+    with pytest.raises(ValueError, match=message):
+        get_q([1.0, 0.0, 0.0], **kwargs)
+
+
+def test_get_q_rejects_zero_directors_and_incompatible_shapes():
+    with pytest.raises(ValueError, match="zero directors"):
+        get_q([0.0, 0.0, 0.0])
+
+    with pytest.raises(ValueError, match="must be broadcastable"):
+        get_q(np.ones((2, 3)), S=np.ones(3))

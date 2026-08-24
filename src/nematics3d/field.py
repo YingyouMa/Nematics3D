@@ -8,53 +8,101 @@ import numpy as np
 
 # from .general import *
 from .datatypes import (
+    DimensionFlagInput,
+    GeneralField,
     QField9,
-    nField,
     SField,
+    as_dimension_info,
     as_director_field,
     as_scalar_field,
-    GeneralField,
-    DimensionFlagInput,
-    as_dimension_info,
+    nField,
 )
-from .logging_decorator import logging_and_warning_decorator
 
 
-@logging_and_warning_decorator()
-def getQ(n: nField, S: SField = None, logger=None) -> QField9:
-    #! biaxial
-    """
-    Compute the Q-tensor field from a given director field and optional scalar order parameter.
+def get_q(
+    n: nField,
+    S: SField | None = None,  # noqa: N803 - conventional scalar-order symbol
+    *,
+    m: nField | None = None,
+    P: SField | None = None,  # noqa: N803 - conventional biaxial-order symbol
+) -> QField9:
+    """Construct a symmetric traceless Q-tensor field.
 
-    This function constructs a symmetric, traceless, uniaxial Q-tensor of the form:
-        Q_ij = S * (n_i n_j - δ_ij / 3)
-
-    If `S` is not provided, the tensor is computed assuming S = 1.
+    The uniaxial convention is ``Q = S * (n n - I / 3)``. When ``m`` and
+    ``P`` are supplied, the biaxial contribution is ``P * (m m - l l)``,
+    where ``l = cross(n, m)``. Directors are normalized during validation.
 
     Parameters
     ----------
     n : nField
-        Director field of shape (..., 3).
-
-    S : SField, optional
-        Scalar order parameter field of shape (...,). If provided, scales the Q-tensor accordingly.
+        Primary director data with trailing shape ``(..., 3)``.
+    S : SField or None, optional
+        Uniaxial scalar-order data. ``None`` is equivalent to ``1``.
+    m : nField or None, optional
+        Secondary director data with trailing shape ``(..., 3)``. It must be
+        supplied together with ``P``.
+    P : SField or None, optional
+        Signed biaxial-order data. It must be supplied together with ``m``.
 
     Returns
     -------
-    Q : QField9
-        The computed Q-tensor field of shape (..., 3, 3), symmetric and traceless.
+    QField9
+        Symmetric traceless tensors with trailing shape ``(..., 3, 3)``.
+
+    Raises
+    ------
+    ValueError
+        If a director is zero, ``m`` and ``P`` are not supplied together,
+        field shapes cannot broadcast, or biaxial directors are not
+        orthogonal.
     """
+    n = as_director_field(n, name="n", is_zero_allowed=False)
+    scalar_order = as_scalar_field(1.0 if S is None else S, name="S")
 
-    n = as_director_field(n, name="n")
+    is_m_given = m is not None
+    is_p_given = P is not None
+    if is_m_given != is_p_given:
+        raise ValueError("'m' and 'P' must be supplied together.")
 
-    Q = np.einsum("...i, ...j -> ...ij", n, n) - np.eye(3) / 3
-    if S is not None:
-        S = as_scalar_field(S, name="S")
-        Q = np.einsum("..., ...ij -> ...ij", S, Q)
-    else:
-        logger.warning(">>> No S input. Set to be 1.")
+    leading_shapes = [n.shape[:-1], scalar_order.shape]
+    if is_m_given:
+        m = as_director_field(m, name="m", is_zero_allowed=False)
+        biaxial_order = as_scalar_field(P, name="P")
+        leading_shapes.extend((m.shape[:-1], biaxial_order.shape))
 
-    return Q
+    try:
+        field_shape = np.broadcast_shapes(*leading_shapes)
+    except ValueError as error:
+        raise ValueError(
+            "The leading shapes of n, S, m, and P must be broadcastable. "
+            f"Got {leading_shapes}."
+        ) from error
+
+    n = np.broadcast_to(n, field_shape + (3,))
+    scalar_order = np.broadcast_to(scalar_order, field_shape)
+    identity = np.eye(3, dtype=float)
+    q_tensor = scalar_order[..., None, None] * (
+        np.einsum("...i,...j->...ij", n, n) - identity / 3.0
+    )
+
+    if is_m_given:
+        m = np.broadcast_to(m, field_shape + (3,))
+        biaxial_order = np.broadcast_to(biaxial_order, field_shape)
+        dot_products = np.einsum("...i,...i->...", n, m)
+        if not np.all(np.isclose(dot_products, 0.0, rtol=0.0, atol=1e-8)):
+            max_abs_dot = float(np.max(np.abs(dot_products)))
+            raise ValueError(
+                "'n' and 'm' must be orthogonal at every field point. "
+                f"Maximum absolute dot product: {max_abs_dot:.6g}."
+            )
+
+        third_director = np.cross(n, m)
+        q_tensor += biaxial_order[..., None, None] * (
+            np.einsum("...i,...j->...ij", m, m)
+            - np.einsum("...i,...j->...ij", third_director, third_director)
+        )
+
+    return q_tensor
 
 
 def add_periodic_boundary(

@@ -125,7 +125,7 @@ from ..datatypes import (
     Unset,
     as_bool,
 )
-from ..field import getQ
+from ..field import get_q
 from ..analysis.q_diagonalization import q_diagonalize
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
@@ -655,7 +655,7 @@ class QFieldObject(ClassBase):
                         f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
                     )
                 object.__setattr__(
-                    self, "raw_Q", as_qfield5(getQ(self.raw_n, S=self.raw_S))
+                    self, "raw_Q", as_qfield5(get_q(self.raw_n, S=self.raw_S))
                 )
             else:
                 if self.raw_Q is not UNSET:

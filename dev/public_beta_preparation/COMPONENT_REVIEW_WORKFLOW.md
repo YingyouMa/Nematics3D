@@ -589,7 +589,7 @@ Its focused review should include:
    and invalid-input behavior.
 2. Preserve and improve the existing isotropic and analytic-director fallback
    tests.
-3. Add `getQ` to `q_diagonalize` round-trip tests.
+3. Add `get_q()` to `q_diagonalize()` round-trip tests.
 4. Compare randomized symmetric traceless tensors with `np.linalg.eigh`.
 5. Verify eigenvalue, eigenvector, normalization, and sign-equivalence
    invariants.

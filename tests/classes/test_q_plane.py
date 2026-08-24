@@ -19,7 +19,7 @@ if "nematics3d" not in sys.modules:
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
 from nematics3d.classes.plane_grid import OptsPlaneGrid
 from nematics3d.classes.q_plane import QPlane
-from nematics3d.field import getQ
+from nematics3d.field import get_q
 
 
 class TestQPlane(unittest.TestCase):
@@ -27,7 +27,7 @@ class TestQPlane(unittest.TestCase):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 2)))
         director = np.zeros((3, 3, 2, 3), dtype=float)
         director[..., 0] = 1.0
-        q_values = getQ(director, S=np.ones((3, 3, 2), dtype=float))
+        q_values = get_q(director, S=np.ones((3, 3, 2), dtype=float))
         field = dataset.act_add_field("Q", q_values)
         interpolator = field.act_add_interpolator()
 

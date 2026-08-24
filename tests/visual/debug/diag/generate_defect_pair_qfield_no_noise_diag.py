@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from nematics3d import q_diagonalize
-from nematics3d.field import getQ
+from nematics3d.field import get_q
 
 NX = NY = NZ = 128
 S_VALUE = 1.0
@@ -41,7 +41,7 @@ def main():
     )
     director = np.repeat(director_xy[:, :, None, :], NZ, axis=2)
     S_input = np.full((NX, NY, NZ), S_VALUE, dtype=np.float64)
-    Q = getQ(director, S=S_input, log_mode="none")
+    Q = get_q(director, S=S_input)
 
     diagonalization = q_diagonalize(Q)
     S_diag, n_diag = diagonalization.S, diagonalization.n
