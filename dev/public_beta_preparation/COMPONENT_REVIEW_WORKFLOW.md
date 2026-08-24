@@ -20,6 +20,31 @@ Related documents:
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) describes repository-wide
   contribution conventions.
 
+## Practical completion standard
+
+This workflow is a comprehensive set of questions to consider, not a demand
+that every component mechanically satisfy every possible checkbox. Applying
+all possible tests, documentation sections, benchmarks, downstream checks, and
+packaging exercises to every function can create work disproportionate to the
+component's importance and risk. Reviewers should apply the items that are
+material to the component under review.
+
+When deciding what "complete" means in practice, use the confirmed
+[`q_diagonalize()` review](BETA_RELEASE_REVIEWED_COMPONENTS.md#nematics3danalysisq_diagonalizationq_diagonalize)
+as the repository's reference for depth, evidence, and reasonable restraint.
+A simpler or lower-risk function may require less work; a more consequential
+component may require more. A review does not need to exceed that example
+merely to demonstrate compliance with this document.
+
+An item may be marked not applicable, explicitly deferred by the maintainer,
+or retained as a documented limitation when the decision and its consequence
+are recorded. This flexibility does not permit skipping correctness, an
+explicit contract, meaningful focused tests, input and failure review, public
+documentation where applicable, or final validation evidence. If an unrelated
+repository or environment problem blocks the full test suite, isolate and
+record the blocker and pass the relevant focused and broader tests instead of
+expanding the component review into an unrelated repair project.
+
 ## Core principle
 
 Define the behavior that the project intends to support, express that behavior
@@ -46,7 +71,7 @@ Selected
   -> Formatting and static checks passed
   -> Logging decision reviewed
   -> Focused tests passed
-  -> Full suite passed
+  -> Broader validation completed
   -> Confirmed
 ```
 
@@ -513,7 +538,9 @@ A component is `Confirmed` only when all of the following are true:
       where material.
 - [ ] Formatting and static checks pass.
 - [ ] Focused tests pass in the `Nematics3D` conda environment.
-- [ ] The relevant broader test suite passes.
+- [ ] The relevant broader test suite passes, or an unrelated blocker has been
+      isolated and recorded with the applicable focused and broader tests
+      passing.
 - [ ] The final diff has been inspected manually.
 - [ ] Validation evidence and the reviewed commit are recorded.
 

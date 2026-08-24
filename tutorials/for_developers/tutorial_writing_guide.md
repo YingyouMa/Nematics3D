@@ -4,6 +4,20 @@ This guide records the writing and formatting conventions for `Nematics3D`
 tutorials. Apply these rules to new tutorials and to existing tutorials when
 they are substantially revised.
 
+## Practical completion standard
+
+This guide is a collection of writing tools, not a checklist that every
+tutorial must satisfy item by item. Applying every possible section and rule
+to every function can create disproportionate work and make a tutorial longer
+than its subject warrants. Select the sections that materially help readers,
+and omit optional sections that have no useful content.
+
+When judgment is needed, use the
+[`q_diagonalize()` tutorial](../field/q_diagonalize.ipynb) as the repository's
+practical reference for expected completeness, structure, and restraint. A
+tutorial does not need to exceed that example merely to demonstrate compliance
+with this guide.
+
 ## Mathematical quantities in prose
 
 Use LaTeX for mathematical and physical quantities whenever they appear in
