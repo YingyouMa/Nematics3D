@@ -54,9 +54,9 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | Tests | [`tests/core/test_q_diagonalization.py`](../../tests/core/test_q_diagonalization.py) |
 | Tutorial | [`tutorials/classes/ResultBase/ResultBase.ipynb`](../../tutorials/classes/ResultBase/ResultBase.ipynb) |
 | Review scope | Dataclass field discovery, attribute and key access, dictionary-like inspection, shallow dictionary conversion, field descriptions, representation, error behavior exercised by the concrete diagonalization result, documentation, formatting, and logging |
-| Validation | `conda run -n Nematics3D pytest -q tests/core/test_q_diagonalization.py` (13 passed, 2 subtests passed); `black --check src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; `ruff check --select E,F,W,N,I src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; in-memory syntax compile; notebook validation; `git diff --check` |
-| Reviewed commit | `55517d5322eafe206369e8881ee6da038121ac84` |
-| Reviewed date | 2026-08-19 |
+| Validation | `conda run -n Nematics3D pytest -q tests/core/test_q_diagonalization.py` (10 passed, 8 subtests passed); `black --check src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; `ruff check --select E,F,W,N,I src/nematics3d/classes/result_base.py tests/core/test_q_diagonalization.py`; in-memory syntax compile; notebook validation; `git diff --check` |
+| Reviewed commit | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` |
+| Reviewed date | 2026-08-24 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Validation intentionally uses `QDiagonalizationResult` as the sole concrete result subclass. Other result subclasses and their scientific functions are outside this review. The existing `get()` behavior was retained by explicit decision. |
 
@@ -72,9 +72,45 @@ Summary of changes and evidence:
 - Documented the user interface, repository-developer subclassing conventions,
   direct construction relationships, logging decision, and the restriction
   against field names that hide inherited interface methods.
-- The focused diagonalization test file passes all thirteen tests, and the reviewed
-  source and test file pass Black, Ruff, syntax, notebook, and whitespace
-  validation.
+- The focused diagonalization test file passes all ten tests and eight
+  parameterized subtests, and the reviewed source and test file pass Black,
+  Ruff, syntax, notebook, and whitespace validation.
+
+### `nematics3d.analysis.q_diagonalization.q_diagonalize`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public scientific function with private Python and compiled C backends |
+| Source | [`src/nematics3d/analysis/q_diagonalization/`](../../src/nematics3d/analysis/q_diagonalization/) |
+| Build configuration | [`setup.py`](../../setup.py), [`pyproject.toml`](../../pyproject.toml), and [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
+| Tests | [`tests/core/test_q_diagonalization.py`](../../tests/core/test_q_diagonalization.py) and [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
+| Tutorial | [`tutorials/field/q_diagonalize.ipynb`](../../tutorials/field/q_diagonalize.ipynb) |
+| Review scope | Public Q5/Q9 contract, named result, principal-only and complete eigensystems, C and `NumExpr` backend selection, Python worker threading, isotropic classification, near-degenerate orthonormality, optional right-handed frames, validation and errors, logging, performance documentation, packaging, exports, and direct callers |
+| Validation | `python -m pytest tests/core -q` (25 passed, 31 subtests passed); focused `tests/core/test_q_diagonalization.py` run (10 passed, 8 subtests passed); `black --check setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; `ruff check --select E,F,W,N,I setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; in-memory syntax compile; notebook JSON, code-cell, local-link, and stale-term validation; `git diff --check`; isolated `python -m build`; wheel installation and public-API smoke test outside the repository |
+| Reviewed commit | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` |
+| Reviewed date | 2026-08-24 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The public scalar order is defined as $S=3\lambda_{\max}/2$, so negative-$S$ conventions for oblate or anti-nematic systems are unsupported. Isotropic directors are deterministic placeholders. Individual eigenvectors remain physically non-unique in degenerate subspaces, and director sign is intentionally unspecified. A dedicated `getQ` round trip and additional downstream boundary tests were deferred by maintainer decision. The wider non-visual suite remains blocked during collection by pre-existing `ClassBase`/`HostBase` test incompatibilities; Windows VTK cleanup also emits unrelated OpenGL errors. The clean local wheel build and smoke test covered Windows CPython 3.12; Linux compilation is configured in CI, while a macOS wheel was not built locally. |
+
+Summary of changes and evidence:
+
+- Replaced the earlier monolithic implementation with a focused analysis
+  package containing a robust traceless symmetric eigensolver, an optional C
+  extension, and a small backend/threading adapter.
+- Confirmed C and `NumExpr` agreement, worker-count consistency, descending
+  eigenvalue ordering, reconstruction, right-handed frames, isotropic
+  conventions, empty-input rejection, and near-degenerate orthonormality
+  against independent `numpy.linalg.eigh()` results.
+- Kept the default low-memory path limited to the dominant eigenpair and
+  documented the complete-eigensystem path, numerical design, sign and
+  degeneracy conventions, backend selection, staged logging, and measured
+  performance.
+- Built both sdist and Windows CPython 3.12 wheel in an isolated build
+  environment. Installed the wheel into a temporary environment outside the
+  repository and successfully forced the compiled C principal and complete
+  paths, right-handed conversion, and the `NumExpr` fallback.
+- Updated public exports and direct callers, removed the obsolete compatibility
+  module, and added Linux/Windows core CI plus an installed-wheel smoke job.
 
 ## Stale review records
 
@@ -91,4 +127,5 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-08-19 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `55517d5322eafe206369e8881ee6da038121ac84` | Confirmed |
+| 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
+| 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
