@@ -238,7 +238,11 @@ class QPlane(InterpolatePlane):
         shape_all = np.shape(grid_all)[:2]
         n_all = np.reshape(n_all, (*shape_all, 1, 3))
 
-        defect_plane_index = defect_detect(n_all, planes=(False, False, True))  #!!! pbc
+        defect_plane_index = defect_detect(
+            n_all,
+            planes=(False, False, True),
+            is_input_validated=True,
+        )  #!!! pbc
         defect_vicinity_index = defect_vicinity_grid(
             defect_plane_index, num_shell=1
         ).astype(int)

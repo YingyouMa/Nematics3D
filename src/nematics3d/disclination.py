@@ -1,29 +1,30 @@
+from numbers import Integral
+from typing import List, Optional, Sequence, Union
+
+import numexpr as ne
 import numpy as np
-import time
-from typing import Union, Sequence, Optional, List, Tuple
 
 # ----------------------------------------------------------
 # Functions which are being used and general.
 # General means the code is for general nematics analysis.
 # Not general means the code is specifically for my project.
 # ----------------------------------------------------------
-
+from .analysis.q_diagonalization import q_diagonalize
 from .datatypes import (
-    Vect,
-    nField,
-    MaskField,
-    as_lattice_mask,
-    DimensionPeriodicInput,
-    DimensionFlagInput,
-    as_dimension_info,
     DefectIndex,
+    DimensionFlagInput,
+    DimensionPeriodicInput,
+    MaskField,
+    Vect,
     as_DefectIndex,
+    as_dimension_info,
     as_director_field,
+    as_lattice_mask,
+    nField,
 )
+from .field import add_periodic_boundary, align_stack
 from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
 from .logging_decorator import logging_and_warning_decorator
-from .field import align_stack, add_periodic_boundary
-from .analysis.q_diagonalization import q_diagonalize
 
 # from .debug.debug_store import DEBUG_VARS
 
@@ -41,145 +42,158 @@ DEFECT_NEIGHBOR[8] = (-0.5, 0, 0.5)
 DEFECT_NEIGHBOR[9] = (-0.5, 0, -0.5)
 
 
-def defect_detects_xyplane(n: np.ndarray, threshold: float) -> np.ndarray:
-    """
-    Detect defects in xy-plane of a reoriented director field (z as loop normal).
-
-    Parameters
-    ----------
-    n : nField, np.ndarray
-        Director field of shape (A, B, C, 3), where C is the loop-normal axis.
-
-    threshold : float
-        Threshold for defect detection.
-
-    Returns
-    -------
-    coords : np.ndarray
-        Coordinates of detected defects in reoriented space.
-    """
-
-    n = as_director_field(n, name="n", is_spatial_3d_required=True)
-
-    a_orig = n[:-1, :-1]
-    b_orig = n[1:, :-1]
-    c_orig = n[1:, 1:]
-    d_orig = n[:-1, 1:]
-    stack = np.stack([a_orig, b_orig, c_orig, d_orig], axis=0)
-    aligned_stack = align_stack(stack)
-    a, b, c, d = aligned_stack
-
-    test = np.einsum("...i,...i->...", a, d)
-
-    coords = np.array(np.where(test < threshold)).T.astype(float)
-    coords[:, [0, 1]] += 0.5
-
-    return coords
+_DEFECT_AXIS_PERMUTATIONS = (
+    (2, 1, 0),
+    (0, 2, 1),
+    (0, 1, 2),
+)
 
 
-@logging_and_warning_decorator()
+def _validate_worker_count(worker_count):
+    if worker_count is None:
+        return None
+    if isinstance(worker_count, bool) or not isinstance(worker_count, Integral):
+        raise TypeError("'worker_count' must be a positive integer or None.")
+
+    worker_count = int(worker_count)
+    if not 1 <= worker_count <= ne.MAX_THREADS:
+        raise ValueError(
+            "'worker_count' must be between 1 and the NumExpr limit "
+            f"({ne.MAX_THREADS}), or None."
+        )
+    return worker_count
+
+
+def _defect_detects_xyplane_unchecked(n, threshold):
+    """Detect xy-plaquette defects in an already validated director field."""
+    a = n[:-1, :-1]
+    b = n[1:, :-1]
+    c = n[1:, 1:]
+    d = n[:-1, 1:]
+
+    ax, ay, az = a[..., 0], a[..., 1], a[..., 2]
+    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
+    cx, cy, cz = c[..., 0], c[..., 1], c[..., 2]
+    dx, dy, dz = d[..., 0], d[..., 1], d[..., 2]
+
+    mask = ne.evaluate(
+        "where("
+        "((((ax*bx + ay*by + az*bz) < 0) "
+        "!= ((bx*cx + by*cy + bz*cz) < 0)) "
+        "!= ((cx*dx + cy*dy + cz*dz) < 0)), "
+        "-(ax*dx + ay*dy + az*dz), "
+        "(ax*dx + ay*dy + az*dz)) < threshold",
+        local_dict={
+            "ax": ax,
+            "ay": ay,
+            "az": az,
+            "bx": bx,
+            "by": by,
+            "bz": bz,
+            "cx": cx,
+            "cy": cy,
+            "cz": cz,
+            "dx": dx,
+            "dy": dy,
+            "dz": dz,
+            "threshold": float(threshold),
+        },
+        optimization="moderate",
+    )
+
+    coordinates = np.argwhere(mask).astype(float, copy=False)
+    coordinates[:, :2] += 0.5
+    return coordinates
+
+
 def defect_detect(
     n_origin: nField,
     threshold: float = 0,
     is_boundary_periodic: DimensionFlagInput = 0,
     planes: DimensionFlagInput = 1,
-    logger=None,
+    *,
+    worker_count: int | None = None,
+    is_input_validated: bool = False,
 ) -> DefectIndex:
-    """
-    Detect defects in a 3D director field.
-    For each small loop formed by four neighoring grid points,
-    calculate the inner product between the beginning and end director,
-    where we enforce the successive directors have the similar orientation to handle the nematic symmetry.
-    The indices of defect will be represented by one integer and two half-integers.
-    A detailed introduction of this algorithm with illustration is elaborated in the FIG. 1 of the following paper:
-    Coexistence of Defect Morphologies in Three-Dimensional Active Nematics, PRL
+    """Detect plaquette defects in a three-dimensional director field.
 
+    Set ``is_input_validated=True`` only when the caller guarantees that
+    ``n_origin`` is a finite real array with shape ``(Nx, Ny, Nz, 3)``. This
+    avoids repeating validation for trusted upstream results such as the
+    director returned by ``q_diagonalize``.
 
     Parameters
     ----------
     n_origin : nField
-        Director field of shape (Nx, Ny, Nz, 3).
-        Must be a float array representing unit vectors at each grid point.
-
+        Director field with shape ``(Nx, Ny, Nz, 3)``.
     threshold : float, optional
-        Threshold for detecting a defect. A defect is identified if the inner product
-        between the starting and ending directors around a loop is less than this value.
-        Default is 0.
-
+        A plaquette is defective when its aligned closure dot product is less
+        than this value.
     is_boundary_periodic : DimensionFlagInput, optional
-        Accepts a bool or a sequence of 3 bools.
-        Whether to apply periodic boundary conditions in each dimension.
-        Default is 0 (no periodicity).
-
+        Periodicity along the three spatial axes.
     planes : DimensionFlagInput, optional
-        Accepts a bool or a sequence of 3 bools.
-        Axes along which to compute loop windings. Each index indicates whether
-        to consider plaquettes normal to x-, y-, or z-direction respectively.
-        For example, planes=[1,0,0] analyzes only yz-planes (perpendicular to x).
-        Default is [1, 1, 1].
-
-    logger : Logger, optional
-        Logger object used for internal messages.
-        Automatically handled by decorator logging_and_warning_decorator().
+        Select plaquettes normal to the x, y, and z axes.
+    worker_count : int or None, optional
+        NumExpr thread count used during this call. The previous process-wide
+        setting is restored before returning.
+    is_input_validated : bool, optional
+        Skip director-field validation when the input contract is already
+        guaranteed by the caller. Default is ``False``.
 
     Returns
     -------
-    defect_indices : DefectIndex
-        Array of shape (N_defects, 3), where each row represents the index of a detected defect.
-        Each index has one integer component and two half-integer components.
-        The geometrical meaning of these components is explained in the definition of `DefectIndex`
-        in `datatype.py`.
-    """
+    DefectIndex
+        Defect coordinates with one integer and two half-integer components.
+        Coordinates are grouped by their plaquette-normal axis.
 
-    n_origin = as_director_field(n_origin, name="n_origin", is_spatial_3d_required=True)
+    Notes
+    -----
+    Changing NumExpr's thread count is process-wide. Concurrent calls should
+    therefore leave ``worker_count=None`` and configure NumExpr externally.
+    """
+    if not isinstance(is_input_validated, (bool, np.bool_)):
+        raise TypeError("'is_input_validated' must be a boolean.")
+
+    if is_input_validated:
+        n_origin = np.asarray(n_origin)
+    else:
+        n_origin = as_director_field(
+            n_origin,
+            name="n_origin",
+            is_spatial_3d_required=True,
+            is_normalized=False,
+        )
 
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
     planes = as_dimension_info(planes)
+    worker_count = _validate_worker_count(worker_count)
 
-    logger.debug(
-        "Start to defect defects. \n"
-        f"Periodic boundary flags: {is_boundary_periodic}. \n"
-        f"Threshold of the inner product between the first and last director is {threshold}."
-    )
+    previous_worker_count = ne.get_num_threads()
+    if worker_count is not None:
+        ne.set_num_threads(worker_count)
 
-    n = add_periodic_boundary(n_origin, is_boundary_periodic)
-    defect_indices = np.empty((0, 3), dtype=float)
+    try:
+        n = add_periodic_boundary(n_origin, is_boundary_periodic)
+        original_shape = n_origin.shape[:3]
+        coordinate_chunks = []
 
-    axis_permutations = {
-        0: (2, 1, 0),  # x-direction → move axis 0 to back
-        1: (0, 2, 1),  # y-direction → move axis 1 to back
-        2: (0, 1, 2),  # z-direction → identity
-    }
+        for axis, is_plane_selected in enumerate(planes):
+            if not is_plane_selected:
+                continue
 
-    now = time.time()
+            permutation = _DEFECT_AXIS_PERMUTATIONS[axis]
+            n_rotated = np.moveaxis(n, (0, 1, 2), permutation)
+            n_rotated = n_rotated[:, :, : original_shape[axis], :]
+            coordinates = _defect_detects_xyplane_unchecked(n_rotated, threshold)
+            if coordinates.size:
+                coordinate_chunks.append(coordinates[:, permutation])
 
-    for axis in range(3):
-        if not planes[axis]:
-            continue
-
-        perm = axis_permutations[axis]
-        n_rot = np.moveaxis(n, [0, 1, 2], perm)  # shape (A, B, C, 3)
-
-        coords = defect_detects_xyplane(n_rot, threshold)
-
-        # Restore original axis order
-        inv_perm = np.argsort(perm)
-        coords = coords[:, inv_perm]
-
-        defect_indices = np.vstack((defect_indices, coords))
-        logger.debug(
-            f"Finished axis {axis}-direction in {round(time.time() - now, 2)}s"
-        )
-        now = time.time()
-
-    # Wrap indices under periodic conditions
-    for i, periodic in enumerate(is_boundary_periodic):
-        if periodic:
-            defect_indices[:, i] %= n_origin.shape[i]
-
-    defect_indices, _ = np.unique(defect_indices, axis=0, return_index=True)
-
-    return defect_indices
+        if not coordinate_chunks:
+            return np.empty((0, 3), dtype=float)
+        return np.concatenate(coordinate_chunks, axis=0)
+    finally:
+        if worker_count is not None:
+            ne.set_num_threads(previous_worker_count)
 
 
 def defect_validity_from_mask(

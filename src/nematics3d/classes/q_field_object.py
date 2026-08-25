@@ -791,6 +791,7 @@ class QFieldObject(ClassBase):
         defect_indices = defect_detect(
             self.raw_n,
             is_boundary_periodic=self.raw_box_periodic_flag,
+            is_input_validated=True,
         )
         logger.info(f"{len(defect_indices)} defects are found.")
 

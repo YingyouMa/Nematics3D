@@ -861,19 +861,37 @@ def as_director_field(
                 f"{name!r} must have shape (Nx, Ny, Nz, 3). "
                 f"Got shape {raw_value.shape}."
             )
-        if not all(isinstance(component, numbers.Real) for component in raw_value.flat):
-            raise TypeError(f"{name!r} must contain only real numbers. Got {value!r}.")
+        if raw_value.dtype.kind == "O":
+            if not all(
+                isinstance(component, numbers.Real) for component in raw_value.flat
+            ):
+                raise TypeError(
+                    f"{name!r} must contain only real numbers. Got {value!r}."
+                )
+            director = np.asarray(raw_value, dtype=float)
+        elif np.issubdtype(raw_value.dtype, np.floating):
+            director = raw_value
+        elif np.issubdtype(raw_value.dtype, np.integer) or np.issubdtype(
+            raw_value.dtype, np.bool_
+        ):
+            director = raw_value.astype(float)
+        else:
+            raise TypeError(
+                f"{name!r} must contain only real numbers. Got dtype "
+                f"{raw_value.dtype}."
+            )
 
-        director = np.asarray(raw_value, dtype=float)
         if not np.isfinite(director).all():
             raise ValueError(
                 f"{name!r} must contain only finite values. Got {value!r}."
             )
 
-        norms = np.linalg.norm(director, axis=-1, keepdims=True)
-        is_zero = norms <= 1e-12
-        if not is_zero_allowed and np.any(is_zero):
-            raise ValueError(f"{name!r} must not contain zero directors.")
+        if is_normalized or not is_zero_allowed:
+            norms = np.linalg.norm(director, axis=-1, keepdims=True)
+            is_zero = norms <= 1e-12
+            if not is_zero_allowed and np.any(is_zero):
+                raise ValueError(f"{name!r} must not contain zero directors.")
+
         if is_normalized:
             normalized = np.zeros_like(director)
             np.divide(director, norms, out=normalized, where=~is_zero)
