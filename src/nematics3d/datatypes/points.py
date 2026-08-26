@@ -22,6 +22,23 @@ def as_points(
     A single point with shape ``(d,)`` is promoted to ``(1, d)``. Empty input
     is normalized to ``(0, d)`` when ``d`` is specified. The returned
     floating-point array is always independent of the input.
+
+    Parameters
+    ----------
+    input_data : array-like
+        One point or a collection of points.
+    d : int or None, optional
+        Required point dimension. ``None`` accepts any dimension.
+    name : str, optional
+        Human-readable input name used in error messages.
+    is_finite : bool, optional
+        Whether all coordinates must be finite.
+    is_empty : bool, optional
+        Whether a collection containing no points is allowed.
+    is_unique : bool, optional
+        Whether duplicate points are removed.
+    min_num : int or None, optional
+        Minimum number of points required after optional deduplication.
     """
     if d is not None:
         if isinstance(d, (bool, np.bool_)) or not isinstance(d, numbers.Integral):
@@ -61,8 +78,7 @@ def as_points(
 
     if raw_points.dtype.kind not in "iuf":
         if raw_points.dtype.kind != "O" or not all(
-            isinstance(value, numbers.Real)
-            and not isinstance(value, (bool, np.bool_))
+            isinstance(value, numbers.Real) and not isinstance(value, (bool, np.bool_))
             for value in raw_points.flat
         ):
             raise TypeError(f"{name!r} must contain only real numbers.")

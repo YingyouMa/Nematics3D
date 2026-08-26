@@ -190,7 +190,11 @@ def test_obb_refine_random_search_does_not_worsen_initial_fit():
     )
 
     assert refined_fit.volume <= initial_fit.volume
-    np.testing.assert_allclose(refined_fit.axes.T @ refined_fit.axes, np.eye(3))
+    np.testing.assert_allclose(
+        refined_fit.axes.T @ refined_fit.axes,
+        np.eye(3),
+        atol=1e-12,
+    )
     assert np.linalg.det(refined_fit.axes) == pytest.approx(1.0)
 
 
@@ -234,7 +238,11 @@ def test_obb_fit_approx_uses_hull_pca_and_refinement():
     )
 
     assert fit.volume <= initial_fit.volume
-    np.testing.assert_allclose(fit.axes.T @ fit.axes, np.eye(3))
+    np.testing.assert_allclose(
+        fit.axes.T @ fit.axes,
+        np.eye(3),
+        atol=1e-12,
+    )
     assert np.linalg.det(fit.axes) == pytest.approx(1.0)
 
 

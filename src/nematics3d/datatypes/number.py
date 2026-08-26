@@ -51,18 +51,13 @@ def as_number(
     infinity, and boolean inputs are rejected by default. If ``replace`` is
     provided, it must satisfy exactly the same contract as the original input.
     """
-    option_values = {
-        "is_integer": is_integer,
-        "is_nan_allowed": is_nan_allowed,
-        "is_infinite_allowed": is_infinite_allowed,
-        "is_clipped": is_clipped,
-    }
-    for option_name, option_value in option_values.items():
-        option_values[option_name] = as_bool(option_value, name=option_name)
-    is_integer = option_values["is_integer"]
-    is_nan_allowed = option_values["is_nan_allowed"]
-    is_infinite_allowed = option_values["is_infinite_allowed"]
-    is_clipped = option_values["is_clipped"]
+    is_integer = as_bool(is_integer, name="is_integer")
+    is_nan_allowed = as_bool(is_nan_allowed, name="is_nan_allowed")
+    is_infinite_allowed = as_bool(
+        is_infinite_allowed,
+        name="is_infinite_allowed",
+    )
+    is_clipped = as_bool(is_clipped, name="is_clipped")
 
     normalized_range = None
     if value_range is not None:

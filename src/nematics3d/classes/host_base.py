@@ -1433,7 +1433,7 @@ class HostBase(ClassBase):
         logger=None,
     ) -> None:
         """Set one runtime protection flag across host and opts public attrs."""
-        for attr in as_list(attrs, name="attrs"):
+        for attr in as_list(attrs):
             try:
                 attr = as_str(attr, name=attr_name)
 
@@ -1484,11 +1484,13 @@ class HostBase(ClassBase):
     ) -> tuple[set[str], set[str]]:
         """Collect host and opts attr names whose runtime flag is true."""
         host_names = {
-            n for n, state in self.impl_assign_state.items()
+            n
+            for n, state in self.impl_assign_state.items()
             if getattr(state, flag_name, False)
         }
         opts_names = {
-            n for n, flag_info in self.opts.impl_attr_flags.items()
+            n
+            for n, flag_info in self.opts.impl_attr_flags.items()
             if flag_info.get(flag_name, False)
         }
         return host_names, opts_names
