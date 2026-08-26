@@ -478,6 +478,55 @@ Summary of changes and evidence:
 - Simplified it from an exception/replacement/logging wrapper into a small
   deterministic normalization helper matching its actual repository use.
 
+### `nematics3d.datatypes.as_points`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public point-collection validator and normalizer |
+| Source | [`src/nematics3d/datatypes/points.py`](../../src/nematics3d/datatypes/points.py) |
+| Tests | [`tests/test_datatypes_points.py`](../../tests/test_datatypes_points.py), [`tests/test_geometry_obb.py`](../../tests/test_geometry_obb.py), and downstream bounds, smoothing, interpolation, grid, and geometry tests |
+| Tutorial | None; this is a compact geometric input helper |
+| Review scope | Single-point promotion, `(N, d)` shape semantics, arbitrary dimensions through `d=None`, empty-input normalization and policy, real finite coordinates by default, optional non-finite values, duplicate removal, minimum point count after deduplication, independent floating output, boolean option validation, PEP 8 parameter naming, dedicated module, public exports, and active callers |
+| Validation | `python -m pytest tests/test_datatypes_points.py tests/test_datatypes_number.py -q` (38 passed); combined datatype and downstream run (67 passed, with one unrelated `as_list(name=...)` failure and two unrelated zero-tolerance OBB assertions); Black on all modified Python files; in-memory compile of 99 source files; active-source `dim=` caller search; `git diff --check` |
+| Reviewed commit | `5cda8a39fdc00cfa10247643dba500e025f9b660` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | With `d=None`, dimensionless empty input is normalized to shape `(0, 0)` because no point dimension can be inferred. `is_unique=True` uses `numpy.unique()` and therefore returns points in lexicographic rather than original order. |
+
+Summary of changes and evidence:
+
+- Extracted `as_points()` from `misc.py` into a dedicated datatype module and
+  migrated every active caller from `dim=` to the repository-standard `d=`.
+- Distinguished structural `ValueError` failures from coordinate-type
+  `TypeError` failures instead of wrapping every invalid input as `TypeError`.
+- Added explicit finite, empty, uniqueness, and minimum-count policies, with
+  the minimum count evaluated after optional deduplication.
+- Added focused tests for single points, arbitrary dimensions, empty inputs,
+  independent output, non-finite opt-in, invalid coordinate types, dimension
+  validation, and deduplicated minimum counts.
+
+### `nematics3d.datatypes.as_value_range`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public inclusive numeric-interval validator |
+| Source | [`src/nematics3d/datatypes/number.py`](../../src/nematics3d/datatypes/number.py) |
+| Tests | [`tests/test_datatypes_number.py`](../../tests/test_datatypes_number.py) |
+| Tutorial | None; this is a compact scalar-range helper used by `as_number()` |
+| Review scope | Exact two-value shape, real numeric dtype, complex and boolean rejection, NaN rejection, strictly increasing bounds, infinite open-ended bounds, Python-float tuple output, parameter-name errors, public export, and `as_number()` range and clipping integration |
+| Validation | `python -m pytest tests/test_datatypes_points.py tests/test_datatypes_number.py -q` (38 passed); direct inspection of `as_number()` inclusive-range, clipping, integer-boundary, and replacement integration; in-memory compile of 99 source files; `git diff --check` |
+| Reviewed commit | `5cda8a39fdc00cfa10247643dba500e025f9b660` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Bounds are strictly increasing, so a zero-width interval such as `(1, 1)` is intentionally invalid. Positive and negative infinity are allowed when their ordering defines a meaningful open-ended interval. |
+
+Summary of changes and evidence:
+
+- Recorded `as_value_range()` separately from `as_number()` so the public
+  helper's own interval contract is visible in the reviewed-component ledger.
+- Confirmed exact shape, real dtype, NaN, ordering, and conversion behavior,
+  together with its inclusive-range and clipping integration in `as_number()`.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -510,3 +559,5 @@ above.
 | 2026-08-26 | `as_str()` | `src/nematics3d/datatypes/string.py` | Direct contract review and downstream tests | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_axes()` | `src/nematics3d/datatypes/axes.py` | `tests/test_datatypes_axes.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_list()` | `src/nematics3d/datatypes/list.py` | `tests/test_datatypes_list.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
+| 2026-08-26 | `as_points()` | `src/nematics3d/datatypes/points.py` | `tests/test_datatypes_points.py` and downstream tests | `5cda8a39fdc00cfa10247643dba500e025f9b660` | Confirmed |
+| 2026-08-26 | `as_value_range()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` | `5cda8a39fdc00cfa10247643dba500e025f9b660` | Confirmed |
