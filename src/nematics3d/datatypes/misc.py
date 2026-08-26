@@ -31,6 +31,7 @@ import numpy as np
 from ..logging_decorator import logging_and_warning_decorator
 from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
 from .number import Number, as_number, as_value_range
+from .string import as_str
 from .tensor import Tensor, as_tensor
 from .vector import Vect, as_vector
 
@@ -70,64 +71,6 @@ def as_axes(
         axes[:, -1] = -axes[:, -1]
 
     return axes
-
-
-@logging_and_warning_decorator(start_finish_level=5)
-def as_str(input_data, name="input_data", pool=None, replace=None, logger=None):
-    """
-    Validate an input value as a string, with optional membership check and
-    user-provided fallback replacement.
-
-    Parameters
-    ----------
-    input_data : Any
-        The value to be validated. It is expected to be of type ``str`` under
-        normal usage.
-    name : str, optional
-        A human-readable name used in error messages.
-    pool : iterable, optional
-        A collection of allowed string values. The membership check is applied
-        only when ``pool`` is truthy. It is the caller's responsibility to ensure
-        that ``pool`` itself is a valid iterable of acceptable values.
-    replace : Any, optional
-        A fallback value used when validation fails. When provided, validation
-        errors will be suppressed and the return value will be forcibly replaced
-        by ``replace``.
-        **Note:** ``replace`` is not validated and may be of any type, including
-        non-string values. The caller must ensure its semantic correctness.
-
-    Returns
-    -------
-    Any
-        Returns ``input_data`` if validation succeeds. Otherwise returns
-        ``replace`` when it is provided. No guarantee is made that the return
-        value is of type ``str`` when the replacement path is taken.
-
-    Raises
-    ------
-    TypeError
-        If ``input_data`` is not a string and ``replace`` is not provided.
-    ValueError
-        If ``input_data`` is not contained in ``pool`` and ``replace`` is not
-        provided.
-    """
-
-    try:
-        if not isinstance(input_data, str):
-            raise TypeError(
-                f"{name!r} should be str. Got {input_data} with type {type(input_data).__name__} instead"
-            )
-        elif pool and input_data not in pool:
-            raise ValueError(f"{name!r} must be in {pool}. Got {input_data} instead.")
-    except (TypeError, ValueError):
-        if replace is None:
-            raise
-        else:
-            logger.exception("Please check data type")
-            logger.recovery(f"Changed it into {replace!r} in the following.")
-            input_data = replace
-
-    return input_data
 
 
 @logging_and_warning_decorator(start_finish_level=5)
