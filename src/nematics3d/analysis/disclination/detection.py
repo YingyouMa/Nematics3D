@@ -1,4 +1,5 @@
 from numbers import Integral
+from time import perf_counter
 
 import numexpr as ne
 import numpy as np
@@ -12,6 +13,7 @@ from ...datatypes import (
     nField,
 )
 from ...field import add_periodic_boundary
+from ...logging_decorator import logging_and_warning_decorator
 
 _DEFECT_AXIS_PERMUTATIONS = (
     (2, 1, 0),
@@ -77,6 +79,7 @@ def _defect_detects_xyplane_unchecked(n, threshold):
     return coordinates
 
 
+@logging_and_warning_decorator()
 def defect_detect(
     n_origin: nField,
     threshold: float = 0,
@@ -85,6 +88,7 @@ def defect_detect(
     *,
     worker_count: int | None = None,
     is_input_validated: bool = False,
+    logger=None,
 ) -> DefectIndex:
     """Detect plaquette defects in a three-dimensional director field.
 
@@ -150,9 +154,21 @@ def defect_detect(
         ne.set_num_threads(worker_count)
 
     try:
-        n = add_periodic_boundary(n_origin, is_boundary_periodic)
+        start = perf_counter()
+        active_worker_count = ne.get_num_threads()
         original_shape = n_origin.shape[:3]
+        periodic_axes = tuple(bool(value) for value in is_boundary_periodic)
+        selected_planes = tuple(bool(value) for value in planes)
+        logger.debug(
+            f"Preparing to detect defects in director field "
+            f"shape={n_origin.shape}; threshold={threshold}, "
+            f"is_boundary_periodic={periodic_axes}, "
+            f"planes={selected_planes}, worker_count={active_worker_count}."
+        )
+
+        n = add_periodic_boundary(n_origin, is_boundary_periodic)
         coordinate_chunks = []
+        defect_counts = [0, 0, 0]
 
         for axis, is_plane_selected in enumerate(planes):
             if not is_plane_selected:
@@ -163,11 +179,20 @@ def defect_detect(
             n_rotated = n_rotated[:, :, : original_shape[axis], :]
             coordinates = _defect_detects_xyplane_unchecked(n_rotated, threshold)
             if coordinates.size:
+                defect_counts[axis] = len(coordinates)
                 coordinate_chunks.append(coordinates[:, permutation])
 
         if not coordinate_chunks:
-            return np.empty((0, 3), dtype=float)
-        return np.concatenate(coordinate_chunks, axis=0)
+            defects = np.empty((0, 3), dtype=float)
+        else:
+            defects = np.concatenate(coordinate_chunks, axis=0)
+
+        logger.debug(
+            f"Detected {len(defects):,} defects; counts by normal axis "
+            f"(x, y, z)={tuple(defect_counts)}, "
+            f"elapsed={perf_counter() - start:.3f} seconds."
+        )
+        return defects
     finally:
         if worker_count is not None:
             ne.set_num_threads(previous_worker_count)

@@ -13,7 +13,7 @@ than its subject warrants. Select the sections that materially help readers,
 and omit optional sections that have no useful content.
 
 When judgment is needed, use the
-[`q_diagonalize()` tutorial](../analysis/q_diagonalize.ipynb) as the repository's
+[`q_diagonalize()` tutorial](../analysis/q_diagonalization/q_diagonalize.ipynb) as the repository's
 practical reference for expected completeness, structure, and restraint. A
 tutorial does not need to exceed that example merely to demonstrate compliance
 with this guide.

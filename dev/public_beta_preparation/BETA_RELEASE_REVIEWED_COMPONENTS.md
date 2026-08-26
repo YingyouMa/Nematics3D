@@ -274,7 +274,7 @@ Summary of changes and evidence:
 | Source | [`src/nematics3d/analysis/q_diagonalization/`](../../src/nematics3d/analysis/q_diagonalization/) |
 | Build configuration | [`setup.py`](../../setup.py), [`pyproject.toml`](../../pyproject.toml), and [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
 | Tests | [`tests/core/test_q_diagonalization.py`](../../tests/core/test_q_diagonalization.py) and [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
-| Tutorial | [`tutorials/analysis/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalize.ipynb) |
+| Tutorial | [`tutorials/analysis/q_diagonalization/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalization/q_diagonalize.ipynb) |
 | Review scope | Public Q5/Q9 contract, named result, principal-only and complete eigensystems, C and `NumExpr` backend selection, Python worker threading, isotropic classification, near-degenerate orthonormality, optional right-handed frames, validation and errors, logging, performance documentation, packaging, exports, and direct callers |
 | Validation | `python -m pytest tests/core -q` (25 passed, 31 subtests passed); focused `tests/core/test_q_diagonalization.py` run (10 passed, 8 subtests passed); `black --check setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; `ruff check --select E,F,W,N,I setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; in-memory syntax compile; notebook JSON, code-cell, local-link, and stale-term validation; `git diff --check`; isolated `python -m build`; wheel installation and public-API smoke test outside the repository |
 | Reviewed commit | `5089673` |
@@ -310,7 +310,7 @@ Summary of changes and evidence:
 | Source | [`src/nematics3d/analysis/disclination/detection.py`](../../src/nematics3d/analysis/disclination/detection.py) |
 | Legacy backup | [`dev/backup/defect_detection_legacy.py`](../backup/defect_detection_legacy.py) |
 | Tests | [`tests/test_disclination_defect_detect.py`](../../tests/test_disclination_defect_detect.py) and [`tests/test_datatypes_director_field.py`](../../tests/test_datatypes_director_field.py) |
-| Tutorial | [`tutorials/analysis/defect_detect.ipynb`](../../tutorials/analysis/defect_detect.ipynb) |
+| Tutorial | [`tutorials/analysis/disclination/defect_detect.ipynb`](../../tutorials/analysis/disclination/defect_detect.ipynb) |
 | Review scope | Three plaquette-normal directions, nematic sign-aligned closure criterion, non-periodic and periodic boundaries on all spatial axes, coordinate conventions, selected planes, empty output, `NumExpr` worker control, trusted-input bypass, director-field validation integration, public callers, logging decision, performance, documentation, and legacy equivalence |
 | Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); focused defect file (19 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/analysis/disclination/detection.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; Ruff E/W/import validation for the reviewed detection implementation; in-memory syntax compile; executed notebook schema and code-cell validation; `git diff --check`; coordinate-set comparison with the archived implementation on `example/data/Q_example_workflow.npy` |
 | Reviewed commit | `5089673` |
@@ -348,7 +348,7 @@ Summary of changes and evidence:
 | Kind | Public Q-field representation validators and converters |
 | Source | [`src/nematics3d/datatypes/q_field.py`](../../src/nematics3d/datatypes/q_field.py) |
 | Tests | [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
-| Tutorial | [`tutorials/analysis/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalize.ipynb) |
+| Tutorial | [`tutorials/analysis/q_diagonalization/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalization/q_diagonalize.ipynb) |
 | Review scope | Compact five-component and full symmetric-traceless 3x3 representations, strict 3D and relaxed leading dimensions, dtype and finite-value validation, symmetry and trace tolerances, empty relaxed inputs, conversion behavior, zero-copy same-representation returns, public exports, and diagonalization integration |
 | Validation | `python -m pytest tests/core/test_datatypes_qfield.py -q` (15 passed, 23 subtests passed); focused datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
 | Reviewed commit | `35af036` |
