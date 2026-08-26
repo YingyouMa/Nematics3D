@@ -71,7 +71,7 @@ def wrap_points_to_box(
     )
     points_input = np.asarray(points, dtype=float)
     is_single_point = points_input.ndim == 1
-    points = as_points(points_input, name="points to wrap", dim=3)
+    points = as_points(points_input, name="points to wrap", d=3)
     points_index = apply_linear_transform(
         points,
         transform=transform,

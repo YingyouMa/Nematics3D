@@ -833,7 +833,7 @@ def bounds_minimal_wrapping_points(
     points = as_points(
         points,
         name="points used to build minimal wrapping bounds",
-        dim=3,
+        d=3,
         min_num=1,
     )
     axes = as_axes(axes, name="axes", atol=_DEF_TOL)

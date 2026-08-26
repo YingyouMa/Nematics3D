@@ -49,7 +49,7 @@ def compute_convex_hull_points(points):
     points = as_points(
         points,
         name="points used to compute a convex hull",
-        dim=3,
+        d=3,
         is_unique=True,
         min_num=1,
     )
@@ -75,7 +75,7 @@ def obb_fit_pca(points):
     points = as_points(
         points,
         name="points used to fit a PCA oriented bounding box",
-        dim=3,
+        d=3,
         is_unique=True,
         min_num=1,
     )
@@ -115,7 +115,7 @@ def obb_refine_random_search(
     points = as_points(
         points,
         name="points used to refine an oriented bounding box",
-        dim=3,
+        d=3,
         is_unique=True,
         min_num=1,
     )
@@ -284,7 +284,7 @@ def _obb_fit_in_axes(points, axes):
     points = as_points(
         points,
         name="points used to fit an oriented bounding box",
-        dim=3,
+        d=3,
         min_num=1,
     )
     axes = canonicalize_axes(axes)
@@ -512,7 +512,7 @@ def check_triangulation_quality(
         Dataclass result with ``flip_ratio``, ``radial_cv``, ``n_flipped``,
         and ``n_triangles``.
     """
-    points = as_points(points, name="points", dim=3, min_num=4)
+    points = as_points(points, name="points", d=3, min_num=4)
 
     centroid = points.mean(axis=0)
     if is_optimize_center:
@@ -590,7 +590,7 @@ def triangulate_surface_points(
     """
     import pyvista as pv
 
-    points = as_points(points, name="points", dim=3, min_num=4)
+    points = as_points(points, name="points", d=3, min_num=4)
 
     centroid = points.mean(axis=0)
 

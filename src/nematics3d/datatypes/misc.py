@@ -167,31 +167,6 @@ def as_lattice_mask(
     return values.astype(bool)
 
 
-def as_points(coords, name="input data", dim=3, *, is_unique=False, min_num=None):
-    try:
-        coords = np.asarray(coords, dtype=float)
-        if coords.ndim == 1:
-            coords = np.asarray([coords], dtype=float)
-        if coords.ndim != 2:
-            raise ValueError(
-                f"{name!r} must be a 2D array of shape (N, D). Got shape={coords.shape}."
-            )
-        if dim is not None and coords.shape[1] != dim:
-            raise ValueError(
-                f"{name!r} must be an (N, {dim}) array. Got shape={coords.shape}."
-            )
-        if is_unique:
-            coords = np.unique(coords, axis=0)
-        if min_num is not None and len(coords) < min_num:
-            raise ValueError(
-                f"{name!r} must contain at least {min_num} point(s). "
-                f"Got {len(coords)}."
-            )
-        return coords.copy()
-    except (ValueError, TypeError) as e:
-        raise TypeError(f"Invalid `coords` input: {e}")
-
-
 class _UnsetType:
     """
     Internal sentinel type representing an explicit "unset" state.

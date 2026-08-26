@@ -36,7 +36,7 @@ def test_as_points_raises_when_unique_points_are_too_few():
         ]
     )
 
-    with pytest.raises(TypeError, match="at least 2 point"):
+    with pytest.raises(ValueError, match="at least 2 point"):
         as_points(points, is_unique=True, min_num=2)
 
 

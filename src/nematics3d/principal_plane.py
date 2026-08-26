@@ -169,7 +169,7 @@ def nml_principal_plane_analysis(
     required_points = as_points(
         required_points,
         name="required points used for NML principal-plane analysis",
-        dim=3,
+        d=3,
         min_num=1,
     )
 

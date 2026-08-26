@@ -160,7 +160,7 @@ class SmoothedLine(HostBase):
         "raw_coords": AttrDef(
             doc="Raw input line coordinates (shape: N x D)",
             kind="raw",
-            validator=lambda v, d: as_points(v, name=d, dim=None),
+            validator=lambda v, d: as_points(v, name=d, d=None),
             is_reapply_opts_after_raw=True,
         ),
         "calc_coords": AttrDef(

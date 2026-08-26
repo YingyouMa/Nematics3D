@@ -105,7 +105,7 @@ class GridInterpolator(ClassBase):
           When the dataset carries no mask, every in-domain point is valid.
         """
 
-        pts = as_points(points, name="interpolation query points", dim=3)
+        pts = as_points(points, name="interpolation query points", d=3)
         points_input = pts.copy()
 
         dataset = self.owner.owner
