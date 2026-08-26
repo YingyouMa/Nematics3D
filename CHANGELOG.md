@@ -9,6 +9,24 @@
    contracts.
  - Reduced full-tensor symmetry-check memory by comparing the three independent
    off-diagonal pairs with reusable work arrays.
+ - Split several datatype helpers out of `datatypes.misc` into dedicated modules
+   while preserving the existing top-level `nematics3d.datatypes` imports.
+ - Tightened `as_str()` fallback validation so `replace` must satisfy the same
+   string and allowed-value-pool constraints as the original input.
+ - Finalized `as_axes()` as the validator for 3D orthonormal column frames,
+   including finite-value checks, explicit tolerance validation, optional
+   right-handed conversion, rejection of complex inputs, and dedicated regression
+   tests.
+ - Simplified `as_list()` into a lightweight single-or-multiple normalization
+   helper: lists are returned unchanged, tuples and sets are expanded, and other
+   objects are treated as single items.
+
+### Fixed
+ - Fixed `as_ColorRGB()` normalization so valid inputs are normalized when
+   `is_norm=True` instead of only reaching normalization through the recovery
+   path.
+ - Unified RGB scalar/array validation for finite real values, `[0, 1]` bounds,
+   normalization, and validated replacements.
 
 ## [0.1.7]
 ### Added
