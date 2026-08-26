@@ -379,13 +379,13 @@ Summary of changes and evidence:
 | Source | [`src/nematics3d/analysis/disclination/classification.py`](../../src/nematics3d/analysis/disclination/classification.py) |
 | Legacy backup | [`dev/backup/defect_line_classification_legacy.py`](../backup/defect_line_classification_legacy.py) |
 | Tests | [`tests/test_disclination_line_classification.py`](../../tests/test_disclination_line_classification.py) and [`tests/test_datatypes_defect_index.py`](../../tests/test_datatypes_defect_index.py) |
-| Tutorial | None yet |
-| Review scope | Half-grid canonicalization, periodic coordinate wrapping, duplicate rejection, vectorized neighbor-edge construction, adjacency and Euler-trail extraction, open and closed lines, periodic-boundary lines, grid transforms and offsets, deterministic line construction, public callers, legacy equivalence, and performance |
-| Validation | `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); bundled-example comparison against the archived classifier (1270 defects and 8 equivalent lines); Black; in-memory syntax and import checks; `git diff --check` |
-| Reviewed commit | `746bc12` |
+| Tutorial | [`tutorials/analysis/disclination/defect_classify_into_lines.ipynb`](../../tutorials/analysis/disclination/defect_classify_into_lines.ipynb) |
+| Review scope | Half-grid canonicalization, periodic coordinate wrapping, duplicate rejection, vectorized neighbor-edge construction, the exact ten legal dual-lattice continuations for each defect plaquette, adjacency and Euler-trail extraction, open and closed lines, branched graphs, periodic-boundary lines, grid transforms and offsets, deterministic line construction, public callers, legacy equivalence, performance, logging, and reader-facing documentation |
+| Validation | `python -m pytest tests/test_disclination_defect_detect.py tests/test_disclination_line_classification.py tests/test_datatypes_defect_index.py -q` (43 passed); bundled-example comparison against the archived classifier (1270 defects and 8 equivalent lines); complete execution of the classification tutorial; JSON and local-link validation of six affected tutorials (no broken links); Black; in-memory syntax and import checks; `git diff --check` |
+| Reviewed commit | `b40d6a5` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
-| Remaining limitations | The public `box_size_periodic` contract still relies on the overly general `as_dimension_info()` validator and is scheduled for separate normalization. No dedicated classification tutorial exists yet. |
+| Remaining limitations | This is intentionally not a general point-cloud clustering algorithm. It accepts the canonical half-grid defect-index geometry and connects only dual-lattice links sharing an endpoint. Branched graphs are represented as deterministic maximal trails rather than as a single simple line. |
 
 ### `nematics3d.datatypes.ColorRGB`, `as_ColorRGB`, and `as_ColorRGB_array`
 
