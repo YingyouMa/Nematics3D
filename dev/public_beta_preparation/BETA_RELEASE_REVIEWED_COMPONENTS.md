@@ -134,7 +134,7 @@ Summary of changes and evidence:
 | Tutorial | None; this is a compact input helper used by public and internal APIs |
 | Review scope | Python and NumPy real scalars, explicit boolean rejection, finite values by default, opt-in NaN and infinity, integer-valued mode, Python scalar return types, inclusive ranges, optional clipping, validated replacement recovery, option validation, logging, PEP 8 naming, public exports, and active callers |
 | Validation | `python -m pytest tests/test_datatypes_number.py -q` (25 passed); combined number, Q-field, defect-index, and line-classification run (63 passed, 23 subtests passed); 65 downstream option and visual tests passed with 2 subtests; Black and `black --check` on all 27 modified Python files; in-memory compile of 136 Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `5089673` |
+| Reviewed commit | `c7443c2343dc31c700db9257f3f4125a517e4533` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Number` is a reader-facing `numbers.Real` alias, so runtime boolean rejection remains the responsibility of `as_number()`. Integer mode intentionally accepts integer-valued real inputs such as `3.0`; callers whose contract requires an integral input type must retain that stricter boundary check. Ruff was unavailable in the project environment during final validation. |
@@ -488,7 +488,7 @@ Summary of changes and evidence:
 | Tutorial | None; this is a compact geometric input helper |
 | Review scope | Single-point promotion, `(N, d)` shape semantics, arbitrary dimensions through `d=None`, empty-input normalization and policy, real finite coordinates by default, optional non-finite values, duplicate removal, minimum point count after deduplication, independent floating output, boolean option validation, PEP 8 parameter naming, dedicated module, public exports, and active callers |
 | Validation | `python -m pytest tests/test_datatypes_points.py tests/test_datatypes_number.py -q` (38 passed); combined datatype and downstream run (67 passed, with one unrelated `as_list(name=...)` failure and two unrelated zero-tolerance OBB assertions); Black on all modified Python files; in-memory compile of 99 source files; active-source `dim=` caller search; `git diff --check` |
-| Reviewed commit | `5cda8a39fdc00cfa10247643dba500e025f9b660` |
+| Reviewed commit | `c7443c2343dc31c700db9257f3f4125a517e4533` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | With `d=None`, dimensionless empty input is normalized to shape `(0, 0)` because no point dimension can be inferred. `is_unique=True` uses `numpy.unique()` and therefore returns points in lexicographic rather than original order. |
@@ -515,7 +515,7 @@ Summary of changes and evidence:
 | Tutorial | None; this is a compact scalar-range helper used by `as_number()` |
 | Review scope | Exact two-value shape, real numeric dtype, complex and boolean rejection, NaN rejection, strictly increasing bounds, infinite open-ended bounds, Python-float tuple output, parameter-name errors, public export, and `as_number()` range and clipping integration |
 | Validation | `python -m pytest tests/test_datatypes_points.py tests/test_datatypes_number.py -q` (38 passed); direct inspection of `as_number()` inclusive-range, clipping, integer-boundary, and replacement integration; in-memory compile of 99 source files; `git diff --check` |
-| Reviewed commit | `5cda8a39fdc00cfa10247643dba500e025f9b660` |
+| Reviewed commit | `c7443c2343dc31c700db9257f3f4125a517e4533` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Bounds are strictly increasing, so a zero-width interval such as `(1, 1)` is intentionally invalid. Positive and negative infinity are allowed when their ordering defines a meaningful open-ended interval. |
@@ -552,12 +552,12 @@ above.
 | 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/dimension_info.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `BoxSizePeriodic` and `as_box_size_periodic()` | `src/nematics3d/datatypes/box_size_periodic.py` | `tests/test_datatypes_box_size_periodic.py` and downstream tests | `746bc12` | Confirmed |
 | 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `746bc12` | Confirmed |
-| 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `5089673` | Confirmed |
+| 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
 | 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
 | 2026-08-26 | `ColorRGB`, `as_ColorRGB()`, and `as_ColorRGB_array()` | `src/nematics3d/datatypes/color_rgb.py` | `tests/test_datatypes_color_rgb.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_str()` | `src/nematics3d/datatypes/string.py` | Direct contract review and downstream tests | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_axes()` | `src/nematics3d/datatypes/axes.py` | `tests/test_datatypes_axes.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_list()` | `src/nematics3d/datatypes/list.py` | `tests/test_datatypes_list.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
-| 2026-08-26 | `as_points()` | `src/nematics3d/datatypes/points.py` | `tests/test_datatypes_points.py` and downstream tests | `5cda8a39fdc00cfa10247643dba500e025f9b660` | Confirmed |
-| 2026-08-26 | `as_value_range()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` | `5cda8a39fdc00cfa10247643dba500e025f9b660` | Confirmed |
+| 2026-08-26 | `as_points()` | `src/nematics3d/datatypes/points.py` | `tests/test_datatypes_points.py` and downstream tests | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
+| 2026-08-26 | `as_value_range()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
