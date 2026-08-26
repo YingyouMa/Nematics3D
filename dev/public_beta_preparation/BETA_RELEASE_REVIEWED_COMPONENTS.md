@@ -178,6 +178,34 @@ Summary of changes and evidence:
 - Kept physical constraints at their owning APIs rather than turning the
   structural broadcaster into a collection of unrelated domain rules.
 
+### `nematics3d.datatypes.BoxSizePeriodic` and `as_box_size_periodic`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public periodic-box semantic alias and three-axis input validator |
+| Source | [`src/nematics3d/datatypes/box_size_periodic.py`](../../src/nematics3d/datatypes/box_size_periodic.py) |
+| Tests | [`tests/test_datatypes_box_size_periodic.py`](../../tests/test_datatypes_box_size_periodic.py), [`tests/test_disclination_line_classification.py`](../../tests/test_disclination_line_classification.py), and downstream grid and line tests |
+| Tutorial | None; this compact datatype helper is documented by its public docstring and the scientific functions that consume periodic boxes |
+| Review scope | One shared or xyz-specific box size, positive finite periods, positive infinity as the non-periodic marker, mixed periodic axes, floating output dtype, independent storage, boolean/NaN/negative-infinity/zero/negative/complex/string/shape rejection, public exports, removal of `DimensionPeriodic` aliases and the redundant periodic-flag helper, grid and disclination caller migration, and lattice-index integer-period specialization |
+| Validation | `python -m pytest tests/test_datatypes_box_size_periodic.py tests/test_disclination_line_classification.py tests/test_disclination_defect_detect.py tests/classes/test_grid_offset_none.py tests/classes/test_q_plane.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/classes/test_bounds_obb.py tests/smooth/test_smooth.py tests/smooth/test_smoothed_line_func_registry.py -q` (74 passed); broader migration run (177 passed, 5 known unrelated `GridFieldDataset` failures); Black and `black --check` on all 10 modified Python files; in-memory compile of 142 Python files; stale-name search; `git diff --check` |
+| Reviewed commit | `746bc12` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The generic datatype intentionally allows arbitrary positive floating periods. Defect classification separately requires integer-valued finite periods because its coordinates live in lattice-index space. Periodic trajectory unwrapping and related grid algorithms retain their existing numerical behavior and are scheduled for separate review. The broader run retained pre-existing missing-interpolator, Gaussian trailing-axis, and reserved-mask test failures. |
+
+Summary of changes and evidence:
+
+- Replaced the generic `DimensionInfo` boundary with an explicit periodic-box
+  contract throughout grid and disclination APIs.
+- Removed `DimensionPeriodic`, `DimensionPeriodicInput`, and
+  `boundary_periodic_size_to_flag()` without compatibility aliases.
+- Replaced the old flag helper with direct `numpy.isfinite()` masks after box
+  validation.
+- Corrected the default disclination-line box from boolean `False` to the
+  explicit fully non-periodic value `numpy.inf`.
+- Kept the generic physical-coordinate datatype permissive while making the
+  stricter integer lattice-period requirement visible at defect classification.
+
 ### `nematics3d.datatypes.as_director_field` and `as_scalar_field`
 
 | Field | Evidence |
@@ -354,7 +382,7 @@ Summary of changes and evidence:
 | Tutorial | None yet |
 | Review scope | Half-grid canonicalization, periodic coordinate wrapping, duplicate rejection, vectorized neighbor-edge construction, adjacency and Euler-trail extraction, open and closed lines, periodic-boundary lines, grid transforms and offsets, deterministic line construction, public callers, legacy equivalence, and performance |
 | Validation | `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); bundled-example comparison against the archived classifier (1270 defects and 8 equivalent lines); Black; in-memory syntax and import checks; `git diff --check` |
-| Reviewed commit | `2134f73` |
+| Reviewed commit | `746bc12` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The public `box_size_periodic` contract still relies on the overly general `as_dimension_info()` validator and is scheduled for separate normalization. No dedicated classification tutorial exists yet. |
@@ -382,7 +410,8 @@ above.
 | 2026-08-26 | `as_bool()` | `src/nematics3d/datatypes/bool.py` | `tests/test_datatypes_bool.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `5089673` | Confirmed |
 | 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/dimension_info.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `5089673` | Confirmed |
-| 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `2134f73` | Confirmed |
+| 2026-08-26 | `BoxSizePeriodic` and `as_box_size_periodic()` | `src/nematics3d/datatypes/box_size_periodic.py` | `tests/test_datatypes_box_size_periodic.py` and downstream tests | `746bc12` | Confirmed |
+| 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `746bc12` | Confirmed |
 | 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
 | 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
