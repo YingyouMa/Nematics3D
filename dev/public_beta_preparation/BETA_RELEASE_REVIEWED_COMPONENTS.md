@@ -97,6 +97,34 @@ Summary of changes and evidence:
 - Updated `as_axes()`, grid-transform validation, and plot-extent validation to
   use the normalized interface.
 
+### `nematics3d.datatypes.Number` and `as_number`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public real-number semantic alias and scalar-input validator |
+| Source | [`src/nematics3d/datatypes/number.py`](../../src/nematics3d/datatypes/number.py) |
+| Tests | [`tests/test_datatypes_number.py`](../../tests/test_datatypes_number.py) and downstream datatype and option-validation tests |
+| Tutorial | None; this is a compact input helper used by public and internal APIs |
+| Review scope | Python and NumPy real scalars, explicit boolean rejection, finite values by default, opt-in NaN and infinity, integer-valued mode, Python scalar return types, inclusive ranges, optional clipping, validated replacement recovery, option validation, logging, PEP 8 naming, public exports, and active callers |
+| Validation | `python -m pytest tests/test_datatypes_number.py -q` (25 passed); combined number, Q-field, defect-index, and line-classification run (63 passed, 23 subtests passed); 65 downstream option and visual tests passed with 2 subtests; Black and `black --check` on all 27 modified Python files; in-memory compile of 136 Python files; active-source stale-name search; `git diff --check` |
+| Reviewed commit | `35af036` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `Number` is a reader-facing `numbers.Real` alias, so runtime boolean rejection remains the responsibility of `as_number()`. Integer mode intentionally accepts integer-valued real inputs such as `3.0`; callers whose contract requires an integral input type must retain that stricter boundary check. Ruff was unavailable in the project environment during final validation. |
+
+Summary of changes and evidence:
+
+- Removed the broad `NumericInput` alias and replaced the mixed-case
+  `as_Number()` API without retaining a compatibility alias.
+- Made finite real scalars the safe default and required explicit opt-in for
+  NaN or infinity.
+- Ensured ordinary and integer modes return Python `float` and `int` values,
+  respectively, while rejecting Python and NumPy booleans.
+- Centralized range validation, clipping, and replacement recovery, including
+  revalidation of replacement values.
+- Migrated active callers and reused the normalized finite non-negative scalar
+  contract for Q-field tolerances and defect-index tolerance.
+
 ### `nematics3d.datatypes.as_director_field` and `as_scalar_field`
 
 | Field | Evidence |
@@ -242,8 +270,8 @@ Summary of changes and evidence:
 | Tutorial | [`tutorials/analysis/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalize.ipynb) |
 | Review scope | Compact five-component and full symmetric-traceless 3x3 representations, strict 3D and relaxed leading dimensions, dtype and finite-value validation, symmetry and trace tolerances, empty relaxed inputs, conversion behavior, zero-copy same-representation returns, public exports, and diagonalization integration |
 | Validation | `python -m pytest tests/core/test_datatypes_qfield.py -q` (15 passed, 23 subtests passed); focused datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
-| Reviewed commit | `bdb7e25` |
-| Reviewed date | 2026-08-25 |
+| Reviewed commit | `35af036` |
+| Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Semantic aliases remain reader-facing NumPy aliases rather than statically shape-aware types. Full QField9 validation scans the complete input for finite values, symmetry, and trace; callers with an already validated internal tensor may explicitly skip numerical validation. |
 
@@ -257,8 +285,8 @@ Summary of changes and evidence:
 | Tutorial | None; the coordinate convention is documented by the defect-analysis tutorials and public scientific functions |
 | Review scope | Shape `(N, 3)`, empty collections, real numeric dtype, finite values, integer/half-integer lattice structure, configurable non-negative finite tolerance, canonical half-grid snapping, error row reporting, PEP 8 naming, public exports, and classification integration |
 | Validation | `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); combined datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
-| Reviewed commit | `bdb7e25` |
-| Reviewed date | 2026-08-25 |
+| Reviewed commit | `35af036` |
+| Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `DefectIndex` intentionally denotes the complete `(N, 3)` collection rather than one `(3,)` row. Periodic wrapping and the doubled-integer graph encoding are algorithm-specific and remain outside this converter. |
 
@@ -299,6 +327,7 @@ above.
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-25 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `bdb7e25` | Confirmed |
-| 2026-08-25 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `bdb7e25` | Confirmed |
-| 2026-08-25 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `bdb7e25` | Confirmed |
 | 2026-08-25 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `bdb7e25` | Confirmed |
+| 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `35af036` | Confirmed |
+| 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
+| 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
