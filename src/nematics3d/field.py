@@ -8,7 +8,7 @@ import numpy as np
 
 # from .general import *
 from .datatypes import (
-    DimensionFlagInput,
+    DimensionInfo,
     GeneralField,
     QField9,
     SField,
@@ -106,7 +106,7 @@ def get_q(
 
 
 def add_periodic_boundary(
-    data: GeneralField, is_boundary_periodic: DimensionFlagInput = 0
+    data: GeneralField, is_boundary_periodic: DimensionInfo = 0
 ) -> GeneralField:
     #! loop
     """
@@ -122,7 +122,7 @@ def add_periodic_boundary(
         Input physical field of shape (Nx, Ny, Nz, ...), where (Nx, Ny, Nz) are spatial dimensions,
         and the remaining axes represent vector/tensor components or other per-voxel data.
 
-    is_boundary_periodic : DimensionFlagInput, optional
+    is_boundary_periodic : DimensionInfo, optional
         A 3-element flag indicating which spatial dimensions are periodic.
         - Can be a scalar (broadcasted), or
         - A list/tuple/array of booleans with shape (3,)
@@ -135,7 +135,11 @@ def add_periodic_boundary(
         Shape becomes:
             (Nx + is_periodic[0], Ny + is_periodic[1], Nz + is_periodic[2], ...)
     """
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
+    is_boundary_periodic = as_dimension_info(
+        is_boundary_periodic,
+        name="is_boundary_periodic",
+        is_bool=True,
+    )
 
     if np.any(is_boundary_periodic):
         Nx, Ny, Nz, *rest_shape = data.shape  # Extract the first three dimensions

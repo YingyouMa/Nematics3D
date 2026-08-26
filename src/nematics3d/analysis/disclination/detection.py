@@ -5,7 +5,7 @@ import numpy as np
 
 from ...datatypes import (
     DefectIndex,
-    DimensionFlagInput,
+    DimensionInfo,
     as_dimension_info,
     as_director_field,
     nField,
@@ -79,8 +79,8 @@ def _defect_detects_xyplane_unchecked(n, threshold):
 def defect_detect(
     n_origin: nField,
     threshold: float = 0,
-    is_boundary_periodic: DimensionFlagInput = 0,
-    planes: DimensionFlagInput = 1,
+    is_boundary_periodic: DimensionInfo = 0,
+    planes: DimensionInfo = 1,
     *,
     worker_count: int | None = None,
     is_input_validated: bool = False,
@@ -99,9 +99,9 @@ def defect_detect(
     threshold : float, optional
         A plaquette is defective when its aligned closure dot product is less
         than this value.
-    is_boundary_periodic : DimensionFlagInput, optional
+    is_boundary_periodic : DimensionInfo, optional
         Periodicity along the three spatial axes.
-    planes : DimensionFlagInput, optional
+    planes : DimensionInfo, optional
         Select plaquettes normal to the x, y, and z axes.
     worker_count : int or None, optional
         NumExpr thread count used during this call. The previous process-wide
@@ -134,8 +134,12 @@ def defect_detect(
             is_normalized=False,
         )
 
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
-    planes = as_dimension_info(planes)
+    is_boundary_periodic = as_dimension_info(
+        is_boundary_periodic,
+        name="is_boundary_periodic",
+        is_bool=True,
+    )
+    planes = as_dimension_info(planes, name="planes", is_bool=True)
     worker_count = _validate_worker_count(worker_count)
 
     previous_worker_count = ne.get_num_threads()

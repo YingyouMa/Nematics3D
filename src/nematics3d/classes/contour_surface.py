@@ -8,7 +8,7 @@ import numpy as np
 import pyvista as pv
 
 from nematics3d.datatypes import (
-    DimensionFlagInput,
+    DimensionInfo,
     Tensor,
     Vect,
     as_number,
@@ -341,7 +341,7 @@ class ContourSurfaceSet(ClassBase):
         name: str | None = None,
         grid_offset: Vect(3) | None = None,
         grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY,
-        box_periodic_flag: DimensionFlagInput = False,
+        box_periodic_flag: DimensionInfo = False,
         bounds=None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         visual_default: Mapping[str, Any] | None = None,

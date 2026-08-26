@@ -334,7 +334,10 @@ class DisclinationLine(ClassBase):
         object.__setattr__(
             self,
             "raw_box_size_periodic_index",
-            as_dimension_info(self.raw_box_size_periodic_index),
+            as_dimension_info(
+                self.raw_box_size_periodic_index,
+                name="box_size_periodic_index",
+            ),
         )
 
         if (

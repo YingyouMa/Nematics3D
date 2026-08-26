@@ -118,7 +118,7 @@ from ..datatypes import (
     as_scalar_field,
     Number,
     as_number,
-    DimensionFlagInput,
+    DimensionInfo,
     as_dimension_info,
     check_bool_flags,
     UNSET,
@@ -206,7 +206,7 @@ class InputQ:
     S: SField | Unset = UNSET
     n: nField | Unset = UNSET
     mask: MaskField | Unset = UNSET
-    box_periodic_flag: DimensionFlagInput = False
+    box_periodic_flag: DimensionInfo = False
     grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
     default_miminum_line_length_smooth: Number = 61
@@ -252,7 +252,11 @@ class InputQ:
         "Q": lambda v, d: as_qfield5(v, name=d),
         "n": lambda v, d: as_director_field(v, name=d, is_spatial_3d_required=True),
         "S": lambda v, d: as_scalar_field(v, name=d, is_spatial_3d_required=True),
-        "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
+        "box_periodic_flag": lambda v, d: as_dimension_info(
+            v,
+            name=d,
+            is_bool=True,
+        ),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "default_miminum_line_length_smooth": lambda v, d: as_number(

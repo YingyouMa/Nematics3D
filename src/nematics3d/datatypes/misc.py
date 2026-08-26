@@ -19,9 +19,9 @@ This file is intended to:
 
 Example usage:
 
-    from datatypes import DimensionInfo, DimensionInfoInput
+    from datatypes import DimensionInfo
 
-    def func(info: DimensionInfoInput) -> DimensionPeriodic:
+    def func(info: DimensionInfo):
         ...
 """
 
@@ -346,56 +346,78 @@ def as_list(input_data, name="input_data", replace=None, logger=None):
 # Dimension info types
 # -------------------------
 
-# DimensionInfo represents general per-dimension numeric metadata.
-# It is a NumPy array of shape (3,), where each element corresponds to a spatial dimension.
-# Example: number of grid points per dimension.
-DimensionInfo = np.ndarray
-
-# Input type for DimensionInfo:
+# DimensionInfo represents one value shared by x, y, and z, or three values
+# assigned to the axes individually.
 # - scalar -> broadcasted to all 3 dimensions
 # - list/tuple/array of 3 values -> used directly
-DimensionInfoInput = Union[Number, Sequence[Number]]
+DimensionInfo = Union[Number, Sequence[Number]]
 
 
 def as_dimension_info(
-    input_data: DimensionInfoInput, name: str = "input_data", is_bool: bool = False
-) -> DimensionInfo:
-    """
-    Convert flexible user input into a standardized DimensionInfo array of shape (3,).
+    input_data: DimensionInfo,
+    name: str = "dimension info",
+    *,
+    is_bool: bool = False,
+) -> np.ndarray:
+    """Expand shared or axis-specific information into an ``(x, y, z)`` array.
 
     Parameters
     ----------
-    input_data : DimensionInfoInput
-        Can be:
-        - a scalar (int or float): will be broadcasted to all 3 dimensions;
-        - a list, tuple, or ndarray of exactly 3 numeric values.
+    input_data : DimensionInfo
+        One real scalar shared by all axes, or exactly three real values
+        assigned to the x, y, and z axes, respectively.
+    name : str, optional
+        Parameter name used in validation messages.
+    is_bool : bool, optional
+        Require every axis value to be boolean or numerically equal to zero or
+        one, then return an array with boolean dtype.
 
     Returns
     -------
-    DimensionInfo
-        A NumPy array of shape (3,) representing per-dimension numeric metadata.
+    numpy.ndarray
+        An independent one-dimensional array with shape ``(3,)``.
 
     Raises
     ------
+    TypeError
+        If the input contains non-real values.
     ValueError
-        If input is not a scalar or not a 3-element structure.
-    ValueError
-        If is_bool is True and non-boolian data is input.
+        If the input is neither a scalar nor an array with shape ``(3,)``, or
+        ``is_bool=True`` and a value is not zero or one.
     """
+    if not isinstance(is_bool, (bool, np.bool_)):
+        raise TypeError(f"'is_bool' must be boolean. Got {is_bool!r}.")
 
-    if isinstance(input_data, (int, float)):
-        result = np.array([input_data] * 3)
-    elif isinstance(input_data, (list, tuple, np.ndarray)) and len(input_data) == 3:
-        result = np.array(input_data)
-    else:
+    raw_value = np.asarray(input_data)
+    if raw_value.ndim == 0:
+        raw_value = np.repeat(raw_value[None], 3)
+    elif raw_value.shape != (3,):
         raise ValueError(
-            f"{name} must be either a single number or a list, tuple, or NumPy array of exactly three elements."
+            f"{name!r} must be one value or exactly three values for the x, y, "
+            f"and z axes. Got shape {raw_value.shape}."
         )
 
-    if is_bool and not all(isinstance(x, (bool, np.bool_)) for x in result):
-        raise ValueError(f"The elements in {name} must be bool. Got {result} instead.")
+    if raw_value.dtype.kind == "O":
+        if not all(isinstance(value, numbers.Real) for value in raw_value):
+            raise TypeError(f"{name!r} must contain only real values.")
+        raw_value = np.asarray(raw_value, dtype=float)
+    elif not (
+        np.issubdtype(raw_value.dtype, np.number)
+        or np.issubdtype(raw_value.dtype, np.bool_)
+    ) or np.iscomplexobj(raw_value):
+        raise TypeError(
+            f"{name!r} must contain only real values. Got dtype {raw_value.dtype}."
+        )
 
-    return result
+    if is_bool:
+        if not np.isin(raw_value, (0, 1)).all():
+            raise ValueError(
+                f"{name!r} must contain only boolean values or numeric 0/1. "
+                f"Got {raw_value!r}."
+            )
+        return raw_value.astype(bool, copy=True)
+
+    return raw_value.copy()
 
 
 # -------------------------
@@ -411,31 +433,15 @@ DimensionPeriodic = DimensionInfo
 # Input type for DimensionPeriodic
 # - scalar -> broadcasted to all 3 dimensions
 # - list/tuple/array of 3 values -> used directly
-DimensionPeriodicInput = Union[Number, Sequence[Number]]
-
-# -------------------------
-# Dimension flag types
-# -------------------------
+DimensionPeriodicInput = DimensionInfo
 
 
-# DimensionFlag is a **specific form of DimensionInfo** each element is boolean.
-# Like DimensionInfo, it is a NumPy array of shape (3,).
-DimensionFlag = DimensionInfo  # conceptually a specialized DimensionInfo
-
-# Input type for DimensionFlag
-# - bool -> broadcasted to all 3 dimensions
-# - list/tuple/array of 3 boolean values -> used directly
-DimensionFlagInput = Union[Number, Sequence[Number]]
-
-
-def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag:
+def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> np.ndarray:
     """
     Return a boolean mask indicating which spatial dimensions are periodic.
 
-    This function converts a DimensionPeriodic array into a DimensionFlag,
-    where each element is:
-        - True  -> the corresponding dimension is non-periodic (value is np.inf)
-        - False -> the dimension is periodic (value is an integer)
+    Each output element is ``True`` when the corresponding box size is finite
+    and therefore periodic, and ``False`` when it is infinite and non-periodic.
 
     Examples
     --------
@@ -443,9 +449,7 @@ def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag
     array([ False, True,  False])
     """
 
-    arr = as_dimension_info(arr)
-    if arr.shape != (3,):
-        raise ValueError("Input must be a NumPy array of shape (3,)")
+    arr = as_dimension_info(arr, name="periodic boundary size")
 
     return arr != np.inf
 

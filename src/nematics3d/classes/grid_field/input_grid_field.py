@@ -6,7 +6,7 @@ from typing import ClassVar, Mapping
 import numpy as np
 
 from nematics3d.datatypes import (
-    DimensionFlagInput,
+    DimensionInfo,
     MaskField,
     Tensor,
     UNSET,
@@ -73,7 +73,7 @@ class InputGridField:
     """
 
     shape: tuple[int, int, int] | Unset = UNSET
-    box_periodic_flag: DimensionFlagInput = False
+    box_periodic_flag: DimensionInfo = False
     grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
     mask: MaskField | Unset = UNSET
@@ -100,7 +100,11 @@ class InputGridField:
 
     _validators: ClassVar[Mapping[str, object]] = {
         "shape": lambda v, d: as_grid_shape(v, name=d),
-        "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
+        "box_periodic_flag": lambda v, d: as_dimension_info(
+            v,
+            name=d,
+            is_bool=True,
+        ),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "mask": lambda v, d: as_lattice_mask(v, name=d),

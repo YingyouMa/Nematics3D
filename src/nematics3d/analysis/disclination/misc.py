@@ -5,7 +5,7 @@ import numpy as np
 from ...analysis.q_diagonalization import q_diagonalize
 from ...datatypes import (
     DefectIndex,
-    DimensionFlagInput,
+    DimensionInfo,
     DimensionPeriodicInput,
     MaskField,
     as_defect_index,
@@ -31,7 +31,7 @@ DEFECT_NEIGHBOR[9] = (-0.5, 0, -0.5)
 def defect_validity_from_mask(
     defect_indices: DefectIndex,
     mask: MaskField,
-    is_boundary_periodic: DimensionFlagInput = 0,
+    is_boundary_periodic: DimensionInfo = 0,
 ) -> np.ndarray:
     """
     Judge which defects are fully supported by valid voxels.
@@ -53,7 +53,7 @@ def defect_validity_from_mask(
         Boolean validity field of shape (Nx, Ny, Nz). True marks voxels whose
         director data is physically meaningful.
 
-    is_boundary_periodic : DimensionFlagInput, optional
+    is_boundary_periodic : DimensionInfo, optional
         Accepts a bool or a sequence of 3 bools.
         Whether to apply periodic boundary conditions in each dimension.
         Along periodic dimensions the plaquette corner indices wrap around;
@@ -67,7 +67,11 @@ def defect_validity_from_mask(
     """
     defect_indices = as_defect_index(defect_indices)
     mask = as_lattice_mask(mask, name="defect validity mask")
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
+    is_boundary_periodic = as_dimension_info(
+        is_boundary_periodic,
+        name="is_boundary_periodic",
+        is_bool=True,
+    )
 
     lower = np.floor(defect_indices).astype(int)
     upper = np.ceil(defect_indices).astype(int)
@@ -391,7 +395,10 @@ def defect_neighbor_possible_get(
         )
 
     # Standardize box_size format
-    box_size_periodic = as_dimension_info(box_size_periodic)
+    box_size_periodic = as_dimension_info(
+        box_size_periodic,
+        name="box_size_periodic",
+    )
 
     # Copy neighbor offset vectors: shape (10, 3)
     neighbor = DEFECT_NEIGHBOR.copy()

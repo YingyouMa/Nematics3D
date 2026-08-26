@@ -405,7 +405,10 @@ def generate_mirror_point_periodic_boundary(
 
     from itertools import product
 
-    box_size = as_dimension_info(box_size_periodic)
+    box_size = as_dimension_info(
+        box_size_periodic,
+        name="box_size_periodic",
+    )
     point = as_vector(
         point, name="The position of point which needs to find mirror image"
     )
@@ -444,7 +447,10 @@ def wrap_points_to_box(
     coordinates, mapped back to grid coordinates, wrapped there, and mapped
     back to physical coordinates.
     """
-    box_size_periodic = as_dimension_info(box_size_periodic)
+    box_size_periodic = as_dimension_info(
+        box_size_periodic,
+        name="box_size_periodic",
+    )
     points_input = np.asarray(points, dtype=float)
     is_single_point = points_input.ndim == 1
     points = as_points(points_input, name="points to wrap", dim=3)
@@ -474,7 +480,7 @@ def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
     Shift the entire trajectory so that the first point is inside the periodic box.
     """
     points_unwrap = np.asarray(points_unwrap, dtype=float)
-    L = as_dimension_info(box_size_periodic)
+    L = as_dimension_info(box_size_periodic, name="box_size_periodic")
 
     shifted = points_unwrap.copy()
     for dim in range(3):
@@ -497,7 +503,10 @@ def unwrap_trajectory(
     Unwrap a trajectory of points across periodic boundaries to produce a geometrically continuous path.
     """
 
-    box_size_periodic = as_dimension_info(box_size_periodic)
+    box_size_periodic = as_dimension_info(
+        box_size_periodic,
+        name="box_size_periodic",
+    )
     points = np.array(points, dtype=float)
 
     if is_reverse:
@@ -535,7 +544,10 @@ def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
     if np.all(box_size_periodic == np.inf):
         return points
 
-    box_size_periodic = as_dimension_info(box_size_periodic)
+    box_size_periodic = as_dimension_info(
+        box_size_periodic,
+        name="box_size_periodic",
+    )
 
     unfolded = points.copy()
     ref = points[0]
