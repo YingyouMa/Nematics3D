@@ -4,10 +4,11 @@ import numpy as np
 
 from ...analysis.q_diagonalization import q_diagonalize
 from ...datatypes import (
+    BoxSizePeriodic,
     DefectIndex,
     DimensionInfo,
-    DimensionPeriodicInput,
     MaskField,
+    as_box_size_periodic,
     as_defect_index,
     as_dimension_info,
     as_lattice_mask,
@@ -346,7 +347,7 @@ def defect_detect_surface(
 
 def defect_neighbor_possible_get(
     defect_index: Union[Sequence[float], np.ndarray],
-    box_size_periodic: DimensionPeriodicInput = np.inf,
+    box_size_periodic: BoxSizePeriodic = np.inf,
 ) -> np.ndarray:
     """
     Compute all possible neighboring defect indices of a given defect in a 3D grid,
@@ -395,7 +396,7 @@ def defect_neighbor_possible_get(
         )
 
     # Standardize box_size format
-    box_size_periodic = as_dimension_info(
+    box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )

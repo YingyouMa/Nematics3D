@@ -11,14 +11,13 @@ from scipy.interpolate import splprep
 from ..general import sort_line_indices
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
+    BoxSizePeriodic,
     Vect,
+    as_box_size_periodic,
     as_vector,
     Tensor,
     DefectIndex,
     as_defect_index,
-    DimensionPeriodicInput,
-    as_dimension_info,
-    boundary_periodic_size_to_flag,
     as_str,
     as_number,
     as_bool,
@@ -118,7 +117,7 @@ class InputLine:
     """
 
     defect_indices: DefectIndex | None = None
-    box_size_periodic_index: DimensionPeriodicInput = False
+    box_size_periodic_index: BoxSizePeriodic = np.inf
     grid_offset: Vect(3) | None = None
     grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
 
@@ -143,7 +142,7 @@ class InputLine:
         "defect_indices": lambda v, d: (
             None if v is None else as_defect_index(v, name=d)
         ),
-        "box_size_periodic_index": lambda v, d: as_dimension_info(v, name=d),
+        "box_size_periodic_index": lambda v, d: as_box_size_periodic(v, name=d),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
@@ -334,7 +333,7 @@ class DisclinationLine(ClassBase):
         object.__setattr__(
             self,
             "raw_box_size_periodic_index",
-            as_dimension_info(
+            as_box_size_periodic(
                 self.raw_box_size_periodic_index,
                 name="box_size_periodic_index",
             ),
@@ -1354,9 +1353,7 @@ class DisclinationLineSmoothPlot(HostBase):
 
         else:
 
-            boundary_flag = boundary_periodic_size_to_flag(
-                owner.owner.raw_box_size_periodic_index
-            )
+            boundary_flag = np.isfinite(owner.owner.raw_box_size_periodic_index)
 
             line_coords_origin = (
                 owner.calc_result_index if is_smooth else owner.owner.raw_defect_indices

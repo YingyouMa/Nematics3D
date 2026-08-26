@@ -16,11 +16,11 @@ from typing import TYPE_CHECKING, List, Optional
 import numpy as np
 
 from ...datatypes import (
+    BoxSizePeriodic,
     DefectIndex,
-    DimensionInfo,
     Vect,
+    as_box_size_periodic,
     as_defect_index,
-    as_dimension_info,
 )
 from ...grid import (
     GRID_TRANSFORM_IDENTITY,
@@ -71,7 +71,13 @@ def _canonicalize_defect_indices_2x(defect_indices, box_size_periodic):
 
     periodic = np.isfinite(box_size_periodic)
     if np.any(periodic):
-        periods_2x = np.rint(2.0 * box_size_periodic[periodic]).astype(np.int64)
+        periodic_sizes = box_size_periodic[periodic]
+        if not np.equal(periodic_sizes, np.rint(periodic_sizes)).all():
+            raise ValueError(
+                "Finite 'box_size_periodic' values must be integer-valued when "
+                "classifying lattice-index defect coordinates."
+            )
+        periods_2x = (2.0 * periodic_sizes).astype(np.int64)
         if np.any(periods_2x <= 0):
             raise ValueError("Finite periodic box sizes must be positive.")
         doubled[:, periodic] %= periods_2x
@@ -279,7 +285,7 @@ def _extract_defect_trails(adjacency, edge_count):
 @logging_and_warning_decorator()
 def defect_classify_into_lines(
     defect_indices: DefectIndex,
-    box_size_periodic: DimensionInfo = np.inf,
+    box_size_periodic: BoxSizePeriodic = np.inf,
     grid_offset: Optional[Vect(3)] = None,
     grid_transform=GRID_TRANSFORM_IDENTITY,
     logger=None,
@@ -294,7 +300,7 @@ def defect_classify_into_lines(
     # defined in this module through higher-level line operations.
     from ...classes.disclination_line import DisclinationLine
 
-    box_size_periodic = as_dimension_info(
+    box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )

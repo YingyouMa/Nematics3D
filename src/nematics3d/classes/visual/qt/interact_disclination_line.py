@@ -2,7 +2,6 @@ from qtpy import QtWidgets
 import numpy as np
 
 from .panel_base import make_labeled_slider_row
-from nematics3d.datatypes import boundary_periodic_size_to_flag
 from nematics3d.grid import apply_linear_transform
 from ..plot_sphere import PlotSphere
 from .interact_glyph_base import InteractGlyphBase
@@ -161,9 +160,7 @@ class InteractDisclinationLine(InteractGlyphBase):
     def _helper_create_sphere_coords(self, is_wrap):
         owner = self.smooth.owner
         if is_wrap:
-            boundary_flag = boundary_periodic_size_to_flag(
-                owner.raw_box_size_periodic_index
-            )
+            boundary_flag = np.isfinite(owner.raw_box_size_periodic_index)
             coords_index = np.where(
                 boundary_flag,
                 owner.raw_defect_indices % owner.raw_box_size_periodic_index,

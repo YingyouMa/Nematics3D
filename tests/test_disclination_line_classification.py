@@ -111,6 +111,17 @@ def test_classify_rejects_duplicate_periodic_points():
         )
 
 
+def test_classify_requires_integer_periods_in_lattice_index_space():
+    defects = np.array([[0.0, 0.5, 0.5], [1.0, 0.5, 0.5]])
+
+    with pytest.raises(ValueError, match="must be integer-valued"):
+        defect_classify_into_lines(
+            defects,
+            box_size_periodic=(4.5, np.inf, np.inf),
+            log_mode="none",
+        )
+
+
 @pytest.mark.parametrize(
     "defects",
     [np.ones((2, 2)), np.ones((2, 3, 1)), np.array([[np.nan, 0.5, 0.5]])],

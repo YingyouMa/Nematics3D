@@ -7,12 +7,12 @@ from typing import Optional, Sequence, Tuple, Union
 import numpy as np
 
 from .datatypes import (
-    DimensionPeriodicInput,
+    BoxSizePeriodic,
     Vect,
+    as_box_size_periodic,
     as_readonly_array,
     as_tensor,
     as_vector,
-    as_dimension_info,
     as_points,
 )
 from .geometry import rotation_matrix_from_vectors
@@ -386,7 +386,7 @@ def apply_linear_transform(
 
 def generate_mirror_point_periodic_boundary(
     point: Vect(3),
-    box_size_periodic: DimensionPeriodicInput = np.inf,
+    box_size_periodic: BoxSizePeriodic = np.inf,
     is_self: bool = True,
 ):
     """
@@ -405,7 +405,7 @@ def generate_mirror_point_periodic_boundary(
 
     from itertools import product
 
-    box_size = as_dimension_info(
+    box_size = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )
@@ -435,7 +435,7 @@ def generate_mirror_point_periodic_boundary(
 
 def wrap_points_to_box(
     points: Union[np.ndarray, Sequence[Sequence[float]], Sequence[float]],
-    box_size_periodic: DimensionPeriodicInput = np.inf,
+    box_size_periodic: BoxSizePeriodic = np.inf,
     transform=GRID_TRANSFORM_IDENTITY,
     offset: Optional[np.ndarray] = None,
 ) -> np.ndarray:
@@ -447,7 +447,7 @@ def wrap_points_to_box(
     coordinates, mapped back to grid coordinates, wrapped there, and mapped
     back to physical coordinates.
     """
-    box_size_periodic = as_dimension_info(
+    box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )
@@ -475,12 +475,16 @@ def wrap_points_to_box(
     return wrapped[0] if is_single_point else wrapped
 
 
-def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
+def shift_to_box(
+    points_unwrap,
+    box_size_periodic: BoxSizePeriodic,
+    ref_index=10,
+):
     """
     Shift the entire trajectory so that the first point is inside the periodic box.
     """
     points_unwrap = np.asarray(points_unwrap, dtype=float)
-    L = as_dimension_info(box_size_periodic, name="box_size_periodic")
+    L = as_box_size_periodic(box_size_periodic, name="box_size_periodic")
 
     shifted = points_unwrap.copy()
     for dim in range(3):
@@ -494,7 +498,7 @@ def shift_to_box(points_unwrap, box_size_periodic, ref_index=10):
 
 def unwrap_trajectory(
     points: Union[np.ndarray, Sequence[Sequence[float]]],
-    box_size_periodic: DimensionPeriodicInput = np.inf,
+    box_size_periodic: BoxSizePeriodic = np.inf,
     is_start_in_box=False,
     ref_index=0,
     is_reverse=False,
@@ -503,7 +507,7 @@ def unwrap_trajectory(
     Unwrap a trajectory of points across periodic boundaries to produce a geometrically continuous path.
     """
 
-    box_size_periodic = as_dimension_info(
+    box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )
@@ -535,19 +539,21 @@ def unwrap_trajectory(
     return points_unwrap
 
 
-def unfold_cluster(points: np.ndarray, box_size_periodic: np.ndarray = np.inf):
+def unfold_cluster(
+    points: np.ndarray,
+    box_size_periodic: BoxSizePeriodic = np.inf,
+):
     """
     Unfolds a cluster of points that may cross periodic boundaries into a single continuous region.
     """
 
     points = np.asarray(points, dtype=float)
-    if np.all(box_size_periodic == np.inf):
-        return points
-
-    box_size_periodic = as_dimension_info(
+    box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )
+    if np.all(np.isinf(box_size_periodic)):
+        return points
 
     unfolded = points.copy()
     ref = points[0]

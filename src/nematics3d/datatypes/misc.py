@@ -30,7 +30,6 @@ import numpy as np
 import numbers
 
 from ..logging_decorator import logging_and_warning_decorator
-from .dimension_info import DimensionInfo, as_dimension_info
 from .number import Number, as_number, as_value_range
 from .tensor import Tensor, as_tensor
 from .vector import Vect, as_vector
@@ -341,40 +340,6 @@ def as_list(input_data, name="input_data", replace=None, logger=None):
         logger.exception(f"Failed to normalize {name!r} into a list.")
         logger.recovery(f"Change {name!r} into {replace!r} in the following.")
         return replace
-
-
-# -------------------------
-# Dimension periodicity types
-# -------------------------
-
-# DimensionPeriodic is a **specific form of DimensionInfo** that encodes boundary condition per dimension.
-# - np.inf -> non-periodic
-# - int -> periodic, with value as the boundary size
-# Like DimensionInfo, it is a NumPy array of shape (3,).
-DimensionPeriodic = DimensionInfo
-
-# Input type for DimensionPeriodic
-# - scalar -> broadcasted to all 3 dimensions
-# - list/tuple/array of 3 values -> used directly
-DimensionPeriodicInput = DimensionInfo
-
-
-def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> np.ndarray:
-    """
-    Return a boolean mask indicating which spatial dimensions are periodic.
-
-    Each output element is ``True`` when the corresponding box size is finite
-    and therefore periodic, and ``False`` when it is infinite and non-periodic.
-
-    Examples
-    --------
-    >>> boundary_periodic_flag(np.array([np.inf, 10, np.inf]))
-    array([ False, True,  False])
-    """
-
-    arr = as_dimension_info(arr, name="periodic boundary size")
-
-    return arr != np.inf
 
 
 # -------------------------
