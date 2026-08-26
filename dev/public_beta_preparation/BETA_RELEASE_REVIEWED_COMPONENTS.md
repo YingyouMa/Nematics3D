@@ -387,6 +387,97 @@ Summary of changes and evidence:
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The public `box_size_periodic` contract still relies on the overly general `as_dimension_info()` validator and is scheduled for separate normalization. No dedicated classification tutorial exists yet. |
 
+### `nematics3d.datatypes.ColorRGB`, `as_ColorRGB`, and `as_ColorRGB_array`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public RGB semantic annotation and scalar/array color validators |
+| Source | [`src/nematics3d/datatypes/color_rgb.py`](../../src/nematics3d/datatypes/color_rgb.py) |
+| Tests | [`tests/test_datatypes_color_rgb.py`](../../tests/test_datatypes_color_rgb.py) |
+| Tutorial | None; these are compact input helpers used by visualization APIs |
+| Review scope | Scalar `(3,)` and array `(N, 3)` shapes, real numeric and finite values, inclusive `[0, 1]` range, copy behavior, scalar and broadcast replacement recovery, replacement revalidation, historical sum-of-powers normalization, near-zero normalization, and public exports |
+| Validation | Focused contract review and direct smoke checks during the datatype cleanup; dedicated pytest coverage added in `tests/test_datatypes_color_rgb.py` for valid inputs, shape errors, range/finite/complex failures, normalization, zero normalization, scalar replacement, array replacement, and structural-error behavior |
+| Reviewed commit | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | Normalization intentionally preserves the package's historical sum-of-powers rule rather than conventional Lp normalization. Array replacement intentionally recovers invalid values only; invalid outer structure or shape remains an immediate error. |
+
+Summary of changes and evidence:
+
+- Extracted RGB handling from `misc.py` into a dedicated datatype module while
+  preserving the public names and compatibility re-export.
+- Fixed the previous control-flow bug where valid scalar RGB input skipped
+  normalization even when `is_norm=True`.
+- Unified real/finite/range validation and replacement revalidation between
+  scalar and array forms.
+
+### `nematics3d.datatypes.as_str`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public scalar string validator |
+| Source | [`src/nematics3d/datatypes/string.py`](../../src/nematics3d/datatypes/string.py) |
+| Tests | None; the helper is intentionally treated as a compact direct-contract validator |
+| Tutorial | None |
+| Review scope | String type validation, optional membership pool, replacement recovery, replacement revalidation against the same type and pool contract, error messages, and public exports |
+| Validation | Direct contract review of ordinary strings, pool-constrained strings, invalid input recovery, non-string replacement rejection, and out-of-pool replacement rejection |
+| Reviewed commit | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | No dedicated pytest file was added because the implementation is small and deterministic; downstream option/name validators provide additional coverage. |
+
+Summary of changes and evidence:
+
+- Extracted `as_str()` from `misc.py` into a dedicated module.
+- Made replacement values pass the same string and optional-pool validation as
+  ordinary input instead of allowing an unchecked fallback.
+
+### `nematics3d.datatypes.as_axes`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public 3D orthonormal-frame validator and right-handed normalizer |
+| Source | [`src/nematics3d/datatypes/axes.py`](../../src/nematics3d/datatypes/axes.py) |
+| Tests | [`tests/test_datatypes_axes.py`](../../tests/test_datatypes_axes.py) |
+| Tutorial | None; this is a compact geometric input helper |
+| Review scope | Exact `(3, 3)` shape, real finite values, orthonormal columns, absolute-tolerance semantics, right- and left-handed frames, optional right-handed conversion, copy behavior, complex rejection, and parameter validation |
+| Validation | Focused contract review and dedicated pytest coverage in `tests/test_datatypes_axes.py` for identity/general frames, copy semantics, left-handed handling, tolerance behavior, invalid shape/type/complex/finite/orthogonality inputs, and invalid option parameters |
+| Reviewed commit | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | The helper validates an orthonormal frame stored by columns but does not encode shape or orthogonality statically in its type annotation. |
+
+Summary of changes and evidence:
+
+- Extracted `as_axes()` from `misc.py` and removed the low-value `Axes` and
+  `AxesInput` aliases.
+- Rejected complex and non-finite inputs explicitly, made `atol` a finite
+  non-negative real contract, and made `rtol=0` so `atol` alone controls the
+  orthogonality tolerance.
+- Retained optional conversion to a right-handed frame by flipping the final
+  axis when needed.
+
+### `nematics3d.datatypes.as_list`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public single-or-multiple list normalizer |
+| Source | [`src/nematics3d/datatypes/list.py`](../../src/nematics3d/datatypes/list.py) |
+| Tests | [`tests/test_datatypes_list.py`](../../tests/test_datatypes_list.py) |
+| Tutorial | None |
+| Review scope | Existing-list identity, tuple/set expansion, scalar wrapping, and deliberate treatment of strings, ranges, generators, NumPy arrays, and `None` as single objects |
+| Validation | Direct contract review plus focused tests in `tests/test_datatypes_list.py` for list identity, tuple/set expansion, scalar-like iterable handling, generators, and `None` |
+| Reviewed commit | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | Sets are accepted and therefore lose deterministic ordering. General iterables are intentionally not expanded; only tuples and sets are treated as multi-item inputs. |
+
+Summary of changes and evidence:
+
+- Extracted `as_list()` from `misc.py` into a dedicated module.
+- Simplified it from an exception/replacement/logging wrapper into a small
+  deterministic normalization helper matching its actual repository use.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -415,3 +506,7 @@ above.
 | 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
 | 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
+| 2026-08-26 | `ColorRGB`, `as_ColorRGB()`, and `as_ColorRGB_array()` | `src/nematics3d/datatypes/color_rgb.py` | `tests/test_datatypes_color_rgb.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
+| 2026-08-26 | `as_str()` | `src/nematics3d/datatypes/string.py` | Direct contract review and downstream tests | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
+| 2026-08-26 | `as_axes()` | `src/nematics3d/datatypes/axes.py` | `tests/test_datatypes_axes.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
+| 2026-08-26 | `as_list()` | `src/nematics3d/datatypes/list.py` | `tests/test_datatypes_list.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
