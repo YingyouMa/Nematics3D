@@ -1,33 +1,19 @@
-from numbers import Integral
-from typing import List, Optional, Sequence, Union
+from typing import Sequence, Union
 
-import numexpr as ne
 import numpy as np
 
-# ----------------------------------------------------------
-# Functions which are being used and general.
-# General means the code is for general nematics analysis.
-# Not general means the code is specifically for my project.
-# ----------------------------------------------------------
-from .analysis.q_diagonalization import q_diagonalize
-from .datatypes import (
+from ...analysis.q_diagonalization import q_diagonalize
+from ...datatypes import (
     DefectIndex,
     DimensionFlagInput,
     DimensionPeriodicInput,
     MaskField,
-    Vect,
-    as_DefectIndex,
+    as_defect_index,
     as_dimension_info,
-    as_director_field,
     as_lattice_mask,
-    nField,
 )
-from .field import add_periodic_boundary, align_stack
-from .grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
-from .logging_decorator import logging_and_warning_decorator
-
-# from .debug.debug_store import DEBUG_VARS
-
+from ...field import align_stack
+from ...logging_decorator import logging_and_warning_decorator
 
 DEFECT_NEIGHBOR = np.zeros((10, 3))
 DEFECT_NEIGHBOR[0] = (1, 0, 0)
@@ -40,160 +26,6 @@ DEFECT_NEIGHBOR[6] = (-0.5, 0.5, 0)
 DEFECT_NEIGHBOR[7] = (-0.5, -0.5, 0)
 DEFECT_NEIGHBOR[8] = (-0.5, 0, 0.5)
 DEFECT_NEIGHBOR[9] = (-0.5, 0, -0.5)
-
-
-_DEFECT_AXIS_PERMUTATIONS = (
-    (2, 1, 0),
-    (0, 2, 1),
-    (0, 1, 2),
-)
-
-
-def _validate_worker_count(worker_count):
-    if worker_count is None:
-        return None
-    if isinstance(worker_count, bool) or not isinstance(worker_count, Integral):
-        raise TypeError("'worker_count' must be a positive integer or None.")
-
-    worker_count = int(worker_count)
-    if not 1 <= worker_count <= ne.MAX_THREADS:
-        raise ValueError(
-            "'worker_count' must be between 1 and the NumExpr limit "
-            f"({ne.MAX_THREADS}), or None."
-        )
-    return worker_count
-
-
-def _defect_detects_xyplane_unchecked(n, threshold):
-    """Detect xy-plaquette defects in an already validated director field."""
-    a = n[:-1, :-1]
-    b = n[1:, :-1]
-    c = n[1:, 1:]
-    d = n[:-1, 1:]
-
-    ax, ay, az = a[..., 0], a[..., 1], a[..., 2]
-    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
-    cx, cy, cz = c[..., 0], c[..., 1], c[..., 2]
-    dx, dy, dz = d[..., 0], d[..., 1], d[..., 2]
-
-    mask = ne.evaluate(
-        "where("
-        "((((ax*bx + ay*by + az*bz) < 0) "
-        "!= ((bx*cx + by*cy + bz*cz) < 0)) "
-        "!= ((cx*dx + cy*dy + cz*dz) < 0)), "
-        "-(ax*dx + ay*dy + az*dz), "
-        "(ax*dx + ay*dy + az*dz)) < threshold",
-        local_dict={
-            "ax": ax,
-            "ay": ay,
-            "az": az,
-            "bx": bx,
-            "by": by,
-            "bz": bz,
-            "cx": cx,
-            "cy": cy,
-            "cz": cz,
-            "dx": dx,
-            "dy": dy,
-            "dz": dz,
-            "threshold": float(threshold),
-        },
-        optimization="moderate",
-    )
-
-    coordinates = np.argwhere(mask).astype(float, copy=False)
-    coordinates[:, :2] += 0.5
-    return coordinates
-
-
-def defect_detect(
-    n_origin: nField,
-    threshold: float = 0,
-    is_boundary_periodic: DimensionFlagInput = 0,
-    planes: DimensionFlagInput = 1,
-    *,
-    worker_count: int | None = None,
-    is_input_validated: bool = False,
-) -> DefectIndex:
-    """Detect plaquette defects in a three-dimensional director field.
-
-    Set ``is_input_validated=True`` only when the caller guarantees that
-    ``n_origin`` is a finite real array with shape ``(Nx, Ny, Nz, 3)``. This
-    avoids repeating validation for trusted upstream results such as the
-    director returned by ``q_diagonalize``.
-
-    Parameters
-    ----------
-    n_origin : nField
-        Director field with shape ``(Nx, Ny, Nz, 3)``.
-    threshold : float, optional
-        A plaquette is defective when its aligned closure dot product is less
-        than this value.
-    is_boundary_periodic : DimensionFlagInput, optional
-        Periodicity along the three spatial axes.
-    planes : DimensionFlagInput, optional
-        Select plaquettes normal to the x, y, and z axes.
-    worker_count : int or None, optional
-        NumExpr thread count used during this call. The previous process-wide
-        setting is restored before returning.
-    is_input_validated : bool, optional
-        Skip director-field validation when the input contract is already
-        guaranteed by the caller. Default is ``False``.
-
-    Returns
-    -------
-    DefectIndex
-        Defect coordinates with one integer and two half-integer components.
-        Coordinates are grouped by their plaquette-normal axis.
-
-    Notes
-    -----
-    Changing NumExpr's thread count is process-wide. Concurrent calls should
-    therefore leave ``worker_count=None`` and configure NumExpr externally.
-    """
-    if not isinstance(is_input_validated, (bool, np.bool_)):
-        raise TypeError("'is_input_validated' must be a boolean.")
-
-    if is_input_validated:
-        n_origin = np.asarray(n_origin)
-    else:
-        n_origin = as_director_field(
-            n_origin,
-            name="n_origin",
-            is_spatial_3d_required=True,
-            is_normalized=False,
-        )
-
-    is_boundary_periodic = as_dimension_info(is_boundary_periodic)
-    planes = as_dimension_info(planes)
-    worker_count = _validate_worker_count(worker_count)
-
-    previous_worker_count = ne.get_num_threads()
-    if worker_count is not None:
-        ne.set_num_threads(worker_count)
-
-    try:
-        n = add_periodic_boundary(n_origin, is_boundary_periodic)
-        original_shape = n_origin.shape[:3]
-        coordinate_chunks = []
-
-        for axis, is_plane_selected in enumerate(planes):
-            if not is_plane_selected:
-                continue
-
-            permutation = _DEFECT_AXIS_PERMUTATIONS[axis]
-            n_rotated = np.moveaxis(n, (0, 1, 2), permutation)
-            n_rotated = n_rotated[:, :, : original_shape[axis], :]
-            coordinates = _defect_detects_xyplane_unchecked(n_rotated, threshold)
-            if coordinates.size:
-                coordinate_chunks.append(coordinates[:, permutation])
-
-        if not coordinate_chunks:
-            return np.empty((0, 3), dtype=float)
-        return np.concatenate(coordinate_chunks, axis=0)
-    finally:
-        if worker_count is not None:
-            ne.set_num_threads(previous_worker_count)
 
 
 def defect_validity_from_mask(
@@ -233,7 +65,7 @@ def defect_validity_from_mask(
     validity : np.ndarray, shape (N_defects,), dtype bool
         True for each defect whose four supporting voxels are all valid.
     """
-    defect_indices = as_DefectIndex(defect_indices)
+    defect_indices = as_defect_index(defect_indices)
     mask = as_lattice_mask(mask, name="defect validity mask")
     is_boundary_periodic = as_dimension_info(is_boundary_periodic)
 
@@ -508,110 +340,6 @@ def defect_detect_surface(
     return defect_coords, near_defect_mask
 
 
-@logging_and_warning_decorator()
-def defect_classify_into_lines(
-    defect_indices: DefectIndex,
-    box_size_periodic: DimensionFlagInput = np.inf,
-    grid_offset: Optional[Vect(3)] = None,
-    grid_transform=GRID_TRANSFORM_IDENTITY,
-    logger=None,
-) -> List["DisclinationLine"]:
-    """
-    Group defect points into disclination lines based on graph connectivity.
-
-    This function treats each defect point as a graph node, and forms edges between
-    spatially adjacent nodes (using `defect_neighbor_possible_get` and periodicity).
-    The resulting undirected graph is decomposed into connected components,
-    each representing a disclination line.
-
-    Each line is then:
-    - Unwrapped across periodic boundaries
-    - Transformed into physical coordinates via `transform` and `offset`
-    - Encapsulated as a `DisclinationLine` object
-
-    Parameters
-    ----------
-    defect_indices : DefectIndex, np.ndarray of shape (N_defects, 3)
-        Grid indices of all the defects composing the line.
-        Each point should contain one integer and two half-integers (e.g., [1, 3.5, 7.5]).
-        The geometrical meaning of these components is explained in the definition of `DefectIndex`
-        in `datatype.py`.
-
-    box_size_periodic : DimensionPeriodic,
-        array_like of 3 ints or a single int
-        Grid size in each dimension, used to infer periodicity.
-        If a single float `x` is provided, it is interpreted as (x, x, x).
-        Use `np.inf` for non-periodic directions.
-        Example: [128, 128, np.inf] indicates periodicity in x and y only.
-
-    offset : Vect(3), array_like of 3 floats, optional
-        Global offset added to all coordinates after transformation.
-        Useful for shifting lines in real space.
-        Default is None (no shift).
-
-    transform : np.ndarray of shape (3, 3), optional
-        Linear transformation matrix applied to the defect indices
-        to convert from grid space to physical space (e.g., for anisotropic grids).
-        Default is the canonical identity transform.
-
-    logger : Logger object, optional
-        Used internally by the logging decorator: logging_and_warning_decorator()
-
-    Returns
-    -------
-    lines : list of DisclinationLine
-        A list of disclination line objects, each representing one connected component
-        (i.e., one continuous defect trajectory).
-    """
-
-    from .classes.graph import Graph
-    from .classes.disclination_line import DisclinationLine
-    from .grid import unwrap_trajectory
-    from .general import make_hash_table, search_in_reservoir
-
-    box_size_periodic = as_dimension_info(box_size_periodic)
-    grid_transform = as_grid_transform(grid_transform)
-
-    logger.debug(
-        "Start line classfication. \n" f"box_size_periodic: {box_size_periodic}."
-    )
-
-    defect_indices_hash = make_hash_table(defect_indices)
-
-    graph = Graph()
-
-    for idx1, defect in enumerate(defect_indices):
-        neighbor = defect_neighbor_possible_get(
-            defect, box_size_periodic=box_size_periodic
-        )
-        search = search_in_reservoir(
-            neighbor, defect_indices_hash, is_reservoir_hash=True
-        )
-        search = search[~np.isnan(search)].astype(int)
-        for idx2 in search:
-            graph.add_edge(idx1, idx2)
-
-    paths = graph.find_path()
-    paths = [
-        unwrap_trajectory(defect_indices[path], box_size_periodic=box_size_periodic)
-        for path in paths
-    ]
-    logger.debug("Done!")
-
-    lines = [
-        DisclinationLine(
-            defect_indices=path,
-            box_size_periodic_index=box_size_periodic,
-            grid_offset=grid_offset,
-            grid_transform=grid_transform,
-            is_sorted=True,
-        )
-        for path in paths
-    ]
-
-    return lines
-
-
 def defect_neighbor_possible_get(
     defect_index: Union[Sequence[float], np.ndarray],
     box_size_periodic: DimensionPeriodicInput = np.inf,
@@ -654,7 +382,7 @@ def defect_neighbor_possible_get(
         If input shape is not (3,) or if the "layer" dimension cannot be identified.
     """
 
-    from .grid import generate_mirror_point_periodic_boundary
+    from ...grid import generate_mirror_point_periodic_boundary
 
     defect_index = np.asarray(defect_index, dtype=np.float64)
     if defect_index.shape != (3,):
@@ -769,7 +497,7 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     defecty = defect_indices[indexy]
     defectz = defect_indices[indexz]
 
-    from .general import get_square
+    from ...general import get_square
 
     squarex = get_square(
         square_size_list, square_num_list, origin_list=square_origin_list, dim=3

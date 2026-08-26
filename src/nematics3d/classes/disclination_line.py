@@ -15,7 +15,7 @@ from ..datatypes import (
     as_vector,
     Tensor,
     DefectIndex,
-    as_DefectIndex,
+    as_defect_index,
     DimensionPeriodicInput,
     as_dimension_info,
     boundary_periodic_size_to_flag,
@@ -141,7 +141,7 @@ class InputLine:
 
     impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         "defect_indices": lambda v, d: (
-            None if v is None else as_DefectIndex(v, is_return_row=True)
+            None if v is None else as_defect_index(v, name=d)
         ),
         "box_size_periodic_index": lambda v, d: as_dimension_info(v, name=d),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),

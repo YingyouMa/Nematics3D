@@ -132,7 +132,7 @@ from ..grid import (
     as_grid_transform,
     apply_linear_transform,
 )
-from ..disclination import (
+from ..analysis.disclination import (
     defect_detect,
     defect_classify_into_lines,
     defect_validity_from_mask,

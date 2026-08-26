@@ -550,7 +550,7 @@ Review date: 2026-08-22
 
 Scope:
 
-- `src/nematics3d/datatypes.py::as_qfield9()` and its private validation helpers.
+- `src/nematics3d/datatypes/q_field.py::as_qfield9()` and its private validation helpers.
 - Focused tests in `tests/core/test_datatypes_qfield.py`.
 - Conversion and validation only; projection, eigensolver behavior, and a
   user-facing tutorial are outside this component's scope.

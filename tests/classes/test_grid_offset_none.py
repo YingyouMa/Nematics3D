@@ -18,7 +18,7 @@ if "nematics3d" not in sys.modules:
 from nematics3d.classes.disclination_line import DisclinationLine
 from nematics3d.classes.grid_field import InputGridField
 from nematics3d.classes.q_field_object import InputQ
-from nematics3d.disclination import defect_classify_into_lines
+from nematics3d.analysis.disclination import defect_classify_into_lines
 
 
 class TestGridOffsetNone(unittest.TestCase):

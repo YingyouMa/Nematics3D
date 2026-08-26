@@ -4,7 +4,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from nematics3d.disclination import defect_detect
+from nematics3d.analysis.disclination import defect_detect
 from nematics3d.field import add_periodic_boundary, align_stack
 
 
@@ -215,7 +215,7 @@ def test_defect_detect_trusted_path_skips_director_validation():
     director[..., 0] = 1.0
 
     with patch(
-        "nematics3d.disclination.as_director_field",
+        "nematics3d.analysis.disclination.detection.as_director_field",
         side_effect=AssertionError("director validation was called"),
     ):
         defects = defect_detect(

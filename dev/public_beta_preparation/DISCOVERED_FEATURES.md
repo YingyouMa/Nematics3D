@@ -13,7 +13,7 @@ here, then update the relevant release checklist and component review record.
 | --- | --- |
 | Status | Implemented and locally verified |
 | Discovered while reviewing | `nematics3d.q_diagonalize()` |
-| Primary implementation | `src/nematics3d/datatypes.py::as_qfield9()` |
+| Primary implementation | `src/nematics3d/datatypes/q_field.py::as_qfield9()` |
 | Downstream beneficiary | Every function that consumes the validated full Q-tensor representation |
 | Discovered date | 2026-08-18 |
 | Completed date | 2026-08-22 |

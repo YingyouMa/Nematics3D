@@ -8,7 +8,7 @@ import numpy as np
 from pyvistaqt import BackgroundPlotter
 
 from nematics3d.datatypes import as_bool
-from nematics3d.disclination import defect_detect, defect_vicinity_grid
+from nematics3d.analysis.disclination import defect_detect, defect_vicinity_grid
 from nematics3d.field import (
     align_directors,
     n_color_immerse,
