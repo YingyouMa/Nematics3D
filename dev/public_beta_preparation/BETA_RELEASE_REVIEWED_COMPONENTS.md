@@ -50,12 +50,12 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | Field | Evidence |
 | --- | --- |
 | Kind | Public semantic annotation and vector-input validator |
-| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Source | [`src/nematics3d/datatypes/vector.py`](../../src/nematics3d/datatypes/vector.py) |
 | Tests | None; the validator is intentionally covered by direct contract checks and existing downstream tests rather than a dedicated test file |
 | Tutorial | None; these are compact developer-facing input helpers |
 | Review scope | Dimension semantics, real finite values, exact shape, arbitrary positive dimensions, zero-vector policy, optional normalization, validated replacement recovery, logging, naming, public exports, and all active repository callers |
 | Validation | Direct `as_vector()` smoke checks for normalized 3-vectors, arbitrary 5-vectors, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/test_datatypes_check_sn.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `python -m pytest tests/classes/test_q_plane.py -q` (1 passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `cf3ea14da0be0a82f12fdffaab515087885fbe53` |
+| Reviewed commit | `bdb7e25` |
 | Reviewed date | 2026-08-24 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Vect(d)` records dimension only as reader-facing semantic metadata and does not provide static shape checking. Near-zero rejection uses the repository's existing absolute norm threshold of `1e-12`. Generated build artifacts are not source-of-truth callers and were not rewritten. |
@@ -76,12 +76,12 @@ Summary of changes and evidence:
 | Field | Evidence |
 | --- | --- |
 | Kind | Public semantic annotation and tensor-input validator |
-| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Source | [`src/nematics3d/datatypes/tensor.py`](../../src/nematics3d/datatypes/tensor.py) |
 | Tests | None; the validator is intentionally covered by direct contract checks and existing downstream tests rather than a dedicated test file |
 | Tutorial | None; these are compact developer-facing input helpers |
 | Review scope | Shape semantics, arbitrary positive-rank shapes, real finite values, exact shape, validated replacement recovery, logging, naming, public exports, `as_axes()` integration, grid transforms, plot extents, and all active repository callers |
 | Validation | Direct `as_tensor()` smoke checks for a 2x2 matrix, a rank-three tensor, and replacement recovery; in-memory compile of all 77 source files; `python -m pytest tests/classes/test_q_plane.py tests/core/test_datatypes_qfield.py -q` (16 passed, 23 subtests passed); `black --check` on all modified Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `cf3ea14da0be0a82f12fdffaab515087885fbe53` |
+| Reviewed commit | `bdb7e25` |
 | Reviewed date | 2026-08-24 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Tensor(shape)` records shape only as reader-facing semantic metadata and does not provide static shape checking. Scalar shape `()` and dimensions of size zero are intentionally unsupported. Generated build artifacts are not source-of-truth callers and were not rewritten. |
@@ -102,12 +102,12 @@ Summary of changes and evidence:
 | Field | Evidence |
 | --- | --- |
 | Kind | Public field-input validators with domain-specific `nField` and `SField` aliases |
-| Source | [`src/nematics3d/datatypes.py`](../../src/nematics3d/datatypes.py) |
+| Source | [`src/nematics3d/datatypes/director_field.py`](../../src/nematics3d/datatypes/director_field.py) and [`scalar_field.py`](../../src/nematics3d/datatypes/scalar_field.py) |
 | Tests | [`tests/test_datatypes_director_field.py`](../../tests/test_datatypes_director_field.py) and downstream Q-field tests |
 | Tutorial | None; these are compact input helpers used by public scientific functions |
 | Review scope | Arbitrary leading dimensions, optional strict 3D spatial shapes, real finite values, dtype-level fast paths, floating-dtype preservation, object-array fallback, avoidable norm and copy elimination, per-point director normalization, allowed and rejected zero directors, generic `ScalarField` output, domain-specific `SField`, validated replacement recovery, logging, naming, deletion of the mixed-purpose `check_Sn()`, and active callers |
 | Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/disclination.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; in-memory syntax compile; executed defect tutorial validation; `git diff --check` |
-| Reviewed commit | `b5f84a89bef171546b15803cd5fdb7f6696146ba` |
+| Reviewed commit | `bdb7e25` |
 | Reviewed date | 2026-08-25 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `nField` and `SField` intentionally remain domain-style naming exceptions. Allowed director norms at or below `1e-12` are represented as zero during normalization. Physical value restrictions on scalar order are intentionally delegated to calling scientific functions. The wider `QFieldObject` test retains a pre-existing failure because `FieldData` has no `interpolator` attribute. |
@@ -193,18 +193,18 @@ Summary of changes and evidence:
 - Updated public exports and direct callers, removed the obsolete compatibility
   module, and added Linux/Windows core CI plus an installed-wheel smoke job.
 
-### `nematics3d.disclination.defect_detect`
+### `nematics3d.analysis.disclination.defect_detect`
 
 | Field | Evidence |
 | --- | --- |
 | Kind | Public scientific function with a private multithreaded `NumExpr` plaquette kernel |
-| Source | [`src/nematics3d/disclination.py`](../../src/nematics3d/disclination.py) |
+| Source | [`src/nematics3d/analysis/disclination/detection.py`](../../src/nematics3d/analysis/disclination/detection.py) |
 | Legacy backup | [`dev/backup/defect_detection_legacy.py`](../backup/defect_detection_legacy.py) |
 | Tests | [`tests/test_disclination_defect_detect.py`](../../tests/test_disclination_defect_detect.py) and [`tests/test_datatypes_director_field.py`](../../tests/test_datatypes_director_field.py) |
 | Tutorial | [`tutorials/analysis/defect_detect.ipynb`](../../tutorials/analysis/defect_detect.ipynb) |
 | Review scope | Three plaquette-normal directions, nematic sign-aligned closure criterion, non-periodic and periodic boundaries on all spatial axes, coordinate conventions, selected planes, empty output, `NumExpr` worker control, trusted-input bypass, director-field validation integration, public callers, logging decision, performance, documentation, and legacy equivalence |
-| Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); focused defect file (19 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/disclination.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; Ruff E/W/import validation for the reviewed `disclination.py` region; in-memory syntax compile; executed notebook schema and code-cell validation; `git diff --check`; coordinate-set comparison with the archived implementation on `example/data/Q_example_workflow.npy` |
-| Reviewed commit | `b5f84a89bef171546b15803cd5fdb7f6696146ba` |
+| Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); focused defect file (19 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/analysis/disclination/detection.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; Ruff E/W/import validation for the reviewed detection implementation; in-memory syntax compile; executed notebook schema and code-cell validation; `git diff --check`; coordinate-set comparison with the archived implementation on `example/data/Q_example_workflow.npy` |
+| Reviewed commit | `bdb7e25` |
 | Reviewed date | 2026-08-25 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Nonzero `threshold` behavior is retained for developers but intentionally lacks dedicated tests because current user workflows use the default zero criterion. `is_input_validated=True` deliberately trusts the caller. Explicit `worker_count` temporarily changes a process-wide `NumExpr` setting and should not be varied by concurrent calls. Periodic detection currently copies the extended field, adding about 49 MiB on the bundled example. Output is grouped by plaquette-normal axis rather than globally sorted. The wider suite remains blocked during collection by pre-existing `ClassBase`/`HostBase` test incompatibilities. |
@@ -232,6 +232,52 @@ Summary of changes and evidence:
   periodic boundaries, trusted path, worker behavior, and a complete
   $Q$-tensor-to-defect example in an executed tutorial.
 
+### `nematics3d.datatypes.as_qfield5` and `as_qfield9`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public Q-field representation validators and converters |
+| Source | [`src/nematics3d/datatypes/q_field.py`](../../src/nematics3d/datatypes/q_field.py) |
+| Tests | [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
+| Tutorial | [`tutorials/analysis/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalize.ipynb) |
+| Review scope | Compact five-component and full symmetric-traceless 3x3 representations, strict 3D and relaxed leading dimensions, dtype and finite-value validation, symmetry and trace tolerances, empty relaxed inputs, conversion behavior, zero-copy same-representation returns, public exports, and diagonalization integration |
+| Validation | `python -m pytest tests/core/test_datatypes_qfield.py -q` (15 passed, 23 subtests passed); focused datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
+| Reviewed commit | `bdb7e25` |
+| Reviewed date | 2026-08-25 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Semantic aliases remain reader-facing NumPy aliases rather than statically shape-aware types. Full QField9 validation scans the complete input for finite values, symmetry, and trace; callers with an already validated internal tensor may explicitly skip numerical validation. |
+
+### `nematics3d.datatypes.DefectIndex` and `as_defect_index`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public defect-index semantic alias and strict canonicalizer |
+| Source | [`src/nematics3d/datatypes/defect_index.py`](../../src/nematics3d/datatypes/defect_index.py) |
+| Tests | [`tests/test_datatypes_defect_index.py`](../../tests/test_datatypes_defect_index.py) and downstream line-classification tests |
+| Tutorial | None; the coordinate convention is documented by the defect-analysis tutorials and public scientific functions |
+| Review scope | Shape `(N, 3)`, empty collections, real numeric dtype, finite values, integer/half-integer lattice structure, configurable non-negative finite tolerance, canonical half-grid snapping, error row reporting, PEP 8 naming, public exports, and classification integration |
+| Validation | `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); combined datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
+| Reviewed commit | `bdb7e25` |
+| Reviewed date | 2026-08-25 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `DefectIndex` intentionally denotes the complete `(N, 3)` collection rather than one `(3,)` row. Periodic wrapping and the doubled-integer graph encoding are algorithm-specific and remain outside this converter. |
+
+### `nematics3d.analysis.disclination.defect_classify_into_lines`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public defect-line classification function with private vectorized graph helpers |
+| Source | [`src/nematics3d/analysis/disclination/classification.py`](../../src/nematics3d/analysis/disclination/classification.py) |
+| Legacy backup | [`dev/backup/defect_line_classification_legacy.py`](../backup/defect_line_classification_legacy.py) |
+| Tests | [`tests/test_disclination_line_classification.py`](../../tests/test_disclination_line_classification.py) and [`tests/test_datatypes_defect_index.py`](../../tests/test_datatypes_defect_index.py) |
+| Tutorial | None yet |
+| Review scope | Half-grid canonicalization, periodic coordinate wrapping, duplicate rejection, vectorized neighbor-edge construction, adjacency and Euler-trail extraction, open and closed lines, periodic-boundary lines, grid transforms and offsets, deterministic line construction, public callers, legacy equivalence, and performance |
+| Validation | `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); bundled-example comparison against the archived classifier (1270 defects and 8 equivalent lines); Black; in-memory syntax and import checks; `git diff --check` |
+| Reviewed commit | `bdb7e25` |
+| Reviewed date | 2026-08-25 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The public `box_size_periodic` contract still relies on the overly general `as_dimension_info()` validator and is scheduled for separate normalization. No dedicated classification tutorial exists yet. |
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -247,9 +293,12 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `cf3ea14da0be0a82f12fdffaab515087885fbe53` | Confirmed |
-| 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes.py` | Direct contract checks and downstream tests | `cf3ea14da0be0a82f12fdffaab515087885fbe53` | Confirmed |
+| 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
+| 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes/tensor.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
-| 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes.py` | `tests/test_datatypes_director_field.py` and downstream tests | `b5f84a89bef171546b15803cd5fdb7f6696146ba` | Confirmed |
-| 2026-08-25 | `defect_detect()` | `src/nematics3d/disclination.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `b5f84a89bef171546b15803cd5fdb7f6696146ba` | Confirmed |
+| 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
+| 2026-08-25 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `bdb7e25` | Confirmed |
+| 2026-08-25 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `bdb7e25` | Confirmed |
+| 2026-08-25 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `bdb7e25` | Confirmed |
+| 2026-08-25 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `bdb7e25` | Confirmed |
