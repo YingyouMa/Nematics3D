@@ -130,12 +130,12 @@ Summary of changes and evidence:
 | Field | Evidence |
 | --- | --- |
 | Kind | Public reader-facing per-axis input alias and runtime broadcaster |
-| Source | [`src/nematics3d/datatypes/misc.py`](../../src/nematics3d/datatypes/misc.py) |
+| Source | [`src/nematics3d/datatypes/dimension_info.py`](../../src/nematics3d/datatypes/dimension_info.py) |
 | Tests | [`tests/test_datatypes_dimension_info.py`](../../tests/test_datatypes_dimension_info.py) and downstream defect, grid, bounds, and plane tests |
 | Tutorial | None; this is a compact input helper whose scalar and xyz forms are documented in its public docstring and callers |
 | Review scope | One value shared by x, y, and z; three values assigned to the axes in order; Python and NumPy real scalars; exact `(3,)` shape; independent output storage; real-value validation; optional strict boolean/0/1 mode; boolean output dtype; parameter-name errors; removal of redundant `DimensionInfoInput`, `DimensionFlag`, and `DimensionFlagInput`; public exports; and all active callers |
-| Validation | `python -m pytest tests/test_datatypes_dimension_info.py tests/test_disclination_defect_detect.py tests/test_disclination_line_classification.py tests/classes/test_grid_offset_none.py tests/classes/test_q_plane.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/classes/test_bounds_obb.py -q` (79 passed); Black and `black --check` on all 11 modified Python files; in-memory compile of 137 Python files; stale-name and call-site audit; import smoke test; `git diff --check` |
-| Reviewed commit | `2134f73` |
+| Validation | `python -m pytest tests/test_datatypes_dimension_info.py tests/test_disclination_defect_detect.py tests/test_disclination_line_classification.py tests/classes/test_grid_offset_none.py tests/classes/test_q_plane.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/classes/test_bounds_obb.py -q` (79 passed); post-extraction focused run (56 passed); Black and `black --check`; in-memory compile of 137 Python files; stale-name and call-site audit; direct-module and public import identity smoke test; `git diff --check` |
+| Reviewed commit | `b0efc5d` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The base converter intentionally validates structure rather than domain-specific ranges, so spacing, radii, and minimum lengths retain their caller-level positivity checks. `DimensionPeriodic` remains a temporary specialization pending the separate periodic-box-size review. The wider validation emitted two pre-existing `DisclinationLine` warnings from remainder operations involving infinite non-periodic sizes. |
@@ -353,7 +353,7 @@ above.
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `2134f73` | Confirmed |
-| 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/misc.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `2134f73` | Confirmed |
+| 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/dimension_info.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `b0efc5d` | Confirmed |
 | 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `2134f73` | Confirmed |
 | 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `35af036` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
