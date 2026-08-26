@@ -1,5 +1,7 @@
 """Semantic data aliases and runtime conversion helpers."""
 
+# Test comment: direct GitHub write from ChatGPT.
+
 from .bool import as_bool
 from .box_size_periodic import BoxSizePeriodic, as_box_size_periodic
 from .defect_index import DefectIndex, as_defect_index
