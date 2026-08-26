@@ -15,3 +15,6 @@ from .scalar_field import SField, ScalarField, as_scalar_field
 from .string import as_str
 from .tensor import Tensor, as_tensor
 from .vector import Vect, as_vector
+
+# Temporary compatibility for internal callers not yet renamed.
+as_list = ensure_list
