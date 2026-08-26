@@ -13,6 +13,7 @@ from .misc import *
 from .number import Number, as_number, as_value_range
 from .points import as_points
 from .q_field import QField5, QField9, as_qfield5, as_qfield9
+from .readonly_array import as_readonly_array
 from .scalar_field import SField, ScalarField, as_scalar_field
 from .string import as_str
 from .tensor import Tensor, as_tensor
