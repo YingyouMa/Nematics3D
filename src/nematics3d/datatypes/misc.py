@@ -1,34 +1,14 @@
 """
 Miscellaneous semantic data aliases and runtime conversion helpers.
 
-This file defines semantic type aliases used throughout the package for clarity in
-function signatures, documentation, and interface contracts.
-
-All types defined here are **semantic aliases**: they describe the *intended meaning*
-of data (e.g., a 3D vector or per-dimension metadata), but they do **not** enforce
-structural constraints (e.g., shape or dtype) at the type level. That is:
-
-    - We do NOT statically enforce shapes like (3,) or numeric-only elements.
-    - Type checkers (e.g., mypy, Pyright) will treat these as np.ndarray or general unions.
-    - Shape and value validation must be performed at runtime, if needed.
-
-This file is intended to:
-    - Serve as the centralized definition for commonly used input/output types.
-    - Provide self-documenting names for inputs like DimensionInfo, Vector3, etc.
-    - Allow future migration to stronger typing (e.g., with Pydantic, beartype) if desired.
-
-Example usage:
-
-    from datatypes import DimensionInfo
-
-    def func(info: DimensionInfo):
-        ...
+This module contains helpers that do not yet have a dedicated datatype module.
+Dedicated validators are re-exported here temporarily for compatibility.
 """
 
-from typing import Union, Sequence, Literal
 import numpy as np
 
 from ..logging_decorator import logging_and_warning_decorator
+from .axes import as_axes
 from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
 from .number import Number, as_number, as_value_range
 from .string import as_str
@@ -43,34 +23,6 @@ def as_readonly_array(input_data, *, dtype=float, copy: bool = True) -> np.ndarr
         values = values.copy()
     values.setflags(write=False)
     return values
-
-
-# Axes is a 3D orthonormal frame stored as columns.
-Axes = np.ndarray
-AxesInput = Union[Sequence[Sequence[Number]], np.ndarray]
-
-
-def as_axes(
-    input_data: AxesInput,
-    name: str = "axes",
-    *,
-    atol: float = 1e-8,
-    is_right_handed: bool = True,
-) -> Axes:
-    """Validate a 3D orthonormal axes frame stored as column vectors."""
-
-    axes = as_tensor(input_data, (3, 3), name=name).copy()
-    if not np.allclose(axes.T @ axes, np.eye(3), atol=atol):
-        raise ValueError(f"{name!r} must be an orthonormal axes frame.")
-
-    det = float(np.linalg.det(axes))
-    if np.isclose(det, 0.0, atol=atol):
-        raise ValueError(f"{name!r} must be a non-degenerate axes frame.")
-
-    if is_right_handed and det < 0:
-        axes[:, -1] = -axes[:, -1]
-
-    return axes
 
 
 @logging_and_warning_decorator(start_finish_level=5)
@@ -283,15 +235,8 @@ class _UnsetType:
     __slots__ = ()
 
     def __repr__(self) -> str:
-        # Provide a concise and readable representation for debugging,
-        # logging, and error messages.
         return "UNSET"
 
 
-# The single, canonical instance used throughout the codebase to denote
-# an "unset" value. Identity comparison (`is UNSET`) should always be used.
 UNSET = _UnsetType()
-
-# Public alias for the sentinel's type, intended for use in type annotations,
-# e.g. `float | Unset`. Users should not instantiate this type directly.
 Unset = _UnsetType
