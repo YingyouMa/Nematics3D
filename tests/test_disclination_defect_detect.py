@@ -240,8 +240,20 @@ def test_defect_detect_rejects_nonfinite_field_by_default():
         defect_detect(director, worker_count=1)
 
 
-@pytest.mark.parametrize("is_input_validated", [0, 1, "yes", None])
-def test_defect_detect_requires_boolean_validation_flag(is_input_validated):
+@pytest.mark.parametrize("is_input_validated", [0, 1])
+def test_defect_detect_accepts_numeric_boolean_validation_flag(is_input_validated):
+    director = np.ones((2, 2, 1, 3))
+
+    result = defect_detect(
+        director,
+        is_input_validated=is_input_validated,
+    )
+
+    assert result.shape == (0, 3)
+
+
+@pytest.mark.parametrize("is_input_validated", ["yes", None])
+def test_defect_detect_rejects_invalid_boolean_validation_flag(is_input_validated):
     director = np.ones((2, 2, 1, 3))
 
     with pytest.raises(TypeError, match="must be a boolean"):

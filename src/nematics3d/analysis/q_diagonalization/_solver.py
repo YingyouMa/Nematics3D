@@ -9,7 +9,7 @@ import numexpr as ne
 import numpy as np
 
 from ...classes.result_base import ResultBase
-from ...datatypes import QField5, QField9, as_qfield5, as_qfield9
+from ...datatypes import QField5, QField9, as_bool, as_qfield5, as_qfield9
 from ...logging_decorator import logging_and_warning_decorator
 from ._backend import (
     _resolve_worker_count,
@@ -403,6 +403,14 @@ def q_diagonalize(
         If the compiled backend is required but unavailable.
     """
     input_tensor = np.asarray(qtensor)
+    is_biaxial = as_bool(is_biaxial, name="is_biaxial")
+    is_right_handed = as_bool(is_right_handed, name="is_right_handed")
+    if is_use_c_backend is not None:
+        is_use_c_backend = as_bool(
+            is_use_c_backend,
+            name="is_use_c_backend",
+        )
+
     logger.debug(
         f"Received Q-tensor input: shape={input_tensor.shape}, "
         f"dtype={input_tensor.dtype}.\n"
@@ -416,8 +424,6 @@ def q_diagonalize(
     if is_right_handed and not is_biaxial:
         raise ValueError("'is_right_handed=True' requires 'is_biaxial=True'.")
 
-    if is_use_c_backend is not None and not isinstance(is_use_c_backend, bool):
-        raise TypeError("'is_use_c_backend' must be True, False, or None.")
     if worker_count is not None:
         if isinstance(worker_count, bool) or not isinstance(worker_count, Integral):
             raise TypeError("'worker_count' must be a positive integer or None.")

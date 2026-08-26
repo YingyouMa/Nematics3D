@@ -75,7 +75,7 @@ def test_as_value_range_rejects_invalid_configuration(value_range, error_type):
 
 def test_as_number_rejects_non_boolean_options():
     with pytest.raises(TypeError, match="is_integer"):
-        as_number(1, is_integer=1)
+        as_number(1, is_integer="yes")
 
 
 def test_integer_clipping_requires_integer_valued_bounds():

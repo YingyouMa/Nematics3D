@@ -519,49 +519,6 @@ def as_lattice_mask(
     return values.astype(bool)
 
 
-@logging_and_warning_decorator(start_finish_level=5)
-def as_bool(input_data, name="input data", replace=None, logger=None) -> bool:
-
-    try:
-        # --- Case 1: already boolean ---
-        if isinstance(input_data, (bool, np.bool_)):
-            return input_data
-
-        # --- Case 2: numeric 0 / 1 ---
-        if isinstance(input_data, Number):
-            if input_data in (0, 1):
-                return bool(input_data)
-            else:
-                raise TypeError(
-                    f"{name} must contain only 0/1 when numeric. Got {input_data}."
-                )
-
-        # --- Everything else is invalid ---
-        raise TypeError(
-            f"{name} must be boolean or in (0,1). "
-            f"Got {input_data} with dtype={getattr(input_data, 'dtype', type(input_data).__name__)}"
-        )
-
-    except TypeError:
-        # --- No recovery allowed ---
-        if replace is None:
-            raise
-
-        logger.exception("Please check data type")
-        logger.recovery(f"set {name} to be {replace} in the following.")
-
-        return replace
-
-
-def check_bool_flags(d: dict, prefix: str = "is_"):
-    for name, value in d.items():
-        if name.startswith(prefix):
-            if not isinstance(value, (bool, np.bool_, Number)) or (
-                isinstance(value, Number) and value not in (0, 1)
-            ):
-                raise TypeError(f"{name} must be a bool, got {type(value)}")
-
-
 def as_points(coords, name="input data", dim=3, *, is_unique=False, min_num=None):
     try:
         coords = np.asarray(coords, dtype=float)

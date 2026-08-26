@@ -41,8 +41,8 @@ def test_boolean_mode_rejects_other_numeric_values(value):
 
 
 def test_is_bool_option_must_be_boolean():
-    with pytest.raises(TypeError, match="'is_bool' must be boolean"):
-        as_dimension_info(1, is_bool=1)
+    with pytest.raises(TypeError, match="'is_bool' must be a boolean"):
+        as_dimension_info(1, is_bool="yes")
 
 
 def test_result_does_not_share_storage_with_input():

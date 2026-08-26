@@ -6,6 +6,7 @@ import numpy as np
 from ...datatypes import (
     DefectIndex,
     DimensionInfo,
+    as_bool,
     as_dimension_info,
     as_director_field,
     nField,
@@ -121,8 +122,10 @@ def defect_detect(
     Changing NumExpr's thread count is process-wide. Concurrent calls should
     therefore leave ``worker_count=None`` and configure NumExpr externally.
     """
-    if not isinstance(is_input_validated, (bool, np.bool_)):
-        raise TypeError("'is_input_validated' must be a boolean.")
+    is_input_validated = as_bool(
+        is_input_validated,
+        name="is_input_validated",
+    )
 
     if is_input_validated:
         n_origin = np.asarray(n_origin)

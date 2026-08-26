@@ -1,5 +1,6 @@
 """Semantic data aliases and runtime conversion helpers."""
 
+from .bool import as_bool
 from .defect_index import DefectIndex, as_defect_index
 from .dimension_info import DimensionInfo, as_dimension_info
 from .director_field import as_director_field, nField

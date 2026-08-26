@@ -5,6 +5,7 @@ import numbers
 import numpy as np
 
 from ..logging_decorator import logging_and_warning_decorator
+from .bool import as_bool
 
 
 # Reader-facing semantic alias for real scalar values. Runtime conversion
@@ -57,8 +58,11 @@ def as_number(
         "is_clipped": is_clipped,
     }
     for option_name, option_value in option_values.items():
-        if not isinstance(option_value, (bool, np.bool_)):
-            raise TypeError(f"{option_name!r} must be boolean. Got {option_value!r}.")
+        option_values[option_name] = as_bool(option_value, name=option_name)
+    is_integer = option_values["is_integer"]
+    is_nan_allowed = option_values["is_nan_allowed"]
+    is_infinite_allowed = option_values["is_infinite_allowed"]
+    is_clipped = option_values["is_clipped"]
 
     normalized_range = None
     if value_range is not None:

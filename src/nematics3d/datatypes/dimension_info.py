@@ -5,6 +5,7 @@ from typing import Sequence, Union
 
 import numpy as np
 
+from .bool import as_bool
 from .number import Number
 
 
@@ -44,8 +45,7 @@ def as_dimension_info(
         If the input is neither a scalar nor an array with shape ``(3,)``, or
         ``is_bool=True`` and a value is not zero or one.
     """
-    if not isinstance(is_bool, (bool, np.bool_)):
-        raise TypeError(f"'is_bool' must be boolean. Got {is_bool!r}.")
+    is_bool = as_bool(is_bool, name="is_bool")
 
     raw_value = np.asarray(input_data)
     if raw_value.ndim == 0:

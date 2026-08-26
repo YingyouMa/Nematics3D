@@ -120,7 +120,6 @@ from ..datatypes import (
     as_number,
     DimensionInfo,
     as_dimension_info,
-    check_bool_flags,
     UNSET,
     Unset,
     as_bool,
@@ -1199,7 +1198,10 @@ class QFieldObject(ClassBase):
         opts_line = merge["line_"]
         opts_extent = merge["extent_"]
 
-        check_bool_flags(locals())
+        is_new = as_bool(is_new, name="is_new")
+        is_wrap = as_bool(is_wrap, name="is_wrap")
+        is_smooth = as_bool(is_smooth, name="is_smooth")
+        is_extent = as_bool(is_extent, name="is_extent")
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds_input = bounds
