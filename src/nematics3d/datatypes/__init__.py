@@ -1,9 +1,8 @@
 """Semantic data aliases and runtime conversion helpers."""
 
-# Test comment: direct GitHub write from ChatGPT.
-
 from .bool import as_bool
 from .box_size_periodic import BoxSizePeriodic, as_box_size_periodic
+from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
 from .defect_index import DefectIndex, as_defect_index
 from .dimension_info import DimensionInfo, as_dimension_info
 from .director_field import as_director_field, nField
