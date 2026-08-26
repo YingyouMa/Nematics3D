@@ -30,32 +30,9 @@ import numpy as np
 import numbers
 
 from ..logging_decorator import logging_and_warning_decorator
+from .number import Number, as_number, as_value_range
 from .tensor import Tensor, as_tensor
 from .vector import Vect, as_vector
-
-# Number includes int, float, np.interger, np.floating and so on.
-# Notably, Number includes np.inf
-Number = numbers.Real
-
-# - scalar -> broadcasted to all 3 dimensions
-# - list/tuple/array of 3 values -> used directly
-NumericInput = Union[Number, Sequence[Number]]
-
-
-def as_value_range(value_range, *, name: str = "value_range") -> tuple[float, float]:
-    """Validate and normalize a closed numeric interval."""
-    value_range_arr = np.asarray(value_range, dtype=float)
-    if value_range_arr.shape != (2,):
-        raise TypeError(
-            f"{name!r} must contain exactly two numbers. "
-            f"Got shape {value_range_arr.shape}."
-        )
-    lo, hi = map(float, value_range_arr)
-    if np.isnan(lo) or np.isnan(hi):
-        raise ValueError(f"{name!r} must not contain NaN. Got {value_range!r}.")
-    if hi <= lo:
-        raise ValueError(f"{name!r} must be strictly increasing. Got {value_range!r}.")
-    return lo, hi
 
 
 def as_readonly_array(input_data, *, dtype=float, copy: bool = True) -> np.ndarray:
@@ -65,85 +42,6 @@ def as_readonly_array(input_data, *, dtype=float, copy: bool = True) -> np.ndarr
         values = values.copy()
     values.setflags(write=False)
     return values
-
-
-@logging_and_warning_decorator(start_finish_level=5)
-def as_Number(
-    input_data,
-    name="input data",
-    is_int=False,
-    is_nan_ok=True,
-    is_inf_ok=True,
-    value_range=None,
-    bounded=False,
-    replace=None,
-    logger=None,
-):
-
-    try:
-        # --- Type checks ---
-        if is_int:
-            if isinstance(input_data, numbers.Integral):
-                input_data = int(input_data)
-            elif (
-                isinstance(input_data, numbers.Real) and float(input_data).is_integer()
-            ):
-                input_data = int(input_data)
-            else:
-                raise TypeError(
-                    f"{name!r} must be an integer-valued number. Got {input_data} instead."
-                )
-        else:
-            if not isinstance(input_data, numbers.Real):
-                raise TypeError(f"{name!r} must be a number. Got {input_data} instead.")
-
-        if not is_nan_ok and np.isnan(input_data):
-            raise ValueError(f"{name!r} must not be NaN.")
-
-        if not is_inf_ok and np.isinf(input_data):
-            raise ValueError(f"{name!r} must be finite. Got {input_data}.")
-
-        lo = hi = None
-
-        # --- Validate value_range itself (recover by ignoring range if malformed) ---
-        if value_range is not None:
-            try:
-                lo, hi = as_value_range(value_range, name=f"{name} value_range")
-            except Exception as e:
-                logger.exception(
-                    f"Invalid value_range for {name!r}: {value_range!r}. Reason: {e}"
-                )
-                logger.recovery("Ignore value_range in the following.")
-                value_range = None
-
-        # --- Enforce range if applicable ---
-        if value_range is not None:
-            if not (lo <= input_data <= hi):
-                msg = f"{name!r} must be in [{lo}, {hi}], got {input_data}."
-
-                if not bounded:
-                    raise ValueError(msg)
-
-                # bounded=True: clip and warn
-                if input_data < lo:
-                    input_data = lo
-                elif input_data > hi:
-                    input_data = hi
-
-                msg += f"\nSet {name!r} to be {input_data} in the following."
-                logger.warning(msg)
-
-        return input_data
-
-    except (TypeError, ValueError) as e:
-        # --- Recovery ---
-        if replace is None:
-            raise
-
-        logger.exception(f"Validation failed for {name!r}: {e}")
-        logger.recovery(f"Set {name!r} to be {replace!r} in the following.")
-
-        return replace
 
 
 # Axes is a 3D orthonormal frame stored as columns.
@@ -456,7 +354,7 @@ DimensionInfo = np.ndarray
 # Input type for DimensionInfo:
 # - scalar -> broadcasted to all 3 dimensions
 # - list/tuple/array of 3 values -> used directly
-DimensionInfoInput = NumericInput
+DimensionInfoInput = Union[Number, Sequence[Number]]
 
 
 def as_dimension_info(
@@ -513,7 +411,7 @@ DimensionPeriodic = DimensionInfo
 # Input type for DimensionPeriodic
 # - scalar -> broadcasted to all 3 dimensions
 # - list/tuple/array of 3 values -> used directly
-DimensionPeriodicInput = NumericInput
+DimensionPeriodicInput = Union[Number, Sequence[Number]]
 
 # -------------------------
 # Dimension flag types
@@ -527,7 +425,7 @@ DimensionFlag = DimensionInfo  # conceptually a specialized DimensionInfo
 # Input type for DimensionFlag
 # - bool -> broadcasted to all 3 dimensions
 # - list/tuple/array of 3 boolean values -> used directly
-DimensionFlagInput = NumericInput
+DimensionFlagInput = Union[Number, Sequence[Number]]
 
 
 def boundary_periodic_size_to_flag(arr: DimensionPeriodicInput) -> DimensionFlag:
@@ -601,7 +499,9 @@ def as_real_lattice_field(
             f"Got shape {values.shape} instead."
         )
     if extra_ndim is not None:
-        extra_ndim = int(as_Number(extra_ndim, name=f"{name} extra_ndim", is_int=True))
+        extra_ndim = int(
+            as_number(extra_ndim, name=f"{name} extra_ndim", is_integer=True)
+        )
         if extra_ndim < 0:
             raise ValueError(
                 f"{name!r} extra_ndim must be non-negative. Got {extra_ndim}."

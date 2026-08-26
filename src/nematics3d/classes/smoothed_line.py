@@ -6,7 +6,7 @@ import numpy as np
 from scipy.interpolate import interp1d, splev, splprep
 from scipy.signal import savgol_filter
 
-from ..datatypes import Number, UNSET, Unset, as_Number, as_bool, as_points, as_str
+from ..datatypes import Number, UNSET, Unset, as_number, as_bool, as_points, as_str
 from ..logging_decorator import logging_and_warning_decorator
 from .class_base import AttrDef, ClassBase
 from .host_base import HostBase, OptsBase
@@ -66,12 +66,12 @@ class OptsSmooth(OptsBase):
 
     impl_validators = {
         **(OptsBase.impl_validators),
-        "window_ratio":         lambda v, d: None if v is None else as_Number(v, name=d),
-        "window_length":        lambda v, d: None if v is None else as_Number(v, name=d, is_int=True),
-        "order":                lambda v, d: as_Number(v, name=d, is_int=True, value_range=(3, np.inf)),
-        "num_out_ratio":        lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "window_ratio":         lambda v, d: None if v is None else as_number(v, name=d),
+        "window_length":        lambda v, d: None if v is None else as_number(v, name=d, is_integer=True),
+        "order":                lambda v, d: as_number(v, name=d, is_integer=True, value_range=(3, np.inf)),
+        "num_out_ratio":        lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
         "mode":                 lambda v, d: as_str(v, name=d, pool=("interp", "wrap")),
-        "min_line_length":      lambda v, d: as_Number(v, name=d, is_int=True, value_range=(2, np.inf)),
+        "min_line_length":      lambda v, d: as_number(v, name=d, is_integer=True, value_range=(2, np.inf)),
     }
 
     impl_defaults_frozen = MappingProxyType({
@@ -255,14 +255,22 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        line_coord_input = type(self).__attr_defs__["raw_coords"].validator(
-            line_coord_input,
-            type(self).__attr_defs__["raw_coords"].doc,
+        line_coord_input = (
+            type(self)
+            .__attr_defs__["raw_coords"]
+            .validator(
+                line_coord_input,
+                type(self).__attr_defs__["raw_coords"].doc,
+            )
         )
 
-        is_window_warning = type(self).__attr_defs__["state_is_window_warning"].validator(
-            is_window_warning,
-            type(self).__attr_defs__["state_is_window_warning"].doc,
+        is_window_warning = (
+            type(self)
+            .__attr_defs__["state_is_window_warning"]
+            .validator(
+                is_window_warning,
+                type(self).__attr_defs__["state_is_window_warning"].doc,
+            )
         )
         object.__setattr__(self, "raw_coords", line_coord_input)
         object.__setattr__(self, "calc_coords", self.raw_coords)
@@ -474,7 +482,7 @@ class SmoothedLine(HostBase):
                 "Probably the line is not properly initialized or successfully smoothed."
             )
 
-        u_percent = as_Number(
+        u_percent = as_number(
             u_percent,
             value_range=(0, 100),
             name="Continuous spline parameter along the curve",
@@ -504,7 +512,7 @@ class SmoothedLine(HostBase):
                 "Probably the line is not properly initialized or successfully smoothed."
             )
 
-        u_percent = as_Number(
+        u_percent = as_number(
             u_percent,
             value_range=(0, 100),
             name="Continuous spline parameter along the curve",
@@ -604,7 +612,7 @@ def linefunc_window_span_percent(
     parameter domain. `SmoothedLine` keeps `window_length` and `window_ratio`
     synchronized, so the line-function smoother only needs the normalized ratio.
     """
-    window_ratio = as_Number(
+    window_ratio = as_number(
         window_ratio,
         name="line function window_ratio",
         value_range=(1e-12, np.inf),
@@ -658,7 +666,7 @@ def linefunc_kernel_weights(
     therefore use `window_span_percent / 2` as their support radius.
     """
     delta = np.asarray(delta, dtype=float)
-    window_span_percent = as_Number(
+    window_span_percent = as_number(
         window_span_percent,
         name="line function window span in percent",
         value_range=(1e-12, np.inf),
@@ -719,10 +727,10 @@ def linefunc_smooth_values(
         )
 
     window_span_percent = linefunc_window_span_percent(window_ratio=window_ratio)
-    order = as_Number(
+    order = as_number(
         order,
         name="line function local polynomial order",
-        is_int=True,
+        is_integer=True,
         value_range=(0, np.inf),
     )
     if spacing_weights is None:
@@ -1076,7 +1084,9 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(
             self,
             "raw_func",
-            type(self).__attr_defs__["raw_func"].validator(
+            type(self)
+            .__attr_defs__["raw_func"]
+            .validator(
                 func,
                 type(self).__attr_defs__["raw_func"].doc,
             ),
@@ -1084,7 +1094,9 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(
             self,
             "raw_u_samples",
-            type(self).__attr_defs__["raw_u_samples"].validator(
+            type(self)
+            .__attr_defs__["raw_u_samples"]
+            .validator(
                 u_samples,
                 type(self).__attr_defs__["raw_u_samples"].doc,
             ),
@@ -1092,7 +1104,9 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(
             self,
             "raw_func_kwargs",
-            type(self).__attr_defs__["raw_func_kwargs"].validator(
+            type(self)
+            .__attr_defs__["raw_func_kwargs"]
+            .validator(
                 func_kwargs,
                 type(self).__attr_defs__["raw_func_kwargs"].doc,
             ),
@@ -1100,7 +1114,9 @@ class SmoothedLineFunc(ClassBase):
         object.__setattr__(
             self,
             "state_is_follow_owner_opts",
-            type(self).__attr_defs__["state_is_follow_owner_opts"].validator(
+            type(self)
+            .__attr_defs__["state_is_follow_owner_opts"]
+            .validator(
                 is_follow_owner_opts,
                 type(self).__attr_defs__["state_is_follow_owner_opts"].doc,
             ),
@@ -1251,7 +1267,9 @@ class SmoothedLineFunc(ClassBase):
             object.__setattr__(
                 self,
                 "raw_func",
-                type(self).__attr_defs__["raw_func"].validator(
+                type(self)
+                .__attr_defs__["raw_func"]
+                .validator(
                     func,
                     type(self).__attr_defs__["raw_func"].doc,
                 ),
@@ -1285,12 +1303,19 @@ class SmoothedLineFunc(ClassBase):
                 payload_sample = None
                 payload_shared_i = None
             else:
-                value, metric, payload_sample, payload_shared_i = sample_result, None, None, None
+                value, metric, payload_sample, payload_shared_i = (
+                    sample_result,
+                    None,
+                    None,
+                    None,
+                )
             values.append(np.asarray(value))
             metrics.append(metric)
             payload_samples.append(payload_sample)
             is_has_metric = is_has_metric or (metric is not None)
-            is_has_payload_samples = is_has_payload_samples or (payload_sample is not None)
+            is_has_payload_samples = is_has_payload_samples or (
+                payload_sample is not None
+            )
             if payload_shared_i is not None:
                 if not is_has_payload_shared:
                     payload_shared = payload_shared_i

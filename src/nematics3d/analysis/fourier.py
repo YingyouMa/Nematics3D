@@ -10,7 +10,7 @@ from typing import ClassVar
 import numpy as np
 
 from nematics3d.classes.result_base import ResultBase
-from nematics3d.datatypes import as_Number
+from nematics3d.datatypes import as_number
 from nematics3d.datatypes import as_real_lattice_field
 
 
@@ -554,7 +554,7 @@ def _as_radial_spectrum_limits(
         k_max = max_k
     else:
         k_max = float(
-            as_Number(
+            as_number(
                 k_max,
                 name="k_max",
                 value_range=(tiny, max_k),
@@ -565,7 +565,7 @@ def _as_radial_spectrum_limits(
         bin_width = min(_min_nonzero_k_step(result), k_max)
     else:
         bin_width = float(
-            as_Number(
+            as_number(
                 bin_width,
                 name="bin_width",
                 value_range=(tiny, k_max),
@@ -916,7 +916,7 @@ def _as_distance_limits(
     if r_max is None:
         r_max = default_r_max
     else:
-        r_max = as_Number(
+        r_max = as_number(
             r_max,
             name="r_max",
             value_range=(tiny, default_r_max),
@@ -926,7 +926,7 @@ def _as_distance_limits(
     if bin_width is None:
         bin_width = min(min(result.spacing), r_max)
     else:
-        bin_width = as_Number(
+        bin_width = as_number(
             bin_width,
             name="bin_width",
             value_range=(tiny, r_max),

@@ -4,6 +4,8 @@ from typing import Union
 
 import numpy as np
 
+from .number import as_number
+
 
 # Tensor order parameter in 5-component representation, shape: (Nx, Ny, Nz, 5)
 # Subtype of GeneralField
@@ -178,10 +180,14 @@ def as_qfield9(
         "trace_tolerance": trace_tolerance,
     }
     for tolerance_name, tolerance in tolerance_inputs.items():
-        if tolerance is not None and (not np.isfinite(tolerance) or tolerance < 0):
-            raise ValueError(
-                f"{tolerance_name!r} must be a finite, non-negative number or None."
+        if tolerance is not None:
+            tolerance_inputs[tolerance_name] = as_number(
+                tolerance,
+                name=tolerance_name,
+                value_range=(0.0, np.inf),
             )
+    symmetry_tolerance = tolerance_inputs["symmetry_tolerance"]
+    trace_tolerance = tolerance_inputs["trace_tolerance"]
 
     shape = qtensor.shape
 

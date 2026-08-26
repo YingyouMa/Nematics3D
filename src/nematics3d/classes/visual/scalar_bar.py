@@ -14,7 +14,7 @@ from nematics3d.datatypes import (
     UNSET,
     Unset,
     as_ColorRGB,
-    as_Number,
+    as_number,
     as_vector,
     as_bool,
     as_str,
@@ -33,23 +33,23 @@ def _as_optional_str(value, desc, *, pool=None):
 def _as_optional_int(value, desc, *, value_range=None):
     if value is None:
         return None
-    return as_Number(
+    return as_number(
         value,
         name=desc,
-        is_int=True,
+        is_integer=True,
         value_range=value_range,
-        bounded=True,
+        is_clipped=True,
     )
 
 
 def _as_optional_float(value, desc, *, value_range=None):
     if value is None:
         return None
-    return as_Number(
+    return as_number(
         value,
         name=desc,
         value_range=value_range,
-        bounded=True,
+        is_clipped=True,
     )
 
 

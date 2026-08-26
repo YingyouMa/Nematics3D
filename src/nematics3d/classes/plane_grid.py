@@ -11,7 +11,7 @@ from nematics3d.datatypes import (
     UNSET,
     Unset,
     Vect,
-    as_Number,
+    as_number,
     as_vector,
     as_bool,
     as_str,
@@ -76,12 +76,12 @@ class OptsPlaneGrid(OptsBase):
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
         "normal": lambda v, d: as_vector(v, name=d, is_normalized=True),
-        "spacing": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "spacing": lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
         "spacing_extra": lambda v, d: (
-            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+            None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf))
         ),
-        "size": lambda v, d: as_Number(v, name=d),
-        "size_extra": lambda v, d: None if v is None else as_Number(v, name=d),
+        "size": lambda v, d: as_number(v, name=d),
+        "size_extra": lambda v, d: None if v is None else as_number(v, name=d),
         "origin": lambda v, d: as_vector(v, name=d),
         "alignment": lambda v, d: as_str(
             v,

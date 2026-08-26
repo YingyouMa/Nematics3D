@@ -15,7 +15,7 @@ from nematics3d.datatypes import (
     UNSET,
     Unset,
     Vect,
-    as_Number,
+    as_number,
     as_vector,
     as_axes,
     as_dimension_info,
@@ -114,12 +114,12 @@ class OptsBounds(OptsBase):
         "axis2": lambda v, d: (
             None if v is None else as_vector(v, name=d, d=3, is_normalized=True)
         ),
-        "length1": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "length1": lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
         "length2": lambda v, d: (
-            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+            None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf))
         ),
         "length3": lambda v, d: (
-            None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf))
+            None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf))
         ),
         "alignment": lambda v, d: as_str(v, name=d, pool=("min_corner", "center")),
     }

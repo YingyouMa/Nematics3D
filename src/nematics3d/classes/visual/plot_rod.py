@@ -9,7 +9,7 @@ from typing import Any, Callable, ClassVar, Mapping, Sequence
 import numpy as np
 import pyvista as pv
 
-from nematics3d.datatypes import UNSET, Unset, as_Number, as_points, as_str
+from nematics3d.datatypes import UNSET, Unset, as_number, as_points, as_str
 from nematics3d.general import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
@@ -150,7 +150,7 @@ class OptsRod(OptsGlyph):
 
     impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         **dict(OptsGlyph.impl_validators),
-        "length": lambda v, d: as_Number(v, name=d, value_range=(1e-12, np.inf)),
+        "length": lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
         "resolver_source": lambda v, d: as_str(
             v,
             name=d,
@@ -433,9 +433,13 @@ class PlotRod(PlotGlyph):
         **kwargs,
     ):
 
-        orient = type(self).__attr_defs__["raw_orient"].validator(
-            orient,
-            type(self).__attr_defs__["raw_orient"].doc,
+        orient = (
+            type(self)
+            .__attr_defs__["raw_orient"]
+            .validator(
+                orient,
+                type(self).__attr_defs__["raw_orient"].doc,
+            )
         )
         object.__setattr__(self, "raw_orient", orient)
 

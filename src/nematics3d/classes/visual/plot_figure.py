@@ -17,7 +17,7 @@ from nematics3d.datatypes import (
     Vect,
     as_ColorRGB,
     as_bool,
-    as_Number,
+    as_number,
     as_vector,
     as_str,
 )
@@ -92,10 +92,10 @@ class OptsFigure(OptsBase):
 
     impl_validators = {
         **(OptsBase.impl_validators),
-        "azimuth":          lambda v, d: as_Number(v, name=d, value_range=(0, 360)),
-        "elevation":        lambda v, d: as_Number(v, name=d, value_range=(-90, 90)),
-        "roll":             lambda v, d: as_Number(v, name=d, value_range=(-180, 180)),
-        "distance":         lambda v, d: as_Number(v, name=d, value_range=(0, np.inf)),
+        "azimuth":          lambda v, d: as_number(v, name=d, value_range=(0, 360)),
+        "elevation":        lambda v, d: as_number(v, name=d, value_range=(-90, 90)),
+        "roll":             lambda v, d: as_number(v, name=d, value_range=(-180, 180)),
+        "distance":         lambda v, d: as_number(v, name=d, value_range=(0, np.inf)),
         "focal_point":      lambda v, d: as_vector(v, name=d, d=3),
         "size":             lambda v, d: as_vector(v, name=d, d=2),
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
@@ -1211,10 +1211,10 @@ class PlotFigure(HostBase):
         logger=None,
     ):
         """Save a screenshot of the current figure to an image file."""
-        scale = as_Number(
+        scale = as_number(
             scale,
             name="savefig scale",
-            is_int=True,
+            is_integer=True,
             value_range=(1, np.inf),
             replace=1,
         )

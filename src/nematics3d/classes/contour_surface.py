@@ -11,7 +11,7 @@ from nematics3d.datatypes import (
     DimensionFlagInput,
     Tensor,
     Vect,
-    as_Number,
+    as_number,
     as_bool,
     as_readonly_array,
     as_real_lattice_field,
@@ -31,7 +31,7 @@ from .registry_base import RegistryBase
 
 def _as_contour_level(value, *, name: str) -> float:
     """Validate one contour level and normalize it to float."""
-    return float(as_Number(value, name=name))
+    return float(as_number(value, name=name))
 
 
 class ContourSurface(ClassBase):
@@ -93,7 +93,9 @@ class ContourSurface(ClassBase):
         object.__setattr__(
             self,
             "raw_level",
-            type(self).__attr_defs__["raw_level"].validator(
+            type(self)
+            .__attr_defs__["raw_level"]
+            .validator(
                 level,
                 type(self).__attr_defs__["raw_level"].doc,
             ),
@@ -165,9 +167,13 @@ class ContourSurface(ClassBase):
 
     def act_set_level(self, level: float) -> float:
         """Update the contour level and immediately refresh the cached mesh."""
-        level_value = type(self).__attr_defs__["raw_level"].validator(
-            level,
-            type(self).__attr_defs__["raw_level"].doc,
+        level_value = (
+            type(self)
+            .__attr_defs__["raw_level"]
+            .validator(
+                level,
+                type(self).__attr_defs__["raw_level"].doc,
+            )
         )
         object.__setattr__(self, "raw_level", level_value)
         owner = self.owner

@@ -10,7 +10,7 @@ import numpy as np
 import pyvista as pv
 from scipy.spatial import cKDTree
 
-from ..datatypes import UNSET, Unset, as_Number
+from ..datatypes import UNSET, Unset, as_number
 from ..logging_decorator import logging_and_warning_decorator
 from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
@@ -229,12 +229,12 @@ class OptsSurfaceSampling(OptsBase):
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
         **dict(OptsBase.impl_validators),
-        "spacing":     lambda v, d: None if v is None else as_Number(v, name=d, value_range=(1e-12, np.inf)),
-        "seed":        lambda v, d: as_Number(v, name=d, is_int=True),
-        "oversample":  lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
-        "relax_steps": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(0, np.inf)),
-        "k_neighbors": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
-        "default_sample_count_target": lambda v, d: as_Number(v, name=d, is_int=True, value_range=(1, np.inf)),
+        "spacing":     lambda v, d: None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf)),
+        "seed":        lambda v, d: as_number(v, name=d, is_integer=True),
+        "oversample":  lambda v, d: as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
+        "relax_steps": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(0, np.inf)),
+        "k_neighbors": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
+        "default_sample_count_target": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType({

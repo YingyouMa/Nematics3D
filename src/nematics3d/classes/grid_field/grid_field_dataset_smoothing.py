@@ -9,7 +9,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 from nematics3d.datatypes import (
-    as_Number,
+    as_number,
     as_real_lattice_field,
     as_str,
 )
@@ -113,7 +113,7 @@ def _helper_as_gaussian_sigma_3(
             )
         sigma_user = tuple(
             float(
-                as_Number(
+                as_number(
                     value,
                     name=f"{sigma_name} axis {axis}",
                     value_range=(0.0, np.inf),
@@ -123,7 +123,7 @@ def _helper_as_gaussian_sigma_3(
         )
     else:
         sigma_scalar = float(
-            as_Number(
+            as_number(
                 sigma,
                 name=sigma_name,
                 value_range=(0.0, np.inf),
@@ -410,7 +410,7 @@ def act_gaussian_smooth(
             weights
         )
         weights_floor_value = float(
-            as_Number(
+            as_number(
                 weights_floor,
                 name="Gaussian smoothing weights_floor",
                 value_range=(0.0, np.inf),
@@ -420,7 +420,7 @@ def act_gaussian_smooth(
         truncate_value = 4.0
     else:
         truncate_value = float(
-            as_Number(
+            as_number(
                 truncate,
                 name="Gaussian smoothing truncate",
                 value_range=(0.0, np.inf),

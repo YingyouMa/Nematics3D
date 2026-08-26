@@ -20,7 +20,7 @@ from ..datatypes import (
     as_dimension_info,
     boundary_periodic_size_to_flag,
     as_str,
-    as_Number,
+    as_number,
     as_bool,
     UNSET,
     Unset,
@@ -1515,7 +1515,7 @@ class OptsDefectSectionGrid(OptsBase):
 
     impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         **OptsBase.impl_validators,
-        "u_percent": lambda v, d: as_Number(v, name=d, value_range=(0, 100)),
+        "u_percent": lambda v, d: as_number(v, name=d, value_range=(0, 100)),
         "is_wrap": lambda v, d: as_bool(v, name=d),
     }
 

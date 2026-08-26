@@ -6,7 +6,7 @@ from typing import Any, ClassVar, Mapping
 
 import numpy as np
 
-from nematics3d.datatypes import UNSET, Unset, Vect, as_Number, as_bool, as_vector
+from nematics3d.datatypes import UNSET, Unset, Vect, as_number, as_bool, as_vector
 from nematics3d.grid import resolve_plane_physical_axes
 from nematics3d.general import select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
@@ -65,14 +65,14 @@ class OptsPlaneGridPolar(OptsBase):
             None if v is None else as_vector(v, name=d, is_normalized=True)
         ),
         "r_min": lambda v, d: (
-            None if v is None else as_Number(v, name=d, value_range=(0, np.inf))
+            None if v is None else as_number(v, name=d, value_range=(0, np.inf))
         ),
-        "layers": lambda v, d: as_Number(
-            v, name=d, value_range=(1, np.inf), is_int=True
+        "layers": lambda v, d: as_number(
+            v, name=d, value_range=(1, np.inf), is_integer=True
         ),
-        "dr": lambda v, d: as_Number(v, name=d, value_range=(1e-6, np.inf)),
+        "dr": lambda v, d: as_number(v, name=d, value_range=(1e-6, np.inf)),
         "arc_dist": lambda v, d: (
-            None if v is None else as_Number(v, name=d, value_range=(1e-6, np.inf))
+            None if v is None else as_number(v, name=d, value_range=(1e-6, np.inf))
         ),
         "is_clip_inside": lambda v, d: as_bool(v, name=d),
     }

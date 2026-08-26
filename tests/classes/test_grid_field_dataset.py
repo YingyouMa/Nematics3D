@@ -25,7 +25,7 @@ from nematics3d.classes.grid_field import (
 from nematics3d.classes.npy_array_payload import NpyArrayPayload
 from nematics3d.datatypes import (
     UNSET,
-    as_Number,
+    as_number,
     as_readonly_array,
     as_real_lattice_field,
     as_value_range,
@@ -48,7 +48,7 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(hi, 1.0)
 
     def test_as_value_range_rejects_bad_shape(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             as_value_range([0, 1, 2])
 
     def test_as_value_range_rejects_non_increasing_interval(self):
@@ -61,17 +61,20 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertEqual(lo, 1e-12)
         self.assertEqual(hi, np.inf)
 
-    def test_as_number_defaults_still_allow_nan_and_inf(self):
-        self.assertTrue(np.isnan(as_Number(np.nan)))
-        self.assertEqual(as_Number(np.inf), np.inf)
-
-    def test_as_number_can_reject_nan(self):
+    def test_as_number_rejects_nan_and_inf_by_default(self):
         with self.assertRaises(ValueError):
-            as_Number(np.nan, is_nan_ok=False)
-
-    def test_as_number_can_reject_inf(self):
+            as_number(np.nan)
         with self.assertRaises(ValueError):
-            as_Number(np.inf, is_inf_ok=False)
+            as_number(np.inf)
+
+    def test_as_number_can_allow_nan(self):
+        self.assertTrue(np.isnan(as_number(np.nan, is_nan_allowed=True)))
+
+    def test_as_number_can_allow_inf(self):
+        self.assertEqual(
+            as_number(np.inf, is_infinite_allowed=True),
+            np.inf,
+        )
 
     def test_as_readonly_array_returns_readonly_copy(self):
         source = np.array([1.0, 2.0, 3.0], dtype=float)

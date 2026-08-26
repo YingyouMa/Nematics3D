@@ -9,7 +9,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 
 from nematics3d.classes.result_base import ResultBase
-from nematics3d.datatypes import as_Number
+from nematics3d.datatypes import as_number
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -211,7 +211,7 @@ def _as_optional_nonnegative_number(value, *, name: str) -> float | None:
     if value is None:
         return None
     return float(
-        as_Number(
+        as_number(
             value,
             name=name,
             value_range=(0.0, np.inf),
@@ -222,10 +222,10 @@ def _as_optional_nonnegative_number(value, *, name: str) -> float | None:
 def _as_positive_integer(value, *, name: str) -> int:
     """Return a strictly positive integer."""
     value = int(
-        as_Number(
+        as_number(
             value,
             name=name,
-            is_int=True,
+            is_integer=True,
             value_range=(0, np.inf),
         )
     )
@@ -446,7 +446,7 @@ def act_relaxation_length(
     length.
     """
     threshold = float(
-        as_Number(
+        as_number(
             threshold,
             name="threshold",
             value_range=(0.0, np.inf),
@@ -465,7 +465,7 @@ def act_relaxation_length(
         name="max_iteration_num",
     )
     fit_tolerance = float(
-        as_Number(
+        as_number(
             fit_tolerance,
             name="fit_tolerance",
             value_range=(0.0, np.inf),

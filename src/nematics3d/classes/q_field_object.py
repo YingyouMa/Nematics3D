@@ -117,7 +117,7 @@ from ..datatypes import (
     as_director_field,
     as_scalar_field,
     Number,
-    as_Number,
+    as_number,
     DimensionFlagInput,
     as_dimension_info,
     check_bool_flags,
@@ -255,13 +255,13 @@ class InputQ:
         "box_periodic_flag": lambda v, d: as_dimension_info(v, name=d, is_bool=True),
         "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
-        "default_miminum_line_length_smooth": lambda v, d: as_Number(
+        "default_miminum_line_length_smooth": lambda v, d: as_number(
             v, name=d, value_range=(1, np.inf)
         ),
-        "default_smooth_window_length": lambda v, d: as_Number(
+        "default_smooth_window_length": lambda v, d: as_number(
             v, name=d, value_range=(2, np.inf)
         ),
-        "default_miminum_line_length_visual": lambda v, d: as_Number(
+        "default_miminum_line_length_visual": lambda v, d: as_number(
             v, name=d, value_range=(2, np.inf)
         ),
     }

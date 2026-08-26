@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.general import find_nearest_point, closest_point_on_polyline
 from nematics3d.datatypes import (
-    as_Number,
+    as_number,
     ColorRGB,
     as_ColorRGB,
 )
@@ -51,16 +51,16 @@ class OptsPickManager:
     }
 
     _validators = {
-        "double_click_threshold": lambda v, d: as_Number(v, name=d, replace=0.3),
-        "marker_proximity_threshold": lambda v, d: as_Number(v, name=d, replace=0.5),
-        "marker_size": lambda v, d: as_Number(v, name=d, replace=14),
+        "double_click_threshold": lambda v, d: as_number(v, name=d, replace=0.3),
+        "marker_proximity_threshold": lambda v, d: as_number(v, name=d, replace=0.5),
+        "marker_size": lambda v, d: as_number(v, name=d, replace=14),
         "marker_color": lambda v, d: as_ColorRGB(v, name=d, replace=(1, 1, 0)),
-        "marker_font_size": lambda v, d: as_Number(v, name=d, replace=14),
+        "marker_font_size": lambda v, d: as_number(v, name=d, replace=14),
         "sil_color": lambda v, d: as_ColorRGB(v, name=d, replace=(0, 0, 0)),
-        "sil_opacity": lambda v, d: as_Number(v, name=d, value_range=(0, 1)),
-        "sil_width": lambda v, d: as_Number(v, name=d, value_range=(0, np.inf)),
+        "sil_opacity": lambda v, d: as_number(v, name=d, value_range=(0, 1)),
+        "sil_width": lambda v, d: as_number(v, name=d, value_range=(0, np.inf)),
         "slider_throttle_ms": lambda v, d: int(
-            as_Number(v, name=d, value_range=(1, 1000))
+            as_number(v, name=d, value_range=(1, 1000))
         ),
     }
 

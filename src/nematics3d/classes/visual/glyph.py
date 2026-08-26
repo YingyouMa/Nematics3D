@@ -15,7 +15,7 @@ from nematics3d.datatypes import (
     Unset,
     ColorRGB,
     Vect,
-    as_Number,
+    as_number,
     as_str,
     as_bool,
     as_ColorRGB,
@@ -197,15 +197,15 @@ class OptsGlyph(OptsBase):
         "is_pickable":          lambda v, d: as_bool(v, name=d),
         "shading_type":         lambda v, d: as_str(v, name=d, pool=("phong", "pbr")),
         "is_reset_camera":      lambda v, d: as_bool(v, name=d),
-        "ambient":              lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "diffuse":              lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "specular":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "specular_power":       lambda v, d: as_Number(
-            v, name=d, value_range=(1, 100), bounded=True
+        "ambient":              lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
+        "diffuse":              lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
+        "specular":             lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
+        "specular_power":       lambda v, d: as_number(
+            v, name=d, value_range=(1, 100), is_clipped=True
         ),
         "specular_color":       lambda v, d: as_ColorRGB(v, name=d),
-        "metallic":             lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
-        "roughness":            lambda v, d: as_Number(v, name=d, value_range=(0, 1), bounded=True),
+        "metallic":             lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
+        "roughness":            lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
         "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
         "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "u_percent")),
         "resolver_source_color": lambda v, d: _as_resolver_source_or_none(
@@ -224,8 +224,8 @@ class OptsGlyph(OptsBase):
         "scalars_clim":         lambda v, d: (v if v is None else as_vector(v, name=d, d=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
         "scalar_bar_title":     lambda v, d: as_str(v, name=d),
-        "sides":                lambda v, d: as_Number(
-            v, name=d, is_int=True, value_range=(3, 128), bounded=True
+        "sides":                lambda v, d: as_number(
+            v, name=d, is_integer=True, value_range=(3, 128), is_clipped=True
         ),
         }
 
@@ -1316,7 +1316,7 @@ class PlotGlyph(HostBase):
             else None
         )
         opacity = (
-            as_Number(
+            as_number(
                 opacity,
                 name="The opacity of silhouette",
                 value_range=(0, 1),
@@ -1326,7 +1326,7 @@ class PlotGlyph(HostBase):
             else None
         )
         width = (
-            as_Number(
+            as_number(
                 width,
                 name="The line width of silhouette",
                 value_range=(0, np.inf),

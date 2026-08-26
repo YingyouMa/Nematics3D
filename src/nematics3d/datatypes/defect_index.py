@@ -1,8 +1,8 @@
 """Defect-index semantic alias and runtime converter."""
 
-import numbers
-
 import numpy as np
+
+from .number import as_number
 
 
 # A DefectIndex is an array of shape (N, 3) in lattice-index coordinates.
@@ -24,13 +24,11 @@ def as_defect_index(
     and every row contains exactly one integer and two half-integers.
     Empty input with shape (0, 3) is valid.
     """
-    if isinstance(tolerance, bool) or not isinstance(tolerance, numbers.Real):
-        raise TypeError(f"'tolerance' must be a real number. Got {tolerance!r}.")
-    tolerance = float(tolerance)
-    if not np.isfinite(tolerance) or tolerance < 0.0:
-        raise ValueError(
-            f"'tolerance' must be finite and non-negative. Got {tolerance!r}."
-        )
+    tolerance = as_number(
+        tolerance,
+        name="tolerance",
+        value_range=(0.0, np.inf),
+    )
 
     raw_values = np.asarray(input_data)
     if raw_values.ndim != 2 or raw_values.shape[1:] != (3,):

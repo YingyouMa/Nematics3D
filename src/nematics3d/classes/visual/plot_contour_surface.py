@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 import pyvista as pv
 
-from ...datatypes import UNSET, Unset, as_ColorRGB, as_Number, as_bool, as_str
+from ...datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, as_str
 from ..bounds import BoundsData
 from ..class_base import AttrDef
 from ..contour_surface import ContourSurface
@@ -40,7 +40,7 @@ class OptsContourSurface(OptsGlyph):
         **dict(OptsGlyph.impl_validators),
         "is_show_edges": lambda v, d: as_bool(v, name=d),
         "edge_color": lambda v, d: as_ColorRGB(v, name=d),
-        "line_width": lambda v, d: as_Number(
+        "line_width": lambda v, d: as_number(
             v,
             name=d,
             value_range=(0.0, np.inf),
