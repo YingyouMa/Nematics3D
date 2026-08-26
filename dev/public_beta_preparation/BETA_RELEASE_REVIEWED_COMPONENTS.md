@@ -97,6 +97,33 @@ Summary of changes and evidence:
 - Updated `as_axes()`, grid-transform validation, and plot-extent validation to
   use the normalized interface.
 
+### `nematics3d.datatypes.as_bool`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public scalar boolean-input validator and normalizer |
+| Source | [`src/nematics3d/datatypes/bool.py`](../../src/nematics3d/datatypes/bool.py) |
+| Tests | [`tests/test_datatypes_bool.py`](../../tests/test_datatypes_bool.py) and downstream datatype, defect, diagonalization, and visual tests |
+| Tutorial | None; this is a compact scalar input helper used throughout public APIs and option validators |
+| Review scope | Python and NumPy booleans, Python and NumPy real zero/one values, rejection of other real values and non-scalar/non-real inputs, Python `bool` output, validated replacement recovery, logging, PEP 8 naming, dedicated module, public exports, deletion of name-driven `check_bool_flags()`, and active callers |
+| Validation | `python -m pytest tests/test_datatypes_bool.py tests/test_datatypes_number.py tests/test_datatypes_dimension_info.py tests/test_disclination_defect_detect.py tests/core/test_q_diagonalization.py tests/visual/test_glyph_empty_coords.py tests/visual/test_glyph_resolver_source.py tests/visual/test_glyph_scalar_bar.py tests/visual/test_plot_vector.py tests/classes/test_grid_offset_none.py -q` (119 passed, 10 subtests passed); Black and `black --check` on all 12 modified Python files; in-memory compile of 140 Python files; reviewed-component manual-boolean-check audit; `git diff --check` |
+| Reviewed commit | `5089673` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Strings such as `"true"` and `"false"`, zero-dimensional arrays, and general truthy/falsy objects are intentionally rejected. Integer APIs retain explicit bool rejection because that protects an integer contract rather than normalizing a boolean option. The visual regression run emitted pre-existing VTK cleanup errors and three unrelated warnings. |
+
+Summary of changes and evidence:
+
+- Extracted `as_bool()` from `misc.py` into a dedicated datatype module and
+  guaranteed a Python `bool` result for every accepted input.
+- Distinguished wrong values from wrong types and revalidated configured
+  replacements instead of returning them unchecked.
+- Removed `check_bool_flags()` and replaced its name-driven inspection with
+  explicit normalization of each public boolean option.
+- Migrated reviewed boolean checks in number, DimensionInfo, defect detection,
+  and Q diagonalization while retaining deliberate bool rejection in integer
+  validators.
+
 ### `nematics3d.datatypes.Number` and `as_number`
 
 | Field | Evidence |
@@ -107,7 +134,7 @@ Summary of changes and evidence:
 | Tutorial | None; this is a compact input helper used by public and internal APIs |
 | Review scope | Python and NumPy real scalars, explicit boolean rejection, finite values by default, opt-in NaN and infinity, integer-valued mode, Python scalar return types, inclusive ranges, optional clipping, validated replacement recovery, option validation, logging, PEP 8 naming, public exports, and active callers |
 | Validation | `python -m pytest tests/test_datatypes_number.py -q` (25 passed); combined number, Q-field, defect-index, and line-classification run (63 passed, 23 subtests passed); 65 downstream option and visual tests passed with 2 subtests; Black and `black --check` on all 27 modified Python files; in-memory compile of 136 Python files; active-source stale-name search; `git diff --check` |
-| Reviewed commit | `35af036` |
+| Reviewed commit | `5089673` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | `Number` is a reader-facing `numbers.Real` alias, so runtime boolean rejection remains the responsibility of `as_number()`. Integer mode intentionally accepts integer-valued real inputs such as `3.0`; callers whose contract requires an integral input type must retain that stricter boundary check. Ruff was unavailable in the project environment during final validation. |
@@ -135,7 +162,7 @@ Summary of changes and evidence:
 | Tutorial | None; this is a compact input helper whose scalar and xyz forms are documented in its public docstring and callers |
 | Review scope | One value shared by x, y, and z; three values assigned to the axes in order; Python and NumPy real scalars; exact `(3,)` shape; independent output storage; real-value validation; optional strict boolean/0/1 mode; boolean output dtype; parameter-name errors; removal of redundant `DimensionInfoInput`, `DimensionFlag`, and `DimensionFlagInput`; public exports; and all active callers |
 | Validation | `python -m pytest tests/test_datatypes_dimension_info.py tests/test_disclination_defect_detect.py tests/test_disclination_line_classification.py tests/classes/test_grid_offset_none.py tests/classes/test_q_plane.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/classes/test_bounds_obb.py -q` (79 passed); post-extraction focused run (56 passed); Black and `black --check`; in-memory compile of 137 Python files; stale-name and call-site audit; direct-module and public import identity smoke test; `git diff --check` |
-| Reviewed commit | `b0efc5d` |
+| Reviewed commit | `5089673` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The base converter intentionally validates structure rather than domain-specific ranges, so spacing, radii, and minimum lengths retain their caller-level positivity checks. `DimensionPeriodic` remains a temporary specialization pending the separate periodic-box-size review. The wider validation emitted two pre-existing `DisclinationLine` warnings from remainder operations involving infinite non-periodic sizes. |
@@ -222,8 +249,8 @@ Summary of changes and evidence:
 | Tutorial | [`tutorials/analysis/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalize.ipynb) |
 | Review scope | Public Q5/Q9 contract, named result, principal-only and complete eigensystems, C and `NumExpr` backend selection, Python worker threading, isotropic classification, near-degenerate orthonormality, optional right-handed frames, validation and errors, logging, performance documentation, packaging, exports, and direct callers |
 | Validation | `python -m pytest tests/core -q` (25 passed, 31 subtests passed); focused `tests/core/test_q_diagonalization.py` run (10 passed, 8 subtests passed); `black --check setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; `ruff check --select E,F,W,N,I setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; in-memory syntax compile; notebook JSON, code-cell, local-link, and stale-term validation; `git diff --check`; isolated `python -m build`; wheel installation and public-API smoke test outside the repository |
-| Reviewed commit | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` |
-| Reviewed date | 2026-08-24 |
+| Reviewed commit | `5089673` |
+| Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The public scalar order is defined as $S=3\lambda_{\max}/2$, so negative-$S$ conventions for oblate or anti-nematic systems are unsupported. Isotropic directors are deterministic placeholders. Individual eigenvectors remain physically non-unique in degenerate subspaces, and director sign is intentionally unspecified. A dedicated `get_q()` round trip was added subsequently; additional downstream boundary tests remain deferred by maintainer decision. The wider non-visual suite remains blocked during collection by pre-existing `ClassBase`/`HostBase` test incompatibilities; Windows VTK cleanup also emits unrelated OpenGL errors. The clean local wheel build and smoke test covered Windows CPython 3.12; Linux compilation is configured in CI, while a macOS wheel was not built locally. |
 
@@ -258,7 +285,7 @@ Summary of changes and evidence:
 | Tutorial | [`tutorials/analysis/defect_detect.ipynb`](../../tutorials/analysis/defect_detect.ipynb) |
 | Review scope | Three plaquette-normal directions, nematic sign-aligned closure criterion, non-periodic and periodic boundaries on all spatial axes, coordinate conventions, selected planes, empty output, `NumExpr` worker control, trusted-input bypass, director-field validation integration, public callers, logging decision, performance, documentation, and legacy equivalence |
 | Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); focused defect file (19 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/analysis/disclination/detection.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; Ruff E/W/import validation for the reviewed detection implementation; in-memory syntax compile; executed notebook schema and code-cell validation; `git diff --check`; coordinate-set comparison with the archived implementation on `example/data/Q_example_workflow.npy` |
-| Reviewed commit | `2134f73` |
+| Reviewed commit | `5089673` |
 | Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Nonzero `threshold` behavior is retained for developers but intentionally lacks dedicated tests because current user workflows use the default zero criterion. `is_input_validated=True` deliberately trusts the caller. Explicit `worker_count` temporarily changes a process-wide `NumExpr` setting and should not be varied by concurrent calls. Periodic detection currently copies the extended field, adding about 49 MiB on the bundled example. Output is grouped by plaquette-normal axis rather than globally sorted. The wider suite remains blocked during collection by pre-existing `ClassBase`/`HostBase` test incompatibilities. |
@@ -350,11 +377,12 @@ above.
 | 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes/tensor.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
-| 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
+| 2026-08-26 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `5089673` | Confirmed |
 | 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
-| 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `2134f73` | Confirmed |
-| 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/dimension_info.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `b0efc5d` | Confirmed |
+| 2026-08-26 | `as_bool()` | `src/nematics3d/datatypes/bool.py` | `tests/test_datatypes_bool.py` and downstream tests | `5089673` | Confirmed |
+| 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `5089673` | Confirmed |
+| 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/dimension_info.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `2134f73` | Confirmed |
-| 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `35af036` | Confirmed |
+| 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
 | 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
