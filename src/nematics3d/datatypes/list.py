@@ -1,7 +1,7 @@
 """Lightweight normalization helper for single-or-multiple inputs."""
 
 
-def ensure_list(input_data) -> list:
+def as_list(input_data) -> list:
     """Return *input_data* as a list without interpreting scalars as iterables.
 
     Lists are returned unchanged, tuples and sets are converted element-wise,
