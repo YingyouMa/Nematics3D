@@ -13,6 +13,7 @@ from .list import as_list
 from .number import Number, as_number, as_value_range
 from .string import as_str
 from .tensor import Tensor, as_tensor
+from .unset import UNSET, Unset
 from .vector import Vect, as_vector
 
 
@@ -165,28 +166,3 @@ def as_lattice_mask(
             f"{name!r} must contain only boolean-like values (True/False or 0/1)."
         )
     return values.astype(bool)
-
-
-class _UnsetType:
-    """
-    Internal sentinel type representing an explicit "unset" state.
-
-    This type is used to distinguish between:
-    - a value that has not been provided by the user (UNSET), and
-    - a value that is explicitly provided as None or another valid value.
-
-    It is intentionally designed to be:
-    - state-less (no attributes),
-    - identity-based (checked via `is UNSET`),
-    - type-identifiable (usable in type annotations),
-    - and safe against accidental mutation.
-    """
-
-    __slots__ = ()
-
-    def __repr__(self) -> str:
-        return "UNSET"
-
-
-UNSET = _UnsetType()
-Unset = _UnsetType
