@@ -7,9 +7,9 @@ Dedicated validators are re-exported here temporarily for compatibility.
 
 import numpy as np
 
-from ..logging_decorator import logging_and_warning_decorator
 from .axes import as_axes
 from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
+from .list import as_list
 from .number import Number, as_number, as_value_range
 from .string import as_str
 from .tensor import Tensor, as_tensor
@@ -23,31 +23,6 @@ def as_readonly_array(input_data, *, dtype=float, copy: bool = True) -> np.ndarr
         values = values.copy()
     values.setflags(write=False)
     return values
-
-
-@logging_and_warning_decorator(start_finish_level=5)
-def as_list(input_data, name="input_data", replace=None, logger=None):
-    """
-    Normalize input into a list.
-
-    If ``input_data`` is already a list, it is returned unchanged. If it is a
-    tuple or set, it is converted to a list of its elements. Otherwise the value
-    is treated as a single item and wrapped into a one-element list.
-    """
-
-    try:
-        if isinstance(input_data, list):
-            return input_data
-        if isinstance(input_data, (tuple, set)):
-            return list(input_data)
-        return [input_data]
-    except Exception:
-        if replace is None:
-            raise
-
-        logger.exception(f"Failed to normalize {name!r} into a list.")
-        logger.recovery(f"Change {name!r} into {replace!r} in the following.")
-        return replace
 
 
 # -------------------------
