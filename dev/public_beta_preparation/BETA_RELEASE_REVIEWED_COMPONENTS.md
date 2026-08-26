@@ -125,6 +125,32 @@ Summary of changes and evidence:
 - Migrated active callers and reused the normalized finite non-negative scalar
   contract for Q-field tolerances and defect-index tolerance.
 
+### `nematics3d.datatypes.DimensionInfo` and `as_dimension_info`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public reader-facing per-axis input alias and runtime broadcaster |
+| Source | [`src/nematics3d/datatypes/misc.py`](../../src/nematics3d/datatypes/misc.py) |
+| Tests | [`tests/test_datatypes_dimension_info.py`](../../tests/test_datatypes_dimension_info.py) and downstream defect, grid, bounds, and plane tests |
+| Tutorial | None; this is a compact input helper whose scalar and xyz forms are documented in its public docstring and callers |
+| Review scope | One value shared by x, y, and z; three values assigned to the axes in order; Python and NumPy real scalars; exact `(3,)` shape; independent output storage; real-value validation; optional strict boolean/0/1 mode; boolean output dtype; parameter-name errors; removal of redundant `DimensionInfoInput`, `DimensionFlag`, and `DimensionFlagInput`; public exports; and all active callers |
+| Validation | `python -m pytest tests/test_datatypes_dimension_info.py tests/test_disclination_defect_detect.py tests/test_disclination_line_classification.py tests/classes/test_grid_offset_none.py tests/classes/test_q_plane.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/classes/test_bounds_obb.py -q` (79 passed); Black and `black --check` on all 11 modified Python files; in-memory compile of 137 Python files; stale-name and call-site audit; import smoke test; `git diff --check` |
+| Reviewed commit | `2134f73` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The base converter intentionally validates structure rather than domain-specific ranges, so spacing, radii, and minimum lengths retain their caller-level positivity checks. `DimensionPeriodic` remains a temporary specialization pending the separate periodic-box-size review. The wider validation emitted two pre-existing `DisclinationLine` warnings from remainder operations involving infinite non-periodic sizes. |
+
+Summary of changes and evidence:
+
+- Made `DimensionInfo` itself express the flexible public input contract: one
+  shared value or three values corresponding to x, y, and z.
+- Removed redundant input and flag aliases while retaining strict flag behavior
+  through `is_bool=True`, which accepts booleans and numeric zero/one only.
+- Migrated flag callers to strict boolean mode and added meaningful parameter
+  names to ordinary numerical callers for clearer validation errors.
+- Kept physical constraints at their owning APIs rather than turning the
+  structural broadcaster into a collection of unrelated domain rules.
+
 ### `nematics3d.datatypes.as_director_field` and `as_scalar_field`
 
 | Field | Evidence |
@@ -232,8 +258,8 @@ Summary of changes and evidence:
 | Tutorial | [`tutorials/analysis/defect_detect.ipynb`](../../tutorials/analysis/defect_detect.ipynb) |
 | Review scope | Three plaquette-normal directions, nematic sign-aligned closure criterion, non-periodic and periodic boundaries on all spatial axes, coordinate conventions, selected planes, empty output, `NumExpr` worker control, trusted-input bypass, director-field validation integration, public callers, logging decision, performance, documentation, and legacy equivalence |
 | Validation | `python -m pytest tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py tests/classes/test_q_plane.py -q` (30 passed); focused defect file (19 passed); `black --check src/nematics3d/datatypes.py src/nematics3d/analysis/disclination/detection.py src/nematics3d/classes/q_field_object.py src/nematics3d/classes/q_plane.py tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; `ruff check tests/test_datatypes_director_field.py tests/test_disclination_defect_detect.py`; Ruff E/W/import validation for the reviewed detection implementation; in-memory syntax compile; executed notebook schema and code-cell validation; `git diff --check`; coordinate-set comparison with the archived implementation on `example/data/Q_example_workflow.npy` |
-| Reviewed commit | `bdb7e25` |
-| Reviewed date | 2026-08-25 |
+| Reviewed commit | `2134f73` |
+| Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | Nonzero `threshold` behavior is retained for developers but intentionally lacks dedicated tests because current user workflows use the default zero criterion. `is_input_validated=True` deliberately trusts the caller. Explicit `worker_count` temporarily changes a process-wide `NumExpr` setting and should not be varied by concurrent calls. Periodic detection currently copies the extended field, adding about 49 MiB on the bundled example. Output is grouped by plaquette-normal axis rather than globally sorted. The wider suite remains blocked during collection by pre-existing `ClassBase`/`HostBase` test incompatibilities. |
 
@@ -301,8 +327,8 @@ Summary of changes and evidence:
 | Tutorial | None yet |
 | Review scope | Half-grid canonicalization, periodic coordinate wrapping, duplicate rejection, vectorized neighbor-edge construction, adjacency and Euler-trail extraction, open and closed lines, periodic-boundary lines, grid transforms and offsets, deterministic line construction, public callers, legacy equivalence, and performance |
 | Validation | `python -m pytest tests/test_disclination_line_classification.py -q` (11 passed); `python -m pytest tests/test_datatypes_defect_index.py -q` (12 passed); bundled-example comparison against the archived classifier (1270 defects and 8 equivalent lines); Black; in-memory syntax and import checks; `git diff --check` |
-| Reviewed commit | `bdb7e25` |
-| Reviewed date | 2026-08-25 |
+| Reviewed commit | `2134f73` |
+| Reviewed date | 2026-08-26 |
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The public `box_size_periodic` contract still relies on the overly general `as_dimension_info()` validator and is scheduled for separate normalization. No dedicated classification tutorial exists yet. |
 
@@ -326,8 +352,9 @@ above.
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-24 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
 | 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
-| 2026-08-25 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `bdb7e25` | Confirmed |
-| 2026-08-25 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `bdb7e25` | Confirmed |
+| 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `2134f73` | Confirmed |
+| 2026-08-26 | `DimensionInfo` and `as_dimension_info()` | `src/nematics3d/datatypes/misc.py` | `tests/test_datatypes_dimension_info.py` and downstream tests | `2134f73` | Confirmed |
+| 2026-08-26 | `defect_classify_into_lines()` | `src/nematics3d/analysis/disclination/classification.py` | `tests/test_disclination_line_classification.py` | `2134f73` | Confirmed |
 | 2026-08-26 | `Number` and `as_number()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` and downstream tests | `35af036` | Confirmed |
 | 2026-08-26 | `as_qfield5()` and `as_qfield9()` | `src/nematics3d/datatypes/q_field.py` | `tests/core/test_datatypes_qfield.py` | `35af036` | Confirmed |
 | 2026-08-26 | `DefectIndex` and `as_defect_index()` | `src/nematics3d/datatypes/defect_index.py` | `tests/test_datatypes_defect_index.py` | `35af036` | Confirmed |
