@@ -1,5 +1,6 @@
 """Semantic data aliases and runtime conversion helpers."""
 
+from .axes import as_axes
 from .bool import as_bool
 from .box_size_periodic import BoxSizePeriodic, as_box_size_periodic
 from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
