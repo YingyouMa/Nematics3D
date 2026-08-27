@@ -369,7 +369,7 @@ class GridFieldDataset(ClassBase):
             else:
                 box_size_periodic_index[i] = np.inf
 
-        grid_index = generate_coordinate_grid(grid_shape, grid_shape)[0]
+        grid_index = generate_coordinate_grid(grid_shape, grid_shape)
         grid = apply_linear_transform(
             grid_index,
             transform=self.raw_grid_transform,
