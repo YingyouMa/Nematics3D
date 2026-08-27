@@ -20,8 +20,8 @@ from ..registry_base import RegistryBase
 from ...grid import (
     VALIDITY_FIELD_NAME,
     apply_linear_transform,
-    as_readonly_grid_offset,
-    as_readonly_grid_transform,
+    as_grid_offset,
+    as_grid_transform,
     generate_coordinate_grid,
     is_grid_transform_identity,
 )
@@ -64,9 +64,13 @@ class FieldData(ClassBase):
         values,
         info=None,
     ):
-        values = type(self).__attr_defs__["raw_values"].validator(
-            values,
-            type(self).__attr_defs__["raw_values"].doc,
+        values = (
+            type(self)
+            .__attr_defs__["raw_values"]
+            .validator(
+                values,
+                type(self).__attr_defs__["raw_values"].doc,
+            )
         )
 
         super().__init__(name=name, name_replace="field", is_fixed=True)
@@ -215,12 +219,12 @@ class GridFieldDataset(ClassBase):
         object.__setattr__(
             self,
             "raw_grid_offset",
-            as_readonly_grid_offset(inputValue.grid_offset),
+            as_grid_offset(inputValue.grid_offset, is_readonly=True),
         )
         object.__setattr__(
             self,
             "raw_grid_transform",
-            as_readonly_grid_transform(inputValue.grid_transform),
+            as_grid_transform(inputValue.grid_transform, is_readonly=True),
         )
         self._helper_refresh_grid_cache()
 
@@ -246,9 +250,7 @@ class GridFieldDataset(ClassBase):
                 inputValue.mask,
                 name="dataset validity mask",
             )
-            self._helper_add_field(
-                VALIDITY_FIELD_NAME, mask_values.astype(float)
-            )
+            self._helper_add_field(VALIDITY_FIELD_NAME, mask_values.astype(float))
 
     def _helper_ensure_or_infer_shape(
         self,
@@ -415,9 +417,7 @@ class GridFieldDataset(ClassBase):
                 "mask when constructing the dataset (InputGridField.mask); a "
                 "dataset built without a mask cannot gain one later."
             )
-        return self._helper_add_field(
-            name, values, info=info, is_replace=is_replace
-        )
+        return self._helper_add_field(name, values, info=info, is_replace=is_replace)
 
     def _helper_add_field(
         self,

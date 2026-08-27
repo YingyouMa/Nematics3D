@@ -12,8 +12,8 @@ from nematics3d.datatypes import as_qfield9
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
 from ...grid import (
-    as_readonly_grid_offset,
-    as_readonly_grid_transform,
+    as_grid_offset,
+    as_grid_transform,
     is_grid_transform_identity,
 )
 from .input_grid_field import as_grid_shape
@@ -98,8 +98,10 @@ def _helper_second_derivative_index(
         return np.zeros_like(values, dtype=float)
 
     if self.raw_box_periodic_flag[axis]:
-        return np.roll(values, -1, axis=axis) - 2.0 * values + np.roll(
-            values, 1, axis=axis
+        return (
+            np.roll(values, -1, axis=axis)
+            - 2.0 * values
+            + np.roll(values, 1, axis=axis)
         )
 
     derivative = np.empty_like(values, dtype=float)
@@ -116,18 +118,14 @@ def _helper_second_derivative_index(
     index_1[axis] = 1
     index_2[axis] = 2
     derivative[tuple(index_first)] = (
-        values[tuple(index_0)]
-        - 2.0 * values[tuple(index_1)]
-        + values[tuple(index_2)]
+        values[tuple(index_0)] - 2.0 * values[tuple(index_1)] + values[tuple(index_2)]
     )
 
     index_0[axis] = axis_size - 3
     index_1[axis] = axis_size - 2
     index_2[axis] = axis_size - 1
     derivative[tuple(index_last)] = (
-        values[tuple(index_0)]
-        - 2.0 * values[tuple(index_1)]
-        + values[tuple(index_2)]
+        values[tuple(index_0)] - 2.0 * values[tuple(index_1)] + values[tuple(index_2)]
     )
 
     if axis_size > 2:
@@ -178,8 +176,8 @@ def _helper_spatial_derivative_info(
     component_axis: int | None = None,
 ) -> SpatialDerivativeInfo:
     """Build payload-free metadata for an immediate derivative result."""
-    grid_offset = as_readonly_grid_offset(self.raw_grid_offset)
-    grid_transform = as_readonly_grid_transform(self.raw_grid_transform)
+    grid_offset = as_grid_offset(self.raw_grid_offset, is_readonly=True)
+    grid_transform = as_grid_transform(self.raw_grid_transform, is_readonly=True)
     return SpatialDerivativeInfo(
         operator=operator,
         source_name=source,
@@ -845,9 +843,7 @@ def act_strain_rate_and_vorticity_tensor(
     """
     which = str(which)
     if which not in ("both", "strain_rate", "vorticity_tensor"):
-        raise ValueError(
-            "which must be 'both', 'strain_rate', or 'vorticity_tensor'."
-        )
+        raise ValueError("which must be 'both', 'strain_rate', or 'vorticity_tensor'.")
 
     source, values, strain_rate, vorticity_tensor = self._helper_vector_gradient_split(
         field_or_values,

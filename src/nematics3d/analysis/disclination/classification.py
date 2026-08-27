@@ -24,6 +24,8 @@ from ...datatypes import (
 )
 from ...grid import (
     GRID_TRANSFORM_IDENTITY,
+    GridTransform,
+    as_grid_offset,
     as_grid_transform,
     unwrap_trajectory,
 )
@@ -287,7 +289,7 @@ def defect_classify_into_lines(
     defect_indices: DefectIndex,
     box_size_periodic: BoxSizePeriodic = np.inf,
     grid_offset: Optional[Vect(3)] = None,
-    grid_transform=GRID_TRANSFORM_IDENTITY,
+    grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY,
     logger=None,
 ) -> List["DisclinationLine"]:
     """Group half-grid defect points into ordered disclination-line trails.
@@ -304,6 +306,7 @@ def defect_classify_into_lines(
         box_size_periodic,
         name="box_size_periodic",
     )
+    grid_offset = as_grid_offset(grid_offset)
     grid_transform = as_grid_transform(grid_transform)
     defect_indices = as_defect_index(
         defect_indices,

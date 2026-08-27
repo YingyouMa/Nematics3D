@@ -8,15 +8,18 @@ import numpy as np
 from nematics3d.datatypes import (
     DimensionInfo,
     MaskField,
-    Tensor,
     UNSET,
     Unset,
     Vect,
-    as_vector,
     as_dimension_info,
     as_lattice_mask,
 )
-from nematics3d.grid import GRID_TRANSFORM_IDENTITY, as_grid_transform
+from nematics3d.grid import (
+    GRID_TRANSFORM_IDENTITY,
+    GridTransform,
+    as_grid_offset,
+    as_grid_transform,
+)
 
 
 def as_grid_shape(value, name: str = "grid shape") -> tuple[int, int, int]:
@@ -75,7 +78,7 @@ class InputGridField:
     shape: tuple[int, int, int] | Unset = UNSET
     box_periodic_flag: DimensionInfo = False
     grid_offset: Vect(3) | None = None
-    grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
+    grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY
     mask: MaskField | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -105,7 +108,7 @@ class InputGridField:
             name=d,
             is_bool=True,
         ),
-        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
+        "grid_offset": lambda v, d: as_grid_offset(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "mask": lambda v, d: as_lattice_mask(v, name=d),
     }

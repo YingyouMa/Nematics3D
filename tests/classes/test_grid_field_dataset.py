@@ -33,8 +33,6 @@ from nematics3d.datatypes import (
 from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
     apply_linear_transform,
-    as_readonly_grid_offset,
-    as_readonly_grid_transform,
     generate_coordinate_grid,
 )
 from nematics3d.general import get_box_corners
@@ -85,15 +83,6 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(frozen, source))
         source[0] = 10.0
         self.assertEqual(float(frozen[0]), 1.0)
-
-    def test_as_readonly_grid_offset_preserves_none(self):
-        self.assertIsNone(as_readonly_grid_offset(None))
-
-    def test_as_readonly_grid_transform_preserves_identity_sentinel(self):
-        self.assertIs(
-            as_readonly_grid_transform(GRID_TRANSFORM_IDENTITY),
-            GRID_TRANSFORM_IDENTITY,
-        )
 
     def test_as_real_lattice_field_can_require_finite_values(self):
         values = np.zeros((2, 2, 2), dtype=float)

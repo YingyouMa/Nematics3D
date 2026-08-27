@@ -106,8 +106,6 @@ import pyvista as pv
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     Vect,
-    as_vector,
-    Tensor,
     QField5,
     QField9,
     as_qfield5,
@@ -128,6 +126,8 @@ from ..field import get_q
 from ..analysis.q_diagonalization import q_diagonalize
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
+    GridTransform,
+    as_grid_offset,
     as_grid_transform,
     apply_linear_transform,
 )
@@ -207,7 +207,7 @@ class InputQ:
     mask: MaskField | Unset = UNSET
     box_periodic_flag: DimensionInfo = False
     grid_offset: Vect(3) | None = None
-    grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
+    grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY
     default_miminum_line_length_smooth: Number = 61
     default_smooth_window_length: Number = 41
     default_miminum_line_length_visual: Number = 75
@@ -256,7 +256,7 @@ class InputQ:
             name=d,
             is_bool=True,
         ),
-        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
+        "grid_offset": lambda v, d: as_grid_offset(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
         "default_miminum_line_length_smooth": lambda v, d: as_number(
             v, name=d, value_range=(1, np.inf)

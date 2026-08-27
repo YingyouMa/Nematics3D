@@ -527,6 +527,36 @@ Summary of changes and evidence:
 - Confirmed exact shape, real dtype, NaN, ordering, and conversion behavior,
   together with its inclusive-range and clipping integration in `as_number()`.
 
+### `nematics3d.grid.shift_to_box`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public whole-trajectory periodic-box translation utility |
+| Source | [`src/nematics3d/grid/periodic.py`](../../src/nematics3d/grid/periodic.py) |
+| Tests | [`tests/test_grid_periodic.py`](../../tests/test_grid_periodic.py), with datatype validation covered by [`tests/test_datatypes_box_size_periodic.py`](../../tests/test_datatypes_box_size_periodic.py) and [`tests/test_datatypes_points.py`](../../tests/test_datatypes_points.py) |
+| Tutorial | None; the helper is documented by its public docstring and is used internally by the [`unwrap_trajectory()` tutorial](../../tutorials/grid/periodic/unwrap_trajectory.ipynb) |
+| Review scope | Whole-trajectory translation by integer box periods, mixed periodic and non-periodic axes, selectable positive or negative reference index, copy-by-default behavior, explicit in-place mutation, strict writable floating-array requirements for in-place operation, empty and malformed input rejection, boolean option validation, trusted `is_validate=False` fast path, and public exports |
+| Validation | `python -m pytest tests/test_grid_periodic.py tests/test_datatypes_box_size_periodic.py tests/test_datatypes_points.py -q` (39 passed); Black check of the implementation and focused tests; execution and link validation of the periodic-trajectory tutorial; `git diff --check` |
+| Reviewed commit | `c7443c2` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The function translates the complete trajectory by whole periods; it does not repair discontinuities between successive points. The `is_validate=False` path deliberately gives undefined behavior for malformed arrays and is intended only for validated internal callers. |
+
+### `nematics3d.grid.unwrap_trajectory`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public minimum-image periodic-trajectory reconstruction utility |
+| Source | [`src/nematics3d/grid/periodic.py`](../../src/nematics3d/grid/periodic.py) |
+| Tests | [`tests/test_grid_periodic.py`](../../tests/test_grid_periodic.py), with datatype validation covered by [`tests/test_datatypes_box_size_periodic.py`](../../tests/test_datatypes_box_size_periodic.py) and [`tests/test_datatypes_points.py`](../../tests/test_datatypes_points.py) |
+| Tutorial | [`tutorials/grid/periodic/unwrap_trajectory.ipynb`](../../tutorials/grid/periodic/unwrap_trajectory.ipynb) |
+| Review scope | Minimum-image correction of consecutive displacements, mixed periodic axes, scalar and xyz box sizes, input isolation, empty and single-point trajectories, reverse anchoring, optional translation of a selected reference point into the principal box, positive and negative reference indices, validation failures, internal use of the trusted in-place `shift_to_box()` path, debug logging, public exports, and disclination-line classification integration |
+| Validation | `python -m pytest tests/test_grid_periodic.py tests/test_datatypes_box_size_periodic.py tests/test_datatypes_points.py -q` (39 passed); Black check of the implementation and focused tests; complete execution of the 17-cell tutorial and local-link validation (no broken links); `git diff --check` |
+| Reviewed commit | `c7443c2` |
+| Reviewed date | 2026-08-26 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The minimum-image convention assumes every true step is shorter than half the corresponding periodic length. An exact half-period displacement is direction-ambiguous and follows `numpy.round()` tie-to-even behavior. Unwrapping preserves continuity and may intentionally return coordinates outside the principal box. |
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -561,3 +591,5 @@ above.
 | 2026-08-26 | `as_list()` | `src/nematics3d/datatypes/list.py` | `tests/test_datatypes_list.py` | `60c63dd8c1bc497e6b9ec3de076aa6e2076b3dae` | Confirmed |
 | 2026-08-26 | `as_points()` | `src/nematics3d/datatypes/points.py` | `tests/test_datatypes_points.py` and downstream tests | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
 | 2026-08-26 | `as_value_range()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
+| 2026-08-26 | `shift_to_box()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
+| 2026-08-26 | `unwrap_trajectory()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |

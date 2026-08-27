@@ -15,7 +15,7 @@ from ..datatypes import (
     as_points,
     as_vector,
 )
-from .transform import GRID_TRANSFORM_IDENTITY, apply_linear_transform
+from .transform import GRID_TRANSFORM_IDENTITY, GridTransform, apply_linear_transform
 
 
 def generate_mirror_point_periodic_boundary(
@@ -60,7 +60,7 @@ def generate_mirror_point_periodic_boundary(
 def wrap_points_to_box(
     points: Union[np.ndarray, Sequence[Sequence[float]], Sequence[float]],
     box_size_periodic: BoxSizePeriodic = np.inf,
-    transform=GRID_TRANSFORM_IDENTITY,
+    transform: GridTransform = GRID_TRANSFORM_IDENTITY,
     offset: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Wrap points into the principal periodic box in lattice coordinates.

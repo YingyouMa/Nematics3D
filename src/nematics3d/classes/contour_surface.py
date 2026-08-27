@@ -9,7 +9,6 @@ import pyvista as pv
 
 from nematics3d.datatypes import (
     DimensionInfo,
-    Tensor,
     Vect,
     as_number,
     as_bool,
@@ -18,9 +17,10 @@ from nematics3d.datatypes import (
 )
 from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
+    GridTransform,
     apply_linear_transform,
-    as_readonly_grid_offset,
-    as_readonly_grid_transform,
+    as_grid_offset,
+    as_grid_transform,
 )
 
 from .class_base import AttrDef, ClassBase
@@ -340,7 +340,7 @@ class ContourSurfaceSet(ClassBase):
         *,
         name: str | None = None,
         grid_offset: Vect(3) | None = None,
-        grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY,
+        grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY,
         box_periodic_flag: DimensionInfo = False,
         bounds=None,
         opts_defaults_override: Mapping[str, Any] | None = None,
@@ -393,12 +393,12 @@ class ContourSurfaceSet(ClassBase):
         object.__setattr__(
             self,
             "raw_grid_offset",
-            as_readonly_grid_offset(grid_info.grid_offset),
+            as_grid_offset(grid_info.grid_offset, is_readonly=True),
         )
         object.__setattr__(
             self,
             "raw_grid_transform",
-            as_readonly_grid_transform(grid_info.grid_transform),
+            as_grid_transform(grid_info.grid_transform, is_readonly=True),
         )
         object.__setattr__(self, "impl_visual_default", visual_default_use)
         object.__setattr__(

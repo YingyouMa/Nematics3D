@@ -1,10 +1,23 @@
-"""Grid-transform validation and application helpers."""
-
-from typing import Optional
+"""Grid-transform validation, storage, and application helpers."""
 
 import numpy as np
 
-from ..datatypes import as_readonly_array, as_tensor
+from ..datatypes import (
+    Tensor,
+    as_bool,
+    as_points,
+    as_readonly_array,
+    as_tensor,
+    as_vector,
+)
+
+
+# GridTransform is a reader-facing semantic annotation. Runtime validation is
+# performed by as_grid_transform().
+GridTransform = Tensor((3, 3))
+
+_GRID_ORTHOGONAL_RTOL = 1e-8
+_GRID_DEGENERATE_RTOL = 1e-12
 
 
 class _GridTransformIdentity:
@@ -26,7 +39,6 @@ class _GridTransformIdentity:
 
 
 GRID_TRANSFORM_IDENTITY = _GridTransformIdentity()
-GridTransformIdentity = _GridTransformIdentity
 
 
 def is_grid_transform_identity(transform) -> bool:
@@ -34,57 +46,67 @@ def is_grid_transform_identity(transform) -> bool:
     return transform is GRID_TRANSFORM_IDENTITY or transform is None
 
 
-def as_grid_transform(transform, name="grid_transform"):
+def as_grid_transform(
+    transform: GridTransform,
+    name="grid_transform",
+    *,
+    is_readonly: bool = False,
+) -> GridTransform:
     """Validate a right-handed orthogonal grid transform.
 
     Transform columns are lattice-basis vectors. They may carry scale, but
     shear, reflections, and degenerate axes are unsupported.
     """
+    is_readonly = as_bool(is_readonly, name="is_readonly")
     if is_grid_transform_identity(transform):
-        return transform
+        return GRID_TRANSFORM_IDENTITY
 
     transform = as_tensor(transform, (3, 3), name=name)
     axis_lengths = np.linalg.norm(transform, axis=0)
-    if np.any(axis_lengths <= 1e-12):
+    if np.any(axis_lengths <= _GRID_DEGENERATE_RTOL):
         raise ValueError(f"{name} must have three nonzero column vectors.")
 
     gram = transform.T @ transform
     off_diag = gram - np.diag(np.diag(gram))
     scale_sq = max(float(np.max(axis_lengths) ** 2), 1.0)
-    if not np.allclose(off_diag, 0.0, atol=1e-8 * scale_sq):
+    if not np.allclose(
+        off_diag,
+        0.0,
+        rtol=0.0,
+        atol=_GRID_ORTHOGONAL_RTOL * scale_sq,
+    ):
         raise ValueError(
             f"{name} must define an orthogonal grid basis: its column vectors "
             "may be scaled, but must be pairwise orthogonal."
         )
 
     det_scale = max(float(np.prod(axis_lengths)), 1.0)
-    if np.linalg.det(transform) <= 1e-12 * det_scale:
+    if np.linalg.det(transform) <= _GRID_DEGENERATE_RTOL * det_scale:
         raise ValueError(
             f"{name} must define a right-handed grid basis; reflections and "
             "degenerate transforms are not supported."
         )
 
+    if is_readonly:
+        return as_readonly_array(transform)
     return transform
 
 
-def as_readonly_grid_offset(offset):
-    """Return one read-only grid offset array, preserving ``None``."""
+def as_grid_offset(offset, name="grid_offset", *, is_readonly: bool = False):
+    """Validate a three-dimensional grid offset, preserving ``None``."""
+    is_readonly = as_bool(is_readonly, name="is_readonly")
     if offset is None:
         return None
-    return as_readonly_array(offset, dtype=float)
-
-
-def as_readonly_grid_transform(transform):
-    """Return one read-only grid transform array, preserving identity."""
-    if is_grid_transform_identity(transform):
-        return transform
-    return as_readonly_array(transform, dtype=float)
+    offset = as_vector(offset, d=3, name=name)
+    if is_readonly:
+        return as_readonly_array(offset)
+    return offset
 
 
 def apply_linear_transform(
     points: np.ndarray,
-    transform=GRID_TRANSFORM_IDENTITY,
-    offset: Optional[np.ndarray] = None,
+    transform: GridTransform = GRID_TRANSFORM_IDENTITY,
+    offset=None,
     *,
     is_inv: bool = False,
 ) -> np.ndarray:
@@ -94,26 +116,27 @@ def apply_linear_transform(
     uses ``(points - offset) @ inv(transform)``. Point arrays may have arbitrary
     leading dimensions and one trailing coordinate axis.
     """
-    points = np.asarray(points)
-    ndim = points.shape[-1]
-
-    if is_grid_transform_identity(transform):
-        transform_use = transform
-    else:
-        transform_use = as_tensor(transform, (ndim, ndim), name="grid transform")
-
-    if offset is None:
-        offset_use = None
-    else:
-        offset_use = np.asarray(offset)
-        if offset_use.shape != (ndim,):
-            raise ValueError(f"offset must have shape ({ndim},)")
+    is_inv = as_bool(is_inv, name="is_inv")
+    raw_points = np.asarray(points)
+    if raw_points.ndim == 0 or raw_points.shape[-1] != 3:
+        raise ValueError(
+            "'points' must have a trailing coordinate axis of length 3. "
+            f"Got shape={raw_points.shape}."
+        )
+    points_shape = raw_points.shape
+    points = as_points(raw_points.reshape(-1, 3), d=3, name="points").reshape(
+        points_shape
+    )
+    transform_use = as_grid_transform(transform, name="transform")
+    offset_use = as_grid_offset(offset, name="offset")
 
     if is_inv:
         result = points if offset_use is None else points - offset_use
         if is_grid_transform_identity(transform_use):
             return result
-        return np.einsum("...i,ij->...j", result, np.linalg.inv(transform_use))
+        result_flat = result.reshape(-1, 3)
+        transformed = np.linalg.solve(transform_use.T, result_flat.T).T
+        return transformed.reshape(points_shape)
 
     if is_grid_transform_identity(transform_use):
         result = points

@@ -15,7 +15,6 @@ from ..datatypes import (
     Vect,
     as_box_size_periodic,
     as_vector,
-    Tensor,
     DefectIndex,
     as_defect_index,
     as_str,
@@ -26,7 +25,9 @@ from ..datatypes import (
 )
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
+    GridTransform,
     apply_linear_transform,
+    as_grid_offset,
     as_grid_transform,
     unwrap_trajectory,
     wrap_points_to_box,
@@ -119,7 +120,7 @@ class InputLine:
     defect_indices: DefectIndex | None = None
     box_size_periodic_index: BoxSizePeriodic = np.inf
     grid_offset: Vect(3) | None = None
-    grid_transform: Tensor((3, 3)) = GRID_TRANSFORM_IDENTITY
+    grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         "defect_indices": "indices of defect points in the Q array",
@@ -143,7 +144,7 @@ class InputLine:
             None if v is None else as_defect_index(v, name=d)
         ),
         "box_size_periodic_index": lambda v, d: as_box_size_periodic(v, name=d),
-        "grid_offset": lambda v, d: None if v is None else as_vector(v, name=d),
+        "grid_offset": lambda v, d: as_grid_offset(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
     }
 

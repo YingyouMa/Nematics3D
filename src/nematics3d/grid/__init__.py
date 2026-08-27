@@ -11,11 +11,10 @@ from .periodic import (
 from .plane import resolve_plane_physical_axes
 from .transform import (
     GRID_TRANSFORM_IDENTITY,
-    GridTransformIdentity,
+    GridTransform,
     apply_linear_transform,
+    as_grid_offset,
     as_grid_transform,
-    as_readonly_grid_offset,
-    as_readonly_grid_transform,
     is_grid_transform_identity,
 )
 
@@ -24,12 +23,11 @@ VALIDITY_FIELD_NAME = "mask"
 
 __all__ = [
     "GRID_TRANSFORM_IDENTITY",
-    "GridTransformIdentity",
+    "GridTransform",
     "VALIDITY_FIELD_NAME",
     "apply_linear_transform",
+    "as_grid_offset",
     "as_grid_transform",
-    "as_readonly_grid_offset",
-    "as_readonly_grid_transform",
     "generate_coordinate_grid",
     "generate_fixed_step_grid",
     "generate_mirror_point_periodic_boundary",
