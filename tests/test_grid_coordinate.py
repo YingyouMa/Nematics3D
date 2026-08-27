@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.grid import generate_coordinate_grid
+from nematics3d.grid import generate_coordinate_grid, generate_fixed_step_grid
 
 
 def test_generate_coordinate_grid_identity_3d():
@@ -68,3 +68,65 @@ def test_generate_coordinate_grid_returns_array_not_legacy_tuple():
     grid = generate_coordinate_grid((2, 2), (3, 3))
     assert isinstance(grid, np.ndarray)
     assert grid.shape == (3, 3, 2)
+
+
+def test_generate_fixed_step_grid_bottom_left():
+    grid, grid_int, sizes = generate_fixed_step_grid(5.2, 3.1, 2.0, 1.0)
+
+    assert grid.shape == (3, 4, 2)
+    assert grid_int.shape == grid.shape
+    assert grid.dtype == float
+    assert np.issubdtype(grid_int.dtype, np.integer)
+    np.testing.assert_array_equal(grid_int[2, 3], [2, 3])
+    np.testing.assert_allclose(grid[2, 3], [4.0, 3.0])
+    assert sizes == (4.0, 3.0)
+
+
+def test_generate_fixed_step_grid_center_is_symmetric_and_contains_zero():
+    grid, grid_int, sizes = generate_fixed_step_grid(
+        5.2, 4.4, 1.0, 1.0, alignment="center"
+    )
+
+    assert grid.shape == (5, 5, 2)
+    np.testing.assert_allclose(grid[0, 0], [-2.0, -2.0])
+    np.testing.assert_allclose(grid[2, 2], [0.0, 0.0])
+    np.testing.assert_allclose(grid[-1, -1], [2.0, 2.0])
+    np.testing.assert_array_equal(grid_int[2, 2], [2, 2])
+    assert sizes == (4.0, 4.0)
+
+
+def test_generate_fixed_step_grid_zero_size_returns_one_point():
+    grid, grid_int, sizes = generate_fixed_step_grid(0.0, 0.0, 2.0, 3.0)
+
+    assert grid.shape == (1, 1, 2)
+    np.testing.assert_array_equal(grid, [[[0.0, 0.0]]])
+    np.testing.assert_array_equal(grid_int, [[[0, 0]]])
+    assert sizes == (0.0, 0.0)
+
+
+def test_generate_fixed_step_grid_accepts_numpy_real_scalars():
+    grid, _, sizes = generate_fixed_step_grid(
+        np.float64(4.0), np.int64(3), np.float32(2.0), np.int32(1)
+    )
+    assert grid.shape == (3, 4, 2)
+    assert sizes == (4.0, 3.0)
+
+
+@pytest.mark.parametrize(
+    "args, kwargs, error_type",
+    [
+        ((-1.0, 2.0, 1.0, 1.0), {}, ValueError),
+        ((1.0, -2.0, 1.0, 1.0), {}, ValueError),
+        ((1.0, 2.0, 0.0, 1.0), {}, ValueError),
+        ((1.0, 2.0, -1.0, 1.0), {}, ValueError),
+        ((1.0, 2.0, 1.0, 0.0), {}, ValueError),
+        ((np.nan, 2.0, 1.0, 1.0), {}, ValueError),
+        ((1.0, 2.0, np.inf, 1.0), {}, ValueError),
+        ((True, 2.0, 1.0, 1.0), {}, TypeError),
+        ((1.0, 2.0, 1.0, 1.0), {"alignment": "middle"}, ValueError),
+        ((1.0, 2.0, 1.0, 1.0), {"alignment": 1}, TypeError),
+    ],
+)
+def test_generate_fixed_step_grid_rejects_invalid_inputs(args, kwargs, error_type):
+    with pytest.raises(error_type):
+        generate_fixed_step_grid(*args, **kwargs)
