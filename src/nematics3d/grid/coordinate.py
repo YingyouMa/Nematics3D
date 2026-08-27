@@ -125,8 +125,12 @@ def generate_fixed_step_grid(
         requested sizes are rounded down to the largest extents compatible with
         the fixed spacings and selected alignment.
     """
-    size1 = float(as_number(size1, name="size1"))
-    size2 = float(as_number(size2, name="size2"))
+    size1 = float(
+        as_number(size1, name="size1", value_range=(0.0, np.inf))
+    )
+    size2 = float(
+        as_number(size2, name="size2", value_range=(0.0, np.inf))
+    )
     step1 = float(as_number(step1, name="step1"))
     step2 = float(as_number(step2, name="step2"))
     alignment = as_str(
@@ -135,8 +139,9 @@ def generate_fixed_step_grid(
         pool=("bottom-left", "center"),
     )
 
-    if size1 < 0.0 or size2 < 0.0:
-        raise ValueError("size1 and size2 must be non-negative.")
+    # as_number uses inclusive value ranges. Keep the strict-zero boundary here
+    # so arbitrarily small positive spacings remain valid without inventing a
+    # library-wide numerical epsilon for this helper.
     if step1 <= 0.0 or step2 <= 0.0:
         raise ValueError("step1 and step2 must be strictly positive.")
 
