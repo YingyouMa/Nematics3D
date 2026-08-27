@@ -3,8 +3,6 @@
 from dataclasses import dataclass
 from typing import ClassVar, Mapping
 
-import numpy as np
-
 from nematics3d.datatypes import (
     DimensionInfo,
     MaskField,
@@ -12,6 +10,7 @@ from nematics3d.datatypes import (
     Unset,
     Vect,
     as_dimension_info,
+    as_grid_shape,
     as_lattice_mask,
 )
 from nematics3d.grid import (
@@ -22,58 +21,9 @@ from nematics3d.grid import (
 )
 
 
-def as_grid_shape(value, name: str = "grid shape") -> tuple[int, int, int]:
-    """Validate a 3D grid shape and return it as a tuple of positive integers."""
-    if not isinstance(value, (tuple, list, np.ndarray)) or len(value) != 3:
-        raise ValueError(
-            f"{name!r} must be a length-3 shape like (Nx, Ny, Nz). "
-            f"Got {value!r} instead."
-        )
-
-    shape = []
-    for dim in value:
-        if not isinstance(dim, (int, np.integer)):
-            raise TypeError(
-                f"{name!r} entries must be integers. Got {value!r} instead."
-            )
-        dim = int(dim)
-        if dim <= 0:
-            raise ValueError(
-                f"{name!r} entries must be positive. Got {value!r} instead."
-            )
-        shape.append(dim)
-
-    return tuple(shape)
-
-
 @dataclass(slots=True)
 class InputGridField:
-    """
-    Validated input bundle for a shared-grid field dataset.
-
-    This object describes only the common spatial grid. Physical data such as
-    Q tensors, velocity, active force, and concentration should be bound later
-    to the owning dataset, where their leading grid shape can be checked against
-    this metadata.
-
-    Parameters
-    ----------
-    shape
-        Optional lattice shape ``(Nx, Ny, Nz)``. If omitted, a dataset may infer
-        it from the first field that is bound.
-    box_periodic_flag
-        Periodic-boundary-condition flags for the three lattice directions.
-    grid_offset
-        Translation offset that maps lattice indices to real-space coordinates.
-    grid_transform
-        3x3 linear transform that maps lattice indices to real-space
-        coordinates, or ``GRID_TRANSFORM_IDENTITY`` for the identity map.
-    mask
-        Optional per-voxel validity mask of shape ``(Nx, Ny, Nz)``. True marks
-        voxels whose data is physically meaningful. The mask can only be
-        supplied here, at dataset construction; once bound it is immutable, and
-        a dataset built without a mask can never gain one later.
-    """
+    """Validated input bundle for a shared-grid field dataset."""
 
     shape: tuple[int, int, int] | Unset = UNSET
     box_periodic_flag: DimensionInfo = False
@@ -102,7 +52,7 @@ class InputGridField:
     }
 
     _validators: ClassVar[Mapping[str, object]] = {
-        "shape": lambda v, d: as_grid_shape(v, name=d),
+        "shape": lambda v, d: as_grid_shape(v, name=d, is_strict_3d=True),
         "box_periodic_flag": lambda v, d: as_dimension_info(
             v,
             name=d,
@@ -113,8 +63,6 @@ class InputGridField:
         "mask": lambda v, d: as_lattice_mask(v, name=d),
     }
 
-    # Keep the InputQ-style assignment contract: validation runs both during
-    # dataclass initialization and during later interactive edits.
     def __setattr__(self, key, value):
         if key in self._validators and value is not UNSET:
             desc = f"{key!r}: {self.__class__.__attrs__[key]}"
