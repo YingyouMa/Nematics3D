@@ -99,8 +99,8 @@ def generate_fixed_step_grid(
     step1: float,
     step2: float,
     alignment: str = "bottom-left",
-) -> tuple[np.ndarray, tuple[float, float]]:
-    """Generate integer topology for a 2D grid with fixed physical step sizes.
+) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
+    """Generate a two-dimensional grid with fixed physical step sizes.
 
     Parameters
     ----------
@@ -109,25 +109,21 @@ def generate_fixed_step_grid(
     step1, step2 : real
         Strictly positive finite physical spacings along the two grid axes.
     alignment : {"bottom-left", "center"}, optional
-        ``"bottom-left"`` starts at one corner and grows in the positive
-        directions. ``"center"`` keeps the origin on an actual grid point and
-        grows symmetrically around it.
+        ``"bottom-left"`` starts at coordinate ``(0, 0)`` and grows in the
+        positive directions. ``"center"`` keeps ``(0, 0)`` on an actual grid
+        point and grows symmetrically around it.
 
     Returns
     -------
+    grid : numpy.ndarray
+        Continuous 2D coordinates with shape ``(n1, n2, 2)`` and float dtype.
     grid_int : numpy.ndarray
-        Integer grid topology with shape ``(n1, n2, 2)`` and integer dtype.
+        Integer grid topology with the same shape and platform-integer dtype;
         ``grid_int[i, j] == (i, j)``.
     size_eff : tuple of float
         Effective physical extents actually covered by the discrete grid. The
-        requested size is rounded down to the largest extent compatible with
-        the fixed spacing and selected alignment.
-
-    Notes
-    -----
-    This helper intentionally returns only integer topology plus effective
-    extents. Physical coordinates are constructed by the owning plane geometry
-    from the topology, basis vectors, spacing, and origin.
+        requested sizes are rounded down to the largest extents compatible with
+        the fixed spacings and selected alignment.
     """
     size1 = float(as_number(size1, name="size1"))
     size2 = float(as_number(size2, name="size2"))
@@ -147,6 +143,8 @@ def generate_fixed_step_grid(
     if alignment == "bottom-left":
         n1 = int(np.floor(size1 / step1)) + 1
         n2 = int(np.floor(size2 / step2)) + 1
+        origin_index1 = 0
+        origin_index2 = 0
         size1_eff = (n1 - 1) * step1
         size2_eff = (n2 - 1) * step2
     else:  # alignment == "center"
@@ -154,11 +152,18 @@ def generate_fixed_step_grid(
         n2_half = int(np.floor(size2 / (2.0 * step2)))
         n1 = 2 * n1_half + 1
         n2 = 2 * n2_half + 1
+        origin_index1 = n1_half
+        origin_index2 = n2_half
         size1_eff = 2.0 * n1_half * step1
         size2_eff = 2.0 * n2_half * step2
 
-    # Only the integer topology is consumed downstream. np.indices constructs
-    # that payload directly, avoiding the old float meshgrid and a second
-    # integer meshgrid before stacking.
+    # Build the integer topology once. The legacy implementation created two
+    # separate meshgrids (float and integer) and stacked both. Here the physical
+    # coordinate grid is derived directly from the integer topology, reducing
+    # peak temporary allocation while preserving the public three-value API.
     grid_int = np.moveaxis(np.indices((n1, n2), dtype=np.intp), 0, -1)
-    return grid_int, (float(size1_eff), float(size2_eff))
+    grid = grid_int.astype(float)
+    grid[..., 0] = (grid[..., 0] - origin_index1) * step1
+    grid[..., 1] = (grid[..., 1] - origin_index2) * step2
+
+    return grid, grid_int, (float(size1_eff), float(size2_eff))
