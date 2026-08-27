@@ -4,6 +4,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from ..datatypes import as_number, as_str
+
 
 def _as_positive_int_shape(shape, *, name: str) -> tuple[int, ...]:
     """Return one validated shape made of positive integral dimensions."""
@@ -97,46 +99,66 @@ def generate_fixed_step_grid(
     step1: float,
     step2: float,
     alignment: str = "bottom-left",
-) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
-    """Generate a two-dimensional coordinate grid with fixed step sizes.
+) -> tuple[np.ndarray, tuple[float, float]]:
+    """Generate integer topology for a 2D grid with fixed physical step sizes.
 
-    ``alignment='bottom-left'`` starts both axes at zero. ``'center'`` keeps
-    zero as an actual grid point and expands symmetrically around it. Return
-    the continuous grid, integer index grid, and effective covered sizes.
+    Parameters
+    ----------
+    size1, size2 : real
+        Requested non-negative physical extents along the two grid axes.
+    step1, step2 : real
+        Strictly positive finite physical spacings along the two grid axes.
+    alignment : {"bottom-left", "center"}, optional
+        ``"bottom-left"`` starts at one corner and grows in the positive
+        directions. ``"center"`` keeps the origin on an actual grid point and
+        grows symmetrically around it.
+
+    Returns
+    -------
+    grid_int : numpy.ndarray
+        Integer grid topology with shape ``(n1, n2, 2)`` and integer dtype.
+        ``grid_int[i, j] == (i, j)``.
+    size_eff : tuple of float
+        Effective physical extents actually covered by the discrete grid. The
+        requested size is rounded down to the largest extent compatible with
+        the fixed spacing and selected alignment.
+
+    Notes
+    -----
+    This helper intentionally returns only integer topology plus effective
+    extents. Physical coordinates are constructed by the owning plane geometry
+    from the topology, basis vectors, spacing, and origin.
     """
-    alignment = str(alignment)
+    size1 = float(as_number(size1, name="size1"))
+    size2 = float(as_number(size2, name="size2"))
+    step1 = float(as_number(step1, name="step1"))
+    step2 = float(as_number(step2, name="step2"))
+    alignment = as_str(
+        alignment,
+        name="alignment",
+        pool=("bottom-left", "center"),
+    )
+
+    if size1 < 0.0 or size2 < 0.0:
+        raise ValueError("size1 and size2 must be non-negative.")
+    if step1 <= 0.0 or step2 <= 0.0:
+        raise ValueError("step1 and step2 must be strictly positive.")
+
     if alignment == "bottom-left":
         n1 = int(np.floor(size1 / step1)) + 1
         n2 = int(np.floor(size2 / step2)) + 1
-
-        axis1 = np.arange(n1, dtype=float) * step1
-        axis2 = np.arange(n2, dtype=float) * step2
-        axis1_int = np.arange(n1)
-        axis2_int = np.arange(n2)
-
         size1_eff = (n1 - 1) * step1
         size2_eff = (n2 - 1) * step2
+    else:  # alignment == "center"
+        n1_half = int(np.floor(size1 / (2.0 * step1)))
+        n2_half = int(np.floor(size2 / (2.0 * step2)))
+        n1 = 2 * n1_half + 1
+        n2 = 2 * n2_half + 1
+        size1_eff = 2.0 * n1_half * step1
+        size2_eff = 2.0 * n2_half * step2
 
-    elif alignment == "center":
-        n1_half = int(np.floor(size1 / step1 / 2))
-        n2_half = int(np.floor(size2 / step2 / 2))
-
-        axis1 = np.arange(-n1_half, n1_half + 1, dtype=float) * step1
-        axis2 = np.arange(-n2_half, n2_half + 1, dtype=float) * step2
-        axis1_int = np.arange(axis1.shape[0])
-        axis2_int = np.arange(axis2.shape[0])
-
-        size1_eff = 2 * n1_half * step1
-        size2_eff = 2 * n2_half * step2
-    else:
-        raise ValueError(
-            f"alignment must be 'bottom-left' or 'center', got {alignment!r}"
-        )
-
-    mesh = np.meshgrid(axis1, axis2, indexing="ij")
-    grid = np.stack(mesh, axis=-1)
-
-    mesh_int = np.meshgrid(axis1_int, axis2_int, indexing="ij")
-    grid_int = np.stack(mesh_int, axis=-1)
-
-    return grid, grid_int, (size1_eff, size2_eff)
+    # Only the integer topology is consumed downstream. np.indices constructs
+    # that payload directly, avoiding the old float meshgrid and a second
+    # integer meshgrid before stacking.
+    grid_int = np.moveaxis(np.indices((n1, n2), dtype=np.intp), 0, -1)
+    return grid_int, (float(size1_eff), float(size2_eff))
