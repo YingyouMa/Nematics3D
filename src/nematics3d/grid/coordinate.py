@@ -4,36 +4,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from ..datatypes import as_number, as_str
-
-
-def _as_positive_int_shape(shape, *, name: str) -> tuple[int, ...]:
-    """Return one validated shape made of positive integral dimensions."""
-    if isinstance(shape, (str, bytes)):
-        raise TypeError(f"{name} must be a sequence of positive integers.")
-
-    try:
-        values = tuple(shape)
-    except TypeError as exc:
-        raise TypeError(f"{name} must be a sequence of positive integers.") from exc
-
-    if not values:
-        raise ValueError(f"{name} must contain at least one dimension.")
-
-    result = []
-    for i, value in enumerate(values):
-        if isinstance(value, (bool, np.bool_)) or not isinstance(
-            value, (int, np.integer)
-        ):
-            raise TypeError(
-                f"{name}[{i}] must be an integer, got {type(value).__name__}."
-            )
-        value = int(value)
-        if value <= 0:
-            raise ValueError(f"{name}[{i}] must be positive, got {value}.")
-        result.append(value)
-
-    return tuple(result)
+from ..datatypes import as_grid_shape, as_number, as_str
 
 
 def generate_coordinate_grid(
@@ -64,8 +35,8 @@ def generate_coordinate_grid(
     A target dimension of length one samples source coordinate zero, matching
     ``numpy.linspace(0, source_size - 1, 1)``.
     """
-    shape_source = _as_positive_int_shape(shape_source, name="shape_source")
-    shape_target = _as_positive_int_shape(shape_target, name="shape_target")
+    shape_source = as_grid_shape(shape_source, name="shape_source")
+    shape_target = as_grid_shape(shape_target, name="shape_target")
 
     ndim = len(shape_source)
     if ndim != len(shape_target):
@@ -73,14 +44,9 @@ def generate_coordinate_grid(
             "shape_source and shape_target must have the same number of dimensions"
         )
 
-    # Common fast path: no resampling is needed. np.indices allocates the
-    # coordinate payload directly without constructing a separate meshgrid list.
     if shape_source == shape_target:
         return np.moveaxis(np.indices(shape_target, dtype=float), 0, -1)
 
-    # Allocate only the final dense coordinate grid. Each 1D coordinate axis is
-    # broadcast directly into its final component, avoiding N full-size meshgrid
-    # temporaries before stacking.
     grid = np.empty((*shape_target, ndim), dtype=float)
     for axis_index, (source_size, target_size) in enumerate(
         zip(shape_source, shape_target)
@@ -100,50 +66,16 @@ def generate_fixed_step_grid(
     step2: float,
     alignment: str = "bottom-left",
 ) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
-    """Generate a two-dimensional grid with fixed physical step sizes.
-
-    Parameters
-    ----------
-    size1, size2 : real
-        Requested non-negative physical extents along the two grid axes.
-    step1, step2 : real
-        Strictly positive finite physical spacings along the two grid axes.
-    alignment : {"bottom-left", "center"}, optional
-        ``"bottom-left"`` starts at coordinate ``(0, 0)`` and grows in the
-        positive directions. ``"center"`` keeps ``(0, 0)`` on an actual grid
-        point and grows symmetrically around it.
-
-    Returns
-    -------
-    grid : numpy.ndarray
-        Continuous 2D coordinates with shape ``(n1, n2, 2)`` and float dtype.
-    grid_int : numpy.ndarray
-        Integer grid topology with the same shape and platform-integer dtype;
-        ``grid_int[i, j] == (i, j)``.
-    size_eff : tuple of float
-        Effective physical extents actually covered by the discrete grid. The
-        requested sizes are rounded down to the largest extents compatible with
-        the fixed spacings and selected alignment.
-    """
-    size1 = float(
-        as_number(size1, name="size1", value_range=(0.0, np.inf))
-    )
-    size2 = float(
-        as_number(size2, name="size2", value_range=(0.0, np.inf))
-    )
-    step1 = float(as_number(step1, name="step1"))
-    step2 = float(as_number(step2, name="step2"))
+    """Generate a two-dimensional grid with fixed physical step sizes."""
+    size1 = float(as_number(size1, name="size1", value_range=(0.0, np.inf)))
+    size2 = float(as_number(size2, name="size2", value_range=(0.0, np.inf)))
+    step1 = float(as_number(step1, name="step1", value_range=(1e-12, np.inf)))
+    step2 = float(as_number(step2, name="step2", value_range=(1e-12, np.inf)))
     alignment = as_str(
         alignment,
         name="alignment",
         pool=("bottom-left", "center"),
     )
-
-    # as_number uses inclusive value ranges. Keep the strict-zero boundary here
-    # so arbitrarily small positive spacings remain valid without inventing a
-    # library-wide numerical epsilon for this helper.
-    if step1 <= 0.0 or step2 <= 0.0:
-        raise ValueError("step1 and step2 must be strictly positive.")
 
     if alignment == "bottom-left":
         n1 = int(np.floor(size1 / step1)) + 1
@@ -152,7 +84,7 @@ def generate_fixed_step_grid(
         origin_index2 = 0
         size1_eff = (n1 - 1) * step1
         size2_eff = (n2 - 1) * step2
-    else:  # alignment == "center"
+    else:
         n1_half = int(np.floor(size1 / (2.0 * step1)))
         n2_half = int(np.floor(size2 / (2.0 * step2)))
         n1 = 2 * n1_half + 1
@@ -162,10 +94,6 @@ def generate_fixed_step_grid(
         size1_eff = 2.0 * n1_half * step1
         size2_eff = 2.0 * n2_half * step2
 
-    # Build the integer topology once. The legacy implementation created two
-    # separate meshgrids (float and integer) and stacked both. Here the physical
-    # coordinate grid is derived directly from the integer topology, reducing
-    # peak temporary allocation while preserving the public three-value API.
     grid_int = np.moveaxis(np.indices((n1, n2), dtype=np.intp), 0, -1)
     grid = grid_int.astype(float)
     grid[..., 0] = (grid[..., 0] - origin_index1) * step1
