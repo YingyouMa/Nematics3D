@@ -7,6 +7,7 @@ from .color_rgb import ColorRGB, as_ColorRGB, as_ColorRGB_array
 from .defect_index import DefectIndex, as_defect_index
 from .dimension_info import DimensionInfo, as_dimension_info
 from .director_field import as_director_field, nField
+from .grid_shape import as_grid_shape
 from .lattice_field import GeneralField, MaskField, as_lattice_mask, as_real_lattice_field
 from .list import as_list
 from .number import Number, as_number, as_value_range
