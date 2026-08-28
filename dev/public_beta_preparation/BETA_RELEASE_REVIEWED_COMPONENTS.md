@@ -652,6 +652,40 @@ Summary of changes and evidence:
   Its repository validators `as_director_field()` and `as_scalar_field()` are
   already confirmed.
 
+### `nematics3d.grid` transform utilities
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public grid-transform annotation, identity sentinel, validators, and forward/inverse coordinate mapping |
+| Source | [`src/nematics3d/grid/transform.py`](../../src/nematics3d/grid/transform.py) |
+| Tests | [`tests/test_grid_transform.py`](../../tests/test_grid_transform.py), with shared-grid geometry coverage in [`tests/classes/test_grid_field_dataset.py`](../../tests/classes/test_grid_field_dataset.py) and downstream periodic, defect-line, contour, bounds, plane-grid, and Q-field tests |
+| Tutorial | [`tutorials/grid/transform/apply_linear_transform.ipynb`](../../tutorials/grid/transform/apply_linear_transform.ipynb) |
+| Review scope | `GridTransform`, `GRID_TRANSFORM_IDENTITY`, identity canonicalization, three-dimensional offsets, read-only snapshots, the row-vector convention $x_{physical}=x_{index}T+o$, transform rows as scaled lattice-basis vectors, arbitrary leading point shapes, empty points, forward and inverse maps, anisotropic rotation, row orthogonality, right-handedness, reflection/shear/degeneracy rejection, physical-scale-stable direction checks, grid-spacing extraction, input validation, public exports, active callers, and logging decision |
+| Validation | Focused transform and shared-grid geometry run (19 passed); broader periodic, defect classification, contour, bounds, plane-grid, and Q-field caller run (63 passed, with 1 unrelated pre-existing `FieldData.interpolator` relation failure); Black and `black --check` on the implementation and affected tests; complete in-memory execution of the transform tutorial; notebook JSON validation; in-memory syntax compile; active-source row/column convention audit; `git diff --check` |
+| Reviewed commit | `7b3ec3a91ec30e7d7003c4570c000650ce55be12` |
+| Reviewed date | 2026-08-28 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Grid transforms intentionally support only finite right-handed orthogonal bases with independent row scales. General shear, reflection, and degenerate affine maps are rejected. A row length at or below the absolute `1e-12` degeneracy threshold is unsupported. |
+
+Summary of changes and evidence:
+
+- Unified validation, application, spacing, tests, and tutorial documentation on
+  the repository row-vector convention: row `i` of `T` is the physical basis
+  vector reached by one unit step along lattice-index axis `i`.
+- Added a direct rotated-basis test so a forward/inverse round trip can no
+  longer conceal a transposed convention, and confirmed the shared-grid
+  coordinates and spacing use the same basis rows.
+- Made orthogonality and handedness checks operate on normalized row directions,
+  avoiding scale-dependent acceptance and rejection for otherwise equivalent
+  physical transforms.
+- Confirmed identity and offset-only paths, read-only storage, arbitrary leading
+  point shapes, invalid inputs, right-handedness, shear/reflection rejection,
+  and forward/inverse recovery.
+- Kept the utilities undecorated because they are deterministic validation and
+  vectorized mapping primitives; workflow-level callers own useful logging.
+  Their repository dependencies `as_bool()`, `as_points()`, `as_tensor()`, and
+  `as_vector()` are separately confirmed.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -691,3 +725,4 @@ above.
 | 2026-08-27 | `generate_coordinate_grid()` and `generate_fixed_step_grid()` | `src/nematics3d/grid/coordinate.py` | `tests/test_grid_coordinate.py` and direct caller tests | `2b54edaa83e084f999fb415dddff6914dd256dfb` | Confirmed |
 | 2026-08-27 | `as_grid_shape()` | `src/nematics3d/datatypes/grid_shape.py` | `tests/test_datatypes_grid_shape.py` and downstream tests | `fa2239e7681b262cea48d01fa580452f2e5d851e` | Confirmed |
 | 2026-08-28 | `get_q()` | `src/nematics3d/field.py` | `tests/core/test_get_q.py` and downstream tests | `70871e394effca0755983efe6888a377180871ea` | Confirmed |
+| 2026-08-28 | Grid transform utilities | `src/nematics3d/grid/transform.py` | `tests/test_grid_transform.py` and downstream geometry tests | `7b3ec3a91ec30e7d7003c4570c000650ce55be12` | Confirmed |
