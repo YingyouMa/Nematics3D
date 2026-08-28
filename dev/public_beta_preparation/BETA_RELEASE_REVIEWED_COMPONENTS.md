@@ -682,6 +682,36 @@ Summary of changes and evidence:
   boolean filter; useful defect counts and mask-filtering events are already
   logged by its workflow-level `QFieldObject.act_defect_detect()` caller.
 
+### `nematics3d.datatypes.GeneralField` and `as_real_lattice_field()`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public semantic alias and runtime converter for real-valued lattice fields |
+| Source | [`src/nematics3d/datatypes/lattice_field.py`](../../src/nematics3d/datatypes/lattice_field.py) |
+| Tests | [`tests/test_datatypes_lattice_field.py`](../../tests/test_datatypes_lattice_field.py), with Fourier, contour-surface, grid-dataset, mask, and defect downstream coverage |
+| Tutorial | None; lattice-axis semantics, component-axis rules, finite-value behavior, range handling, and copy behavior are documented in the function docstring and focused tests |
+| Review scope | Minimum three lattice axes, exact trailing-component-axis count, standard complete-shape validation, nonempty axes, real numeric input, integer-to-float normalization, compatible floating-input reuse, finite-value enforcement, optional NaN/infinity preservation, inclusive finite-value ranges, rejection versus clipping, non-finite preservation during clipping, caller-input isolation when clipping, bool-like options, public datatype export, active physical-field callers, and logging decision |
+| Validation | Complete lattice-field datatype run (23 passed); contour and defect-mask downstream run (18 passed); Fourier transform run excluding unrelated correlation/distance failures (20 passed, 7 deselected); full Fourier/contour/defect run (40 passed, with 5 unrelated pre-existing correlation shape failures); full grid-dataset run (102 passed, with 5 unrelated pre-existing interpolator/smoothing/dynamic-mask failures); Black and `black --check`; in-memory syntax compile; active-caller/export/dependency audit; `git diff --check` |
+| Reviewed commit | `63cb2c3b47ae847480a89f921b93da7eb1b41879` |
+| Reviewed date | 2026-08-28 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | This converter validates generic real lattice data, not domain-specific physics such as director normalization, Q-tensor symmetry/tracelessness, or binary mask values. Compatible floating input may share memory with the caller by design; clipping returns an independent result. Complete `shape` validation includes component axes as well as the first three lattice axes. |
+
+Summary of changes and evidence:
+
+- Replaced the private exact-shape validator with the confirmed public
+  `as_grid_shape()` contract while preserving complete-array shape checks.
+- Fixed range handling so `is_finite=False` genuinely preserves NaN and
+  positive/negative infinity, including when finite values are clipped.
+- Confirmed scalar, vector, and tensor lattice layouts through exact
+  component-axis counts without conflating this converter with the arbitrary
+  rank accepted by `as_scalar_field()`.
+- Confirmed integer normalization, zero-copy compatible floating input,
+  independent clipped output, finite-value errors, and bool-like option rules.
+- Kept the converter undecorated because it is a deterministic array validator;
+  successful conversions are too frequent and lightweight to be useful log
+  events, while validation exceptions already identify the failed contract.
+
 ### `nematics3d.datatypes.MaskField` and `as_lattice_mask()`
 
 | Field | Evidence |
@@ -695,7 +725,7 @@ Summary of changes and evidence:
 | Reviewed commit | `d28dfc2529c64fbd26bf56ba86adc1b84cb00400` |
 | Reviewed date | 2026-08-28 |
 | Reviewer | Yingyou Ma and Codex |
-| Remaining limitations | Masks are deliberately binary validity fields, not continuous confidence weights. `as_real_lattice_field()`, used to validate numeric mask input, remains active and has not yet been separately confirmed; its dependencies `as_bool()` and `as_value_range()` and the mask shape dependency `as_grid_shape()` are already confirmed. |
+| Remaining limitations | Masks are deliberately binary validity fields, not continuous confidence weights. Its numeric-field dependency `as_real_lattice_field()` and the dependencies `as_bool()`, `as_value_range()`, and `as_grid_shape()` are separately confirmed. |
 
 Summary of changes and evidence:
 
@@ -788,3 +818,4 @@ above.
 | 2026-08-28 | Grid transform utilities | `src/nematics3d/grid/transform.py` | `tests/test_grid_transform.py` and downstream geometry tests | `7b3ec3a91ec30e7d7003c4570c000650ce55be12` | Confirmed |
 | 2026-08-28 | `defect_validity_from_mask()` | `src/nematics3d/analysis/disclination/misc.py` | `tests/test_disclination_defect_validity.py` and Q-field initialization integration | `7e03526ffe198d1970543661f698770942dc6e9e` | Confirmed |
 | 2026-08-28 | `MaskField` and `as_lattice_mask()` | `src/nematics3d/datatypes/lattice_field.py` | `tests/test_datatypes_lattice_field.py` and downstream mask integration | `d28dfc2529c64fbd26bf56ba86adc1b84cb00400` | Confirmed |
+| 2026-08-28 | `GeneralField` and `as_real_lattice_field()` | `src/nematics3d/datatypes/lattice_field.py` | `tests/test_datatypes_lattice_field.py` and downstream physical-field callers | `63cb2c3b47ae847480a89f921b93da7eb1b41879` | Confirmed |
