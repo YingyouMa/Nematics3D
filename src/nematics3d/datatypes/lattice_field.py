@@ -10,23 +10,6 @@ from .number import as_number, as_value_range
 GeneralField = np.ndarray
 
 
-def _as_shape(shape, *, name: str) -> tuple[int, ...]:
-    """Validate one exact array shape without silently truncating dimensions."""
-    try:
-        shape = tuple(shape)
-    except TypeError as exc:
-        raise TypeError(f"{name!r} must be an iterable of positive integers.") from exc
-
-    validated = []
-    for i, dim in enumerate(shape):
-        value = as_number(dim, name=f"{name}[{i}]", is_integer=True)
-        value = int(value)
-        if value <= 0:
-            raise ValueError(f"{name!r} dimensions must be positive. Got {shape}.")
-        validated.append(value)
-    return tuple(validated)
-
-
 def as_real_lattice_field(
     input_data,
     name: str = "field values",
@@ -37,7 +20,7 @@ def as_real_lattice_field(
     value_range=None,
     bounded: bool = False,
 ) -> GeneralField:
-    """Convert input into a real-valued NumPy lattice field.
+    """Validate and normalize a real-valued NumPy lattice field.
 
     The first three axes are interpreted as lattice axes. ``extra_ndim`` may
     require an exact number of trailing component axes. Numeric real-valued
@@ -47,8 +30,32 @@ def as_real_lattice_field(
     clips them when ``bounded=True``.
 
     When ``is_finite=False``, NaN and infinity are permitted. A simultaneous
-    ``value_range`` constraint applies only to finite values; NaN is therefore
-    preserved rather than treated as an out-of-range value.
+    ``value_range`` constraint applies only to finite values; non-finite values
+    are therefore preserved rather than rejected or clipped.
+
+    Parameters
+    ----------
+    input_data : array-like
+        Real numeric field with at least three lattice axes.
+    name : str, optional
+        Reader-facing name used in validation errors.
+    extra_ndim : int, optional
+        Exact number of component axes after the three lattice axes.
+    shape : tuple of int, optional
+        Required complete array shape, including any component axes. It follows
+        the standard :func:`as_grid_shape` positive-integer shape contract.
+    is_finite : bool, optional
+        Whether every value must be finite. Default is ``True``.
+    value_range : sequence of two numbers, optional
+        Inclusive range for finite values.
+    bounded : bool, optional
+        If ``True``, clip out-of-range finite values instead of raising.
+
+    Returns
+    -------
+    GeneralField
+        Floating-point array preserving the input shape. Compatible floating
+        input is reused unless clipping requires an independent result.
     """
     is_finite = as_bool(is_finite, name=f"{name} is_finite")
     bounded = as_bool(bounded, name=f"{name} bounded")
@@ -78,7 +85,7 @@ def as_real_lattice_field(
             )
 
     if shape is not None:
-        shape = _as_shape(shape, name=f"{name} shape")
+        shape = as_grid_shape(shape, name=f"{name} shape")
         if values.shape != shape:
             raise ValueError(
                 f"{name!r} must have shape {shape}. Got shape {values.shape} instead."
@@ -103,18 +110,20 @@ def as_real_lattice_field(
 
     if value_range is not None:
         lo, hi = as_value_range(value_range, name=f"{name} value_range")
-        below = values < lo
-        above = values > hi
+        is_finite_value = np.isfinite(values)
+        below = is_finite_value & (values < lo)
+        above = is_finite_value & (values > hi)
         if np.any(below) or np.any(above):
             if not bounded:
-                finite_values = values[np.isfinite(values)]
+                finite_values = values[is_finite_value]
                 value_min = float(np.min(finite_values))
                 value_max = float(np.max(finite_values))
                 raise ValueError(
                     f"{name!r} must stay within [{lo}, {hi}]. "
                     f"Got finite value range [{value_min}, {value_max}]."
                 )
-            values = np.clip(values, lo, hi)
+            values = values.copy()
+            values[is_finite_value] = np.clip(values[is_finite_value], lo, hi)
 
     return values
 

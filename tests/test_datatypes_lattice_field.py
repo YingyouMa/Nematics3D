@@ -80,15 +80,55 @@ def test_real_lattice_field_value_range_rejects_or_clips():
     out = as_real_lattice_field(values, value_range=(0.0, 1.0), bounded=True)
     np.testing.assert_array_equal(out, np.array([[[[0.0, 0.5, 1.0]]]]))
 
+    np.testing.assert_array_equal(
+        as_real_lattice_field(values, value_range=(0.0, 1.0), bounded=1),
+        out,
+    )
     with pytest.raises((TypeError, ValueError)):
-        as_real_lattice_field(values, bounded=1)
+        as_real_lattice_field(values, bounded=0.5)
 
 
 def test_real_lattice_field_nonfinite_with_range_preserves_nan():
-    values = np.array([[[np.nan, 0.5]]])
-    out = as_real_lattice_field(values, is_finite=False, value_range=(0.0, 1.0))
+    values = np.array([[[np.nan, -np.inf, np.inf, -1.0, 0.5, 2.0]]])
+    out = as_real_lattice_field(
+        values,
+        is_finite=False,
+        value_range=(0.0, 1.0),
+        bounded=True,
+    )
     assert np.isnan(out[0, 0, 0])
-    assert out[0, 0, 1] == 0.5
+    assert out[0, 0, 1] == -np.inf
+    assert out[0, 0, 2] == np.inf
+    np.testing.assert_array_equal(out[0, 0, 3:], np.array([0.0, 0.5, 1.0]))
+
+
+def test_real_lattice_field_range_accepts_all_nonfinite_when_allowed():
+    values = np.array([[[np.nan, -np.inf, np.inf]]])
+
+    out = as_real_lattice_field(
+        values,
+        is_finite=False,
+        value_range=(0.0, 1.0),
+    )
+
+    assert np.isnan(out[0, 0, 0])
+    assert out[0, 0, 1] == -np.inf
+    assert out[0, 0, 2] == np.inf
+
+
+def test_real_lattice_field_clipping_does_not_modify_input():
+    values = np.array([[[-1.0, 0.5, 2.0]]])
+    values_before = values.copy()
+
+    out = as_real_lattice_field(
+        values,
+        value_range=(0.0, 1.0),
+        bounded=True,
+    )
+
+    np.testing.assert_array_equal(values, values_before)
+    np.testing.assert_array_equal(out, np.array([[[0.0, 0.5, 1.0]]]))
+    assert not np.shares_memory(out, values)
 
 
 def test_real_lattice_field_avoids_unnecessary_copy_for_float_input():
