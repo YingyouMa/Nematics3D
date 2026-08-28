@@ -157,7 +157,7 @@ class TestGridFieldDataset(unittest.TestCase):
 
         dataset = GridFieldDataset(inputValue=input_value, name="dataset")
 
-        expected_grid_index = generate_coordinate_grid((2, 3, 4), (2, 3, 4))[0]
+        expected_grid_index = generate_coordinate_grid((2, 3, 4), (2, 3, 4))
         expected_grid = apply_linear_transform(
             expected_grid_index,
             transform=input_value.grid_transform,

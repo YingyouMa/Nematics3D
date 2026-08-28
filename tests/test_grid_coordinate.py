@@ -113,6 +113,22 @@ def test_generate_fixed_step_grid_accepts_numpy_real_scalars():
 
 
 @pytest.mark.parametrize(
+    "alignment, size, expected_shape, expected_size",
+    [
+        ("bottom-left", 0.3, (4, 4, 2), (0.3, 0.3)),
+        ("center", 0.6, (7, 7, 2), (0.6, 0.6)),
+    ],
+)
+def test_generate_fixed_step_grid_preserves_decimal_step_boundaries(
+    alignment, size, expected_shape, expected_size
+):
+    grid, _, sizes = generate_fixed_step_grid(size, size, 0.1, 0.1, alignment=alignment)
+
+    assert grid.shape == expected_shape
+    np.testing.assert_allclose(sizes, expected_size)
+
+
+@pytest.mark.parametrize(
     "args, kwargs, error_type",
     [
         ((-1.0, 2.0, 1.0, 1.0), {}, ValueError),

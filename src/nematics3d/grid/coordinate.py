@@ -66,7 +66,33 @@ def generate_fixed_step_grid(
     step2: float,
     alignment: str = "bottom-left",
 ) -> tuple[np.ndarray, np.ndarray, tuple[float, float]]:
-    """Generate a two-dimensional grid with fixed physical step sizes."""
+    """Generate a two-dimensional grid with fixed physical step sizes.
+
+    Parameters
+    ----------
+    size1, size2 : float
+        Requested non-negative extents along the two grid axes.
+    step1, step2 : float
+        Positive fixed step lengths along the two grid axes.
+    alignment : {"bottom-left", "center"}, optional
+        Place index ``(0, 0)`` at the coordinate origin, or center an odd-sized
+        grid symmetrically around the origin.
+
+    Returns
+    -------
+    grid : numpy.ndarray
+        Floating coordinates with shape ``(n1, n2, 2)``.
+    grid_int : numpy.ndarray
+        Integer topology with shape ``(n1, n2, 2)``.
+    size_eff : tuple of float
+        Extents actually covered by complete fixed steps.
+
+    Notes
+    -----
+    Requested extents are snapped down rather than changing the step lengths.
+    Center alignment retains complete pairs of steps around zero, so its
+    effective extent can be smaller than for bottom-left alignment.
+    """
     size1 = float(as_number(size1, name="size1", value_range=(0.0, np.inf)))
     size2 = float(as_number(size2, name="size2", value_range=(0.0, np.inf)))
     step1 = float(as_number(step1, name="step1", value_range=(1e-12, np.inf)))
@@ -78,15 +104,15 @@ def generate_fixed_step_grid(
     )
 
     if alignment == "bottom-left":
-        n1 = int(np.floor(size1 / step1)) + 1
-        n2 = int(np.floor(size2 / step2)) + 1
+        n1 = int(np.floor(np.nextafter(size1 / step1, np.inf))) + 1
+        n2 = int(np.floor(np.nextafter(size2 / step2, np.inf))) + 1
         origin_index1 = 0
         origin_index2 = 0
         size1_eff = (n1 - 1) * step1
         size2_eff = (n2 - 1) * step2
     else:
-        n1_half = int(np.floor(size1 / (2.0 * step1)))
-        n2_half = int(np.floor(size2 / (2.0 * step2)))
+        n1_half = int(np.floor(np.nextafter(size1 / (2.0 * step1), np.inf)))
+        n2_half = int(np.floor(np.nextafter(size2 / (2.0 * step2), np.inf)))
         n1 = 2 * n1_half + 1
         n2 = 2 * n2_half + 1
         origin_index1 = n1_half
