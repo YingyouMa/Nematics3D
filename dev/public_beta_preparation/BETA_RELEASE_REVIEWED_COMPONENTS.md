@@ -665,7 +665,7 @@ Summary of changes and evidence:
 | Reviewed commit | `7e03526ffe198d1970543661f698770942dc6e9e` |
 | Reviewed date | 2026-08-28 |
 | Reviewer | Yingyou Ma and Codex |
-| Remaining limitations | The mask must be a three-dimensional lattice mask with the same lattice shape used to produce the defect indices; shape agreement is enforced indirectly by corner bounds rather than by a separate grid-shape parameter. The repository dependency `as_lattice_mask()` remains active and has not yet been separately confirmed; `as_defect_index()` and `as_dimension_info()` are already confirmed. |
+| Remaining limitations | The mask must be a three-dimensional lattice mask with the same lattice shape used to produce the defect indices; shape agreement is enforced indirectly by corner bounds rather than by a separate grid-shape parameter. Its repository dependencies `as_lattice_mask()`, `as_defect_index()`, and `as_dimension_info()` are separately confirmed. |
 
 Summary of changes and evidence:
 
@@ -681,6 +681,36 @@ Summary of changes and evidence:
 - Kept the function undecorated because it is a deterministic vectorized
   boolean filter; useful defect counts and mask-filtering events are already
   logged by its workflow-level `QFieldObject.act_defect_detect()` caller.
+
+### `nematics3d.datatypes.MaskField` and `as_lattice_mask()`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public semantic alias and runtime converter for lattice validity masks |
+| Source | [`src/nematics3d/datatypes/lattice_field.py`](../../src/nematics3d/datatypes/lattice_field.py) |
+| Tests | [`tests/test_datatypes_lattice_field.py`](../../tests/test_datatypes_lattice_field.py), with defect-mask coverage in [`tests/test_disclination_defect_validity.py`](../../tests/test_disclination_defect_validity.py) and Q-field initialization coverage in [`tests/classes/test_q_field_object_phase2.py`](../../tests/classes/test_q_field_object_phase2.py) |
+| Tutorial | None; the physical validity convention and normalization behavior are documented in the function docstring and focused tests |
+| Review scope | `True`/`False` physical convention, boolean and exact numeric 0/1 input, rejection of fractional, non-finite, complex, and non-numeric values, exact three-axis rank, nonempty axes, standard strict grid-shape validation, shape mismatch, independent boolean output, public datatype export, dataset construction, Q-field initialization, defect filtering, active callers, and logging decision |
+| Validation | Mask-focused datatype run (12 passed); defect validity and Q-field mask-initialization run (8 passed); grid-dataset and defect downstream run (133 passed, with 5 unrelated pre-existing interpolator/smoothing/dynamic-mask failures); Black and `black --check`; in-memory syntax compile; active-caller/export/dependency audit; `git diff --check` |
+| Reviewed commit | `d28dfc2529c64fbd26bf56ba86adc1b84cb00400` |
+| Reviewed date | 2026-08-28 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Masks are deliberately binary validity fields, not continuous confidence weights. `as_real_lattice_field()`, used to validate numeric mask input, remains active and has not yet been separately confirmed; its dependencies `as_bool()` and `as_value_range()` and the mask shape dependency `as_grid_shape()` are already confirmed. |
+
+Summary of changes and evidence:
+
+- Made the physical convention explicit: `True` means usable physical field
+  data and `False` means downstream analysis must exclude that voxel.
+- Unified boolean and numeric inputs on one rank, nonempty-axis, and optional
+  shape-validation path.
+- Replaced the mask-specific private shape rules with the confirmed strict
+  three-dimensional `as_grid_shape()` contract.
+- Confirmed exact 0/1 normalization, rejection of uncertain weights, output
+  isolation, dataset shape agreement, Q-field initialization, and downstream
+  defect filtering.
+- Kept the converter undecorated because validation failures already contain
+  actionable context and successful per-array conversion is not a useful
+  workflow event to log.
 
 ### `nematics3d.grid` transform utilities
 
@@ -757,3 +787,4 @@ above.
 | 2026-08-28 | `get_q()` | `src/nematics3d/field.py` | `tests/core/test_get_q.py` and downstream tests | `70871e394effca0755983efe6888a377180871ea` | Confirmed |
 | 2026-08-28 | Grid transform utilities | `src/nematics3d/grid/transform.py` | `tests/test_grid_transform.py` and downstream geometry tests | `7b3ec3a91ec30e7d7003c4570c000650ce55be12` | Confirmed |
 | 2026-08-28 | `defect_validity_from_mask()` | `src/nematics3d/analysis/disclination/misc.py` | `tests/test_disclination_defect_validity.py` and Q-field initialization integration | `7e03526ffe198d1970543661f698770942dc6e9e` | Confirmed |
+| 2026-08-28 | `MaskField` and `as_lattice_mask()` | `src/nematics3d/datatypes/lattice_field.py` | `tests/test_datatypes_lattice_field.py` and downstream mask integration | `d28dfc2529c64fbd26bf56ba86adc1b84cb00400` | Confirmed |
