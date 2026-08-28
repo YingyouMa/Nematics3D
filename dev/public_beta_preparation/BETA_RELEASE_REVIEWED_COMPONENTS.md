@@ -570,7 +570,7 @@ Summary of changes and evidence:
 | Reviewed commit | `2b54edaa83e084f999fb415dddff6914dd256dfb` |
 | Reviewed date | 2026-08-27 |
 | Reviewer | Yingyou Ma and Codex |
-| Remaining limitations | Both functions intentionally allocate dense coordinate arrays and can exhaust memory for impractically large requested grids. `generate_coordinate_grid()` depends on the active but not yet separately reviewed `as_grid_shape()` validator; `generate_fixed_step_grid()` depends only on already confirmed repository validators `as_number()` and `as_str()`. |
+| Remaining limitations | Both functions intentionally allocate dense coordinate arrays and can exhaust memory for impractically large requested grids. Their repository validators `as_grid_shape()`, `as_number()`, and `as_str()` are separately confirmed. |
 
 Summary of changes and evidence:
 
@@ -586,6 +586,38 @@ Summary of changes and evidence:
 - Kept both functions undecorated because their operations are lightweight and
   deterministic, their validation errors are already explicit, and logging is
   more useful at the higher-level workflow boundary.
+
+### `nematics3d.datatypes.as_grid_shape`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public ordered grid-shape validator and normalizer |
+| Source | [`src/nematics3d/datatypes/grid_shape.py`](../../src/nematics3d/datatypes/grid_shape.py) |
+| Tests | [`tests/test_datatypes_grid_shape.py`](../../tests/test_datatypes_grid_shape.py), with coordinate-grid and `InputGridField` caller coverage |
+| Tutorial | None; this is a compact input validator whose complete contract is documented in its docstring and focused tests |
+| Review scope | Ordered iterable inputs, tuple/list/NumPy-array/generator support, Python and NumPy integers, Python-int tuple output, arbitrary positive dimensionality, strict three-dimensional mode, empty and non-positive shapes, boolean/float/complex rejection, explicit mapping/set/string/bytes rejection, parameter-specific errors, public exports, internal imports, active callers, and logging decision |
+| Validation | `python -m pytest tests/test_datatypes_grid_shape.py tests/test_grid_coordinate.py -q` (55 passed); focused `InputGridField`, coordinate, plane-grid, and contour-surface caller run (73 passed); broader related run (184 passed, with 6 unrelated pre-existing failures in interpolator relations, Gaussian smoothing of trailing component axes, reserved-mask expectations, and legacy Q-field interpolation); Black and `black --check` on the implementation, focused tests, and affected callers; in-memory syntax compile; active-source import audit; `git diff --check` |
+| Reviewed commit | `fa2239e7681b262cea48d01fa580452f2e5d851e` |
+| Reviewed date | 2026-08-27 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The validator intentionally does not impose an upper bound on dimensions; downstream array constructors remain responsible for resource limits. Generator inputs are consumed once during normalization. |
+
+Summary of changes and evidence:
+
+- Defined the accepted input as an ordered iterable of positive integers and
+  explicitly rejected mappings and sets, whose iteration order is not a valid
+  grid-axis contract.
+- Preserved tuple, list, NumPy integer array, NumPy integer scalar, and generator
+  support while guaranteeing a tuple of Python integers.
+- Added focused tests for main paths, strict three-dimensional mode, invalid
+  containers, empty and non-positive shapes, invalid dimension types, and the
+  validated strictness flag.
+- Updated active internal callers to import the validator directly from
+  `nematics3d.datatypes` while preserving the existing
+  `nematics3d.classes.grid_field` re-export.
+- Kept the function undecorated because this lightweight deterministic
+  validator has no useful intermediate state or workflow boundary to log. Its
+  only repository-function dependency is the already confirmed `as_bool()`.
 
 ## Stale review records
 
@@ -624,3 +656,4 @@ above.
 | 2026-08-26 | `shift_to_box()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
 | 2026-08-26 | `unwrap_trajectory()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
 | 2026-08-27 | `generate_coordinate_grid()` and `generate_fixed_step_grid()` | `src/nematics3d/grid/coordinate.py` | `tests/test_grid_coordinate.py` and direct caller tests | `2b54edaa83e084f999fb415dddff6914dd256dfb` | Confirmed |
+| 2026-08-27 | `as_grid_shape()` | `src/nematics3d/datatypes/grid_shape.py` | `tests/test_datatypes_grid_shape.py` and downstream tests | `fa2239e7681b262cea48d01fa580452f2e5d851e` | Confirmed |
