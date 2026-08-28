@@ -32,6 +32,7 @@ from nematics3d.datatypes import (
 )
 from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
+    VALIDITY_FIELD_NAME,
     apply_linear_transform,
     generate_coordinate_grid,
 )
@@ -147,7 +148,7 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(ValueError):
             as_real_lattice_field(values)
 
-    def test_dataset_builds_shared_grid_cache_from_explicit_shape(self):
+    def test_dataset_builds_lightweight_geometry_from_explicit_shape(self):
         input_value = InputGridField(
             shape=(2, 3, 4),
             box_periodic_flag=(True, False, True),
@@ -176,8 +177,10 @@ class TestGridFieldDataset(unittest.TestCase):
                 dataset.calc_box_size_periodic_index, np.array([2.0, np.inf, 4.0])
             )
         )
-        self.assertTrue(np.allclose(dataset.calc_grid_index, expected_grid_index))
-        self.assertTrue(np.allclose(dataset.calc_grid, expected_grid))
+        self.assertTrue(
+            np.allclose(dataset.act_generate_grid(coord="index"), expected_grid_index)
+        )
+        self.assertTrue(np.allclose(dataset.act_generate_grid(), expected_grid))
         self.assertTrue(np.allclose(dataset.calc_corners_index, expected_corners_index))
         self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
         self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
@@ -195,9 +198,50 @@ class TestGridFieldDataset(unittest.TestCase):
         )
 
         np.testing.assert_allclose(dataset.calc_grid_spacing, [2.0, 3.0, 4.0])
-        np.testing.assert_allclose(dataset.calc_grid[1, 0, 0], transform[0])
-        np.testing.assert_allclose(dataset.calc_grid[0, 1, 0], transform[1])
-        np.testing.assert_allclose(dataset.calc_grid[0, 0, 1], transform[2])
+        grid = dataset.act_generate_grid()
+        np.testing.assert_allclose(grid[1, 0, 0], transform[0])
+        np.testing.assert_allclose(grid[0, 1, 0], transform[1])
+        np.testing.assert_allclose(grid[0, 0, 1], transform[2])
+
+    def test_dataset_converts_selected_points_without_full_grid(self):
+        transform = np.array(
+            [
+                [0.0, 2.0, 0.0],
+                [-3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        offset = np.array([10.0, 20.0, 30.0])
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 5, 6),
+                grid_transform=transform,
+                grid_offset=offset,
+            )
+        )
+        indices = np.array([[0.0, 0.0, 0.0], [1.5, 2.0, 3.25]])
+
+        coords = dataset.act_index_to_coord(indices)
+        restored = dataset.act_coord_to_index(coords)
+
+        np.testing.assert_allclose(coords, indices @ transform + offset)
+        np.testing.assert_allclose(restored, indices)
+
+    def test_dataset_full_grid_generation_is_explicit_and_uncached(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 3, 4)))
+
+        grid_first = dataset.act_generate_grid()
+        grid_second = dataset.act_generate_grid()
+
+        self.assertEqual(grid_first.shape, (2, 3, 4, 3))
+        self.assertIsNot(grid_first, grid_second)
+        self.assertNotIn("calc_grid", type(dataset).__attr_defs__)
+        self.assertNotIn("calc_grid_index", type(dataset).__attr_defs__)
+
+        with self.assertRaises(ValueError):
+            dataset.act_generate_grid(coord="unknown")
+        with self.assertRaises(TypeError):
+            dataset.act_generate_grid(dtype=np.int64)
 
     def test_dataset_calc_center_returns_transformed_box_center(self):
         grid_transform = np.array(
@@ -236,19 +280,44 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertTrue(np.allclose(bounds_copy.opts.origin, (10.0, 20.0, 30.0)))
 
-    def test_first_field_can_infer_dataset_shape_and_refresh_caches(self):
+    def test_dataset_bounds_is_initialized_once_and_cannot_be_replaced(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 3, 4)))
+        bounds = dataset.calc_bounds
+
+        self.assertIs(dataset.calc_bounds, bounds)
+        with self.assertRaisesRegex(RuntimeError, "already initialized"):
+            dataset._helper_initialize_geometry()
+
+        self.assertIs(dataset.calc_bounds, bounds)
+
+    def test_dataset_bounds_uses_grid_point_center_convention(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 3, 4)))
+
+        np.testing.assert_allclose(
+            dataset.calc_corners_index,
+            get_box_corners(1, 2, 3),
+        )
+        np.testing.assert_allclose(dataset.calc_center, (0.5, 1.0, 1.5))
+        np.testing.assert_allclose(
+            dataset.calc_bounds.corners,
+            dataset.calc_corners,
+        )
+
+    def test_first_field_can_infer_shape_and_initialize_geometry(self):
         dataset = GridFieldDataset()
         values = np.arange(2 * 3 * 4 * 5, dtype=float).reshape(2, 3, 4, 5)
 
         self.assertIs(dataset.raw_shape, UNSET)
         self.assertIsNone(dataset.raw_grid_offset)
-        self.assertIs(dataset.calc_grid, UNSET)
+        with self.assertRaises(ValueError):
+            dataset.act_generate_grid()
 
         dataset.act_add_field("Q", values)
 
         self.assertEqual(tuple(dataset.raw_shape), (2, 3, 4))
-        self.assertEqual(dataset.calc_grid.shape, (2, 3, 4, 3))
-        self.assertTrue(np.allclose(dataset.calc_grid, dataset.calc_grid_index))
+        grid = dataset.act_generate_grid()
+        self.assertEqual(grid.shape, (2, 3, 4, 3))
+        self.assertTrue(np.allclose(grid, dataset.act_generate_grid(coord="index")))
         self.assertEqual(dataset.calc_corners_index.shape, (8, 3))
         self.assertEqual(dataset.calc_corners.shape, (8, 3))
 
@@ -261,22 +330,31 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(TypeError):
             dataset.act_add_field("complex", np.ones((2, 2, 2), dtype=complex))
 
-    def test_field_values_are_fixed_and_replace_creates_new_field(self):
+    def test_field_values_are_readonly_defensive_snapshots(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
-        field = dataset.act_add_field("scalar", np.zeros((2, 2, 2)))
+        source = np.zeros((2, 2, 2))
+        field = dataset.act_add_field("scalar", source)
 
         with self.assertRaises(AttributeError):
             field.values = np.ones((2, 2, 2))
+        with self.assertRaises(ValueError):
+            field.raw_values[0, 0, 0] = 1.0
 
-        field_new = dataset.act_add_field(
-            "scalar",
-            np.ones((2, 2, 2)),
-            is_replace=True,
-        )
+        source[...] = 2.0
 
-        self.assertIsNot(field_new, field)
-        self.assertIs(dataset["scalar"], field_new)
-        self.assertTrue(np.allclose(field_new.raw_values, 1.0))
+        self.assertFalse(field.raw_values.flags.writeable)
+        self.assertFalse(np.shares_memory(field.raw_values, source))
+        self.assertTrue(np.allclose(field.raw_values, 0.0))
+
+    def test_registered_field_cannot_be_replaced(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        field = dataset.act_add_field("scalar", np.zeros((2, 2, 2)))
+
+        with self.assertRaisesRegex(ValueError, "cannot be replaced"):
+            dataset.act_add_field("scalar", np.ones((2, 2, 2)))
+
+        self.assertIs(dataset["scalar"], field)
+        self.assertTrue(np.allclose(field.raw_values, 0.0))
 
     def test_field_can_store_optional_user_info(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
@@ -294,16 +372,49 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertIsNone(field.raw_info)
 
-    def test_dataset_core_grid_metadata_is_fixed_after_initialization(self):
-        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+    def test_dataset_geometry_is_fixed_after_initialization(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 2, 2),
+                box_periodic_flag=(True, False, True),
+                grid_offset=(1.0, 2.0, 3.0),
+                grid_transform=np.diag((2.0, 3.0, 4.0)),
+            )
+        )
 
-        with self.assertRaises(AttributeError):
-            dataset.shape = (3, 3, 3)
-        with self.assertRaises(AttributeError):
-            dataset.grid_offset = (1.0, 2.0, 3.0)
+        replacements = {
+            "raw_shape": (3, 3, 3),
+            "raw_box_periodic_flag": (False, False, False),
+            "raw_grid_offset": (4.0, 5.0, 6.0),
+            "raw_grid_transform": np.eye(3),
+        }
+        for name, value in replacements.items():
+            with self.subTest(name=name), self.assertRaises(AttributeError):
+                setattr(dataset, name, value)
 
         self.assertEqual(tuple(dataset.raw_shape), (2, 2, 2))
-        self.assertEqual(dataset.calc_grid.shape, (2, 2, 2, 3))
+        self.assertEqual(
+            tuple(dataset.raw_box_periodic_flag),
+            (True, False, True),
+        )
+        np.testing.assert_allclose(dataset.raw_grid_offset, (1.0, 2.0, 3.0))
+        np.testing.assert_allclose(
+            dataset.raw_grid_transform,
+            np.diag((2.0, 3.0, 4.0)),
+        )
+        self.assertEqual(dataset.act_generate_grid().shape, (2, 2, 2, 3))
+
+    def test_dataset_shape_is_inferred_once_and_then_fixed(self):
+        dataset = GridFieldDataset()
+        dataset.act_add_field("first", np.zeros((2, 3, 4)))
+
+        self.assertEqual(tuple(dataset.raw_shape), (2, 3, 4))
+        with self.assertRaisesRegex(ValueError, "must match"):
+            dataset.act_add_field("different", np.zeros((3, 3, 4)))
+        with self.assertRaises(AttributeError):
+            dataset.raw_shape = (3, 3, 4)
+
+        self.assertEqual(tuple(dataset.raw_shape), (2, 3, 4))
 
     def test_dataset_grid_transform_parameters_are_readonly_snapshots(self):
         grid_offset = np.array([1.0, 2.0, 3.0])
@@ -328,6 +439,82 @@ class TestGridFieldDataset(unittest.TestCase):
         with self.assertRaises(ValueError):
             dataset.raw_grid_transform[0, 0] = 0.0
 
+        with self.assertRaises(TypeError):
+            dataset.raw_shape[0] = 3
+        with self.assertRaises(ValueError):
+            dataset.raw_box_periodic_flag[0] = False
+
+    def test_dataset_mask_is_one_canonical_readonly_boolean_snapshot(self):
+        source = np.ones((2, 2, 2), dtype=bool)
+        source[0, 0, 0] = False
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(shape=(2, 2, 2), mask=source)
+        )
+
+        mask_field = dataset.fields[VALIDITY_FIELD_NAME]
+
+        self.assertIs(dataset.mask, mask_field.raw_values)
+        self.assertIs(dataset._helper_read_validity_mask(), dataset.mask)
+        self.assertEqual(dataset.mask.dtype, np.dtype(bool))
+        self.assertFalse(dataset.mask.flags.writeable)
+        self.assertTrue(dataset.calc_is_has_mask)
+
+        source[...] = False
+
+        self.assertEqual(np.count_nonzero(dataset.mask), 7)
+        with self.assertRaises(ValueError):
+            dataset.mask[0, 0, 0] = True
+
+    def test_dataset_without_mask_exposes_none(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+
+        self.assertIsNone(dataset.mask)
+        self.assertFalse(dataset.calc_is_has_mask)
+
+    def test_reserved_mask_name_explains_construction_only_contract(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Supply the mask when constructing the dataset",
+        ):
+            dataset.act_add_field("mask", np.ones((2, 2, 2), dtype=bool))
+
+    def test_interpolation_validity_uses_canonical_dataset_mask(self):
+        mask = np.ones((2, 2, 2), dtype=bool)
+        mask[0, 0, 0] = False
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(shape=(2, 2, 2), mask=mask)
+        )
+        field = dataset.act_add_field("scalar", np.arange(8.0).reshape(2, 2, 2))
+
+        _, validity = field.act_interpolate(
+            np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]),
+            is_index=True,
+            is_return_validity=True,
+        )
+
+        np.testing.assert_array_equal(validity, (False, True))
+
+    def test_canonical_mask_can_weight_smoothing(self):
+        mask = np.ones((5, 5, 5), dtype=bool)
+        mask[2, 2, 2] = False
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(shape=(5, 5, 5), mask=mask)
+        )
+        values = np.zeros((5, 5, 5), dtype=float)
+        values[2, 2, 2] = 100.0
+        dataset.act_add_field("scalar", values)
+
+        smoothed = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=1.0,
+            coord="index",
+            weights="mask",
+        )
+
+        self.assertTrue(np.allclose(smoothed, 0.0))
+
     def test_field_can_create_generic_interpolator_and_sample_world_points(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
@@ -344,6 +531,7 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertIsInstance(interpolator, GridInterpolator)
         self.assertIs(field.interpolator, interpolator)
+        self.assertIs(field.act_add_interpolator(), interpolator)
         self.assertIs(interpolator.owner, field)
 
         sampled = field.act_interpolate(np.array([[12.0, 23.0, 34.0]]))
@@ -592,7 +780,7 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(field.raw_values, expected))
         self.assertIs(field.raw_info, result.raw_info)
 
-    def test_result_field_registration_supports_replace(self):
+    def test_result_field_registration_cannot_replace_existing_field(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 4, 5)))
         i, j, k = np.indices((3, 4, 5), dtype=float)
         dataset.act_add_field("scalar", i + j + k)
@@ -605,15 +793,8 @@ class TestGridFieldDataset(unittest.TestCase):
             coord="index",
             is_result=True,
         )
-        field = dataset.act_add_result_field(
-            "grad_scalar",
-            result_second,
-            is_replace=True,
-        )
-
-        self.assertEqual(field.raw_info.operator, "derivative")
-        self.assertEqual(field.raw_info.derivative_axis, 0)
-        self.assertEqual(field.raw_values.shape, (3, 4, 5))
+        with self.assertRaisesRegex(ValueError, "cannot be replaced"):
+            dataset.act_add_result_field("grad_scalar", result_second)
 
     def test_result_field_registration_rejects_non_result(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
@@ -1479,17 +1660,17 @@ class TestGridFieldDataset(unittest.TestCase):
         values[2, 2, 2] = 1.0
         weights = np.ones((5, 5, 5), dtype=float)
         dataset.act_add_field("scalar", values)
-        dataset.act_add_field("mask", weights)
+        dataset.act_add_field("confidence", weights)
 
         result = dataset.act_gaussian_smooth(
             "scalar",
             sigma=1.0,
             coord="index",
-            weights="mask",
+            weights="confidence",
             is_result=True,
         )
 
-        self.assertEqual(result.raw_info.weights_source_name, "mask")
+        self.assertEqual(result.raw_info.weights_source_name, "confidence")
         self.assertEqual(result.raw_info.weights_floor, 1e-12)
         expected = dataset.act_gaussian_smooth(
             "scalar",

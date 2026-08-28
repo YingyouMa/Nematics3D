@@ -23,7 +23,7 @@ from nematics3d.classes.vector_plane import VectorPlane
 class TestVectorPlane(unittest.TestCase):
     def test_vector_plane_samples_vector_field_and_caches_magnitude(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
-        values = dataset.calc_grid.copy()
+        values = dataset.act_generate_grid()
         field = dataset.act_add_field("v", values)
         interpolator = field.act_add_interpolator()
 
@@ -49,7 +49,7 @@ class TestVectorPlane(unittest.TestCase):
 
     def test_vector_plane_refresh_tracks_grid_changes(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(4, 4, 4)))
-        values = dataset.calc_grid.copy()
+        values = dataset.act_generate_grid()
         field = dataset.act_add_field("v", values)
 
         plane = VectorPlane(

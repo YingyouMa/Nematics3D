@@ -47,8 +47,8 @@
 # workflows remain usable while data ownership moves into the shared-grid model.
 #
 # Phase 1. Strengthen GridFieldDataset as the shared grid owner
-# - Add shared geometry/cache state to GridFieldDataset:
-#   calc_grid_index, calc_grid, calc_corners_index, calc_corners, calc_bounds,
+# - Add shared lightweight geometry state to GridFieldDataset:
+#   calc_corners_index, calc_corners, calc_bounds, and
 #   calc_box_size_periodic_index.
 # - Move the grid/bounds construction logic currently implemented here into the
 #   dataset layer, but keep QFieldObject behavior unchanged for callers.
@@ -76,8 +76,9 @@
 # Phase 4. Migrate shared-grid-dependent tools to dataset/field ownership
 # - Update QInterpolator, plane helpers, and other grid-aware utilities to read
 #   grid geometry, bounds, and periodic information from GridFieldDataset.
-# - Keep QFieldObject convenience properties as compatibility facades, e.g.
-#   calc_grid -> self.dataset.calc_grid and calc_bounds -> self.dataset.calc_bounds.
+# - Keep lightweight QFieldObject convenience properties as facades, e.g.
+#   calc_bounds -> self.dataset.calc_bounds. Full coordinate grids are explicit
+#   dataset allocations through act_generate_grid().
 # - After this phase, QFieldObject should mainly provide Q-specific analysis,
 #   not generic grid infrastructure.
 #
@@ -295,7 +296,6 @@ class QFieldObject(ClassBase):
     - `figures` / `figs`: FigureManager storing figures created from this Q field.
     - `objects` / `objs`: RegistryBase storing physical objects derived from this Q field.
     - `interpolator`: GridInterpolator used for off-grid sampling.
-    - `calc_grid`: full real-space lattice coordinates of the Q field.
     - `calc_corners`: real-space box corner coordinates.
     - `calc_bounds`: Bounds object describing the Q-field box.
     - `calc_defect_indices` / `calc_defect_grid`: detected defect positions
@@ -377,14 +377,6 @@ class QFieldObject(ClassBase):
         "default_miminum_line_length_visual": AttrDef(
             doc="Default minimum line length (#points) required for visualization.",
             kind="default",
-        ),
-        "calc_grid_index": AttrDef(
-            doc="Lattice coordinate grid in index space (before applying transform/offset).",
-            kind="property",
-        ),
-        "calc_grid": AttrDef(
-            doc="Coordinate grid in real space after applying grid_transform and grid_offset.",
-            kind="property",
         ),
         "calc_corners_index": AttrDef(
             doc="Box corners in lattice-index space.",
@@ -1846,16 +1838,6 @@ class QFieldObject(ClassBase):
     # -------------------------------
 
     @property
-    def calc_grid_index(self):
-        """Return the dataset-owned lattice coordinate grid in index space."""
-        return self.dataset.calc_grid_index
-
-    @property
-    def calc_grid(self):
-        """Return the dataset-owned coordinate grid in real space."""
-        return self.dataset.calc_grid
-
-    @property
     def calc_corners_index(self):
         """Return the dataset-owned box corners in lattice-index space."""
         return self.dataset.calc_corners_index
@@ -1878,7 +1860,7 @@ class QFieldObject(ClassBase):
     @property
     def mask(self):
         """Return the dataset validity mask as a bool array, or None if absent."""
-        return self.dataset._helper_read_validity_mask()
+        return self.dataset.mask
 
     @property
     def lines(self):

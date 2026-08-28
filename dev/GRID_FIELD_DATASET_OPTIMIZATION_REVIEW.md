@@ -83,9 +83,9 @@ and must never be mixed by spatial smoothing.
 - Weighted and unweighted paths agree for uniform unit weights.
 - Existing scalar-field behavior remains unchanged.
 
-### 2. Resolve the `FieldData.interpolator` API mismatch
+### 2. Resolve the `FieldData.interpolator` API mismatch — COMPLETED
 
-**Status:** Proposed; confirmed API inconsistency.
+**Status:** Completed on 2026-08-28 with a read-only public property.
 
 **Observed behavior**
 
@@ -102,16 +102,22 @@ Choose and document one public contract:
 - Alternative: make `entity_interpolator` the only public name and migrate all
   callers/tests explicitly.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- Repeated `act_add_interpolator()` calls return the same live object.
-- The chosen readable API returns that same object.
-- `QFieldObject.interpolator` and its canonical Q `FieldData` agree.
-- No duplicate interpolators are silently created.
+- [x] Repeated `act_add_interpolator()` calls return the same live object.
+- [x] The readable `field.interpolator` API returns that same object.
+- [x] `QFieldObject.interpolator` and its canonical Q `FieldData` agree.
+- [x] No duplicate interpolators are silently created.
 
-### 3. Make full coordinate grids lazy
+**Implemented contract**
 
-**Status:** Proposed; high-value memory optimization.
+- `entity_interpolator` remains the managed internal entity field.
+- `interpolator` is a declared, read-only property facade.
+- The interpolator keeps its owner relation back to the canonical `FieldData`.
+
+### 3. Make full coordinate grids lazy — COMPLETED
+
+**Status:** Completed on 2026-08-28 with an explicit, uncached allocation API.
 
 **Observed behavior**
 
@@ -129,23 +135,33 @@ mask, interpolation, or analysis arrays.
 - Store only shape, transform, offset, spacing, corners, center, and bounds at
   construction.
 - Generate complete coordinate grids only when requested.
-- Decide whether requested grids are cached, weakly cached, or regenerated.
+- Generate requested grids explicitly with `act_generate_grid()` and do not cache
+  them on the dataset.
 - Provide direct coordinate conversion for point subsets so most callers never
   require a full grid.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- Constructing a dataset does not allocate either full coordinate grid.
-- `calc_grid_index` and `calc_grid` preserve their current numerical convention
-  when accessed.
-- corners, center, bounds, interpolation, and defect transforms do not force
+- [x] Constructing a dataset does not allocate either full coordinate grid.
+- [x] `act_generate_grid(coord="index")` and
+  `act_generate_grid(coord="physical")` preserve the established numerical
+  conventions.
+- [x] Corners, center, bounds, interpolation, and defect transforms do not force
   full-grid allocation.
-- A memory benchmark records the before/after initialization footprint for at
+- [x] A memory benchmark records the before/after initialization footprint for at
   least `128^3` and `256^3` grids.
 
-### 4. Define grid geometry as immutable or fully invalidating
+**Verification (2026-08-28, Windows, project conda environment)**
 
-**Status:** Decision required; correctness risk.
+- `128^3` dataset initialization RSS delta: approximately 3.43 MiB.
+- Adding a `256^3` dataset RSS delta: approximately 2.15 MiB.
+- Neither initialized dataset exposes or owns `calc_grid` or
+  `calc_grid_index`; complete arrays are allocated only by
+  `act_generate_grid()`.
+
+### 4. Define grid geometry as immutable or fully invalidating — COMPLETED
+
+**Status:** Completed on 2026-08-28 with immutable shared-grid geometry.
 
 **Observed behavior**
 
@@ -171,16 +187,28 @@ If mutation is required, implement one atomic update path that validates all
 new geometry, invalidates every dependent cache/interpolator/result, and then
 rebuilds consistent state.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- No supported public operation can leave partially refreshed geometry.
-- Stored transform/offset/periodicity arrays cannot be mutated in place.
-- Shape inference happens at most once and is well tested.
-- The effect on existing fields and interpolators is explicit.
+- [x] No supported public operation can leave partially refreshed geometry.
+- [x] Stored transform, offset, and periodicity arrays cannot be mutated in
+  place.
+- [x] Shape inference happens at most once and is tested.
+- [x] Existing fields and interpolators retain the geometry of their owning
+  dataset; different geometry requires a new dataset.
 
-### 5. Define physical-field value mutability and stale-result behavior
+**Implemented contract**
 
-**Status:** Decision required; repository-wide policy may be needed.
+- `ClassBase(is_fixed=True)` blocks public reassignment of all geometry fields.
+- Shape and periodicity are immutable/read-only values; transform and offset
+  are stored as read-only defensive snapshots.
+- An initially `UNSET` shape may be inferred by the first field exactly once.
+  Later fields must match it.
+- There is no geometry update or cache-invalidation API. Callers construct a
+  new dataset when geometry changes.
+
+### 5. Define physical-field value mutability and stale-result behavior — COMPLETED
+
+**Status:** Completed on 2026-08-28 with immutable field snapshots.
 
 **Observed behavior**
 
@@ -198,20 +226,29 @@ already exist. The dataset has no general stale-result mechanism.
 
 **Recommended direction**
 
-Registered physical fields should be stable snapshots. Use an explicit
-replacement operation for new data and invalidate/rebuild field-owned derived
-objects there.
+Registered physical fields are stable snapshots. No field update or replacement
+operation is provided; use a new field name or construct a new dataset for new
+data.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- The chosen ownership rule is documented for `FieldData.raw_values`.
-- Caller mutation cannot silently change a registered field, or is explicitly
-  guaranteed and tested to invalidate dependents.
-- Replacing a field handles any existing interpolator deterministically.
+- [x] `FieldData.raw_values` is a read-only defensive copy owned by the field.
+- [x] Caller mutation cannot silently change a registered field.
+- [x] Public assignment and in-place array mutation are both blocked.
+- [x] Existing fields cannot be replaced, so their interpolators and derived
+  results always retain the same source snapshot.
 
-### 6. Preserve the construction-only validity-mask lifecycle
+**Implemented contract**
 
-**Status:** Recommended to keep; align tests and documentation.
+- `FieldData` uses `ClassBase(is_fixed=True)` to block value reassignment.
+- `as_readonly_array()` creates an independent, read-only value snapshot.
+- Duplicate field names always raise `ValueError`.
+- `is_replace` was removed from both `act_add_field()` and
+  `act_add_result_field()`.
+
+### 6. Preserve the construction-only validity-mask lifecycle — COMPLETED
+
+**Status:** Completed on 2026-08-28 with one canonical construction-only mask.
 
 **Current design**
 
@@ -229,17 +266,27 @@ smoothing, and interpolation results from becoming stale after a mask change.
 - Keep the physical validity mask strictly boolean; do not conflate it with
   continuous confidence/weight fields.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- Dataset and Q-field initialization expose the same canonical mask.
-- Defect filtering, interpolation validity, and mask-weighted operations use
+- [x] Dataset and Q-field initialization expose the same canonical mask.
+- [x] Defect filtering, interpolation validity, and mask-weighted operations use
   that canonical source.
-- Reserved-name errors clearly explain how to supply a validity mask.
-- Soft weights remain supported without being treated as validity flags.
+- [x] Reserved-name errors clearly explain how to supply a validity mask.
+- [x] Soft weights remain supported without being treated as validity flags.
 
-### 7. Separate core geometry, field registry, and operators more explicitly
+**Implemented contract**
 
-**Status:** Proposed after behavioral stabilization.
+- The reserved `mask` field is created only by the dataset constructor.
+- `dataset.mask`, `QFieldObject.mask`, and the reserved mask `FieldData` expose
+  the same read-only boolean snapshot.
+- Boolean masks are converted to 0/1 weights only at the Gaussian-smoothing
+  boundary; canonical storage remains boolean.
+- Ordinary continuous weights use non-reserved field names such as
+  `confidence`.
+
+### 7. Separate core geometry, field registry, and operators more explicitly — COMPLETED
+
+**Status:** Completed on 2026-08-28 with explicit operator mixins.
 
 **Observed structure**
 
@@ -270,17 +317,26 @@ class GridFieldDataset(
 Keep domain-independent geometry/field lifecycle in the core class and keep
 operator-specific result metadata near each operator family.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- No runtime monkey-patching is required for public methods.
-- Public imports and method names remain compatible unless a migration is
+- [x] No runtime monkey-patching is required for public methods.
+- [x] Public imports and method names remain compatible unless a migration is
   explicitly approved.
-- Circular imports do not increase.
-- Type checkers and IDEs can discover operator methods from the class MRO.
+- [x] Circular imports do not increase.
+- [x] Type checkers and IDEs can discover operator methods from the class MRO.
 
-### 8. Review eager `Bounds` construction and replacement
+**Implemented structure**
 
-**Status:** Proposed; lower priority than full-grid memory.
+- `GridFieldDatasetDerivativeMixin` owns derivative helpers and actions.
+- `GridFieldDatasetSmoothingMixin` owns Gaussian-smoothing helpers and actions.
+- Both mixins use `TYPE_CHECKING` for the host `GridFieldDataset` annotation, so
+  IDEs see the concrete self type without a runtime reverse import.
+- `GridFieldDataset` inherits both mixins explicitly before `ClassBase`.
+- The former module-bottom assignments to `GridFieldDataset.*` were removed.
+
+### 8. Review eager `Bounds` construction and replacement — COMPLETED
+
+**Status:** Completed on 2026-08-28 with one immutable canonical `Bounds`.
 
 **Observed behavior**
 
@@ -295,11 +351,24 @@ could leave external references to obsolete bounds objects.
   updated or replaced with explicit invalidation.
 - Confirm that `QFieldObject.objects` registers the canonical bounds only once.
 
-**Acceptance criteria**
+**Acceptance criteria — all satisfied**
 
-- Bounds identity/lifecycle is deterministic.
-- No duplicate or obsolete bounds remain registered.
-- corners, center, and bounds use the same cell-center/box-edge convention.
+- [x] Bounds identity/lifecycle is deterministic.
+- [x] No duplicate or obsolete bounds remain registered.
+- [x] Corners, center, and bounds use the same grid-point-center convention.
+
+**Implemented contract**
+
+- `_helper_initialize_geometry()` replaces the former refresh-style helper.
+- Explicit shape creates the canonical `Bounds` during construction; inferred
+  shape creates it exactly once when the first field is registered.
+- Re-running geometry initialization after `Bounds` exists raises
+  `RuntimeError`; replacement is unsupported.
+- Canonical `Bounds` opts are protected. Callers use `act_copy()` when they need
+  an editable custom bounds object.
+- `QFieldObject` registers the dataset-owned canonical object exactly once.
+- Index-space corners span `[0, shape - 1]`, so corners, center, and bounds all
+  describe the outer grid-point centers rather than half-cell box edges.
 
 ### 9. Clarify field replacement semantics
 

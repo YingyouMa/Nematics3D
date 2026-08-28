@@ -28,9 +28,26 @@ from nematics3d.classes.disclination_line import (
     _helper_sample_beta_from_smooth,
 )
 from nematics3d.classes.q_plane import OmegaResult
+from nematics3d.grid import apply_linear_transform
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
+    def test_q_registers_canonical_dataset_bounds_once(self):
+        q_values = np.zeros((2, 2, 2, 5), dtype=float)
+        q_values[..., 0] = 2.0 / 3.0
+        q_values[..., 3] = -1.0 / 3.0
+        q_values[..., 4] = -1.0 / 3.0
+
+        q = QFieldObject(
+            inputValue=InputQ(Q=q_values),
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+
+        bounds = q.dataset.calc_bounds
+        self.assertIs(q.calc_bounds, bounds)
+        self.assertEqual(sum(item is bounds for item in q.objects), 1)
+
     def test_init_excludes_defects_touching_invalid_mask_voxels(self):
         shape = (3, 3, 3)
         n = np.zeros(shape + (3,), dtype=float)
@@ -55,13 +72,14 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         np.testing.assert_array_equal(
             q.calc_defect_indices_masked, np.array(((0.0, 0.5, 0.5),))
         )
+        self.assertIs(q.mask, q.dataset.mask)
+        self.assertIs(q.mask, q.dataset.fields["mask"].raw_values)
+        self.assertEqual(q.mask.dtype, np.dtype(bool))
+        self.assertFalse(q.mask.flags.writeable)
 
     def test_act_get_beta_interpolator_new_smooth_matches_direct_beta(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -103,10 +121,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
     def test_act_get_beta_interpolator_requires_existing_smooth_when_not_new(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -121,10 +136,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
     def test_act_get_beta_interpolator_stores_omega_grid_kwargs_on_linefunc(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -141,7 +153,9 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         )
 
         self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
-        self.assertIsInstance(beta_func.raw_func_kwargs["opts_grid"], OptsPlaneGridPolar)
+        self.assertIsInstance(
+            beta_func.raw_func_kwargs["opts_grid"], OptsPlaneGridPolar
+        )
         self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].dr, 0.4)
         self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
         self.assertIn("smooth", beta_func.raw_func_kwargs)
@@ -149,10 +163,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
     def test_act_get_beta_interpolator_new_smooth_appends_even_when_cached_exists(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -174,10 +185,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
     def test_smoothed_line_act_add_beta_interpolator_builds_linefunc_directly(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -198,10 +206,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
     def test_smoothed_line_act_add_beta_interpolator_wrap_drops_100_endpoint(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -215,14 +220,13 @@ class TestQFieldObjectPhase2(unittest.TestCase):
             u_samples=np.array([0.0, 25.0, 50.0, 100.0], dtype=float),
         )
 
-        self.assertTrue(np.allclose(beta_func.raw_u_samples, np.array([0.0, 25.0, 50.0])))
+        self.assertTrue(
+            np.allclose(beta_func.raw_u_samples, np.array([0.0, 25.0, 50.0]))
+        )
 
     def test_act_calc_omega_returns_result_base_objects(self):
         data_path = (
-            Path(__file__).resolve().parents[1]
-            / "disclination"
-            / "beta"
-            / "Q_1630.npy"
+            Path(__file__).resolve().parents[1] / "disclination" / "beta" / "Q_1630.npy"
         )
         q_data = np.load(data_path)[0]
         q_data = q_data[168:185, 5:32, 10:35]
@@ -236,7 +240,9 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIsInstance(section_result, OmegaResult)
         self.assertTrue("beta" in section_result)
         self.assertTrue("omega" in section_result)
-        self.assertTrue(np.isfinite(section_result["beta"]) or np.isnan(section_result["beta"]))
+        self.assertTrue(
+            np.isfinite(section_result["beta"]) or np.isnan(section_result["beta"])
+        )
 
     def test_legacy_init_builds_dataset_owned_q_field(self):
         shape = (2, 2, 2)
@@ -265,8 +271,16 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIs(q.field.owner, q.dataset)
         self.assertIs(q.raw_Q, q.field.raw_values)
         self.assertEqual(tuple(q.dataset.raw_shape), shape)
-        self.assertTrue(np.allclose(q.calc_grid, q.dataset.calc_grid))
-        self.assertTrue(np.allclose(q.calc_grid_index, q.dataset.calc_grid_index))
+        self.assertTrue(
+            np.allclose(
+                q.dataset.act_generate_grid(),
+                apply_linear_transform(
+                    q.dataset.act_generate_grid(coord="index"),
+                    transform=grid_transform,
+                    offset=grid_offset,
+                ),
+            )
+        )
         self.assertTrue(np.allclose(q.calc_corners, q.dataset.calc_corners))
         self.assertTrue(
             np.allclose(
@@ -313,7 +327,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIs(q.raw_Q, field.raw_values)
         self.assertEqual(len(dataset.fields), 1)
         self.assertIs(dataset["Q"], field)
-        self.assertTrue(np.allclose(q.calc_grid, dataset.calc_grid))
+        self.assertEqual(dataset.act_generate_grid().shape, shape + (3,))
         self.assertTrue(np.allclose(q.calc_corners, dataset.calc_corners))
         self.assertIs(q.calc_bounds, dataset.calc_bounds)
         self.assertEqual(tuple(q.raw_box_periodic_flag), (False, True, False))
@@ -359,7 +373,12 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
         self.assertIsNone(q.raw_grid_offset)
         self.assertIsNone(q.dataset.raw_grid_offset)
-        self.assertTrue(np.allclose(q.calc_grid, q.calc_grid_index))
+        self.assertTrue(
+            np.allclose(
+                q.dataset.act_generate_grid(),
+                q.dataset.act_generate_grid(coord="index"),
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
@@ -16,6 +16,9 @@ from ...grid import (
     as_grid_transform,
     is_grid_transform_identity,
 )
+
+if TYPE_CHECKING:
+    from .grid_field_dataset import GridFieldDataset
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -244,7 +247,7 @@ def _helper_vector_gradient_split(
 
 
 def act_gradient(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -328,7 +331,7 @@ def act_gradient(
 
 
 def act_derivative(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     direction: str | int,
     *,
@@ -380,7 +383,7 @@ def act_derivative(
 
 
 def act_second_derivative(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     direction: str | int,
     *,
@@ -438,7 +441,7 @@ def act_second_derivative(
 
 
 def act_divergence(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -481,7 +484,7 @@ def act_divergence(
 
 
 def act_tensor_divergence(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     vector_axis: int = -1,
@@ -537,7 +540,7 @@ def act_tensor_divergence(
 
 
 def act_directional_derivative(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     direction,
     *,
@@ -608,7 +611,7 @@ def act_directional_derivative(
 
 
 def act_curl(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -679,7 +682,7 @@ def act_curl(
 
 
 def act_tensor_curl(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     vector_axis: int = -1,
@@ -758,7 +761,7 @@ def act_tensor_curl(
 
 
 def act_elastic_deformation(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -816,7 +819,7 @@ def act_elastic_deformation(
 
 
 def act_strain_rate_and_vorticity_tensor(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     which: str = "both",
@@ -881,7 +884,7 @@ def act_strain_rate_and_vorticity_tensor(
 
 
 def act_laplacian(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -957,7 +960,7 @@ def act_laplacian(
 
 
 def act_componentwise_laplacian(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     *,
     coord: str = "physical",
@@ -1024,3 +1027,30 @@ def act_componentwise_laplacian(
         coord=coord,
         derivative_axis=None,
     )
+
+
+class GridFieldDatasetDerivativeMixin:
+    """Spatial-derivative behavior mixed explicitly into GridFieldDataset."""
+
+    __slots__ = ()
+
+    _helper_first_derivative_index = _helper_first_derivative_index
+    _helper_second_derivative_index = _helper_second_derivative_index
+    _helper_physical_direction_weights = _helper_physical_direction_weights
+    _helper_is_diagonal_grid_transform = _helper_is_diagonal_grid_transform
+    _helper_spatial_derivative_info = _helper_spatial_derivative_info
+    _helper_spatial_derivative_result = _helper_spatial_derivative_result
+    _helper_vector_gradient_split = _helper_vector_gradient_split
+
+    act_gradient = act_gradient
+    act_derivative = act_derivative
+    act_second_derivative = act_second_derivative
+    act_divergence = act_divergence
+    act_tensor_divergence = act_tensor_divergence
+    act_directional_derivative = act_directional_derivative
+    act_curl = act_curl
+    act_tensor_curl = act_tensor_curl
+    act_elastic_deformation = act_elastic_deformation
+    act_strain_rate_and_vorticity_tensor = act_strain_rate_and_vorticity_tensor
+    act_laplacian = act_laplacian
+    act_componentwise_laplacian = act_componentwise_laplacian

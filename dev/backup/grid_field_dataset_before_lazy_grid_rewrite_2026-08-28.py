@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields, replace
-from typing import ClassVar, Literal
+from typing import ClassVar
 
 import numpy as np
 
@@ -12,7 +12,6 @@ from nematics3d.datatypes import (
     Unset,
     as_grid_shape,
     as_lattice_mask,
-    as_readonly_array,
     as_real_lattice_field,
 )
 
@@ -29,14 +28,6 @@ from ...grid import (
 )
 from ..npy_array_payload import NpyArrayPayload
 from ...general import get_box_corners
-from .grid_field_dataset_derivatives import (
-    GridFieldDatasetDerivativeMixin,
-    SpatialDerivativeInfo,
-)
-from .grid_field_dataset_smoothing import (
-    GaussianSmoothInfo,
-    GridFieldDatasetSmoothingMixin,
-)
 from .input_grid_field import InputGridField
 
 
@@ -58,10 +49,6 @@ class FieldData(ClassBase):
             doc="The generic interpolator associated with this field.",
             kind="entity",
         ),
-        "interpolator": AttrDef(
-            doc="Read-only public access to the field-owned interpolator.",
-            kind="property",
-        ),
     }
     # fmt: on
 
@@ -78,20 +65,13 @@ class FieldData(ClassBase):
         values,
         info=None,
     ):
-        if name == VALIDITY_FIELD_NAME:
-            values = as_lattice_mask(values, name="dataset validity mask")
-        else:
-            values = (
-                type(self)
-                .__attr_defs__["raw_values"]
-                .validator(
-                    values,
-                    type(self).__attr_defs__["raw_values"].doc,
-                )
+        values = (
+            type(self)
+            .__attr_defs__["raw_values"]
+            .validator(
+                values,
+                type(self).__attr_defs__["raw_values"].doc,
             )
-        values = as_readonly_array(
-            values,
-            dtype=bool if name == VALIDITY_FIELD_NAME else float,
         )
 
         super().__init__(name=name, name_replace="field", is_fixed=True)
@@ -109,11 +89,6 @@ class FieldData(ClassBase):
 
         interpolator = GridInterpolator(self, name=f"{self.name} interpolator")
         object.__setattr__(self, "entity_interpolator", interpolator)
-        return self.entity_interpolator
-
-    @property
-    def interpolator(self):
-        """Return the field-owned interpolator, or None before creation."""
         return self.entity_interpolator
 
     def act_interpolate(
@@ -134,18 +109,8 @@ class FieldData(ClassBase):
         )
 
 
-class GridFieldDataset(
-    GridFieldDatasetDerivativeMixin,
-    GridFieldDatasetSmoothingMixin,
-    ClassBase,
-):
-    """Container for physical fields sharing one immutable lattice.
-
-    Shape, periodicity, offset, and transform are fixed after construction.
-    When shape is initially ``UNSET``, the first registered field may infer it
-    exactly once; all later fields must match. Create a new dataset to use
-    different grid geometry.
-    """
+class GridFieldDataset(ClassBase):
+    """Container for physical fields sharing one lattice and boundary model."""
 
     # fmt: off
     __attr_defs__: ClassVar = {
@@ -164,6 +129,14 @@ class GridFieldDataset(
         "raw_grid_transform": AttrDef(
             doc="Linear transform mapping lattice indices to real space.",
             kind="raw",
+        ),
+        "calc_grid_index": AttrDef(
+            doc="Lattice coordinate grid in index space.",
+            kind="calc",
+        ),
+        "calc_grid": AttrDef(
+            doc="Coordinate grid in real space after transform and offset.",
+            kind="calc",
         ),
         "calc_corners_index": AttrDef(
             doc="Box corners in lattice-index space.",
@@ -199,13 +172,6 @@ class GridFieldDataset(
             doc=(
                 "Read-only: whether this dataset carries a per-voxel validity "
                 "mask field bound at construction."
-            ),
-            kind="property",
-        ),
-        "mask": AttrDef(
-            doc=(
-                "Read-only canonical boolean validity mask, or None when the "
-                "dataset was constructed without one."
             ),
             kind="property",
         ),
@@ -249,7 +215,7 @@ class GridFieldDataset(
         object.__setattr__(
             self,
             "raw_box_periodic_flag",
-            as_readonly_array(inputValue.box_periodic_flag, dtype=bool),
+            inputValue.box_periodic_flag,
         )
         object.__setattr__(
             self,
@@ -261,7 +227,7 @@ class GridFieldDataset(
             "raw_grid_transform",
             as_grid_transform(inputValue.grid_transform, is_readonly=True),
         )
-        self._helper_initialize_geometry()
+        self._helper_refresh_grid_cache()
 
         registry = RegistryBase(
             "fields manager",
@@ -285,7 +251,7 @@ class GridFieldDataset(
                 inputValue.mask,
                 name="dataset validity mask",
             )
-            self._helper_add_field(VALIDITY_FIELD_NAME, mask_values)
+            self._helper_add_field(VALIDITY_FIELD_NAME, mask_values.astype(float))
 
     def _helper_ensure_or_infer_shape(
         self,
@@ -295,7 +261,7 @@ class GridFieldDataset(
         field_shape = as_grid_shape(np.shape(values)[:3], name="field grid shape")
         if self.raw_shape is UNSET:
             object.__setattr__(self, "raw_shape", field_shape)
-            self._helper_initialize_geometry()
+            self._helper_refresh_grid_cache()
             return field_shape
         if field_shape != tuple(self.raw_shape):
             raise ValueError(
@@ -376,24 +342,14 @@ class GridFieldDataset(
         raise ValueError("direction must be one of 0, 1, 2, 'x', 'y', or 'z'.")
 
     # -------------------------------
-    # Shared-grid geometry initialization
+    # Shared-grid geometry cache
     # -------------------------------
 
-    def _helper_initialize_geometry(self) -> None:
-        """Initialize canonical geometry once after shape becomes available."""
-        try:
-            bounds_existing = object.__getattribute__(self, "calc_bounds")
-        except AttributeError:
-            bounds_existing = UNSET
-
-        if bounds_existing is not UNSET:
-            raise RuntimeError(
-                "GridFieldDataset geometry is already initialized and cannot "
-                "be refreshed or replaced. Create a new dataset for different "
-                "geometry."
-            )
-
+    def _helper_refresh_grid_cache(self) -> None:
+        """Refresh geometry caches from the current shared grid metadata."""
         if self.raw_shape is UNSET:
+            object.__setattr__(self, "calc_grid_index", UNSET)
+            object.__setattr__(self, "calc_grid", UNSET)
             object.__setattr__(self, "calc_corners_index", UNSET)
             object.__setattr__(self, "calc_corners", UNSET)
             object.__setattr__(self, "calc_bounds", UNSET)
@@ -414,6 +370,13 @@ class GridFieldDataset(
             else:
                 box_size_periodic_index[i] = np.inf
 
+        grid_index = generate_coordinate_grid(grid_shape, grid_shape)
+        grid = apply_linear_transform(
+            grid_index,
+            transform=self.raw_grid_transform,
+            offset=self.raw_grid_offset,
+        )
+
         lengths_index = np.asarray(grid_shape) - np.array([1, 1, 1])
         corners_index = get_box_corners(*lengths_index)
         corners_coord = apply_linear_transform(
@@ -432,94 +395,12 @@ class GridFieldDataset(
             "calc_box_size_periodic_index",
             box_size_periodic_index,
         )
+        object.__setattr__(self, "calc_grid_index", grid_index)
+        object.__setattr__(self, "calc_grid", grid)
         object.__setattr__(self, "calc_corners_index", corners_index)
         object.__setattr__(self, "calc_corners", corners_coord)
         object.__setattr__(self, "calc_bounds", bounds)
         object.__setattr__(self, "calc_grid_spacing", grid_spacing)
-
-    # -------------------------------
-    # Coordinate conversion and explicit full-grid allocation
-    # -------------------------------
-
-    def act_index_to_coord(self, indices) -> np.ndarray:
-        """Convert lattice-index points to physical coordinates.
-
-        ``indices`` may be one point with shape ``(3,)`` or an array with any
-        leading shape and a trailing coordinate axis of length three.
-        """
-        return apply_linear_transform(
-            indices,
-            transform=self.raw_grid_transform,
-            offset=self.raw_grid_offset,
-        )
-
-    def act_coord_to_index(self, coords) -> np.ndarray:
-        """Convert physical-coordinate points to lattice-index coordinates.
-
-        ``coords`` may be one point with shape ``(3,)`` or an array with any
-        leading shape and a trailing coordinate axis of length three.
-        """
-        return apply_linear_transform(
-            coords,
-            transform=self.raw_grid_transform,
-            offset=self.raw_grid_offset,
-            is_inv=True,
-        )
-
-    def act_generate_grid(
-        self,
-        coord: Literal["index", "physical"] = "physical",
-        *,
-        dtype=np.float64,
-    ) -> np.ndarray:
-        """Allocate and return the complete lattice coordinate grid.
-
-        This operation is intentionally explicit because the returned array
-        has shape ``(*raw_shape, 3)`` and can be very large. The result is not
-        cached by the dataset.
-
-        Physical grids are written directly into their final array, avoiding
-        allocation of a second full-size index grid as an intermediate.
-        """
-        if self.raw_shape is UNSET:
-            raise ValueError(
-                "Dataset shape must be known before a full coordinate grid "
-                "can be generated. Add a field first or initialize the "
-                "dataset with a shape."
-            )
-        if coord not in ("index", "physical"):
-            raise ValueError("coord must be either 'index' or 'physical'.")
-
-        dtype = np.dtype(dtype)
-        if not np.issubdtype(dtype, np.floating):
-            raise TypeError("dtype must be a floating NumPy dtype.")
-
-        grid_shape = as_grid_shape(self.raw_shape, name="dataset grid shape")
-        if coord == "index":
-            return generate_coordinate_grid(grid_shape, grid_shape).astype(
-                dtype,
-                copy=False,
-            )
-
-        grid = np.zeros((*grid_shape, 3), dtype=dtype)
-        if is_grid_transform_identity(self.raw_grid_transform):
-            transform = np.eye(3, dtype=dtype)
-        else:
-            transform = np.asarray(self.raw_grid_transform, dtype=dtype)
-        ndim = len(grid_shape)
-        for index_axis, axis_size in enumerate(grid_shape):
-            axis = np.arange(axis_size, dtype=dtype)
-            axis_shape = [1] * ndim
-            axis_shape[index_axis] = axis_size
-            axis = axis.reshape(axis_shape)
-            for coord_axis in range(3):
-                coefficient = transform[index_axis, coord_axis]
-                if coefficient != 0.0:
-                    grid[..., coord_axis] += axis * coefficient
-
-        if self.raw_grid_offset is not None:
-            grid += np.asarray(self.raw_grid_offset, dtype=dtype)
-        return grid
 
     def act_add_field(
         self,
@@ -527,16 +408,17 @@ class GridFieldDataset(
         values,
         *,
         info=None,
+        is_replace: bool = False,
     ) -> FieldData:
-        """Validate and bind one immutable physical-field snapshot."""
+        """Validate and bind one physical field to this dataset."""
         if name == VALIDITY_FIELD_NAME:
             raise ValueError(
                 f"{VALIDITY_FIELD_NAME!r} is a reserved validity mask field and "
-                "cannot be added through act_add_field. Supply the "
+                "cannot be added or replaced through act_add_field. Supply the "
                 "mask when constructing the dataset (InputGridField.mask); a "
                 "dataset built without a mask cannot gain one later."
             )
-        return self._helper_add_field(name, values, info=info)
+        return self._helper_add_field(name, values, info=info, is_replace=is_replace)
 
     def _helper_add_field(
         self,
@@ -544,23 +426,25 @@ class GridFieldDataset(
         values,
         *,
         info=None,
+        is_replace: bool = False,
     ) -> FieldData:
         """Validate and bind one physical field, bypassing the name guard."""
-        if name == VALIDITY_FIELD_NAME:
-            values = as_lattice_mask(values, name="dataset validity mask")
-        else:
-            values = as_real_lattice_field(values, name=f"field {name!r} values")
+        values = as_real_lattice_field(values, name=f"field {name!r} values")
         self._helper_ensure_or_infer_shape(values)
 
         try:
             existing_field = self.fields[name]
         except KeyError:
             existing_field = None
-        if existing_field is not None:
+        if existing_field is not None and not is_replace:
             raise ValueError(
-                f"Field {name!r} already exists in this dataset. Registered "
-                "fields are immutable snapshots and cannot be replaced."
+                f"Field {name!r} already exists in this dataset. "
+                "Pass is_replace=True to replace it."
             )
+
+        if is_replace:
+            if existing_field is not None:
+                self.fields.act_unregister(existing_field, is_missing_ok=True)
 
         field = FieldData(name=name, values=values, info=info)
         field.act_bind_relation_base("owner", self, is_weak=True)
@@ -571,6 +455,8 @@ class GridFieldDataset(
         self,
         name: str,
         result: NpyArrayPayload,
+        *,
+        is_replace: bool = False,
     ) -> FieldData:
         """
         Register a dataset operator result as a field with payload-free info.
@@ -590,6 +476,7 @@ class GridFieldDataset(
                 name,
                 values,
                 info=result.raw_info,
+                is_replace=is_replace,
             )
 
     def act_get_field(self, name: str | int | None):
@@ -602,15 +489,15 @@ class GridFieldDataset(
 
     def _helper_read_validity_mask(self):
         """Return the validity mask as a bool array, or None when absent."""
-        return self.mask
-
-    @property
-    def mask(self):
-        """Return the canonical read-only boolean validity mask, if present."""
         try:
-            return self.fields[VALIDITY_FIELD_NAME].raw_values
+            mask_field = self.fields[VALIDITY_FIELD_NAME]
         except KeyError:
             return None
+        return as_lattice_mask(
+            mask_field.raw_values,
+            name=f"dataset field {VALIDITY_FIELD_NAME!r} values",
+            shape=None if self.raw_shape is UNSET else tuple(self.raw_shape),
+        )
 
     @property
     def calc_is_has_mask(self) -> bool:
@@ -633,3 +520,76 @@ class GridFieldDataset(
             transform=self.raw_grid_transform,
             offset=self.raw_grid_offset,
         )[0]
+
+
+from .grid_field_dataset_derivatives import (  # noqa: E402
+    SpatialDerivativeInfo,
+    _helper_first_derivative_index,
+    _helper_is_diagonal_grid_transform,
+    _helper_physical_direction_weights,
+    _helper_second_derivative_index,
+    _helper_spatial_derivative_info,
+    _helper_spatial_derivative_result,
+    _helper_vector_gradient_split,
+    act_componentwise_laplacian,
+    act_curl,
+    act_derivative,
+    act_directional_derivative,
+    act_divergence,
+    act_elastic_deformation,
+    act_gradient,
+    act_laplacian,
+    act_second_derivative,
+    act_strain_rate_and_vorticity_tensor,
+    act_tensor_curl,
+    act_tensor_divergence,
+)
+from .grid_field_dataset_smoothing import (  # noqa: E402
+    GaussianSmoothInfo,
+    _helper_as_gaussian_boundary_mode,
+    _helper_as_gaussian_sigma_3,
+    _helper_as_gaussian_weights,
+    _helper_build_gaussian_kernel_1d,
+    _helper_convolve_gaussian_axis,
+    _helper_gaussian_kernel_radius,
+    _helper_gaussian_smooth_info,
+    _helper_gaussian_smooth_result,
+    _helper_gaussian_smooth_values,
+    _helper_pad_for_gaussian_axis,
+    act_gaussian_smooth,
+)
+
+GridFieldDataset._helper_first_derivative_index = _helper_first_derivative_index
+GridFieldDataset._helper_second_derivative_index = _helper_second_derivative_index
+GridFieldDataset._helper_physical_direction_weights = _helper_physical_direction_weights
+GridFieldDataset._helper_is_diagonal_grid_transform = _helper_is_diagonal_grid_transform
+GridFieldDataset._helper_spatial_derivative_info = _helper_spatial_derivative_info
+GridFieldDataset._helper_spatial_derivative_result = _helper_spatial_derivative_result
+GridFieldDataset._helper_vector_gradient_split = _helper_vector_gradient_split
+
+GridFieldDataset._helper_as_gaussian_sigma_3 = _helper_as_gaussian_sigma_3
+GridFieldDataset._helper_as_gaussian_boundary_mode = _helper_as_gaussian_boundary_mode
+GridFieldDataset._helper_as_gaussian_weights = _helper_as_gaussian_weights
+GridFieldDataset._helper_gaussian_kernel_radius = _helper_gaussian_kernel_radius
+GridFieldDataset._helper_build_gaussian_kernel_1d = _helper_build_gaussian_kernel_1d
+GridFieldDataset._helper_pad_for_gaussian_axis = _helper_pad_for_gaussian_axis
+GridFieldDataset._helper_convolve_gaussian_axis = _helper_convolve_gaussian_axis
+GridFieldDataset._helper_gaussian_smooth_info = _helper_gaussian_smooth_info
+GridFieldDataset._helper_gaussian_smooth_result = _helper_gaussian_smooth_result
+GridFieldDataset._helper_gaussian_smooth_values = _helper_gaussian_smooth_values
+
+GridFieldDataset.act_gaussian_smooth = act_gaussian_smooth
+GridFieldDataset.act_gradient = act_gradient
+GridFieldDataset.act_derivative = act_derivative
+GridFieldDataset.act_second_derivative = act_second_derivative
+GridFieldDataset.act_divergence = act_divergence
+GridFieldDataset.act_tensor_divergence = act_tensor_divergence
+GridFieldDataset.act_directional_derivative = act_directional_derivative
+GridFieldDataset.act_curl = act_curl
+GridFieldDataset.act_tensor_curl = act_tensor_curl
+GridFieldDataset.act_elastic_deformation = act_elastic_deformation
+GridFieldDataset.act_strain_rate_and_vorticity_tensor = (
+    act_strain_rate_and_vorticity_tensor
+)
+GridFieldDataset.act_laplacian = act_laplacian
+GridFieldDataset.act_componentwise_laplacian = act_componentwise_laplacian

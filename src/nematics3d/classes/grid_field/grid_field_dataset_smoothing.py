@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
@@ -17,6 +17,9 @@ from ...grid import as_grid_offset, as_grid_transform
 
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
+
+if TYPE_CHECKING:
+    from .grid_field_dataset import GridFieldDataset
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -229,11 +232,14 @@ def _helper_as_gaussian_weights(
 ) -> tuple[np.ndarray, str | None, tuple[int, ...]]:
     """Return validated per-voxel weights for weighted Gaussian smoothing."""
     weights_source_name = self._helper_source_name_for_field_values(weights)
+    weights_values = self._helper_as_field_values_on_grid(
+        weights,
+        name="Gaussian smoothing weights",
+    )
+    if np.issubdtype(weights_values.dtype, np.bool_):
+        weights_values = weights_values.astype(float)
     weights_values = as_real_lattice_field(
-        self._helper_as_field_values_on_grid(
-            weights,
-            name="Gaussian smoothing weights",
-        ),
+        weights_values,
         name="Gaussian smoothing weights",
         extra_ndim=0,
         is_finite=True,
@@ -365,7 +371,7 @@ def _helper_gaussian_smooth_values(
 
 
 def act_gaussian_smooth(
-    self,
+    self: "GridFieldDataset",
     field_or_values,
     sigma,
     *,
@@ -484,3 +490,22 @@ def act_gaussian_smooth(
         weights_source_name=weights_source_name,
         weights_floor=weights_floor_value,
     )
+
+
+class GridFieldDatasetSmoothingMixin:
+    """Gaussian-smoothing behavior mixed explicitly into GridFieldDataset."""
+
+    __slots__ = ()
+
+    _helper_as_gaussian_sigma_3 = _helper_as_gaussian_sigma_3
+    _helper_as_gaussian_boundary_mode = _helper_as_gaussian_boundary_mode
+    _helper_as_gaussian_weights = _helper_as_gaussian_weights
+    _helper_gaussian_kernel_radius = _helper_gaussian_kernel_radius
+    _helper_build_gaussian_kernel_1d = _helper_build_gaussian_kernel_1d
+    _helper_pad_for_gaussian_axis = _helper_pad_for_gaussian_axis
+    _helper_convolve_gaussian_axis = _helper_convolve_gaussian_axis
+    _helper_gaussian_smooth_info = _helper_gaussian_smooth_info
+    _helper_gaussian_smooth_result = _helper_gaussian_smooth_result
+    _helper_gaussian_smooth_values = _helper_gaussian_smooth_values
+
+    act_gaussian_smooth = act_gaussian_smooth
