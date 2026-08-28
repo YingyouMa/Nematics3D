@@ -158,6 +158,21 @@ class TestGridTransform(unittest.TestCase):
         np.testing.assert_array_equal(result, [4.0, 4.0, 4.0])
         self.assertEqual(result.shape, (3,))
 
+    def test_apply_linear_transform_preserves_empty_point_collections(self):
+        points = np.empty((0, 3), dtype=float)
+        transform = np.diag([2.0, 3.0, 4.0])
+
+        physical = apply_linear_transform(points, transform, offset=[1.0, 2.0, 3.0])
+        restored = apply_linear_transform(
+            physical,
+            transform,
+            offset=[1.0, 2.0, 3.0],
+            is_inv=True,
+        )
+
+        assert physical.shape == (0, 3)
+        assert restored.shape == (0, 3)
+
     def test_apply_linear_transform_rejects_invalid_inputs(self):
         with self.assertRaisesRegex(ValueError, "trailing coordinate axis"):
             apply_linear_transform(np.ones((2, 2)))
