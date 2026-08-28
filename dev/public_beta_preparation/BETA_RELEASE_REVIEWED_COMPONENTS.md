@@ -557,6 +557,36 @@ Summary of changes and evidence:
 | Reviewer | Yingyou Ma and Codex |
 | Remaining limitations | The minimum-image convention assumes every true step is shorter than half the corresponding periodic length. An exact half-period displacement is direction-ambiguous and follows `numpy.round()` tie-to-even behavior. Unwrapping preserves continuity and may intentionally return coordinates outside the principal box. |
 
+### `nematics3d.grid.generate_coordinate_grid` and `generate_fixed_step_grid`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public dense coordinate-grid generators |
+| Source | [`src/nematics3d/grid/coordinate.py`](../../src/nematics3d/grid/coordinate.py) |
+| Tests | [`tests/test_grid_coordinate.py`](../../tests/test_grid_coordinate.py), with direct caller coverage in [`tests/classes/test_grid_field_dataset.py`](../../tests/classes/test_grid_field_dataset.py), [`tests/classes/test_plane_grid.py`](../../tests/classes/test_plane_grid.py), and [`tests/classes/test_plane_grid_polar.py`](../../tests/classes/test_plane_grid_polar.py) |
+| Tutorial | [`tutorials/grid/coordinate/generate_coordinate_grid.ipynb`](../../tutorials/grid/coordinate/generate_coordinate_grid.ipynb) and [`tutorials/grid/coordinate/generate_fixed_step_grid.ipynb`](../../tutorials/grid/coordinate/generate_fixed_step_grid.ipynb) |
+| Review scope | N-dimensional source-index resampling coordinates, identity grids, endpoint preservation, one-sample target axes, two-dimensional fixed-step grids, bottom-left and center alignment, integer topology, effective extents, zero sizes, Python and NumPy scalar inputs, invalid inputs, decimal step-boundary rounding, dense-memory behavior, public exports, active callers, documentation, and the explicit decision that these lightweight deterministic functions need no logger |
+| Validation | `python -m pytest tests/test_grid_coordinate.py -q` (31 passed); focused caller run covering `GridFieldDataset`, `PlaneGrid`, and `PlaneGridPolar` (38 passed); broader six-file caller run (121 passed, with 6 unrelated pre-existing failures in interpolator relations, Gaussian smoothing of trailing component axes, reserved-mask expectations, and legacy Q-field interpolation); Black and `black --check` on the implementation and affected tests; complete in-memory execution of both tutorials; notebook JSON validation; `git diff --check` |
+| Reviewed commit | `2b54edaa83e084f999fb415dddff6914dd256dfb` |
+| Reviewed date | 2026-08-27 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Both functions intentionally allocate dense coordinate arrays and can exhaust memory for impractically large requested grids. `generate_coordinate_grid()` depends on the active but not yet separately reviewed `as_grid_shape()` validator; `generate_fixed_step_grid()` depends only on already confirmed repository validators `as_number()` and `as_str()`. |
+
+Summary of changes and evidence:
+
+- Confirmed the source-index coordinate convention, dimensionality, shapes,
+  dtypes, endpoint behavior, fixed-step alignment, and effective-size contracts.
+- Corrected fixed-step snapping at decimal boundaries such as `0.3 / 0.1`,
+  where raw binary floating-point division can fall one representable value
+  below an exact integer before `floor()` is applied.
+- Removed a stale downstream test assumption from the former tuple-return API
+  and confirmed the active `GridFieldDataset` and `PlaneGrid` callers.
+- Split and expanded the public tutorials, including memory, topology,
+  alignment, implementation, and common-misuse guidance.
+- Kept both functions undecorated because their operations are lightweight and
+  deterministic, their validation errors are already explicit, and logging is
+  more useful at the higher-level workflow boundary.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -593,3 +623,4 @@ above.
 | 2026-08-26 | `as_value_range()` | `src/nematics3d/datatypes/number.py` | `tests/test_datatypes_number.py` | `c7443c2343dc31c700db9257f3f4125a517e4533` | Confirmed |
 | 2026-08-26 | `shift_to_box()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
 | 2026-08-26 | `unwrap_trajectory()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
+| 2026-08-27 | `generate_coordinate_grid()` and `generate_fixed_step_grid()` | `src/nematics3d/grid/coordinate.py` | `tests/test_grid_coordinate.py` and direct caller tests | `2b54edaa83e084f999fb415dddff6914dd256dfb` | Confirmed |
