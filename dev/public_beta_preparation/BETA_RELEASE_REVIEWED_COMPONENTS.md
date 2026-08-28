@@ -652,6 +652,36 @@ Summary of changes and evidence:
   Its repository validators `as_director_field()` and `as_scalar_field()` are
   already confirmed.
 
+### `defect_validity_from_mask()`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public defect-plaquette validity filter |
+| Source | [`src/nematics3d/analysis/disclination/misc.py`](../../src/nematics3d/analysis/disclination/misc.py) |
+| Tests | [`tests/test_disclination_defect_validity.py`](../../tests/test_disclination_defect_validity.py), with initialization integration coverage in [`tests/classes/test_q_field_object_phase2.py`](../../tests/classes/test_q_field_object_phase2.py) |
+| Tutorial | None; the plaquette geometry, mask convention, periodic wrapping, ordering, and failure behavior are documented in the function docstring and focused tests |
+| Review scope | All three plaquette orientations, all four supporting corners, unrelated invalid voxels, mixed-result input ordering, boolean result shape and dtype, input isolation, periodic wrapping across two axes, non-periodic bounds diagnostics, empty input, public export, `QFieldObject` initialization mask filtering, active callers, and logging decision |
+| Validation | Focused validity and `QFieldObject` mask-integration run (8 passed); defect detection/classification regression run (38 passed); full phase-2 Q-field run (18 passed, with 1 unrelated pre-existing `FieldData.interpolator` relation failure); Black on the implementation and new focused test, in-memory syntax compile, active-caller/export/dependency audit, and `git diff --check` |
+| Reviewed commit | `7e03526ffe198d1970543661f698770942dc6e9e` |
+| Reviewed date | 2026-08-28 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The mask must be a three-dimensional lattice mask with the same lattice shape used to produce the defect indices; shape agreement is enforced indirectly by corner bounds rather than by a separate grid-shape parameter. The repository dependency `as_lattice_mask()` remains active and has not yet been separately confirmed; `as_defect_index()` and `as_dimension_info()` are already confirmed. |
+
+Summary of changes and evidence:
+
+- Confirmed that a defect is valid exactly when all four vertices of its
+  supporting plaquette are valid, for plaquettes normal to each lattice axis.
+- Confirmed periodic corner wrapping, empty input, stable input order, boolean
+  output, and preservation of caller-owned arrays.
+- Improved non-periodic bounds errors to identify every offending axis and its
+  corner range.
+- Confirmed the initialization path moves mask-supported invalid detections to
+  `calc_defect_indices_masked` while retaining valid detections for downstream
+  analysis.
+- Kept the function undecorated because it is a deterministic vectorized
+  boolean filter; useful defect counts and mask-filtering events are already
+  logged by its workflow-level `QFieldObject.act_defect_detect()` caller.
+
 ### `nematics3d.grid` transform utilities
 
 | Field | Evidence |
@@ -726,3 +756,4 @@ above.
 | 2026-08-27 | `as_grid_shape()` | `src/nematics3d/datatypes/grid_shape.py` | `tests/test_datatypes_grid_shape.py` and downstream tests | `fa2239e7681b262cea48d01fa580452f2e5d851e` | Confirmed |
 | 2026-08-28 | `get_q()` | `src/nematics3d/field.py` | `tests/core/test_get_q.py` and downstream tests | `70871e394effca0755983efe6888a377180871ea` | Confirmed |
 | 2026-08-28 | Grid transform utilities | `src/nematics3d/grid/transform.py` | `tests/test_grid_transform.py` and downstream geometry tests | `7b3ec3a91ec30e7d7003c4570c000650ce55be12` | Confirmed |
+| 2026-08-28 | `defect_validity_from_mask()` | `src/nematics3d/analysis/disclination/misc.py` | `tests/test_disclination_defect_validity.py` and Q-field initialization integration | `7e03526ffe198d1970543661f698770942dc6e9e` | Confirmed |
