@@ -619,6 +619,39 @@ Summary of changes and evidence:
   validator has no useful intermediate state or workflow boundary to log. Its
   only repository-function dependency is the already confirmed `as_bool()`.
 
+### `nematics3d.field.get_q`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public uniaxial and biaxial Q-tensor field constructor |
+| Source | [`src/nematics3d/field.py`](../../src/nematics3d/field.py) |
+| Tests | [`tests/core/test_get_q.py`](../../tests/core/test_get_q.py), with downstream initialization coverage in [`tests/classes/test_q_plane.py`](../../tests/classes/test_q_plane.py) and [`tests/classes/test_q_field_object_phase2.py`](../../tests/classes/test_q_field_object_phase2.py) |
+| Tutorial | None; the physical convention, parameter pairing, broadcasting, and failure behavior are documented in the function docstring and focused scientific tests |
+| Review scope | Uniaxial convention $Q=S(nn-I/3)$, optional signed biaxial contribution $P(mm-ll)$ with $l=n\times m$, director normalization, default unit scalar order, scalar and field broadcasting, symmetric-traceless invariants, director-sign invariance, positive and negative biaxial order, orthogonality tolerance, paired `m`/`P` inputs, zero directors, incompatible shapes, input isolation, floating output, top-level public export, `q_diagonalize()` round trip, active callers, and logging decision |
+| Validation | `python -m pytest tests/core/test_get_q.py tests/core/test_q_diagonalization.py tests/classes/test_q_plane.py -q` (23 passed, 8 subtests passed); `tests/classes/test_q_field_object_phase2.py` downstream run (10 passed, with 1 unrelated pre-existing `FieldData.interpolator` relation failure); Black and `black --check` on the implementation and focused tests; in-memory syntax compile; active-source caller and export audit; `git diff --check` |
+| Reviewed commit | `70871e394effca0755983efe6888a377180871ea` |
+| Reviewed date | 2026-08-28 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Biaxial directors must already be orthogonal within an absolute dot-product tolerance of `1e-8`; the function rejects non-orthogonal pairs rather than orthogonalizing them. Director and scalar validation intentionally normalizes inputs to the repository's standard floating representation. |
+
+Summary of changes and evidence:
+
+- Confirmed the uniaxial and signed biaxial physical conventions through exact
+  diagonal examples, symmetric-traceless invariants, and director-sign
+  equivalence.
+- Confirmed broadcasting for uniaxial and biaxial fields, preservation of input
+  arrays, floating output, zero-director rejection, and paired `m`/`P` failure
+  behavior.
+- Reconstructed a randomized biaxial tensor from the complete
+  `q_diagonalize()` result and recovered the original tensor within numerical
+  tolerance.
+- Confirmed both `nematics3d.field.get_q` and the top-level `nematics3d.get_q`
+  public surface, together with the `QFieldObject` and principal-plane callers.
+- Kept the function undecorated because it is a deterministic vectorized
+  tensor construction with no useful workflow event or recovery path to log.
+  Its repository validators `as_director_field()` and `as_scalar_field()` are
+  already confirmed.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
@@ -657,3 +690,4 @@ above.
 | 2026-08-26 | `unwrap_trajectory()` | `src/nematics3d/grid/periodic.py` | `tests/test_grid_periodic.py` and datatype validation tests | `c7443c2` | Confirmed |
 | 2026-08-27 | `generate_coordinate_grid()` and `generate_fixed_step_grid()` | `src/nematics3d/grid/coordinate.py` | `tests/test_grid_coordinate.py` and direct caller tests | `2b54edaa83e084f999fb415dddff6914dd256dfb` | Confirmed |
 | 2026-08-27 | `as_grid_shape()` | `src/nematics3d/datatypes/grid_shape.py` | `tests/test_datatypes_grid_shape.py` and downstream tests | `fa2239e7681b262cea48d01fa580452f2e5d851e` | Confirmed |
+| 2026-08-28 | `get_q()` | `src/nematics3d/field.py` | `tests/core/test_get_q.py` and downstream tests | `70871e394effca0755983efe6888a377180871ea` | Confirmed |
