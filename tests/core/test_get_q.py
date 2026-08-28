@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import nematics3d as n3d
 from nematics3d.analysis.q_diagonalization import q_diagonalize
 from nematics3d.field import get_q
 
@@ -59,6 +60,27 @@ def test_get_q_is_invariant_to_director_signs():
     positive = get_q([1.0, 0.0, 0.0], S=0.7, m=[0.0, 1.0, 0.0], P=0.1)
     negative = get_q([-1.0, 0.0, 0.0], S=0.7, m=[0.0, -1.0, 0.0], P=0.1)
     np.testing.assert_allclose(positive, negative)
+
+
+def test_get_q_broadcasts_biaxial_fields_without_modifying_inputs():
+    n = np.array([[[2.0, 0.0, 0.0]], [[0.0, 0.0, 3.0]]])
+    m = np.array([0.0, 4.0, 0.0])
+    scalar_order = np.array([[0.6], [0.3]])
+    biaxial_order = np.array([0.1])
+    inputs_before = tuple(value.copy() for value in (n, m, scalar_order, biaxial_order))
+
+    result = get_q(n, S=scalar_order, m=m, P=biaxial_order)
+
+    assert result.shape == (2, 1, 3, 3)
+    assert result.dtype == float
+    np.testing.assert_allclose(result, np.swapaxes(result, -1, -2))
+    np.testing.assert_allclose(np.trace(result, axis1=-2, axis2=-1), 0.0, atol=1e-15)
+    for value, expected in zip((n, m, scalar_order, biaxial_order), inputs_before):
+        np.testing.assert_array_equal(value, expected)
+
+
+def test_get_q_is_available_from_the_top_level_package():
+    assert n3d.get_q is get_q
 
 
 @pytest.mark.parametrize(
