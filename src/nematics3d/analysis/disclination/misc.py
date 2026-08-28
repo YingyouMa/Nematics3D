@@ -64,7 +64,8 @@ def defect_validity_from_mask(
     Returns
     -------
     validity : np.ndarray, shape (N_defects,), dtype bool
-        True for each defect whose four supporting voxels are all valid.
+        True for each defect whose four supporting voxels are all valid. The
+        result preserves the input row order. Input arrays are not modified.
     """
     defect_indices = as_defect_index(defect_indices)
     mask = as_lattice_mask(mask, name="defect validity mask")
@@ -83,21 +84,32 @@ def defect_validity_from_mask(
             lower[:, axis] %= shape[axis]
             upper[:, axis] %= shape[axis]
 
-    if np.any(lower < 0) or np.any(upper >= shape):
+    out_of_bounds_axes = [
+        axis
+        for axis in range(3)
+        if np.any(lower[:, axis] < 0) or np.any(upper[:, axis] >= shape[axis])
+    ]
+    if out_of_bounds_axes:
+        details = "; ".join(
+            f"axis {axis}: corner range "
+            f"[{lower[:, axis].min()}, {upper[:, axis].max()}], valid range "
+            f"[0, {shape[axis] - 1}]"
+            for axis in out_of_bounds_axes
+        )
         raise ValueError(
             "Defect indices reach outside the mask along a non-periodic "
-            f"dimension. Mask shape is {mask.shape}; defect index range is "
-            f"[{defect_indices.min(axis=0)}, {defect_indices.max(axis=0)}]."
+            f"dimension. Mask shape is {mask.shape}; {details}."
         )
 
     # The plaquette corners are every lower/upper combination per axis. The
     # integer component has lower == upper, so the 8 combinations collapse to
-    # the 4 distinct corner voxels of the loop.
+    # the 4 distinct corner voxels of the loop. Keeping the small repeated
+    # reads avoids allocating a separate (N, 4, 3) corner-index array.
     validity = np.ones(len(defect_indices), dtype=bool)
+    corners = (lower, upper)
     for ix in (0, 1):
         for iy in (0, 1):
             for iz in (0, 1):
-                corners = (lower, upper)
                 validity &= mask[
                     corners[ix][:, 0],
                     corners[iy][:, 1],

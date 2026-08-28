@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import types
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -30,6 +31,31 @@ from nematics3d.classes.q_plane import OmegaResult
 
 
 class TestQFieldObjectPhase2(unittest.TestCase):
+    def test_init_excludes_defects_touching_invalid_mask_voxels(self):
+        shape = (3, 3, 3)
+        n = np.zeros(shape + (3,), dtype=float)
+        n[..., 0] = 1.0
+        mask = np.ones(shape, dtype=bool)
+        mask[0, 0, 0] = False
+        detected = np.array(((0.0, 0.5, 0.5), (2.0, 0.5, 0.5)))
+
+        with patch(
+            "nematics3d.classes.q_field_object.defect_detect",
+            return_value=detected,
+        ):
+            q = QFieldObject(
+                inputValue=InputQ(n=n, mask=mask),
+                is_classify_lines=False,
+                name="masked-defect-test",
+            )
+
+        np.testing.assert_array_equal(
+            q.calc_defect_indices, np.array(((2.0, 0.5, 0.5),))
+        )
+        np.testing.assert_array_equal(
+            q.calc_defect_indices_masked, np.array(((0.0, 0.5, 0.5),))
+        )
+
     def test_act_get_beta_interpolator_new_smooth_matches_direct_beta(self):
         data_path = (
             Path(__file__).resolve().parents[1]
