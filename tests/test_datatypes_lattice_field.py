@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from nematics3d.datatypes import as_lattice_mask, as_real_lattice_field
+from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
 
 
 def test_real_lattice_field_scalar_and_component_shapes():
@@ -85,9 +86,7 @@ def test_real_lattice_field_value_range_rejects_or_clips():
 
 def test_real_lattice_field_nonfinite_with_range_preserves_nan():
     values = np.array([[[np.nan, 0.5]]])
-    out = as_real_lattice_field(
-        values, is_finite=False, value_range=(0.0, 1.0)
-    )
+    out = as_real_lattice_field(values, is_finite=False, value_range=(0.0, 1.0))
     assert np.isnan(out[0, 0, 0])
     assert out[0, 0, 1] == 0.5
 
@@ -99,9 +98,7 @@ def test_real_lattice_field_avoids_unnecessary_copy_for_float_input():
 
 
 def test_lattice_mask_accepts_boolean_and_returns_independent_bool_array():
-    mask = np.array(
-        [[[True, False], [False, True]], [[False, True], [True, False]]]
-    )
+    mask = np.array([[[True, False], [False, True]], [[False, True], [True, False]]])
     out = as_lattice_mask(mask)
 
     assert out.dtype == np.bool_
@@ -114,6 +111,7 @@ def test_lattice_mask_accepts_numeric_zero_one():
     out = as_lattice_mask(mask)
     assert out.dtype == np.bool_
     np.testing.assert_array_equal(out, mask.astype(bool))
+    assert not np.shares_memory(out, mask)
 
 
 def test_lattice_mask_rejects_non_binary_numeric_values():
@@ -125,11 +123,29 @@ def test_lattice_mask_rejects_non_binary_numeric_values():
 
 def test_lattice_mask_requires_exactly_three_axes_and_expected_shape():
     with pytest.raises(ValueError):
+        as_lattice_mask(True)
+    with pytest.raises(ValueError):
         as_lattice_mask(np.zeros((2, 2), dtype=bool))
     with pytest.raises(ValueError):
         as_lattice_mask(np.zeros((2, 2, 2, 1), dtype=bool))
     with pytest.raises(ValueError):
         as_lattice_mask(np.zeros((2, 2, 2), dtype=bool), shape=(2, 2, 3))
+    with pytest.raises(ValueError):
+        as_lattice_mask(np.zeros((2, 0, 2), dtype=bool))
+
+
+@pytest.mark.parametrize(
+    "invalid_shape",
+    ((2, 2), (2, 2, 2, 1), (2.0, 2, 2), (True, 2, 2), (2, 0, 2)),
+)
+def test_lattice_mask_expected_shape_uses_standard_grid_shape_contract(
+    invalid_shape,
+):
+    with pytest.raises((TypeError, ValueError)):
+        as_lattice_mask(
+            np.ones((2, 2, 2), dtype=bool),
+            shape=invalid_shape,
+        )
 
 
 def test_lattice_mask_rejects_nonfinite_complex_and_non_numeric():
@@ -141,3 +157,28 @@ def test_lattice_mask_rejects_nonfinite_complex_and_non_numeric():
         as_lattice_mask(np.ones((2, 2, 2), dtype=complex))
     with pytest.raises(TypeError):
         as_lattice_mask(np.full((2, 2, 2), "x"))
+
+
+def test_lattice_mask_dataset_initialization_preserves_physical_convention():
+    numeric_mask = np.array(
+        [[[1, 0], [1, 1]], [[0, 1], [1, 0]]],
+        dtype=np.uint8,
+    )
+
+    dataset = GridFieldDataset(
+        inputValue=InputGridField(shape=(2, 2, 2), mask=numeric_mask)
+    )
+
+    dataset_mask = dataset._helper_read_validity_mask()
+    assert dataset_mask.dtype == np.bool_
+    np.testing.assert_array_equal(dataset_mask, numeric_mask.astype(bool))
+
+
+def test_lattice_mask_dataset_initialization_rejects_grid_shape_mismatch():
+    with pytest.raises(ValueError, match="Field grid shape must match"):
+        GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 2, 2),
+                mask=np.ones((2, 2, 3), dtype=bool),
+            )
+        )

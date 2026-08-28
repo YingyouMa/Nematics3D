@@ -3,6 +3,7 @@
 import numpy as np
 
 from .bool import as_bool
+from .grid_shape import as_grid_shape
 from .number import as_number, as_value_range
 
 
@@ -127,36 +128,59 @@ def as_lattice_mask(
     *,
     shape: tuple[int, ...] | None = None,
 ) -> MaskField:
-    """Convert input into a boolean 3D lattice validity mask.
+    """Validate and normalize a three-dimensional lattice validity mask.
 
-    Boolean arrays are accepted directly after shape validation. Numeric input
-    must contain exactly 0/1 values. The returned array always has boolean dtype.
+    ``True`` marks a voxel whose physical field data is valid; ``False`` marks
+    a voxel that downstream analysis must exclude. Boolean input is accepted
+    directly. Real numeric input must contain exactly zero or one, so uncertain
+    weights such as 0.5 cannot be mistaken for validity flags.
+
+    Parameters
+    ----------
+    input_data : array-like
+        Boolean or numeric mask with shape ``(Nx, Ny, Nz)``.
+    name : str, optional
+        Reader-facing name used in validation errors.
+    shape : tuple of int, optional
+        Required three-dimensional grid shape. It follows the standard
+        :func:`as_grid_shape` contract.
+
+    Returns
+    -------
+    MaskField
+        Independent boolean array with the same shape and voxel ordering as
+        the input.
     """
     values = np.asarray(input_data)
 
+    if values.ndim != 3:
+        raise ValueError(
+            f"{name!r} must have exactly 3 lattice axes. Got shape {values.shape}."
+        )
+    if any(dim <= 0 for dim in values.shape):
+        raise ValueError(
+            f"{name!r} must not contain empty axes. Got shape {values.shape} instead."
+        )
+
+    if shape is not None:
+        expected_shape = as_grid_shape(
+            shape,
+            name=f"{name} shape",
+            is_strict_3d=True,
+        )
+        if values.shape != expected_shape:
+            raise ValueError(
+                f"{name!r} must have shape {expected_shape}. "
+                f"Got shape {values.shape} instead."
+            )
+
     if values.dtype == np.bool_:
-        if values.ndim != 3:
-            raise ValueError(
-                f"{name!r} must have exactly 3 lattice axes. Got shape {values.shape}."
-            )
-        if any(dim <= 0 for dim in values.shape):
-            raise ValueError(
-                f"{name!r} must not contain empty axes. Got shape {values.shape} instead."
-            )
-        if shape is not None:
-            expected_shape = _as_shape(shape, name=f"{name} shape")
-            if values.shape != expected_shape:
-                raise ValueError(
-                    f"{name!r} must have shape {expected_shape}. "
-                    f"Got shape {values.shape} instead."
-                )
         return values.copy()
 
     values = as_real_lattice_field(
         values,
         name=name,
         extra_ndim=0,
-        shape=shape,
         is_finite=True,
         value_range=(0.0, 1.0),
     )
