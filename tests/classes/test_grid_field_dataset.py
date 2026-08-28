@@ -182,6 +182,23 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(dataset.calc_corners, expected_corners))
         self.assertTrue(np.allclose(dataset.calc_bounds.corners, expected_corners))
 
+    def test_dataset_grid_spacing_uses_transform_row_lengths(self):
+        transform = np.array(
+            [
+                [0.0, 2.0, 0.0],
+                [-3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(shape=(2, 2, 2), grid_transform=transform)
+        )
+
+        np.testing.assert_allclose(dataset.calc_grid_spacing, [2.0, 3.0, 4.0])
+        np.testing.assert_allclose(dataset.calc_grid[1, 0, 0], transform[0])
+        np.testing.assert_allclose(dataset.calc_grid[0, 1, 0], transform[1])
+        np.testing.assert_allclose(dataset.calc_grid[0, 0, 1], transform[2])
+
     def test_dataset_calc_center_returns_transformed_box_center(self):
         grid_transform = np.array(
             [

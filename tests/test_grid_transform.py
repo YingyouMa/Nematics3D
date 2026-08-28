@@ -43,7 +43,7 @@ class TestGridTransform(unittest.TestCase):
                 [0.0, 0.0, 1.0],
             ]
         )
-        transform = rotation @ np.diag([2.0, 3.0, 4.0])
+        transform = np.diag([2.0, 3.0, 4.0]) @ rotation.T
 
         result = as_grid_transform(transform)
 
@@ -57,6 +57,20 @@ class TestGridTransform(unittest.TestCase):
         self.assertFalse(result.flags.writeable)
         source[0, 0] = 10.0
         self.assertEqual(result[0, 0], 2.0)
+
+    def test_column_orthogonality_does_not_replace_row_orthogonality(self):
+        theta = np.pi / 4
+        rotation = np.array(
+            [
+                [np.cos(theta), -np.sin(theta), 0.0],
+                [np.sin(theta), np.cos(theta), 0.0],
+                [0.0, 0.0, 1.0],
+            ]
+        )
+        transform = rotation @ np.diag([2.0, 3.0, 4.0])
+
+        with self.assertRaisesRegex(ValueError, "row vectors"):
+            as_grid_transform(transform)
 
     def test_shear_is_rejected(self):
         transform = np.array(
@@ -79,8 +93,13 @@ class TestGridTransform(unittest.TestCase):
     def test_degenerate_axis_is_rejected(self):
         transform = np.diag([1.0, 0.0, 1.0])
 
-        with self.assertRaisesRegex(ValueError, "nonzero column vectors"):
+        with self.assertRaisesRegex(ValueError, "nonzero row vectors"):
             as_grid_transform(transform)
+
+    def test_transform_validation_is_stable_across_physical_scales(self):
+        for scale in (1e-9, 1e9):
+            transform = np.diag([scale, 2.0 * scale, 3.0 * scale])
+            np.testing.assert_array_equal(as_grid_transform(transform), transform)
 
     def test_grid_offset_validation_and_readonly_storage(self):
         source = np.array([1.0, 2.0, 3.0])
@@ -119,6 +138,19 @@ class TestGridTransform(unittest.TestCase):
 
         np.testing.assert_allclose(restored, points)
         self.assertEqual(physical.shape, points.shape)
+
+    def test_apply_linear_transform_uses_rows_as_lattice_basis_vectors(self):
+        transform = np.array(
+            [
+                [0.0, 2.0, 0.0],
+                [-3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+
+        physical = apply_linear_transform(np.eye(3), transform)
+
+        np.testing.assert_array_equal(physical, transform)
 
     def test_apply_linear_transform_preserves_single_point_shape(self):
         result = apply_linear_transform([1.0, 2.0, 3.0], offset=[3.0, 2.0, 1.0])

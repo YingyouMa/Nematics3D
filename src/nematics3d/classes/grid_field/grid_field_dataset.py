@@ -361,7 +361,7 @@ class GridFieldDataset(ClassBase):
         if is_grid_transform_identity(self.raw_grid_transform):
             grid_spacing = np.ones(3, dtype=float)
         else:
-            grid_spacing = np.linalg.norm(self.raw_grid_transform, axis=0)
+            grid_spacing = np.linalg.norm(self.raw_grid_transform, axis=1)
 
         box_size_periodic_index = np.zeros(3, dtype=float)
         for i, is_periodic in enumerate(self.raw_box_periodic_flag):

@@ -16,7 +16,7 @@ from ..datatypes import (
 # performed by as_grid_transform().
 GridTransform = Tensor((3, 3))
 
-_GRID_ORTHOGONAL_RTOL = 1e-8
+_GRID_ORTHOGONAL_ATOL = 1e-8
 _GRID_DEGENERATE_RTOL = 1e-12
 
 
@@ -54,7 +54,7 @@ def as_grid_transform(
 ) -> GridTransform:
     """Validate a right-handed orthogonal grid transform.
 
-    Transform columns are lattice-basis vectors. They may carry scale, but
+    Transform rows are lattice-basis vectors. They may carry scale, but
     shear, reflections, and degenerate axes are unsupported.
     """
     is_readonly = as_bool(is_readonly, name="is_readonly")
@@ -62,26 +62,25 @@ def as_grid_transform(
         return GRID_TRANSFORM_IDENTITY
 
     transform = as_tensor(transform, (3, 3), name=name)
-    axis_lengths = np.linalg.norm(transform, axis=0)
+    axis_lengths = np.linalg.norm(transform, axis=1)
     if np.any(axis_lengths <= _GRID_DEGENERATE_RTOL):
-        raise ValueError(f"{name} must have three nonzero column vectors.")
+        raise ValueError(f"{name} must have three nonzero row vectors.")
 
-    gram = transform.T @ transform
+    directions = transform / axis_lengths[:, None]
+    gram = directions @ directions.T
     off_diag = gram - np.diag(np.diag(gram))
-    scale_sq = max(float(np.max(axis_lengths) ** 2), 1.0)
     if not np.allclose(
         off_diag,
         0.0,
         rtol=0.0,
-        atol=_GRID_ORTHOGONAL_RTOL * scale_sq,
+        atol=_GRID_ORTHOGONAL_ATOL,
     ):
         raise ValueError(
-            f"{name} must define an orthogonal grid basis: its column vectors "
+            f"{name} must define an orthogonal grid basis: its row vectors "
             "may be scaled, but must be pairwise orthogonal."
         )
 
-    det_scale = max(float(np.prod(axis_lengths)), 1.0)
-    if np.linalg.det(transform) <= _GRID_DEGENERATE_RTOL * det_scale:
+    if np.linalg.det(directions) <= _GRID_DEGENERATE_RTOL:
         raise ValueError(
             f"{name} must define a right-handed grid basis; reflections and "
             "degenerate transforms are not supported."
