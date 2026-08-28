@@ -10,8 +10,9 @@ import pyvista as pv
 from nematics3d.datatypes import (
     DimensionInfo,
     Vect,
-    as_number,
     as_bool,
+    as_grid_shape,
+    as_number,
     as_readonly_array,
     as_real_lattice_field,
 )
@@ -25,7 +26,7 @@ from nematics3d.grid import (
 
 from .class_base import AttrDef, ClassBase
 from .bounds import as_bounds
-from .grid_field.input_grid_field import InputGridField, as_grid_shape
+from .grid_field.input_grid_field import InputGridField
 from .registry_base import RegistryBase
 
 

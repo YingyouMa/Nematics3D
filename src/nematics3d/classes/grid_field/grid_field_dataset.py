@@ -10,6 +10,7 @@ import numpy as np
 from nematics3d.datatypes import (
     UNSET,
     Unset,
+    as_grid_shape,
     as_lattice_mask,
     as_real_lattice_field,
 )
@@ -27,7 +28,7 @@ from ...grid import (
 )
 from ..npy_array_payload import NpyArrayPayload
 from ...general import get_box_corners
-from .input_grid_field import InputGridField, as_grid_shape
+from .input_grid_field import InputGridField
 
 
 class FieldData(ClassBase):

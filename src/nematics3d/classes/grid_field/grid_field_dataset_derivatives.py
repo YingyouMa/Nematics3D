@@ -7,7 +7,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from nematics3d.datatypes import as_qfield9
+from nematics3d.datatypes import as_grid_shape, as_qfield9
 
 from ..npy_array_payload import NpyArrayPayload
 from ..result_base import ResultBase
@@ -16,7 +16,6 @@ from ...grid import (
     as_grid_transform,
     is_grid_transform_identity,
 )
-from .input_grid_field import as_grid_shape
 
 
 @dataclass(slots=True, frozen=True, repr=False)
