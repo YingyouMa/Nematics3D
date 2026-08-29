@@ -3,8 +3,8 @@
 import numpy as np
 
 
-def blue_green_red_colors() -> np.ndarray:
-    """Return L2-normalized RGB colors progressing from blue to green to red.
+def blue_red_in_white_bg() -> np.ndarray:
+    """Return L2-normalized RGB colors from blue to red for a white background.
 
     The table contains 511 colors: 256 samples from blue to green followed by
     255 samples from green to red, with the shared green endpoint included only
@@ -32,7 +32,3 @@ def blue_green_red_colors() -> np.ndarray:
     colors /= np.linalg.norm(colors, axis=1, keepdims=True)
 
     return colors
-
-
-# Temporary compatibility until the sole production caller is migrated.
-blue_red_in_white_bg = blue_green_red_colors
