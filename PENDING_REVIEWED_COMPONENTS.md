@@ -40,5 +40,6 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Behavior reviewed: single-point and multi-point inputs; mixed periodic/non-periodic axes; wrapping in lattice coordinates under non-identity grid transforms and offsets; input isolation; empty point collections; strict point-type validation.
 - Fixes: preserved raw input types until `as_points()` validation so booleans and numeric strings are rejected instead of silently coerced; corrected empty one-dimensional input so `[]` returns shape `(0, 3)` instead of being misclassified as a single point and raising `IndexError`.
 - Focused tests: `tests/test_grid_periodic.py` (new coverage for wrapping behavior, transform/offset semantics, empty input, input isolation, and invalid inputs).
-- Review commits: implementation `c1ba8a8fe963338c5154b6a8fa9a7b20c1818260`; focused tests `b7fdd04fae749d9894bd0bc727a2871a1c48ce5e`.
+- Tutorial: `tutorials/grid/periodic/wrap_points_to_box.ipynb`.
+- Review commits: implementation `c1ba8a8fe963338c5154b6a8fa9a7b20c1818260`; focused tests `b7fdd04fae749d9894bd0bc727a2871a1c48ce5e`; tutorial `30e1cb3e50d0b21ee8187d537cae9699e4769064`.
 - Archive note: focused tests have been added, but no GitHub Actions workflow ran for the branch push; record actual test/validation execution and final reviewed commit before moving to the formal ledger.
