@@ -21,6 +21,7 @@ from .relaxation import (
     ThresholdRelaxationResult,
     act_relaxation_length,
 )
+from .sampling import sample_van_der_corput
 
 __all__ = [
     "CorrelationResult",
@@ -41,4 +42,5 @@ __all__ = [
     "act_radial_spectrum",
     "act_relaxation_length",
     "q_diagonalize",
+    "sample_van_der_corput",
 ]
