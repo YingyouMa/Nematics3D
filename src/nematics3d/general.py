@@ -11,6 +11,7 @@ from nematics3d.logging_decorator import logging_and_warning_decorator
 from .geometry import (
     find_plane_normal,
     find_rotation_axis,
+    get_box_corners,
     rotation_matrix_from_vectors,
 )
 
@@ -159,7 +160,7 @@ def sort_line_indices(points):
     Returns
     -------
     output : numpy.ndarray, (N, D)
-        Array representing the sorted indices of the line based on nearest neighbor order.
+        Array representing the sorted indices of the line based on their nearest neighbor order.
         N is the number of points, and D is the dimension (usually 2 or 3).
     """
 
@@ -239,40 +240,6 @@ def sample_far(num: int) -> np.ndarray:
     result[2:] = b / a
 
     return result
-
-
-def get_box_corners(Lx: float, Ly: float, Lz: float) -> np.ndarray:
-    """
-    Return the 8 corner coordinates of a rectangular box
-    from (0, 0, 0) to (Lx, Ly, Lz).
-
-    Parameters
-    ----------
-    Lx, Ly, Lz : float
-        Lengths of the box along x, y, z axes.
-
-    Returns
-    -------
-    corners : list of tuple of float
-        List of 8 corner coordinates in (x, y, z) form.
-        Order is:
-            (0, 0, 0), (Lx, 0, 0), (0, Ly, 0), (0, 0, Lz),
-            (Lx, Ly, 0), (Lx, 0, Lz), (0, Ly, Lz), (Lx, Ly, Lz)
-    """
-    corners = np.array(
-        [
-            [0, 0, 0],
-            [Lx, 0, 0],
-            [0, Ly, 0],
-            [0, 0, Lz],
-            [Lx, Ly, 0],
-            [Lx, 0, Lz],
-            [0, Ly, Lz],
-            [Lx, Ly, Lz],
-        ],
-        dtype=np.float64,
-    )
-    return corners
 
 
 def get_square_each(size, num, dim=2):
