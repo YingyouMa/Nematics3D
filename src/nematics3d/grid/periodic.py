@@ -24,15 +24,18 @@ def wrap_points_to_box(
     """Wrap points into the principal periodic box in lattice coordinates.
 
     With a non-identity transform or offset, physical input coordinates are
-    mapped to lattice coordinates, wrapped there, and mapped back.
+    mapped to lattice coordinates, wrapped there, and mapped back. A single
+    point keeps shape ``(3,)``; a point collection keeps shape ``(N, 3)``.
+    Empty collections are returned with shape ``(0, 3)``.
     """
     box_size_periodic = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
     )
-    points_input = np.asarray(points, dtype=float)
-    is_single_point = points_input.ndim == 1
-    points = as_points(points_input, name="points to wrap", d=3)
+
+    raw_points = np.asarray(points)
+    is_single_point = raw_points.ndim == 1 and raw_points.size != 0
+    points = as_points(points, name="points to wrap", d=3)
     points_index = apply_linear_transform(
         points,
         transform=transform,
