@@ -32,3 +32,13 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Focused tests: none currently.
 - Tutorial: none currently.
 - Archive note: decide whether direct numerical smoke checks are sufficient before formal archival.
+
+### `wrap_points_to_box()`
+
+- Source: `src/nematics3d/grid/periodic.py`
+- Status: retained as an active periodic-coordinate helper used by disclination-line section workflows; reviewed and cleaned up without changing the inverse-transform -> lattice-space wrap -> forward-transform algorithm.
+- Behavior reviewed: single-point and multi-point inputs; mixed periodic/non-periodic axes; wrapping in lattice coordinates under non-identity grid transforms and offsets; input isolation; empty point collections; strict point-type validation.
+- Fixes: preserved raw input types until `as_points()` validation so booleans and numeric strings are rejected instead of silently coerced; corrected empty one-dimensional input so `[]` returns shape `(0, 3)` instead of being misclassified as a single point and raising `IndexError`.
+- Focused tests: `tests/test_grid_periodic.py` (new coverage for wrapping behavior, transform/offset semantics, empty input, input isolation, and invalid inputs).
+- Review commits: implementation `c1ba8a8fe963338c5154b6a8fa9a7b20c1818260`; focused tests `b7fdd04fae749d9894bd0bc727a2871a1c48ce5e`.
+- Archive note: focused tests have been added, but no GitHub Actions workflow ran for the branch push; record actual test/validation execution and final reviewed commit before moving to the formal ledger.
