@@ -1,5 +1,6 @@
 from .field import *
 from .analysis.q_diagonalization import *
+from .analysis.sampling import *
 from .grid import *
 from .principal_plane import *
 from .analysis.disclination import *
