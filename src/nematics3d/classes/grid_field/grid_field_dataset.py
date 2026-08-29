@@ -28,7 +28,7 @@ from ...grid import (
     is_grid_transform_identity,
 )
 from ..npy_array_payload import NpyArrayPayload
-from ...general import get_box_corners
+from ...geometry import get_box_corners
 from .grid_field_dataset_derivatives import (
     GridFieldDatasetDerivativeMixin,
     SpatialDerivativeInfo,
@@ -270,17 +270,7 @@ class GridFieldDataset(
         self.act_bind_relation_base("fields", registry, is_weak=False)
         registry.act_bind_relation_base("owner", self, is_weak=True)
 
-        # The validity mask is the only field that may be supplied through the
-        # dataset constructor. It is bound here, once, via the internal channel
-        # that bypasses the act_add_field guard. A dataset built without a mask
-        # can never gain one later; this keeps every mask-dependent result
-        # (defects, smoothing, interpolation validity) from silently going
-        # stale, because the mask is fixed before any of them is computed.
         if inputValue.mask is not UNSET:
-            # Validate dtype/range/rank here; the grid-shape contract (match an
-            # existing shape, or infer and lock it when unset) is enforced once
-            # for every field by _helper_ensure_or_infer_shape inside
-            # _helper_add_field, so it is not duplicated here.
             mask_values = as_lattice_mask(
                 inputValue.mask,
                 name="dataset validity mask",
@@ -375,10 +365,6 @@ class GridFieldDataset(
             return direction
         raise ValueError("direction must be one of 0, 1, 2, 'x', 'y', or 'z'.")
 
-    # -------------------------------
-    # Shared-grid geometry initialization
-    # -------------------------------
-
     def _helper_initialize_geometry(self) -> None:
         """Initialize canonical geometry once after shape becomes available."""
         try:
@@ -436,10 +422,6 @@ class GridFieldDataset(
         object.__setattr__(self, "calc_corners", corners_coord)
         object.__setattr__(self, "calc_bounds", bounds)
         object.__setattr__(self, "calc_grid_spacing", grid_spacing)
-
-    # -------------------------------
-    # Coordinate conversion and explicit full-grid allocation
-    # -------------------------------
 
     def act_index_to_coord(self, indices) -> np.ndarray:
         """Convert lattice-index points to physical coordinates.
