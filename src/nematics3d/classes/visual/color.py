@@ -32,3 +32,7 @@ def blue_green_red_colors() -> np.ndarray:
     colors /= np.linalg.norm(colors, axis=1, keepdims=True)
 
     return colors
+
+
+# Temporary compatibility until the sole production caller is migrated.
+blue_red_in_white_bg = blue_green_red_colors
