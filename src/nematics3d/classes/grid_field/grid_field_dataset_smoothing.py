@@ -256,92 +256,6 @@ def _helper_as_gaussian_weights(
     return weights_values, weights_source_name, weights_values.shape
 
 
-def _helper_gaussian_kernel_radius(
-    self,
-    sigma_axis: float,
-    *,
-    truncate: float,
-) -> int:
-    """Return the truncated half-width of one Gaussian kernel axis."""
-    del self
-    if sigma_axis <= 0.0:
-        return 0
-    return int(np.ceil(truncate * sigma_axis))
-
-
-def _helper_build_gaussian_kernel_1d(
-    self,
-    sigma_axis: float,
-    *,
-    truncate: float,
-) -> np.ndarray:
-    """Return one normalized 1D Gaussian kernel."""
-    radius = self._helper_gaussian_kernel_radius(
-        sigma_axis,
-        truncate=truncate,
-    )
-    if radius == 0:
-        return np.array([1.0], dtype=float)
-
-    offsets = np.arange(-radius, radius + 1, dtype=float)
-    kernel = np.exp(-0.5 * (offsets / sigma_axis) ** 2)
-    kernel_sum = float(np.sum(kernel))
-    if kernel_sum <= 0.0:
-        return np.array([1.0], dtype=float)
-    return kernel / kernel_sum
-
-
-def _helper_pad_for_gaussian_axis(
-    self,
-    values: np.ndarray,
-    *,
-    axis: int,
-    radius: int,
-    mode: str,
-) -> np.ndarray:
-    """Return values padded only along one requested axis."""
-    del self
-    if radius <= 0:
-        return values
-
-    pad_width = [(0, 0)] * values.ndim
-    pad_width[axis] = (radius, radius)
-    return np.pad(values, pad_width, mode=mode)
-
-
-def _helper_convolve_gaussian_axis(
-    self,
-    values: np.ndarray,
-    *,
-    kernel: np.ndarray,
-    axis: int,
-    mode: str,
-) -> np.ndarray:
-    """Return one-axis Gaussian convolution with boundary handling."""
-    if kernel.ndim != 1:
-        raise ValueError("Gaussian convolution kernel must be one-dimensional.")
-    if kernel.size == 1:
-        return values.copy()
-
-    radius = kernel.size // 2
-    padded = self._helper_pad_for_gaussian_axis(
-        values,
-        axis=axis,
-        radius=radius,
-        mode=mode,
-    )
-    result = np.zeros_like(values, dtype=float)
-
-    base_slices = [slice(None)] * padded.ndim
-    axis_length = values.shape[axis]
-    for offset, weight in enumerate(kernel):
-        shifted_slices = list(base_slices)
-        shifted_slices[axis] = slice(offset, offset + axis_length)
-        result += float(weight) * padded[tuple(shifted_slices)]
-
-    return result
-
-
 def _helper_gaussian_smooth_values(
     self,
     values: np.ndarray,
@@ -350,24 +264,14 @@ def _helper_gaussian_smooth_values(
     truncate: float,
     boundary: tuple[str, str, str],
 ) -> np.ndarray:
-    """Return Gaussian-smoothed values via scipy.ndimage.gaussian_filter."""
-    if len(set(boundary)) == 1:
-        result = gaussian_filter(
-            np.asarray(values, dtype=float),
-            sigma=sigma_index,
-            mode=boundary[0],
-            truncate=truncate,
-        )
-    else:
-        result = np.asarray(values, dtype=float)
-        for axis, (sigma_axis, boundary_mode) in enumerate(zip(sigma_index, boundary)):
-            result = gaussian_filter(
-                result,
-                sigma=[s if i == axis else 0.0 for i, s in enumerate(sigma_index[:3])],
-                mode=boundary_mode,
-                truncate=truncate,
-            )
-    return result
+    """Smooth only the three spatial lattice axes via SciPy's C backend."""
+    return gaussian_filter(
+        np.asarray(values, dtype=float),
+        sigma=sigma_index,
+        mode=boundary,
+        truncate=truncate,
+        axes=(0, 1, 2),
+    )
 
 
 def act_gaussian_smooth(
@@ -500,10 +404,6 @@ class GridFieldDatasetSmoothingMixin:
     _helper_as_gaussian_sigma_3 = _helper_as_gaussian_sigma_3
     _helper_as_gaussian_boundary_mode = _helper_as_gaussian_boundary_mode
     _helper_as_gaussian_weights = _helper_as_gaussian_weights
-    _helper_gaussian_kernel_radius = _helper_gaussian_kernel_radius
-    _helper_build_gaussian_kernel_1d = _helper_build_gaussian_kernel_1d
-    _helper_pad_for_gaussian_axis = _helper_pad_for_gaussian_axis
-    _helper_convolve_gaussian_axis = _helper_convolve_gaussian_axis
     _helper_gaussian_smooth_info = _helper_gaussian_smooth_info
     _helper_gaussian_smooth_result = _helper_gaussian_smooth_result
     _helper_gaussian_smooth_values = _helper_gaussian_smooth_values
