@@ -8,7 +8,6 @@ from typing import Any, Callable, ClassVar, Mapping
 import numpy as np
 from scipy.interpolate import splprep
 
-from ..general import sort_line_indices
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     BoxSizePeriodic,
@@ -37,7 +36,7 @@ from .visual.plot_tube import PlotTube, OptsTube
 from .opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..format import is_given_str
-from ..general import find_plane_normal
+from ..geometry import find_plane_normal
 from .class_base import AttrDef, ClassBase
 from .host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
@@ -307,7 +306,6 @@ class DisclinationLine(ClassBase):
     def __init__(
         self,
         inputValue: InputLine | None = None,
-        is_sorted: bool = False,
         name: str | None = None,
         logger=None,
         **kwargs,
@@ -325,11 +323,6 @@ class DisclinationLine(ClassBase):
             raise ValueError("No defects are input into disclination line")
         for k, v in asdict(inputValue).items():
             object.__setattr__(self, f"raw_{k}", v)
-
-        if not is_sorted:
-            object.__setattr__(
-                self, "raw_defect_indices", sort_line_indices(self.raw_defect_indices)
-            )
 
         object.__setattr__(
             self,
