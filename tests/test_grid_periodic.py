@@ -3,7 +3,67 @@
 import numpy as np
 import pytest
 
-from nematics3d.grid import shift_to_box, unwrap_trajectory
+from nematics3d.grid import shift_to_box, unwrap_trajectory, wrap_points_to_box
+
+
+def test_wrap_points_to_box_wraps_single_point_and_preserves_shape():
+    result = wrap_points_to_box([12.0, -3.0, 7.0], [10.0, 10.0, np.inf])
+
+    np.testing.assert_allclose(result, [2.0, 7.0, 7.0])
+    assert result.shape == (3,)
+
+
+def test_wrap_points_to_box_wraps_collection_without_mutating_input():
+    points = np.array([[12.0, -3.0, 7.0], [3.0, 14.0, 8.0]])
+
+    result = wrap_points_to_box(points, [10.0, 10.0, np.inf])
+
+    np.testing.assert_allclose(result, [[2.0, 7.0, 7.0], [3.0, 4.0, 8.0]])
+    np.testing.assert_allclose(points, [[12.0, -3.0, 7.0], [3.0, 14.0, 8.0]])
+
+
+def test_wrap_points_to_box_wraps_in_lattice_coordinates():
+    transform = np.array(
+        [
+            [0.0, 2.0, 0.0],
+            [-3.0, 0.0, 0.0],
+            [0.0, 0.0, 4.0],
+        ]
+    )
+    offset = np.array([5.0, 7.0, 11.0])
+    lattice_point = np.array([12.0, -3.0, 7.0])
+    physical_point = lattice_point @ transform + offset
+
+    result = wrap_points_to_box(
+        physical_point,
+        [10.0, 10.0, np.inf],
+        transform=transform,
+        offset=offset,
+    )
+
+    expected = np.array([2.0, 7.0, 7.0]) @ transform + offset
+    np.testing.assert_allclose(result, expected)
+
+
+def test_wrap_points_to_box_handles_empty_collection():
+    result = wrap_points_to_box([], 10.0)
+
+    assert result.shape == (0, 3)
+
+
+@pytest.mark.parametrize(
+    "points",
+    [
+        [True, 2.0, 3.0],
+        ["1", "2", "3"],
+        np.zeros((2, 2)),
+        np.zeros((2, 3, 1)),
+        [[0.0, np.nan, 0.0]],
+    ],
+)
+def test_wrap_points_to_box_rejects_invalid_points(points):
+    with pytest.raises((TypeError, ValueError)):
+        wrap_points_to_box(points, 10.0)
 
 
 def test_shift_to_box_returns_copy_by_default():
