@@ -3,13 +3,32 @@
 import numpy as np
 
 
-def blue_red_in_white_bg() -> np.ndarray:
-    """Return the normalized blue-green-red colormap used for line colors."""
-    colormap = np.zeros((511, 3))
-    colormap[:256, 1] = np.arange(256)
-    colormap[:256, 2] = 255 - np.arange(256)
-    colormap[255:, 1] = 255 - np.arange(256)
-    colormap[255:, 0] = np.arange(256)
-    colormap = colormap / 255
-    colormap = colormap / np.linalg.norm(colormap, axis=-1, keepdims=True)
-    return colormap
+def blue_green_red_colors() -> np.ndarray:
+    """Return L2-normalized RGB colors progressing from blue to green to red.
+
+    The table contains 511 colors: 256 samples from blue to green followed by
+    255 samples from green to red, with the shared green endpoint included only
+    once. Each RGB vector is normalized to unit Euclidean norm so mixed colors
+    remain visually strong on a white background.
+    """
+    t = np.linspace(0.0, 1.0, 256)
+
+    blue_to_green = np.column_stack(
+        (
+            np.zeros_like(t),
+            t,
+            1.0 - t,
+        )
+    )
+    green_to_red = np.column_stack(
+        (
+            t[1:],
+            1.0 - t[1:],
+            np.zeros_like(t[1:]),
+        )
+    )
+
+    colors = np.vstack((blue_to_green, green_to_red))
+    colors /= np.linalg.norm(colors, axis=1, keepdims=True)
+
+    return colors
