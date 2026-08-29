@@ -1,6 +1,5 @@
 """Periodic point, trajectory, and cluster helpers."""
 
-from itertools import product
 import operator
 from typing import Optional, Sequence, Union
 
@@ -9,52 +8,11 @@ import numpy as np
 from ..logging_decorator import logging_and_warning_decorator
 from ..datatypes import (
     BoxSizePeriodic,
-    Vect,
     as_bool,
     as_box_size_periodic,
     as_points,
-    as_vector,
 )
 from .transform import GRID_TRANSFORM_IDENTITY, GridTransform, apply_linear_transform
-
-
-def generate_mirror_point_periodic_boundary(
-    point: Vect(3),
-    box_size_periodic: BoxSizePeriodic = np.inf,
-    is_self: bool = True,
-):
-    """Generate nearby mirror images of a point across periodic boundaries.
-
-    Images are produced only when the wrapped point lies within one index unit
-    of a periodic edge. Axes marked by positive infinity are ignored.
-    """
-    box_size = as_box_size_periodic(
-        box_size_periodic,
-        name="box_size_periodic",
-    )
-    point = as_vector(
-        point,
-        name="The position of point which needs to find mirror image",
-    )
-
-    point = np.where(box_size == np.inf, point, point % box_size)
-
-    mirrors = [[value] for value in point]
-    for i, mirror in enumerate(mirrors):
-        size = box_size[i]
-        value = point[i]
-        if size != np.inf:
-            if -1 <= value <= 0:
-                mirror.append(value + size)
-            elif size - 1 <= value <= size:
-                mirror.append(value - size)
-
-    mirror_points = np.array(list(product(*mirrors)))
-
-    if not is_self:
-        mirror_points = mirror_points[1:]
-
-    return mirror_points
 
 
 def wrap_points_to_box(
