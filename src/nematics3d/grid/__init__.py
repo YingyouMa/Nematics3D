@@ -2,7 +2,6 @@
 
 from .coordinate import generate_coordinate_grid, generate_fixed_step_grid
 from .periodic import (
-    generate_mirror_point_periodic_boundary,
     shift_to_box,
     unfold_cluster,
     unwrap_trajectory,
@@ -30,7 +29,6 @@ __all__ = [
     "as_grid_transform",
     "generate_coordinate_grid",
     "generate_fixed_step_grid",
-    "generate_mirror_point_periodic_boundary",
     "is_grid_transform_identity",
     "resolve_plane_physical_axes",
     "shift_to_box",
