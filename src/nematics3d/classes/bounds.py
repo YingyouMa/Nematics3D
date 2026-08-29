@@ -9,7 +9,7 @@ from typing import Any, ClassVar, Literal, Mapping, TypeAlias
 import numpy as np
 import pyvista as pv
 
-from nematics3d.geometry import OBBFit
+from nematics3d.geometry import OBBFit, get_box_corners, rotation_matrix_from_vectors
 from nematics3d.datatypes import (
     Number,
     UNSET,
@@ -24,7 +24,6 @@ from nematics3d.datatypes import (
 )
 from nematics3d.grid import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.general import get_box_corners, rotation_matrix_from_vectors
 from .class_base import AttrDef
 from .host_base import HostBase, OptsBase
 
