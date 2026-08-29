@@ -125,6 +125,7 @@ from ..datatypes import (
 )
 from ..field import get_q
 from ..analysis.q_diagonalization import q_diagonalize
+from ..analysis.sampling import sample_van_der_corput
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
     GridTransform,
@@ -142,6 +143,7 @@ from .visual.plot_rod import OptsRod
 from .visual.plot_sphere import OptsSphere
 from .visual.plot_delaunay import OptsDelaunay
 from .visual.plot_figure import PlotFigure, OptsFigure
+from .visual.color import blue_red_in_white_bg
 from .q_plane import QPlane, QPlanePolar
 from .visual.figure_manager import FigureManager
 from .plane_grid import OptsPlaneGrid
@@ -149,7 +151,6 @@ from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
 from .grid_field import FieldData, GridFieldDataset, GridInterpolator, InputGridField
 from .opts import merge_opts_all, cover_value
-from ..general import blue_red_in_white_bg, sample_far
 from .smoothed_line import OptsSmooth
 from .registry_base import RegistryBase
 from .disclination_line import DisclinationLine
@@ -1178,7 +1179,7 @@ class QFieldObject(ClassBase):
         if opts_figure is None:
             opts_figure = OptsFigure()
         if opts_line is None:
-            opts_line = OptsTube(color="sample_far")
+            opts_line = OptsTube(color="sample_van_der_corput")
 
         merge = merge_opts_all(
             {"figure_": opts_figure, "line_": opts_line, "extent_": opts_extent},
@@ -1213,11 +1214,11 @@ class QFieldObject(ClassBase):
             line for line in self.lines if line.calc_defect_num >= min_line_length
         ]
 
-        if opts_line.color == "sample_far":
+        if opts_line.color == "sample_van_der_corput":
             color_map = blue_red_in_white_bg()
             color_map_length = np.shape(color_map)[0] - 1
             lines_colors = color_map[
-                (sample_far(len(lines_plot)) * color_map_length).astype(int)
+                (sample_van_der_corput(len(lines_plot)) * color_map_length).astype(int)
             ]
         else:
             lines_colors = [opts_line.color for line in lines_plot]
