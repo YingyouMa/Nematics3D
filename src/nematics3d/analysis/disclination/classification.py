@@ -347,7 +347,6 @@ def defect_classify_into_lines(
             box_size_periodic_index=box_size_periodic,
             grid_offset=grid_offset,
             grid_transform=grid_transform,
-            is_sorted=True,
         )
         for path in paths
     ]
