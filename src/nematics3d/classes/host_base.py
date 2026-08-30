@@ -47,7 +47,6 @@ import weakref
 
 from ..datatypes import UNSET, Unset, as_list, as_str
 from ..format import repr_field_line, save_opts_json
-from ..general import pop_exclusive
 from ..logging_decorator import logging_and_warning_decorator
 from .class_base import AttrDef, ClassBase
 from .opts import (
@@ -896,12 +895,32 @@ class HostBase(ClassBase):
                 logger.exception("Invalid attr")
                 logger.recovery("Automatically ignore this attr")
 
+@staticmethod
+def _helper_pop_exclusive(
+    kwargs: dict[str, Any],
+    key1: str,
+    key2: str,
+) -> tuple[bool, Any]:
+    """Pop one of two mutually exclusive keys from ``kwargs``."""
+    has1 = key1 in kwargs
+    has2 = key2 in kwargs
+    if has1 and has2:
+        raise TypeError(
+            f"Ambiguous input: both {key1!r} and {key2!r} were provided. "
+            "Please pass only one."
+        )
+    if has1:
+        return True, kwargs.pop(key1)
+    if has2:
+        return True, kwargs.pop(key2)
+    return False, None
+
     def _helper_commit_name(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Consume a name/raw_name update if present."""
         if not kwargs:
             return {}
 
-        found, name = pop_exclusive(kwargs, "name", "raw_name")
+        found, name = self._helper_pop_exclusive(kwargs, "name", "raw_name")
         if not found:
             return {}
 
@@ -984,7 +1003,7 @@ class HostBase(ClassBase):
         if attr_name_origin.startswith("raw_"):
             host_attr_name = attr_name_origin
             public_attr_name = attr_name_origin[4:]
-            found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
+            found, attr_value = self._helper_pop_exclusive(kwargs, public_attr_name, host_attr_name)
             attr_name_return = public_attr_name
         elif is_state_attr:
             host_attr_name = attr_name_origin
@@ -994,7 +1013,7 @@ class HostBase(ClassBase):
         else:
             host_attr_name = f"raw_{attr_name_origin}"
             public_attr_name = attr_name_origin
-            found, attr_value = pop_exclusive(kwargs, public_attr_name, host_attr_name)
+            found, attr_value = self._helper_pop_exclusive(kwargs, public_attr_name, host_attr_name)
             attr_name_return = public_attr_name
 
         if not found:
