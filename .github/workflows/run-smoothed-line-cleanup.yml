@@ -32,6 +32,7 @@ jobs:
 
           python -m pip install -e ".[test]"
           python dev/onGoing/cleanup_smoothed_line_once.py
+          python -m black src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line.py
           python -m py_compile src/nematics3d/classes/smoothed_line.py
           python -m pytest tests/smooth/test_smoothed_line.py -q
           python -m black --check src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line.py
