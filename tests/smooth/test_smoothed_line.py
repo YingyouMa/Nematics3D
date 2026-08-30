@@ -1,4 +1,44 @@
+import sys
+from pathlib import Path
+import types
+
 import numpy as np
+
+SRC_DIR = Path(__file__).resolve().parents[2] / "src"
+PKG_DIR = SRC_DIR / "nematics3d"
+
+sys.path.insert(0, str(SRC_DIR))
+
+# Keep this regression focused on SmoothedLine itself. The develop branch has
+# removed the old nematics3d.general module, while HostBase still carries one
+# stale import of pop_exclusive from that module. Existing smooth tests already
+# bypass the top-level nematics3d package import; provide only the tiny legacy
+# helper HostBase still expects so this test does not conflate that unrelated
+# packaging issue with smoothing behavior.
+if "nematics3d" not in sys.modules:
+    pkg = types.ModuleType("nematics3d")
+    pkg.__path__ = [str(PKG_DIR)]
+    sys.modules["nematics3d"] = pkg
+
+if "nematics3d.general" not in sys.modules:
+    general = types.ModuleType("nematics3d.general")
+
+    def pop_exclusive(kwargs: dict, k1: str, k2: str):
+        has1 = k1 in kwargs
+        has2 = k2 in kwargs
+        if has1 and has2:
+            raise TypeError(
+                f"Ambiguous input: both {k1!r} and {k2!r} were provided. "
+                "Please pass only one."
+            )
+        if has1:
+            return True, kwargs.pop(k1)
+        if has2:
+            return True, kwargs.pop(k2)
+        return False, None
+
+    general.pop_exclusive = pop_exclusive
+    sys.modules["nematics3d.general"] = general
 
 from nematics3d.classes.smoothed_line import SmoothedLine
 
