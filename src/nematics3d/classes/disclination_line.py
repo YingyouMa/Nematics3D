@@ -55,25 +55,14 @@ def _helper_sample_beta_from_smooth(
     opts_grid: OptsPlaneGridPolar | None = None,
     opts_grid_defaults_override: Mapping[str, Any] | None = None,
     **grid_kwargs,
-) -> tuple[float, dict[str, Any], dict[str, np.ndarray], dict[str, Any]]:
-    """Evaluate beta and return per-sample plus shared diagnostics."""
-    result = smooth.act_calc_omega(
+) -> DefectSectionOmegaResult:
+    """Evaluate and return the complete beta-section result at one sample."""
+    return smooth.act_calc_omega(
         u_percent,
         opts_grid=opts_grid,
         opts_grid_defaults_override=opts_grid_defaults_override,
         **grid_kwargs,
     )
-    tangent = np.asarray(smooth.act_calc_tangent(u_percent), dtype=float)
-    payload_sample = {
-        "omega": np.asarray(result.omega, dtype=float),
-        "tangent": tangent,
-    }
-    payload_shared = {
-        "R": result.R,
-        "num_directors": result.num_directors,
-        "layer": result.layer,
-    }
-    return result.beta, dict(result.metric), payload_sample, payload_shared
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -86,11 +75,13 @@ class DefectSectionOmegaResult(OmegaResult):
         "beta": "Tilt angle in degrees between the line tangent and the fitted omega axis.",
         "u_percent": "Normalized line parameter used to choose the local section.",
         "position": "Wrapped real-space section origin used for the polar grid.",
+        "tangent": "Unit tangent of the smoothed line at the sampled section.",
     }
 
     beta: float
     u_percent: float
     position: np.ndarray
+    tangent: np.ndarray
 
 
 @dataclass(slots=True)
@@ -808,6 +799,7 @@ class DisclinationLineSmooth(SmoothedLine):
                 "opts_grid": opts_grid,
                 "opts_grid_defaults_override": opts_grid_defaults_override,
             },
+            result_value_attr="beta",
             name=name,
         )
 
@@ -1147,6 +1139,7 @@ class DisclinationLineSmooth(SmoothedLine):
             beta=beta,
             u_percent=float(u_percent),
             position=origin,
+            tangent=np.asarray(tangent, dtype=float),
         )
 
 

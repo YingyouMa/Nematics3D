@@ -21,6 +21,7 @@ from .class_base import AttrDef, ClassBase
 from .host_base import HostBase, OptsBase
 from .opts import cover_value, diff_dict_values
 from .registry_base import RegistryBase
+from .result_base import ResultBase
 
 # fmt: off
 @dataclass(slots=True, repr=False)
@@ -547,6 +548,7 @@ class SmoothedLine(HostBase):
         func,
         u_samples,
         func_kwargs: Mapping[str, Any] | None = None,
+        result_value_attr: str = "value",
         is_follow_owner_opts: bool = True,
         name: str | None = None,
     ):
@@ -558,6 +560,7 @@ class SmoothedLine(HostBase):
             u_samples=u_samples,
             owner=self,
             func_kwargs=func_kwargs,
+            result_value_attr=result_value_attr,
             is_follow_owner_opts=is_follow_owner_opts,
             name=name,
         )
@@ -902,9 +905,11 @@ class SmoothedLineFunc(ClassBase):
     Sample and interpolate a numerical function along one SmoothedLine.
 
     Users provide a callable `func(u_percent, **func_kwargs)` together with
-    normalized sample locations in `[0, 100]`. The object evaluates that
-    callable on the current line parameter domain, stores sampled outputs, and
-    exposes a linear interpolator for later reuse.
+    normalized sample locations in `[0, 100]`. The callable must return a
+    ResultBase instance at every sample. The configured `result_value_attr`
+    (default `"value"`) selects which result attribute is smoothed and
+    interpolated, while the complete raw result objects remain available in
+    `calc_results`.
 
     The sampling mode follows the current owner opts mode:
 
@@ -922,12 +927,21 @@ class SmoothedLineFunc(ClassBase):
         ),
         "raw_func": AttrDef(
             doc=(
-                "Numerical sampling function mapping one u_percent to a value "
-                "or a (value, metric) / (value, metric, payload_samples) / "
-                "(value, metric, payload_samples, payload_shared) tuple."
+                "Numerical sampling function mapping one u_percent to a "
+                "ResultBase instance."
             ),
             kind="raw",
             validator=lambda v, d: v if callable(v) else (_raise_type_error(d, v)),
+        ),
+        "raw_result_value_attr": AttrDef(
+            doc=(
+                "ResultBase attribute whose per-sample value is smoothed and "
+                "interpolated."
+            ),
+            kind="raw",
+            validator=lambda v, d: SmoothedLineFunc._helper_validate_result_value_attr(
+                v, name=d
+            ),
         ),
         "raw_u_samples": AttrDef(
             doc="Sampling locations in u_percent used to evaluate the numerical function.",
@@ -954,20 +968,15 @@ class SmoothedLineFunc(ClassBase):
             ),
             kind="impl",
         ),
+        "calc_results": AttrDef(
+            doc="Raw ResultBase objects returned at each sampling location.",
+            kind="calc",
+        ),
         "calc_values": AttrDef(
-            doc="Values returned by the numerical function at each sampling location.",
-            kind="calc",
-        ),
-        "calc_metrics": AttrDef(
-            doc="Per-sample metrics returned by the numerical function, or None if unavailable.",
-            kind="calc",
-        ),
-        "calc_payload_samples": AttrDef(
-            doc="Per-sample payload objects returned by the numerical function, or None if unavailable.",
-            kind="calc",
-        ),
-        "calc_payload_shared": AttrDef(
-            doc="Shared payload returned for the full sampled function, or None if unavailable.",
+            doc=(
+                "Smoothed sample values extracted from the configured "
+                "ResultBase attribute."
+            ),
             kind="calc",
         ),
         "entity_interpolator": AttrDef(
@@ -1007,6 +1016,17 @@ class SmoothedLineFunc(ClassBase):
                 f"{name} must remain non-empty after sorting and deduplication."
             )
         return u_samples
+
+    @staticmethod
+    def _helper_validate_result_value_attr(
+        result_value_attr,
+        *,
+        name: str = "`result_value_attr`",
+    ) -> str:
+        result_value_attr = as_str(result_value_attr, name=name)
+        if not result_value_attr:
+            raise ValueError(f"{name} must be a non-empty string.")
+        return result_value_attr
 
     @staticmethod
     def _helper_validate_func_kwargs(
@@ -1079,6 +1099,7 @@ class SmoothedLineFunc(ClassBase):
         u_samples,
         owner: SmoothedLine,
         func_kwargs: Mapping[str, Any] | None = None,
+        result_value_attr: str = "value",
         is_follow_owner_opts: bool = True,
         name: str = "smoothed line function",
     ):
@@ -1095,6 +1116,16 @@ class SmoothedLineFunc(ClassBase):
             .validator(
                 func,
                 type(self).__attr_defs__["raw_func"].doc,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "raw_result_value_attr",
+            type(self)
+            .__attr_defs__["raw_result_value_attr"]
+            .validator(
+                result_value_attr,
+                type(self).__attr_defs__["raw_result_value_attr"].doc,
             ),
         )
         object.__setattr__(
@@ -1128,10 +1159,8 @@ class SmoothedLineFunc(ClassBase):
             ),
         )
         object.__setattr__(self, "impl_owner_opts_snapshot", None)
+        object.__setattr__(self, "calc_results", None)
         object.__setattr__(self, "calc_values", None)
-        object.__setattr__(self, "calc_metrics", None)
-        object.__setattr__(self, "calc_payload_samples", None)
-        object.__setattr__(self, "calc_payload_shared", None)
         object.__setattr__(self, "entity_interpolator", None)
 
         self.act_bind_relation_base("owner", owner, is_weak=True)
@@ -1290,52 +1319,32 @@ class SmoothedLineFunc(ClassBase):
                 ),
             )
 
+        results = []
         values = []
-        metrics = []
-        payload_samples = []
-        is_has_metric = False
-        is_has_payload_samples = False
-        payload_shared = None
-        is_has_payload_shared = False
         for u in self.raw_u_samples:
-            sample_result = self.raw_func(float(u), **self.raw_func_kwargs)
-            if isinstance(sample_result, tuple) and len(sample_result) == 4:
-                value, metric, payload_sample, payload_shared_i = sample_result
-            elif isinstance(sample_result, tuple) and len(sample_result) == 3:
-                value, metric, payload_sample = sample_result
-                payload_shared_i = None
-            elif isinstance(sample_result, tuple) and len(sample_result) == 2:
-                value, metric = sample_result
-                payload_sample = None
-                payload_shared_i = None
-            else:
-                value, metric, payload_sample, payload_shared_i = (
-                    sample_result,
-                    None,
-                    None,
-                    None,
+            u_float = float(u)
+            sample_result = self.raw_func(u_float, **self.raw_func_kwargs)
+            if not isinstance(sample_result, ResultBase):
+                raise TypeError(
+                    "SmoothedLineFunc `raw_func` must return a ResultBase instance "
+                    f"at every sample; got {type(sample_result).__name__} at "
+                    f"u_percent={u_float}."
                 )
-            values.append(np.asarray(value))
-            metrics.append(metric)
-            payload_samples.append(payload_sample)
-            is_has_metric = is_has_metric or (metric is not None)
-            is_has_payload_samples = is_has_payload_samples or (
-                payload_sample is not None
+            if not hasattr(sample_result, self.raw_result_value_attr):
+                raise AttributeError(
+                    f"SmoothedLineFunc `raw_func` returned "
+                    f"{type(sample_result).__name__} at u_percent={u_float}, but "
+                    f"it has no attribute {self.raw_result_value_attr!r}. Set "
+                    "`result_value_attr` to the ResultBase attribute that should "
+                    "be smoothed."
+                )
+
+            results.append(sample_result)
+            values.append(
+                np.asarray(getattr(sample_result, self.raw_result_value_attr))
             )
-            if payload_shared_i is not None:
-                if not is_has_payload_shared:
-                    payload_shared = payload_shared_i
-                    is_has_payload_shared = True
-                elif payload_shared != payload_shared_i:
-                    raise ValueError(
-                        "Shared payload returned by `raw_func` must remain identical "
-                        "across all sampled `u_percent` values."
-                    )
 
         values = np.stack(values, axis=0)
-        metrics = metrics if is_has_metric else None
-        payload_samples = payload_samples if is_has_payload_samples else None
-        payload_shared = payload_shared if is_has_payload_shared else None
 
         interpolator, values_smooth = linefunc_build_smoothed_interpolator(
             self.raw_u_samples,
@@ -1346,10 +1355,8 @@ class SmoothedLineFunc(ClassBase):
         )
 
         object.__setattr__(self, "impl_owner_opts_snapshot", dict(opts_snapshot))
+        object.__setattr__(self, "calc_results", tuple(results))
         object.__setattr__(self, "calc_values", values_smooth)
-        object.__setattr__(self, "calc_metrics", metrics)
-        object.__setattr__(self, "calc_payload_samples", payload_samples)
-        object.__setattr__(self, "calc_payload_shared", payload_shared)
         object.__setattr__(self, "entity_interpolator", interpolator)
         return self
 

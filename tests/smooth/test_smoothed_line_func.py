@@ -1,8 +1,10 @@
 import sys
 from pathlib import Path
 import types
+from dataclasses import dataclass
 
 import numpy as np
+import pytest
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 PKG_DIR = SRC_DIR / "nematics3d"
@@ -14,7 +16,9 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
+from nematics3d.classes.result_base import ResultBase
 from nematics3d.classes.smoothed_line import (
+    SmoothedLine,
     linefunc_kernel_weights,
     linefunc_smooth_values,
     linefunc_spacing_weights,
@@ -139,3 +143,66 @@ def test_linefunc_streamed_delta_matches_full_matrix_wrap():
     )
 
     np.testing.assert_allclose(actual, expected, rtol=0.0, atol=0.0)
+
+
+@dataclass(repr=False)
+class ValueResult(ResultBase):
+    value: float
+    diagnostic: float
+
+
+@dataclass(repr=False)
+class AngleResult(ResultBase):
+    angle: float
+    diagnostic: float
+
+
+def _build_protocol_line():
+    x = np.linspace(0.0, 1.0, 60)
+    coords = np.column_stack((x, np.zeros_like(x), np.zeros_like(x)))
+    return SmoothedLine(coords, window_length=5, min_line_length=2)
+
+
+def test_linefunc_stores_full_resultbase_samples_and_uses_default_value_attr():
+    line = _build_protocol_line()
+    linefunc = line.act_create_linefunc(
+        lambda u: ValueResult(value=u, diagnostic=u + 1.0),
+        [0.0, 25.0, 50.0, 75.0, 100.0],
+    )
+
+    assert linefunc.raw_result_value_attr == "value"
+    assert isinstance(linefunc.calc_results, tuple)
+    assert len(linefunc.calc_results) == 5
+    assert all(isinstance(result, ValueResult) for result in linefunc.calc_results)
+    assert linefunc.calc_results[2].value == 50.0
+    assert linefunc.calc_results[2].diagnostic == 51.0
+    assert linefunc.calc_values.shape == (5,)
+
+
+def test_linefunc_can_select_custom_result_value_attr():
+    line = _build_protocol_line()
+    linefunc = line.act_create_linefunc(
+        lambda u: AngleResult(angle=2.0 * u, diagnostic=-u),
+        [0.0, 25.0, 50.0, 75.0, 100.0],
+        result_value_attr="angle",
+    )
+
+    assert linefunc.raw_result_value_attr == "angle"
+    assert linefunc.calc_results[2].angle == 100.0
+    assert linefunc.calc_results[2].diagnostic == -50.0
+    assert linefunc.calc_values.shape == (5,)
+
+
+def test_linefunc_rejects_non_resultbase_sample_return():
+    line = _build_protocol_line()
+    with pytest.raises(TypeError, match="must return a ResultBase instance"):
+        line.act_create_linefunc(lambda u: u, [0.0, 50.0, 100.0])
+
+
+def test_linefunc_rejects_missing_configured_result_attribute():
+    line = _build_protocol_line()
+    with pytest.raises(AttributeError, match="has no attribute 'value'"):
+        line.act_create_linefunc(
+            lambda u: AngleResult(angle=u, diagnostic=0.0),
+            [0.0, 50.0, 100.0],
+        )

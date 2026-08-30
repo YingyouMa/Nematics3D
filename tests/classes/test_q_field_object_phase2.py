@@ -106,18 +106,17 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
         self.assertTrue(np.allclose(beta_func(u_query), expected, equal_nan=True))
         self.assertIs(beta_func.raw_func_kwargs["smooth"], smooth)
-        self.assertIsNotNone(beta_func.calc_metrics)
-        self.assertIsNotNone(beta_func.calc_payload_samples)
-        self.assertIsNotNone(beta_func.calc_payload_shared)
-        self.assertEqual(
-            len(beta_func.calc_payload_samples), len(beta_func.raw_u_samples)
-        )
-        self.assertIsInstance(beta_func.calc_metrics[0], dict)
-        self.assertIn("omega", beta_func.calc_payload_samples[0])
-        self.assertIn("tangent", beta_func.calc_payload_samples[0])
-        self.assertIn("R", beta_func.calc_payload_shared)
-        self.assertIn("num_directors", beta_func.calc_payload_shared)
-        self.assertIn("layer", beta_func.calc_payload_shared)
+        self.assertEqual(beta_func.raw_result_value_attr, "beta")
+        self.assertIsInstance(beta_func.calc_results, tuple)
+        self.assertEqual(len(beta_func.calc_results), len(beta_func.raw_u_samples))
+        result0 = beta_func.calc_results[0]
+        self.assertIsInstance(result0, DefectSectionOmegaResult)
+        self.assertIsInstance(result0.metric, dict)
+        self.assertEqual(result0.omega.shape, (3,))
+        self.assertEqual(result0.tangent.shape, (3,))
+        self.assertGreater(result0.R, 0)
+        self.assertGreater(result0.num_directors, 0)
+        self.assertGreaterEqual(result0.layer, 0)
 
     def test_act_get_beta_interpolator_requires_existing_smooth_when_not_new(self):
         data_path = (

@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import types
 import unittest
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -16,8 +17,22 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.registry_base import RegistryBase
+from nematics3d.classes.result_base import ResultBase
 from nematics3d.classes.disclination_line import DisclinationLine, InputLine
 from nematics3d.classes.smoothed_line import SmoothedLine, SmoothedLineFunc
+
+
+@dataclass(repr=False)
+class ScalarResult(ResultBase):
+    value: float
+
+
+def scalar_result(u):
+    return ScalarResult(float(u))
+
+
+def doubled_scalar_result(u):
+    return ScalarResult(2.0 * float(u))
 
 
 class WrapLineFuncModeLine(SmoothedLine):
@@ -43,8 +58,8 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
     def test_act_create_linefunc_registers_default_names(self):
         line = SmoothedLine(build_line(), window_length=5, min_line_length=2)
 
-        first = line.act_create_linefunc(lambda u: u, [0, 50, 100])
-        second = line.act_create_linefunc(lambda u: 2 * u, [0, 50, 100])
+        first = line.act_create_linefunc(scalar_result, [0, 50, 100])
+        second = line.act_create_linefunc(doubled_scalar_result, [0, 50, 100])
 
         self.assertIsInstance(first, SmoothedLineFunc)
         self.assertEqual(first.name, "line_func_0")
@@ -58,8 +73,8 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
     def test_explicit_name_still_advances_default_name_counter(self):
         line = SmoothedLine(build_line(), window_length=5, min_line_length=2)
 
-        named = line.act_create_linefunc(lambda u: u, [0, 50, 100], name="density")
-        default = line.act_create_linefunc(lambda u: u, [0, 50, 100])
+        named = line.act_create_linefunc(scalar_result, [0, 50, 100], name="density")
+        default = line.act_create_linefunc(scalar_result, [0, 50, 100])
 
         self.assertEqual(named.name, "density")
         self.assertEqual(default.name, "line_func_1")
@@ -74,7 +89,7 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
         )
 
         linefunc = line.act_create_linefunc(
-            lambda u: u,
+            scalar_result,
             np.arange(0, 100, 25),
             name="wrapped_scalar",
         )
@@ -104,7 +119,7 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
 
         smooth = line.act_smooth(window_length=5, min_line_length=2)
         linefunc = smooth.act_create_linefunc(
-            lambda u: u,
+            scalar_result,
             np.arange(0, 100, 25),
             name="cross_scalar",
         )
