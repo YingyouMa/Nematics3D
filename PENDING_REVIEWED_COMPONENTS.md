@@ -43,3 +43,13 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Tutorial: `tutorials/grid/periodic/wrap_points_to_box.ipynb`.
 - Review commits: implementation `c1ba8a8fe963338c5154b6a8fa9a7b20c1818260`; focused tests `b7fdd04fae749d9894bd0bc727a2871a1c48ce5e`; tutorial `30e1cb3e50d0b21ee8187d537cae9699e4769064`.
 - Archive note: focused tests have been added, but no GitHub Actions workflow ran for the branch push; record actual test/validation execution and final reviewed commit before moving to the formal ledger.
+
+### `resolve_plane_physical_axes()`
+
+- Source: `src/nematics3d/grid/plane.py`
+- Status: retained as an active plane-basis helper used by `PlaneGrid` whenever its physical sampling basis is generated or updated; geometric strategy preserved while the public contract was clarified and validation tightened.
+- Behavior reviewed: non-unit `normal` and `axis1` inputs are normalized internally; missing `axis1` generates a deterministic in-plane reference axis; non-perpendicular `axis1` is projected into the plane and renormalized; collinear `axis1` falls back to automatic axis generation; `axis2` is derived as `cross(normal, axis1)` to form an orthonormal right-handed plane basis.
+- Fixes: corrected the docstring to match actual normalization behavior; added strict `as_bool()` validation for `is_warn`; made collinearity/perpendicularity tolerances explicit with `rtol=0.0`.
+- Focused tests: `tests/test_grid_plane.py` (new coverage for valid normalized behavior, non-unit inputs, automatic axis generation, projection, collinear fallback, invalid `is_warn`, and invalid vectors).
+- Review commits: implementation `eb0ed76442d791d875f628dc7a1ffcb5e5a767d9`; focused tests `e285f71f722bdacc576f0d785305d5ad04dd48f1`.
+- Archive note: focused tests have been added, but actual test/validation execution has not yet been recorded; run focused validation and record the final reviewed commit before moving to the formal ledger.
