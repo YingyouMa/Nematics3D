@@ -66,7 +66,7 @@ class OptsSmooth(OptsBase):
 
     impl_validators = {
         **(OptsBase.impl_validators),
-        "window_ratio":         lambda v, d: None if v is None else as_number(v, name=d),
+        "window_ratio":         lambda v, d: None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf)),
         "window_length":        lambda v, d: None if v is None else as_number(v, name=d, is_integer=True),
         "order":                lambda v, d: as_number(v, name=d, is_integer=True, value_range=(3, np.inf)),
         "num_out_ratio":        lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
@@ -325,6 +325,56 @@ class SmoothedLine(HostBase):
             f"The line `{self.name}` is not smoothed, reason: {reason}.",
         )
 
+    def _helper_resolve_window_opts(self, *, logger=None) -> None:
+        """Resolve the active smoothing window and synchronize both window opts."""
+        window_length = self.opts.window_length
+        window_ratio = self.opts.window_ratio
+
+        if window_length is None:
+            if window_ratio is None:
+                raise SmoothingConfigError(
+                    "No input value provided for smooth window length."
+                )
+            if self.calc_num_init <= 0:
+                raise SmoothingConfigError("Cannot smooth an empty line.")
+            window_length = int(self.calc_num_init / window_ratio / 2) * 2 + 1
+        else:
+            if (
+                window_ratio is not None
+                and self.state_is_window_warning
+                and logger is not None
+            ):
+                logger.warning(
+                    f"Window_length is manual input as {window_length}. "
+                    f"window_ratio ({window_ratio}) would be ignored and reset."
+                )
+            window_length = int(window_length)
+            if window_length % 2 == 0:
+                window_length += 1
+
+        resolved_ratio = self.calc_num_init / window_length
+        with self.opts.act_internal_update():
+            self.opts.window_length = window_length
+            self.opts.window_ratio = resolved_ratio
+
+    def _helper_resolve_spline_u(self, u_percent) -> float:
+        """Validate a percent spline parameter and map it to FITPACK's [0, 1] domain."""
+        if getattr(self, "entity_tck", None) is None:
+            raise RuntimeError(
+                "Spline cache `entity_tck` is missing. "
+                "Probably the line is not properly initialized or successfully smoothed."
+            )
+
+        u_percent = as_number(
+            u_percent,
+            value_range=(0, 100),
+            name="Continuous spline parameter along the curve",
+        )
+        u = float(u_percent) / 100.0
+        if self.opts.mode == "wrap":
+            u = float(np.mod(u, 1.0))
+        return u
+
     # -------------------------------
     # Smoothing commit pipeline
     # -------------------------------
@@ -342,13 +392,13 @@ class SmoothedLine(HostBase):
         if not is_reapply_opts and not kwargs:
             return
 
-        if kwargs:
-            if "window_ratio" in kwargs and "window_length" not in kwargs:
-                object.__setattr__(self.opts, "window_length", None)
-            if "window_ratio" not in kwargs and "window_length" in kwargs:
-                object.__setattr__(self.opts, "window_ratio", None)
-
         with self.opts.act_internal_update():
+            if kwargs:
+                if "window_ratio" in kwargs and "window_length" not in kwargs:
+                    self.opts.window_length = None
+                if "window_ratio" not in kwargs and "window_length" in kwargs:
+                    self.opts.window_ratio = None
+
             cover_value(
                 self.opts,
                 is_allow_cover_target_set=True,
@@ -365,42 +415,13 @@ class SmoothedLine(HostBase):
         logger.debug(msg)
 
         try:
-            if self.opts.window_length is None:
-                if self.opts.window_ratio is None:
-                    reason = "No input value provided for smooth window length."
-                    raise SmoothingConfigError(reason)
-                object.__setattr__(
-                    self.opts,
-                    "window_length",
-                    int(self.calc_num_init / self.opts.window_ratio / 2) * 2 + 1,
-                )
-                object.__setattr__(
-                    self.opts,
-                    "window_ratio",
-                    self.calc_num_init / self.opts.window_length,
-                )
-            else:
-                if self.opts.window_ratio is not None and self.state_is_window_warning:
-                    logger.warning(
-                        f"Window_length is manual input as {self.opts.window_length}. "
-                        f"window_ratio ({self.opts.window_ratio}) would be ignored and reset."
-                    )
-                window_length = int(self.opts.window_length)
-                if window_length % 2 == 0:
-                    window_length += 1
-                object.__setattr__(self.opts, "window_length", window_length)
-                object.__setattr__(
-                    self.opts,
-                    "window_ratio",
-                    self.calc_num_init / self.opts.window_length,
-                )
+            self._helper_resolve_window_opts(logger=logger)
 
             if self.calc_num_init < self.opts.min_line_length:
                 reason = (
                     f"the minimum length of line smoothing is set to be {self.opts.min_line_length} "
                     f"points, while the current line has {self.calc_num_init} points"
                 )
-                self._helper_fallback_no_smooth(reason)
                 raise SmoothingConfigError(reason)
 
             if self.opts.window_length >= self.calc_num_init:
@@ -474,54 +495,29 @@ class SmoothedLine(HostBase):
     # -------------------------------
 
     def act_calc_tangent(self, u_percent, is_return_coord=False):
-
-        tck = getattr(self, "entity_tck", None)
-        if tck is None:
-            raise RuntimeError(
-                "Spline cache `entity_tck` is missing."
-                "Probably the line is not properly initialized or successfully smoothed."
-            )
-
-        u_percent = as_number(
-            u_percent,
-            value_range=(0, 100),
-            name="Continuous spline parameter along the curve",
+        u = self._helper_resolve_spline_u(u_percent)
+        is_return_coord = as_bool(
+            is_return_coord,
+            name="Whether to return the spline coordinate",
         )
-        u_percent /= 100
-        if self.opts.mode == "wrap":
-            u_percent = np.mod(u_percent, 1.0)
-        dr_dx = np.asarray(splev(u_percent, self.entity_tck, der=1), dtype=float)
+
+        dr_dx = np.asarray(splev(u, self.entity_tck, der=1), dtype=float)
         length = float(np.linalg.norm(dr_dx))
         if (not np.isfinite(length)) or length < 1e-9:
             raise ValueError(
-                f"Degenerate spline derivative at {u_percent}: ||dr/dx||={length}."
+                f"Degenerate spline derivative at {u}: ||dr/dx||={length}."
             )
 
         t_hat = dr_dx / length
         if not is_return_coord:
             return t_hat
 
-        coord = np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
+        coord = np.asarray(splev(u, self.entity_tck, der=0), dtype=float)
         return t_hat, coord
 
     def act_calc_pos(self, u_percent):
-        tck = getattr(self, "entity_tck", None)
-        if tck is None:
-            raise RuntimeError(
-                "Spline cache `entity_tck` is missing."
-                "Probably the line is not properly initialized or successfully smoothed."
-            )
-
-        u_percent = as_number(
-            u_percent,
-            value_range=(0, 100),
-            name="Continuous spline parameter along the curve",
-        )
-        u_percent /= 100
-        if self.opts.mode == "wrap":
-            u_percent = np.mod(u_percent, 1.0)
-
-        return np.asarray(splev(u_percent, self.entity_tck, der=0), dtype=float)
+        u = self._helper_resolve_spline_u(u_percent)
+        return np.asarray(splev(u, self.entity_tck, der=0), dtype=float)
 
     def act_create_linefunc(
         self,

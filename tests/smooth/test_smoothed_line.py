@@ -75,3 +75,79 @@ def test_smoothed_line_current_smoothing_regression():
     np.testing.assert_allclose(coord, line.act_calc_pos(50), atol=1e-12)
     assert np.all(np.isfinite(tangent))
     assert np.all(np.isfinite(coord))
+
+
+def test_smoothed_line_window_resolution_and_fallback_contract():
+    """Cover window normalization plus representative recoverable fallbacks."""
+    _, noisy = _build_noisy_line()
+
+    ratio_line = SmoothedLine(
+        noisy,
+        window_ratio=15,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+    assert ratio_line.calc_is_smoothed is True
+    assert ratio_line.opts.window_length == 9
+    np.testing.assert_allclose(
+        ratio_line.opts.window_ratio,
+        ratio_line.calc_num_init / ratio_line.opts.window_length,
+    )
+
+    even_line = SmoothedLine(
+        noisy,
+        window_length=8,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+    assert even_line.calc_is_smoothed is True
+    assert even_line.opts.window_length == 9
+
+    short_line = SmoothedLine(
+        noisy[:8],
+        window_length=5,
+        order=3,
+        min_line_length=50,
+        mode="interp",
+    )
+    assert short_line.calc_is_smoothed is False
+    assert short_line.entity_tck is None
+    np.testing.assert_array_equal(short_line.result, short_line.calc_coords)
+    assert "minimum length" in short_line.calc_status.lower()
+
+
+def test_smoothed_line_query_helpers_and_wrap_boundary():
+    """Keep position/tangent parameter handling shared and periodic at 100%."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="wrap",
+    )
+
+    np.testing.assert_allclose(line.act_calc_pos(100), line.act_calc_pos(0), atol=1e-12)
+    tangent, coord = line.act_calc_tangent(100, is_return_coord=True)
+    np.testing.assert_allclose(coord, line.act_calc_pos(0), atol=1e-12)
+    np.testing.assert_allclose(np.linalg.norm(tangent), 1.0, atol=1e-12)
+
+
+def test_smoothed_line_zero_window_ratio_does_not_reach_division():
+    """A non-positive ratio must be rejected before smoothing window arithmetic."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_ratio=0,
+        order=3,
+        min_line_length=2,
+        mode="interp",
+    )
+    assert line.calc_is_smoothed is False
+    assert line.entity_tck is None
+    assert "no input value" in line.calc_status.lower()
