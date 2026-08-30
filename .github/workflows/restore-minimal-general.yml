@@ -1,0 +1,136 @@
+name: Restore minimal general module
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Restore active general helpers and verify imports
+        shell: bash
+        run: |
+          if [ "$GITHUB_ACTOR" = "github-actions[bot]" ]; then
+            echo "Bot-triggered commit; skip repeat mutation."
+            exit 0
+          fi
+          python - <<'PY'
+          import ast
+          import subprocess
+          from pathlib import Path
+
+          old = subprocess.check_output(
+              ["git", "show", "78a74c0670ba69f8395328b4de99d9717d1b71c4c^:src/nematics3d/general.py"],
+              text=True,
+          )
+          tree = ast.parse(old)
+          wanted = {
+              "get_square_each",
+              "get_square",
+              "select_grid_in_box",
+              "mark_points_membership",
+              "find_nearest_point",
+              "closest_point_on_polyline",
+          }
+          blocks = []
+          found = set()
+          for node in tree.body:
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name in wanted:
+                  segment = ast.get_source_segment(old, node)
+                  if segment is None:
+                      lines = old.splitlines()
+                      segment = "\n".join(lines[node.lineno - 1 : node.end_lineno])
+                  blocks.append((node.lineno, node.name, segment))
+                  found.add(node.name)
+          missing = wanted - found
+          if missing:
+              raise RuntimeError(f"Could not recover old general helpers: {sorted(missing)}")
+          blocks.sort()
+
+          header = '''"""Legacy compatibility helpers still used by active Nematics3D modules.
+
+          This module intentionally contains only names that remain referenced by active
+          source/tests. Helpers already moved to dedicated modules are re-exported here;
+          the remaining legacy implementations are preserved until their callers migrate.
+          """
+
+          import numpy as np
+
+          from .format import fmt_value
+          from .geometry import (
+              find_rotation_axis,
+              get_box_corners,
+              rotation_matrix_from_vectors,
+          )
+          from .logging_decorator import logging_and_warning_decorator
+
+          __all__ = [
+              "closest_point_on_polyline",
+              "find_nearest_point",
+              "find_rotation_axis",
+              "fmt_value",
+              "get_box_corners",
+              "get_square",
+              "get_square_each",
+              "mark_points_membership",
+              "rotation_matrix_from_vectors",
+              "select_grid_in_box",
+          ]
+
+          '''
+          body = "\n\n\n".join(segment for _, _, segment in blocks) + "\n"
+          Path("src/nematics3d/general.py").write_text(header + body)
+          PY
+
+          python -m pip install -e ".[test]"
+          python -m black src/nematics3d/general.py
+          python -m py_compile src/nematics3d/general.py
+          python - <<'PY'
+          from nematics3d.general import (
+              closest_point_on_polyline,
+              find_nearest_point,
+              find_rotation_axis,
+              fmt_value,
+              get_box_corners,
+              get_square,
+              mark_points_membership,
+              rotation_matrix_from_vectors,
+              select_grid_in_box,
+          )
+          print("general imports OK")
+          PY
+          python - <<'PY'
+          modules = [
+              "nematics3d.classes.plane_grid",
+              "nematics3d.classes.plane_grid_polar",
+              "nematics3d.classes.q_plane",
+              "nematics3d.classes.visual.glyph",
+              "nematics3d.classes.visual.pick_manager",
+              "nematics3d.classes.visual.plot_rod",
+              "nematics3d.classes.visual.plot_tube",
+              "nematics3d.classes.visual.plot_vector",
+              "nematics3d.classes.visual.qt.interact_bounds",
+              "nematics3d.classes.visual.qt.interact_plane",
+              "nematics3d.classes.disclination_line",
+          ]
+          for name in modules:
+              __import__(name)
+              print("OK", name)
+          PY
+          python -m pytest tests/smooth/test_smoothed_line_func_registry.py -q
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/nematics3d/general.py
+          git commit -m "Restore active general compatibility helpers"
+          git push origin HEAD:develop
