@@ -254,8 +254,6 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        object.__setattr__(self, "calc_coords", line_coord_input)
-        object.__setattr__(self, "calc_result", line_coord_input)
         object.__setattr__(self, "entity_tck", None)
         object.__setattr__(self, "entity_linefuncs", None)
         object.__setattr__(self, "impl_linefunc_count", 0)
