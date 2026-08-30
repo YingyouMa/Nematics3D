@@ -16,7 +16,9 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
+import nematics3d.classes.smoothed_line as smoothed_line_module
 from nematics3d.classes.smoothed_line import SmoothedLine
+from scipy.interpolate import splev
 
 
 def _build_noisy_line(num_points=121, noise_scale=0.08, seed=7):
@@ -151,3 +153,67 @@ def test_smoothed_line_zero_window_ratio_does_not_reach_division():
     assert line.calc_is_smoothed is False
     assert line.entity_tck is None
     assert "no input value" in line.calc_status.lower()
+
+
+def test_smoothed_line_preallocated_sampling_matches_scipy_vector_output():
+    """The lower-memory sampling helper must preserve the previous spline values."""
+    _, noisy = _build_noisy_line()
+    for mode in ("interp", "wrap"):
+        line = SmoothedLine(
+            noisy,
+            window_length=9,
+            order=3,
+            num_out_ratio=2,
+            min_line_length=2,
+            mode=mode,
+        )
+        u_out = np.linspace(
+            0.0,
+            1.0,
+            line.calc_num_out,
+            endpoint=mode != "wrap",
+        )
+        expected = np.array(splev(u_out, line.entity_tck)).T
+        np.testing.assert_allclose(line.result, expected, rtol=0.0, atol=0.0)
+
+
+def test_smoothed_line_num_out_ratio_reuses_cached_spline(monkeypatch):
+    """Changing only output density must not rerun filtering or spline fitting."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+    tck_before = line.entity_tck
+
+    original_savgol_filter = smoothed_line_module.savgol_filter
+    original_splprep = smoothed_line_module.splprep
+
+    def _unexpected_recompute(*args, **kwargs):
+        raise AssertionError("output-only resampling unexpectedly rebuilt the spline")
+
+    monkeypatch.setattr(smoothed_line_module, "savgol_filter", _unexpected_recompute)
+    monkeypatch.setattr(smoothed_line_module, "splprep", _unexpected_recompute)
+
+    line.act_commit(num_out_ratio=2)
+
+    assert line.entity_tck is tck_before
+    assert line.calc_is_smoothed is True
+    assert line.calc_status == "Success"
+    assert line.result.shape == (2 * len(noisy), noisy.shape[1])
+
+    monkeypatch.setattr(smoothed_line_module, "savgol_filter", original_savgol_filter)
+    monkeypatch.setattr(smoothed_line_module, "splprep", original_splprep)
+    fresh = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=2,
+        min_line_length=2,
+        mode="interp",
+    )
+    np.testing.assert_allclose(line.result, fresh.result, rtol=0.0, atol=0.0)

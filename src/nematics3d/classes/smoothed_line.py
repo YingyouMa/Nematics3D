@@ -254,12 +254,6 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        object.__setattr__(self, "entity_tck", None)
-        object.__setattr__(self, "entity_linefuncs", None)
-        object.__setattr__(self, "impl_linefunc_count", 0)
-        object.__setattr__(self, "calc_is_smoothed", False)
-        object.__setattr__(self, "calc_status", "Failure, reason unknown.")
-
         super().__init__(
             OptsSmooth,
             opts,
@@ -280,6 +274,7 @@ class SmoothedLine(HostBase):
         )
         linefuncs.act_bind_relation_base("owner", self, is_weak=True)
         object.__setattr__(self, "entity_linefuncs", linefuncs)
+        object.__setattr__(self, "impl_linefunc_count", 0)
 
     # -------------------------------
     # Coordinate and fallback helpers
@@ -337,6 +332,22 @@ class SmoothedLine(HostBase):
             self.opts.window_length = window_length
             self.opts.window_ratio = resolved_ratio
 
+    def _helper_sample_spline_result(self, tck) -> np.ndarray:
+        """Sample a cached parametric spline into the configured output array."""
+        is_periodic = self.opts.mode == "wrap"
+        u_out = np.linspace(
+            0.0,
+            1.0,
+            self.calc_num_out,
+            endpoint=not is_periodic,
+        )
+
+        knots, coefficients, degree = tck
+        result = np.empty((len(u_out), len(coefficients)), dtype=float)
+        for axis, coefficient in enumerate(coefficients):
+            result[:, axis] = splev(u_out, (knots, coefficient, degree))
+        return result
+
     def _helper_resolve_spline_u(self, u_percent) -> float:
         """Validate a percent spline parameter and map it to FITPACK's [0, 1] domain."""
         if getattr(self, "entity_tck", None) is None:
@@ -387,6 +398,12 @@ class SmoothedLine(HostBase):
             )
 
         self._helper_resolve_coords()
+        is_resample_only = (
+            not is_reapply_opts
+            and set(kwargs) == {"num_out_ratio"}
+            and getattr(self, "entity_tck", None) is not None
+            and getattr(self, "calc_is_smoothed", False)
+        )
 
         msg = f"Start to smooth line {self.name!r} with {self.calc_num_init} points.\n"
         msg += f"window length = {self.opts.window_length}\n"
@@ -395,6 +412,13 @@ class SmoothedLine(HostBase):
         logger.debug(msg)
 
         try:
+            if is_resample_only:
+                logger.debug("Reusing cached spline for output-only resampling.")
+                result = self._helper_sample_spline_result(self.entity_tck)
+                object.__setattr__(self, "calc_result", result)
+                object.__setattr__(self, "calc_status", "Success")
+                return
+
             self._helper_resolve_window_opts(logger=logger)
 
             if self.calc_num_init < self.opts.min_line_length:
@@ -437,11 +461,9 @@ class SmoothedLine(HostBase):
                 # endpoint sample is overwritten in-place by `splprep(per=1)`.
                 line_points_spline = np.concatenate((line_points, [line_points[0]]))
                 uspline = np.linspace(0.0, 1.0, len(line_points_spline))
-                u_out = np.linspace(0.0, 1.0, self.calc_num_out, endpoint=False)
             else:
                 line_points_spline = line_points
                 uspline = np.linspace(0.0, 1.0, self.calc_num_init)
-                u_out = np.linspace(0.0, 1.0, self.calc_num_out)
 
             tck = splprep(
                 line_points_spline.T.copy(),
@@ -449,7 +471,14 @@ class SmoothedLine(HostBase):
                 s=0,
                 per=int(is_periodic),
             )[0]
-            result = np.array(splev(u_out, tck)).T
+
+            # FITPACK has already consumed the filtered input. Drop these large
+            # temporaries before allocating the final resampled output.
+            del line_points_spline
+            del line_points
+            del uspline
+
+            result = self._helper_sample_spline_result(tck)
             object.__setattr__(self, "entity_tck", tck)
             object.__setattr__(self, "calc_result", result)
 
