@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from ..datatypes import as_vector
+from ..datatypes import as_bool, as_vector
 from ..geometry import rotation_matrix_from_vectors
 from ..logging_decorator import logging_and_warning_decorator
 
@@ -17,11 +17,14 @@ def resolve_plane_physical_axes(
 ):
     """Return a valid orthonormal in-plane basis from ``normal`` and ``axis1``.
 
-    ``normal`` is assumed to already be a unit normal. If ``axis1`` is missing,
-    collinear with ``normal``, or not perfectly perpendicular, this helper
-    repairs the basis and returns the final physical ``axis1`` and derived
+    ``normal`` and a provided ``axis1`` are validated as non-zero 3D vectors
+    and normalized internally. If ``axis1`` is missing or collinear with
+    ``normal``, an automatic in-plane reference axis is generated. If a
+    provided ``axis1`` is not perpendicular to ``normal``, it is projected
+    onto the plane and renormalized. The returned secondary axis is
     ``axis2 = cross(normal, axis1)``.
     """
+    is_warn = as_bool(is_warn, name="is_warn")
     normal = as_vector(
         normal,
         name="normal used to resolve the plane physical axes",
@@ -43,7 +46,7 @@ def resolve_plane_physical_axes(
 
     if axis1_use is not None:
         dot_product = normal @ axis1_use
-        if np.isclose(abs(dot_product), 1.0, atol=1e-8):
+        if np.isclose(abs(dot_product), 1.0, atol=1e-8, rtol=0.0):
             old_axis1 = axis1_use.copy()
             axis1_use = None
             if is_warn:
@@ -53,7 +56,7 @@ def resolve_plane_physical_axes(
                     f"{old_axis1} and fall back to the automatic reference "
                     f"axis for normal {normal}."
                 )
-        elif not np.isclose(dot_product, 0, atol=1e-8):
+        elif not np.isclose(dot_product, 0.0, atol=1e-8, rtol=0.0):
             old_axis1 = axis1_use.copy()
             axis1_use = axis1_use - dot_product * normal
             axis1_use = as_vector(
