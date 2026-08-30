@@ -33,18 +33,22 @@ jobs:
           echo "=== pre-refactor SmoothedLineFunc related usages ==="
           git grep -n -E "act_create_linefunc|SmoothedLineFunc\(|calc_metrics|calc_payload_samples|calc_payload_shared" -- src tests example tutorials || true
           python dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
-          python -m black src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py
-          python -m py_compile src/nematics3d/classes/smoothed_line.py
-          python -m pytest tests/smooth/test_smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py -q
-          python -m black --check src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py
+          python dev/onGoing/refactor_beta_linefunc_resultbase_once.py
+          python -m black src/nematics3d/classes/smoothed_line.py src/nematics3d/classes/disclination_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py tests/classes/test_q_field_object_phase2.py
+          python -m py_compile src/nematics3d/classes/smoothed_line.py src/nematics3d/classes/disclination_line.py tests/smooth/test_smoothed_line_func_registry.py tests/classes/test_q_field_object_phase2.py
+          python -m pytest tests/smooth/test_smoothed_line.py tests/smooth/test_smoothed_line_func.py -q
+          python -m black --check src/nematics3d/classes/smoothed_line.py src/nematics3d/classes/disclination_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py tests/classes/test_q_field_object_phase2.py
           echo "=== stale protocol identifiers after refactor ==="
           if git grep -n -E "calc_metrics|calc_payload_samples|calc_payload_shared" -- src tests; then
             echo "stale SmoothedLineFunc metadata protocol remains"
             exit 1
           fi
+          echo "=== remaining raw scalar/tuple linefunc sites ==="
+          git grep -n -E "act_create_linefunc|SmoothedLineFunc\(" -- src tests example tutorials || true
           rm dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
+          rm dev/onGoing/refactor_beta_linefunc_resultbase_once.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
+          git add src/nematics3d/classes/smoothed_line.py src/nematics3d/classes/disclination_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py tests/classes/test_q_field_object_phase2.py dev/onGoing/refactor_smoothed_line_func_resultbase_once.py dev/onGoing/refactor_beta_linefunc_resultbase_once.py
           git commit -m "Use ResultBase for SmoothedLineFunc samples"
           git push origin HEAD:develop
