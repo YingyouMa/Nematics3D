@@ -91,11 +91,17 @@ jobs:
           '''
           body = "\n\n\n".join(segment for _, _, segment in blocks) + "\n"
           Path("src/nematics3d/general.py").write_text(header + body)
+
+          path = Path("src/nematics3d/classes/disclination_line.py")
+          text = path.read_text()
+          if not text.startswith("from __future__ import annotations\n"):
+              text = "from __future__ import annotations\n\n" + text
+              path.write_text(text)
           PY
 
           python -m pip install -e ".[test]"
-          python -m black src/nematics3d/general.py
-          python -m py_compile src/nematics3d/general.py
+          python -m black src/nematics3d/general.py src/nematics3d/classes/disclination_line.py
+          python -m py_compile src/nematics3d/general.py src/nematics3d/classes/disclination_line.py
           python - <<'PY'
           from nematics3d.general import (
               closest_point_on_polyline,
@@ -131,6 +137,6 @@ jobs:
           python -m pytest tests/smooth/test_smoothed_line_func_registry.py -q
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/nematics3d/general.py
+          git add src/nematics3d/general.py src/nematics3d/classes/disclination_line.py
           git commit -m "Restore active general compatibility helpers"
           git push origin HEAD:develop
