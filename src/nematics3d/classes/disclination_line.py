@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Disclination-line domain objects and their plot/section wrappers."""
 
 import weakref
