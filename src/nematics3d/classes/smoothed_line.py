@@ -466,7 +466,7 @@ class SmoothedLine(HostBase):
                 uspline = np.linspace(0.0, 1.0, self.calc_num_init)
 
             tck = splprep(
-                line_points_spline.T.copy(),
+                line_points_spline.T,
                 u=uspline,
                 s=0,
                 per=int(is_periodic),
