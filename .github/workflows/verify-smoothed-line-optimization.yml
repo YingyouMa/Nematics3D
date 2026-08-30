@@ -1,0 +1,72 @@
+name: Verify SmoothedLine optimization
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYVISTA_OFF_SCREEN: "true"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Apply, test, benchmark, and commit
+        shell: bash
+        run: |
+          if [ "$GITHUB_ACTOR" = "github-actions[bot]" ]; then
+            echo "Bot-triggered source commit; skip repeat mutation."
+            exit 0
+          fi
+          python -m pip install -e ".[test]"
+          python dev/onGoing/optimize_smoothed_line_memory_once.py
+          python -m black src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line.py
+          python -m py_compile src/nematics3d/classes/smoothed_line.py
+          python -m pytest tests/smooth/test_smoothed_line.py -q
+          python -m black --check src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line.py
+          python - <<'PY'
+          import time
+          import tracemalloc
+          import numpy as np
+          from scipy.interpolate import splprep
+          from scipy.signal import savgol_filter
+
+          rng = np.random.default_rng(123)
+          n = 300_000
+          t = np.linspace(0.0, 12.0 * np.pi, n)
+          points = np.column_stack((t, np.sin(t), np.cos(0.5 * t)))
+          points += 0.01 * rng.normal(size=points.shape)
+          filtered = savgol_filter(points,  nine := 9, 3, axis=0, mode="interp")
+          u = np.linspace(0.0, 1.0, n)
+
+          def bench(use_copy):
+              tracemalloc.start()
+              start = time.perf_counter()
+              data = filtered.T.copy() if use_copy else filtered.T
+              splprep(data, u=u, s=0, per=0)
+              elapsed = time.perf_counter() - start
+              _, peak = tracemalloc.get_traced_memory()
+              tracemalloc.stop()
+              return elapsed, peak
+
+          for label, use_copy in (("transpose-copy", True), ("transpose-view", False)):
+              elapsed, peak = bench(use_copy)
+              print(f"SPLPREP_BENCH {label}: {elapsed:.6f}s peak_python={peak/1024/1024:.2f} MiB")
+          PY
+          rm dev/onGoing/optimize_smoothed_line_memory_once.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line.py dev/onGoing/optimize_smoothed_line_memory_once.py
+          git commit -m "Optimize SmoothedLine spline reuse and sampling"
+          git push origin HEAD:develop
