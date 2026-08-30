@@ -241,9 +241,8 @@ class SmoothedLine(HostBase):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # SmoothedLine overrides HostBase.__init__ because it must validate and cache
-    # raw coordinates before the host opts pipeline is initialized, then trigger
-    # the first smoothing pass immediately after opts finalization.
+    # SmoothedLine lets HostBase initialize and validate its raw/state inputs,
+    # then finalizes opts and triggers the first smoothing pass explicitly.
     # ==================================================
     def __init__(
         self,
@@ -255,31 +254,12 @@ class SmoothedLine(HostBase):
         **kwargs,
     ):
 
-        line_coord_input = (
-            type(self)
-            .__attr_defs__["raw_coords"]
-            .validator(
-                line_coord_input,
-                type(self).__attr_defs__["raw_coords"].doc,
-            )
-        )
-
-        is_window_warning = (
-            type(self)
-            .__attr_defs__["state_is_window_warning"]
-            .validator(
-                is_window_warning,
-                type(self).__attr_defs__["state_is_window_warning"].doc,
-            )
-        )
-        object.__setattr__(self, "raw_coords", line_coord_input)
-        object.__setattr__(self, "calc_coords", self.raw_coords)
-        object.__setattr__(self, "calc_result", self.raw_coords)
+        object.__setattr__(self, "calc_coords", line_coord_input)
+        object.__setattr__(self, "calc_result", line_coord_input)
         object.__setattr__(self, "entity_tck", None)
         object.__setattr__(self, "entity_linefuncs", None)
         object.__setattr__(self, "impl_linefunc_count", 0)
         object.__setattr__(self, "calc_is_smoothed", False)
-        object.__setattr__(self, "state_is_window_warning", is_window_warning)
         object.__setattr__(self, "calc_status", "Failure, reason unknown.")
 
         super().__init__(
@@ -288,6 +268,8 @@ class SmoothedLine(HostBase):
             opts_defaults_override,
             name=name,
             name_replace="line",
+            raw_coords=line_coord_input,
+            state_is_window_warning=is_window_warning,
             **kwargs,
         )
 
