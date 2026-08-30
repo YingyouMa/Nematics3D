@@ -765,9 +765,12 @@ def linefunc_smooth_values(
 
     values_flat = values.reshape(len(u_samples), -1)
     output = np.empty_like(values_flat, dtype=float)
-    deltas_all = _linefunc_sample_delta_matrix(u_samples, mode=mode)
 
-    for idx, delta in enumerate(deltas_all):
+    for idx, u_center in enumerate(u_samples):
+        delta = u_samples - u_center
+        if mode == "wrap":
+            delta = (delta + 50.0) % 100.0 - 50.0
+
         kernel_weights = linefunc_kernel_weights(
             delta,
             window_span_percent,
@@ -864,21 +867,6 @@ def linefunc_build_smoothed_interpolator(
         assume_sorted=True,
     )
     return interpolator, values_smooth
-
-
-def _linefunc_sample_delta_matrix(
-    u_samples,
-    mode: Literal["interp", "wrap"] = "interp",
-) -> np.ndarray:
-    """Return sample-to-sample deltas for smoothing at the sample locations."""
-    u_samples = _linefunc_as_u_samples(u_samples)
-    mode = as_str(mode, name="line function smoothing mode", pool=("interp", "wrap"))
-    _linefunc_validate_wrap_endpoint(u_samples, mode)
-
-    delta = u_samples[np.newaxis, :] - u_samples[:, np.newaxis]
-    if mode == "wrap":
-        delta = (delta + 50.0) % 100.0 - 50.0
-    return delta
 
 
 def _linefunc_as_u_samples(u_samples) -> np.ndarray:
