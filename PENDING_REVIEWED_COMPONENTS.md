@@ -54,3 +54,16 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Tutorial: intentionally not added; the helper is simple and primarily supports `PlaneGrid`, and its direct public use is adequately described by the docstring/API reference.
 - Review commits: implementation `eb0ed76442d791d875f628dc7a1ffcb5e5a767d9`; focused tests `e285f71f722bdacc576f0d785305d5ad04dd48f1`.
 - Archive note: focused tests have been added, but actual test/validation execution has not yet been recorded; run focused validation and record the final reviewed commit before moving to the formal ledger.
+
+### `SmoothedLine`
+
+- Source: `src/nematics3d/classes/smoothed_line.py`
+- Status: core smoothing pipeline reviewed and cleaned up without changing the Savitzky-Golay plus FITPACK smoothing algorithm or the existing window-selection formula.
+- Fixes and cleanup: `window_ratio` is now constrained to positive values; internal option normalization uses `OptsBase.act_internal_update()` with normal validated assignment; coupled `window_length`/`window_ratio` resolution is isolated in `_helper_resolve_window_opts()`; duplicate short-line fallback was removed; spline-position parameter validation/wrap handling is shared through `_helper_resolve_spline_u()`; `act_calc_tangent()` now validates `is_return_coord` with `as_bool()`.
+- Behavior reviewed: explicit-window and ratio-derived smoothing; automatic odd-window normalization; short-line fallback and spline-cache clearing; periodic `wrap` seam behavior; position/tangent evaluation at the periodic 0/100 boundary; preservation of the original successful smoothing regression behavior.
+- Focused tests: `tests/smooth/test_smoothed_line.py`, expanded from the baseline regression to four tests covering the cleanup cases above.
+- Validation actually run: GitHub Actions run `33328556266`, job `99302909548`, Python 3.12 on Ubuntu 24.04; `py_compile` succeeded, `pytest tests/smooth/test_smoothed_line.py -q` reported `4 passed in 0.77s`, and Black reported both files would be left unchanged after formatting.
+- Review commit: implementation and focused tests `e3732be394fdb898b230eb38e89c5f5ee3a93b41`.
+- Tutorial: no new standalone tutorial added during this cleanup; existing class-level documentation and tests cover the reviewed behavior for now.
+- Deferred review: the manual pre-`HostBase.__init__` bootstrap in `SmoothedLine.__init__`, ndarray mutability/aliasing of raw and result arrays, and NumPy 2.x `__array__` copy-protocol compatibility were intentionally left for a separate architecture/API review rather than mixed into this behavior-preserving cleanup.
+- Archive note: core smoothing cleanup is validated, but the deferred architecture/API questions should be resolved or explicitly accepted before formal archival.
