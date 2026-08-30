@@ -1,4 +1,4 @@
-name: Refactor HostBase pop_exclusive
+name: Fix HostBase helper indentation
 
 on:
   push:
@@ -9,52 +9,30 @@ permissions:
   contents: write
 
 jobs:
-  refactor:
-    if: github.event.head_commit.message == 'Temporarily apply HostBase pop_exclusive refactor'
+  fix:
+    if: github.event.head_commit.message == 'Temporarily fix HostBase helper indentation'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           ref: develop
-      - name: Refactor HostBase helper
+      - name: Fix helper indentation
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('src/nematics3d/classes/host_base.py')
           s = p.read_text()
-          s = s.replace('from ..general import pop_exclusive\n', '')
-          needle = '    def _helper_commit_name(self, kwargs: dict[str, Any]) -> dict[str, Any]:\n'
-          helper = '''    @staticmethod
-              def _helper_pop_exclusive(
-                  kwargs: dict[str, Any],
-                  key1: str,
-                  key2: str,
-              ) -> tuple[bool, Any]:
-                  """Pop one of two mutually exclusive keys from ``kwargs``."""
-                  has1 = key1 in kwargs
-                  has2 = key2 in kwargs
-                  if has1 and has2:
-                      raise TypeError(
-                          f"Ambiguous input: both {key1!r} and {key2!r} were provided. "
-                          "Please pass only one."
-                      )
-                  if has1:
-                      return True, kwargs.pop(key1)
-                  if has2:
-                      return True, kwargs.pop(key2)
-                  return False, None
-
-          '''
-          helper = '\n'.join(line[4:] if line.startswith('    ') else line for line in helper.splitlines()) + '\n'
-          assert needle in s
-          s = s.replace(needle, helper + needle, 1)
-          s = s.replace('pop_exclusive(kwargs, "name", "raw_name")', 'self._helper_pop_exclusive(kwargs, "name", "raw_name")')
-          s = s.replace('pop_exclusive(kwargs, public_attr_name, host_attr_name)', 'self._helper_pop_exclusive(kwargs, public_attr_name, host_attr_name)')
+          start = s.index('\n@staticmethod\ndef _helper_pop_exclusive(') + 1
+          end = s.index('    def _helper_commit_name(', start)
+          block = s[start:end]
+          block = '\n'.join(('    ' + line) if line else line for line in block.splitlines()) + '\n'
+          s = s[:start] + block + s[end:]
           p.write_text(s)
           PY
+          python -m py_compile src/nematics3d/classes/host_base.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add src/nematics3d/classes/host_base.py
-          git commit -m "Move pop_exclusive into HostBase"
+          git commit -m "Fix HostBase helper indentation"
           git push origin HEAD:develop
