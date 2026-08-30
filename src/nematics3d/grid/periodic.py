@@ -1,4 +1,4 @@
-"""Periodic point, trajectory, and cluster helpers."""
+"""Periodic point and trajectory helpers."""
 
 import operator
 from typing import Optional, Sequence, Union
@@ -144,8 +144,6 @@ def unwrap_trajectory(
     Consecutive displacements are reduced through the minimum-image convention
     before they are cumulatively reconstructed from the first point.
     """
-    # Normalize the periodic lengths first. A finite entry marks a periodic
-    # axis; positive infinity marks an axis that must remain unchanged.
     box_size = as_box_size_periodic(
         box_size_periodic,
         name="box_size_periodic",
@@ -153,9 +151,6 @@ def unwrap_trajectory(
     is_start_in_box = as_bool(is_start_in_box, name="is_start_in_box")
     is_reverse = as_bool(is_reverse, name="is_reverse")
 
-    # as_points() handles a single point, an empty collection, dimensionality,
-    # finite-coordinate validation, conversion to float, and input isolation.
-    # Consequently, every operation below can assume a writable (N, 3) array.
     points = as_points(points, name="points", d=3)
     if len(points) == 0:
         if is_start_in_box:
@@ -172,9 +167,6 @@ def unwrap_trajectory(
         f"is_start_in_box={is_start_in_box}."
     )
 
-    # ref_index affects only the optional final translation. Validate it here
-    # before entering the trusted shift_to_box() fast path below. Negative
-    # indices retain their normal NumPy meaning.
     if is_start_in_box:
         if isinstance(ref_index, (bool, np.bool_)):
             raise TypeError("'ref_index' must be an integer, not a boolean.")
@@ -188,21 +180,12 @@ def unwrap_trajectory(
                 f"{len(points)} points."
             )
 
-    # Reversing changes which endpoint anchors the continuous reconstruction.
-    # This is useful when the last sample is the more reliable reference. The
-    # result is reversed back to the caller's original ordering at the end.
     if is_reverse:
         logger.debug("Using the final input point as the unwrapping anchor.")
         points = points[::-1]
 
-    # Work with consecutive wrapped displacements instead of absolute
-    # positions. There are N - 1 displacements for N input points.
     deltas = np.diff(points, axis=0)
 
-    # Apply the minimum-image convention only along periodic axes. Subtracting
-    # the nearest integer multiple of each period maps every displacement into
-    # the nearest periodic image. Exact half-period steps follow np.round()'s
-    # tie-to-even convention and are therefore inherently direction-ambiguous.
     mask_periodic = np.isfinite(box_size)
     if np.any(mask_periodic):
         periods = box_size[mask_periodic]
@@ -210,20 +193,12 @@ def unwrap_trajectory(
             np.round(deltas[:, mask_periodic] / periods) * periods
         )
 
-    # Reconstruct absolute positions from the corrected displacements. Writing
-    # cumsum directly into the output avoids an additional full trajectory
-    # allocation; the anchor is added afterward to restore absolute location.
     points_unwrap = np.empty_like(points)
     points_unwrap[0] = points[0]
     if len(points_unwrap) > 1:
         np.cumsum(deltas, axis=0, out=points_unwrap[1:])
         points_unwrap[1:] += points_unwrap[0]
 
-    # Unwrapping guarantees continuity but does not guarantee that any point
-    # lies inside the principal periodic box. When requested, translate the
-    # entire trajectory by whole box lengths so the selected reference does.
-    # The output is already validated, independent, floating, and writable, so
-    # the internal call safely skips repeated validation and modifies in place.
     if is_start_in_box:
         logger.debug(
             f"Shifting the unwrapped trajectory so point {ref_index} lies in "
@@ -238,35 +213,6 @@ def unwrap_trajectory(
         )
 
     if is_reverse:
-        # Restore the caller's original sample ordering after reverse anchoring.
         points_unwrap = points_unwrap[::-1]
 
     return points_unwrap
-
-
-def unfold_cluster(
-    points: np.ndarray,
-    box_size_periodic: BoxSizePeriodic = np.inf,
-):
-    """Unfold a periodic cluster into one continuous region."""
-    points = np.asarray(points, dtype=float)
-    box_size_periodic = as_box_size_periodic(
-        box_size_periodic,
-        name="box_size_periodic",
-    )
-    if np.all(np.isinf(box_size_periodic)):
-        return points
-
-    unfolded = points.copy()
-    ref = points[0]
-
-    for i in range(len(points)):
-        for dim, size in enumerate(box_size_periodic):
-            if size != np.inf:
-                delta = points[i, dim] - ref[dim]
-                if delta > size / 2:
-                    unfolded[i, dim] -= size
-                elif delta < -size / 2:
-                    unfolded[i, dim] += size
-
-    return unfolded
