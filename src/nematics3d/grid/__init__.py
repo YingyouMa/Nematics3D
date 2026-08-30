@@ -1,12 +1,7 @@
 """Grid, coordinate-transform, and periodic-boundary utilities."""
 
 from .coordinate import generate_coordinate_grid, generate_fixed_step_grid
-from .periodic import (
-    shift_to_box,
-    unfold_cluster,
-    unwrap_trajectory,
-    wrap_points_to_box,
-)
+from .periodic import shift_to_box, unwrap_trajectory, wrap_points_to_box
 from .plane import resolve_plane_physical_axes
 from .transform import (
     GRID_TRANSFORM_IDENTITY,
@@ -32,7 +27,6 @@ __all__ = [
     "is_grid_transform_identity",
     "resolve_plane_physical_axes",
     "shift_to_box",
-    "unfold_cluster",
     "unwrap_trajectory",
     "wrap_points_to_box",
 ]
