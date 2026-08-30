@@ -1,0 +1,50 @@
+name: Verify SmoothedLineFunc ResultBase protocol
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYVISTA_OFF_SCREEN: "true"
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Apply, inspect, test, and commit
+        shell: bash
+        run: |
+          if [ "$GITHUB_ACTOR" = "github-actions[bot]" ]; then
+            echo "Bot-triggered source commit; skip repeat mutation."
+            exit 0
+          fi
+          python -m pip install -e ".[test]"
+          echo "=== pre-refactor SmoothedLineFunc related usages ==="
+          git grep -n -E "act_create_linefunc|SmoothedLineFunc\(|calc_metrics|calc_payload_samples|calc_payload_shared" -- src tests example tutorials || true
+          python dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
+          python -m black src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py
+          python -m py_compile src/nematics3d/classes/smoothed_line.py
+          python -m pytest tests/smooth/test_smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py -q
+          python -m black --check src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py
+          echo "=== stale protocol identifiers after refactor ==="
+          if git grep -n -E "calc_metrics|calc_payload_samples|calc_payload_shared" -- src tests; then
+            echo "stale SmoothedLineFunc metadata protocol remains"
+            exit 1
+          fi
+          rm dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/nematics3d/classes/smoothed_line.py tests/smooth/test_smoothed_line_func.py tests/smooth/test_smoothed_line_func_registry.py dev/onGoing/refactor_smoothed_line_func_resultbase_once.py
+          git commit -m "Use ResultBase for SmoothedLineFunc samples"
+          git push origin HEAD:develop
