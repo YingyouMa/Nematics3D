@@ -1,0 +1,23 @@
+name: Audit residual general imports
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Find residual general imports
+        shell: bash
+        run: |
+          echo '=== direct nematics3d.general imports ==='
+          git grep -n -E '(^|[[:space:]])(from[[:space:]]+nematics3d\.general[[:space:]]+import|import[[:space:]]+nematics3d\.general)' -- ':!dev/backup/**' || true
+          echo '=== relative .general / ..general imports under src ==='
+          git grep -n -E 'from[[:space:]]+\.{1,2}general[[:space:]]+import|from[[:space:]]+\.{3,}general[[:space:]]+import' -- src || true
+          echo '=== any textual general.py references under src/tests/tutorials/example ==='
+          git grep -n -E 'nematics3d\.general|\.general[[:space:]]+import|general\.py' -- src tests tutorials example || true
