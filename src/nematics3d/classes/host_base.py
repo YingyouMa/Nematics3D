@@ -895,25 +895,25 @@ class HostBase(ClassBase):
                 logger.exception("Invalid attr")
                 logger.recovery("Automatically ignore this attr")
 
-@staticmethod
-def _helper_pop_exclusive(
-    kwargs: dict[str, Any],
-    key1: str,
-    key2: str,
-) -> tuple[bool, Any]:
-    """Pop one of two mutually exclusive keys from ``kwargs``."""
-    has1 = key1 in kwargs
-    has2 = key2 in kwargs
-    if has1 and has2:
-        raise TypeError(
-            f"Ambiguous input: both {key1!r} and {key2!r} were provided. "
-            "Please pass only one."
-        )
-    if has1:
-        return True, kwargs.pop(key1)
-    if has2:
-        return True, kwargs.pop(key2)
-    return False, None
+    @staticmethod
+    def _helper_pop_exclusive(
+        kwargs: dict[str, Any],
+        key1: str,
+        key2: str,
+    ) -> tuple[bool, Any]:
+        """Pop one of two mutually exclusive keys from ``kwargs``."""
+        has1 = key1 in kwargs
+        has2 = key2 in kwargs
+        if has1 and has2:
+            raise TypeError(
+                f"Ambiguous input: both {key1!r} and {key2!r} were provided. "
+                "Please pass only one."
+            )
+        if has1:
+            return True, kwargs.pop(key1)
+        if has2:
+            return True, kwargs.pop(key2)
+        return False, None
 
     def _helper_commit_name(self, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Consume a name/raw_name update if present."""
