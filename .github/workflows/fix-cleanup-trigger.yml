@@ -1,0 +1,38 @@
+name: Fix cleanup trigger
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Fix trigger and remove bootstrap workflow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/cleanup-smoothed-line.yml')
+          text = path.read_text()
+          old = "    if: github.actor != 'github-actions[bot]'\n"
+          assert text.count(old) == 1
+          text = text.replace(old, '')
+          old = '          git commit -m "Clean up SmoothedLine smoothing pipeline"\n'
+          new = '          git commit -m "Clean up SmoothedLine smoothing pipeline [skip ci]"\n'
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, new))
+          PY
+          rm .github/workflows/fix-cleanup-trigger.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/cleanup-smoothed-line.yml .github/workflows/fix-cleanup-trigger.yml
+          git commit -m "Fix temporary SmoothedLine cleanup trigger"
+          git push origin HEAD:develop
