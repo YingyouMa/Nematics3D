@@ -559,9 +559,8 @@ class SmoothedLine(HostBase):
     # Array-style access
     # -------------------------------
 
-    def __array__(self, dtype=None):
-        arr = self.calc_result
-        return np.asarray(arr, dtype=dtype) if dtype is not None else arr
+    def __array__(self, dtype=None, copy=None):
+        return np.asarray(self.calc_result, dtype=dtype, copy=copy)
 
     def __getitem__(self, idx):
         return self.calc_result[idx]

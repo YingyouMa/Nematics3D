@@ -217,3 +217,30 @@ def test_smoothed_line_num_out_ratio_reuses_cached_spline(monkeypatch):
         mode="interp",
     )
     np.testing.assert_allclose(line.result, fresh.result, rtol=0.0, atol=0.0)
+
+
+def test_smoothed_line_numpy_array_protocol():
+    """Support NumPy 2.x dtype/copy requests through ``__array__``."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+
+    no_copy = np.asarray(line, copy=False)
+    assert np.shares_memory(no_copy, line.calc_result)
+
+    copied = np.asarray(line, copy=True)
+    assert not np.shares_memory(copied, line.calc_result)
+    np.testing.assert_array_equal(copied, line.calc_result)
+
+    converted = np.asarray(line, dtype=np.float32)
+    assert converted.dtype == np.float32
+    np.testing.assert_allclose(converted, line.calc_result, rtol=1e-6, atol=1e-6)
+
+    with np.testing.assert_raises(ValueError):
+        np.asarray(line, dtype=np.float32, copy=False)
