@@ -6,7 +6,16 @@ import numpy as np
 from scipy.interpolate import interp1d, splev, splprep
 from scipy.signal import savgol_filter
 
-from ..datatypes import Number, UNSET, Unset, as_number, as_bool, as_points, as_str
+from ..datatypes import (
+    Number,
+    UNSET,
+    Unset,
+    as_bool,
+    as_number,
+    as_points,
+    as_readonly_array,
+    as_str,
+)
 from ..logging_decorator import logging_and_warning_decorator
 from .class_base import AttrDef, ClassBase
 from .host_base import HostBase, OptsBase
@@ -283,6 +292,11 @@ class SmoothedLine(HostBase):
     def _helper_resolve_coords(self):
         object.__setattr__(self, "calc_coords", self.raw_coords)
 
+    def _helper_set_result(self, result) -> None:
+        """Store the canonical output as a zero-copy read-only array view."""
+        result_readonly = as_readonly_array(result, dtype=None, copy=False)
+        object.__setattr__(self, "calc_result", result_readonly)
+
     @property
     def calc_num_init(self):
         coords = getattr(self, "calc_coords", None)
@@ -292,7 +306,7 @@ class SmoothedLine(HostBase):
 
     def _helper_fallback_no_smooth(self, reason: str) -> None:
         object.__setattr__(self, "calc_is_smoothed", False)
-        object.__setattr__(self, "calc_result", self.calc_coords)
+        self._helper_set_result(self.calc_coords)
         object.__setattr__(self, "entity_tck", None)
         object.__setattr__(
             self,
@@ -415,7 +429,7 @@ class SmoothedLine(HostBase):
             if is_resample_only:
                 logger.debug("Reusing cached spline for output-only resampling.")
                 result = self._helper_sample_spline_result(self.entity_tck)
-                object.__setattr__(self, "calc_result", result)
+                self._helper_set_result(result)
                 object.__setattr__(self, "calc_status", "Success")
                 return
 
@@ -480,7 +494,7 @@ class SmoothedLine(HostBase):
 
             result = self._helper_sample_spline_result(tck)
             object.__setattr__(self, "entity_tck", tck)
-            object.__setattr__(self, "calc_result", result)
+            self._helper_set_result(result)
 
             object.__setattr__(self, "calc_is_smoothed", True)
             object.__setattr__(self, "calc_status", "Success")

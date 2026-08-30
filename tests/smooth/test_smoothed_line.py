@@ -244,3 +244,81 @@ def test_smoothed_line_numpy_array_protocol():
 
     with np.testing.assert_raises(ValueError):
         np.asarray(line, dtype=np.float32, copy=False)
+
+
+def test_smoothed_line_result_is_readonly_without_extra_data_copy():
+    """Canonical successful output should be a read-only zero-copy view."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+
+    assert line.calc_result.flags.writeable is False
+    assert line.result.flags.writeable is False
+    assert np.asarray(line, copy=False).flags.writeable is False
+
+    with np.testing.assert_raises(ValueError):
+        line.result[0, 0] = 0.0
+    with np.testing.assert_raises(ValueError):
+        np.asarray(line, copy=False)[0, 0] = 0.0
+    with np.testing.assert_raises(ValueError):
+        line[0][0] = 0.0
+
+    copied = np.asarray(line, copy=True)
+    assert copied.flags.writeable is True
+    copied[0, 0] = copied[0, 0] + 1.0
+
+
+def test_smoothed_line_fallback_result_is_readonly_but_raw_coords_stay_writable():
+    """Fallback protection must not mark the canonical raw-coordinate array read-only."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy[:8],
+        window_length=5,
+        order=3,
+        min_line_length=50,
+        mode="interp",
+    )
+
+    assert line.calc_is_smoothed is False
+    assert line.calc_result.flags.writeable is False
+    assert line.raw_coords.flags.writeable is True
+    assert line.calc_coords.flags.writeable is True
+    assert np.shares_memory(line.calc_result, line.calc_coords)
+
+    original = float(line.raw_coords[0, 0])
+    line.raw_coords[0, 0] = original + 1.0
+    assert line.calc_coords[0, 0] == original + 1.0
+    assert line.calc_result[0, 0] == original + 1.0
+
+    with np.testing.assert_raises(ValueError):
+        line.calc_result[0, 0] = original
+
+
+def test_smoothed_line_resample_fast_path_keeps_result_readonly(monkeypatch):
+    """Output-only resampling should preserve the canonical read-only contract."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+
+    def _unexpected_recompute(*args, **kwargs):
+        raise AssertionError("output-only resampling unexpectedly rebuilt the spline")
+
+    monkeypatch.setattr(smoothed_line_module, "savgol_filter", _unexpected_recompute)
+    monkeypatch.setattr(smoothed_line_module, "splprep", _unexpected_recompute)
+    line.act_commit(num_out_ratio=2)
+
+    assert line.calc_result.flags.writeable is False
+    with np.testing.assert_raises(ValueError):
+        line.result[0, 0] = 0.0
