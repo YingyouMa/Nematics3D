@@ -1,0 +1,15 @@
+name: Audit active general functions
+on:
+  push:
+    branches: [develop]
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: grep
+        run: |
+          for name in get_square_each get_square select_grid_in_box mark_points_membership find_nearest_point closest_point_on_polyline; do
+            echo "=== $name ==="
+            git grep -n "$name" -- ':!src/nematics3d/general.py' ':!dev/backup/**' ':!.github/workflows/**' || true
+          done
