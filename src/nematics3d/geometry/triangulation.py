@@ -113,6 +113,7 @@ def triangulate_surface_points(points: np.ndarray) -> "pv.PolyData":
     pyvista.PolyData
         Triangulated surface whose vertices are exactly ``points``.
     """
+    # Defer the optional heavy visualization dependency until mesh construction.
     import pyvista as pv
 
     points = as_points(points, name="points", d=3, min_num=4)

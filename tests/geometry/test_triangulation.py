@@ -78,3 +78,17 @@ def test_triangulate_surface_points_centroid_collision():
 
     with pytest.raises(ValueError, match="centroid"):
         triangulate_surface_points(points)
+
+
+def test_triangulate_surface_points_degenerate_projection():
+    points = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0],
+        ]
+    )
+
+    with pytest.raises(ValueError, match="ConvexHull failed"):
+        triangulate_surface_points(points)
