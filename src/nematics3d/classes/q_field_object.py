@@ -1218,7 +1218,10 @@ class QFieldObject(ClassBase):
             color_map = blue_red_in_white_bg()
             color_map_length = np.shape(color_map)[0] - 1
             lines_colors = color_map[
-                (sample_van_der_corput(len(lines_plot)) * color_map_length).astype(int)
+                (
+                    sample_van_der_corput(len(lines_plot), is_include_one=True)
+                    * color_map_length
+                ).astype(int)
             ]
         else:
             lines_colors = [opts_line.color for line in lines_plot]

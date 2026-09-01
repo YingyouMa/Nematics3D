@@ -2,14 +2,17 @@
 
 import numpy as np
 
-from ...datatypes import as_number
+from ...datatypes import as_bool, as_number
 
 
-def sample_van_der_corput(num: int) -> np.ndarray:
-    """Return the first ``num`` points of the base-2 van der Corput sequence.
+def sample_van_der_corput(num: int, *, is_include_one: bool = False) -> np.ndarray:
+    """Return ``num`` points in base-2 van der Corput order.
 
-    The sequence starts as ``0, 1/2, 1/4, 3/4, 1/8, 5/8, ...`` and lies in
-    the half-open unit interval ``[0, 1)``.
+    By default, the standard sequence starts as
+    ``0, 1/2, 1/4, 3/4, 1/8, 5/8, ...`` and lies in the half-open unit
+    interval ``[0, 1)``. If ``is_include_one`` is True, the right endpoint is
+    inserted after zero, producing
+    ``0, 1, 1/2, 1/4, 3/4, 1/8, 5/8, ...`` on the closed interval ``[0, 1]``.
     """
     num = as_number(
         num,
@@ -17,6 +20,7 @@ def sample_van_der_corput(num: int) -> np.ndarray:
         is_integer=True,
         value_range=(0, np.inf),
     )
+    is_include_one = as_bool(is_include_one, name="is_include_one")
 
     result = np.empty(num, dtype=float)
     if num == 0:
@@ -28,9 +32,11 @@ def sample_van_der_corput(num: int) -> np.ndarray:
     while start < num:
         stop = min(2 * start, num)
         indices = np.arange(start, stop)
-        result[start:stop] = (
-            0.5 * result[indices >> 1] + 0.5 * (indices & 1)
-        )
+        result[start:stop] = 0.5 * result[indices >> 1] + 0.5 * (indices & 1)
         start = stop
+
+    if is_include_one and num > 1:
+        result[2:] = result[1:-1]
+        result[1] = 1.0
 
     return result
