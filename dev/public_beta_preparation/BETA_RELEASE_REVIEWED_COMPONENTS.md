@@ -776,6 +776,35 @@ Summary of changes and evidence:
   Their repository dependencies `as_bool()`, `as_points()`, `as_tensor()`, and
   `as_vector()` are separately confirmed.
 
+### `nematics3d.geometry.triangulate_surface_points`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public surface-triangulation function |
+| Source | [`src/nematics3d/geometry/triangulation.py`](../../src/nematics3d/geometry/triangulation.py) |
+| Tests | [`tests/geometry/test_triangulation.py`](../../tests/geometry/test_triangulation.py) |
+| Tutorial | [`tutorials/geometry/triangulation/triangulate_surface_points.ipynb`](../../tutorials/geometry/triangulation/triangulate_surface_points.ipynb) |
+| Review scope | Centroid-based radial projection, spherical convex-hull connectivity, exact input-vertex preservation, triangular PyVista face construction, translation invariance, minimum point validation, centroid collision, degenerate projected point sets, public export, active `QSurface` caller, documentation, and known geometric limitations |
+| Validation | `python -m pytest tests/geometry/test_triangulation.py -q` (5 passed); `black src/nematics3d/geometry/triangulation.py tests/geometry/test_triangulation.py`; `black --check src/nematics3d/geometry/triangulation.py tests/geometry/test_triangulation.py`; in-memory syntax compile of the implementation and focused test; complete execution of the tutorial with `jupyter nbconvert --to notebook --execute tutorials/geometry/triangulation/triangulate_surface_points.ipynb --stdout`; `git diff --check` |
+| Reviewed commit | `f8638a98f3c03cbe3bd54fb32cc593d55ed5ff00` |
+| Reviewed date | 2026-09-01 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Reconstruction assumes one closed surface that is approximately star-shaped with respect to the point-cloud centroid. Strong concavity, tori, disconnected surfaces, centroid-colliding samples, and other degenerate projected point sets are not repaired automatically. The latter two cases raise explicit `ValueError` exceptions. |
+
+Summary of changes and evidence:
+
+- Moved the implementation into the dedicated geometry triangulation module and
+  retained its public geometry and top-level API exports.
+- Documented the spherical-projection algorithm, exact vertex-preservation
+  contract, star-shape assumption, and unsupported degenerate cases.
+- Confirmed tetrahedral and sampled-sphere reconstruction, triangle counts,
+  exact input vertices, translation-invariant connectivity, centroid-collision
+  diagnostics, and conversion of Qhull failures to an actionable `ValueError`.
+- Added and completely executed a focused tutorial covering the algorithm,
+  inputs, output mesh, visualization, assumptions, and limitations.
+- Kept PyVista as a deferred local import so this heavier optional visualization
+  dependency is loaded only when a mesh is constructed.
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
