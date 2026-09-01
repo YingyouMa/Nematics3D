@@ -10,6 +10,10 @@ from ..logging_decorator import logging_and_warning_decorator
 # Director field (unit vector), shape: (Nx, Ny, Nz, 3)
 # Subtype of GeneralField
 # It may relax to shape (..., 3)
+#
+# `nField` intentionally does not follow the usual PEP 8 CapWords convention
+# for type aliases. The short scientific notation is retained to keep the name
+# compact and visually aligned with the existing `SField` alias.
 nField = np.ndarray
 
 
