@@ -7,77 +7,27 @@ import numpy as np
 
 
 def blue_red_in_white_bg() -> np.ndarray:
-    """Return L2-normalized RGB colors from blue to red for a white background.
-
-    The table contains 511 colors: 256 samples from blue to green followed by
-    255 samples from green to red, with the shared green endpoint included only
-    once. Each RGB vector is normalized to unit Euclidean norm so mixed colors
-    remain visually strong on a white background.
-    """
+    """Return L2-normalized RGB colors from blue to red for a white background."""
     t = np.linspace(0.0, 1.0, 256)
-
-    blue_to_green = np.column_stack(
-        (
-            np.zeros_like(t),
-            t,
-            1.0 - t,
-        )
-    )
-    green_to_red = np.column_stack(
-        (
-            t[1:],
-            1.0 - t[1:],
-            np.zeros_like(t[1:]),
-        )
-    )
-
+    blue_to_green = np.column_stack((np.zeros_like(t), t, 1.0 - t))
+    green_to_red = np.column_stack((t[1:], 1.0 - t[1:], np.zeros_like(t[1:])))
     colors = np.vstack((blue_to_green, green_to_red))
     colors /= np.linalg.norm(colors, axis=1, keepdims=True)
-
     return colors
 
 
-def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
-    """Map directors to RGB with the Stage-I Pareto solution at J_norm = 0.34.
-
-    This is the current comparison candidate for the RP2 colormap project. It
-    uses the same Boy-surface polynomial as :func:`nematics3d.field.n_color_immerse`
-    but replaces the empirical Nematics3D affine color transform with the
-    numerically optimized affine map found on the J_norm = 0.34 Pareto point.
-
-    The linear part ``A`` is the Pareto solution. The offset ``b`` below is the
-    gamut-corrected offset for that fixed ``A``: continuous sphere optimization
-    showed that the previously rounded offset allowed minima of about -2.6e-4,
-    which violates the strict RGB validator even though the sampled optimization
-    constraints were nearly satisfied. The corrected offset places each channel
-    just inside the lower gamut boundary without changing ``J_norm``.
-
-    Parameters
-    ----------
-    n : array_like, shape (..., 3)
-        Director vectors. Nonzero vectors are normalized internally.
-
-    Returns
-    -------
-    numpy.ndarray, shape (..., 3)
-        RGB colors.
-    """
+def _boy_polynomial(n: np.ndarray) -> np.ndarray:
+    """Return the original Nematics3D Boy polynomial before color transform."""
     n = np.asarray(n, dtype=float)
     if n.shape[-1] != 3:
         raise ValueError("n must have shape (..., 3)")
-
     norm = np.linalg.norm(n, axis=-1, keepdims=True)
     if np.any(norm == 0.0):
         raise ValueError("director vectors must be nonzero")
     n = n / norm
 
-    x = n[..., 0]
-    y = n[..., 1]
-    z = n[..., 2]
-    x2 = x * x
-    y2 = y * y
-    z2 = z * z
-
+    x, y, z = n[..., 0], n[..., 1], n[..., 2]
+    x2, y2, z2 = x * x, y * y, z * z
     p = np.empty(n.shape, dtype=float)
     p[..., 0] = 0.5 * (
         (2.0 * x2 - y2 - z2)
@@ -91,7 +41,20 @@ def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
     p[..., 2] = (1.0 / 8.0) * (x + y + z) * (
         (x + y + z) ** 3 + 4.0 * (y - x) * (z - y) * (x - z)
     )
+    return p
 
+
+def _apply_boy_affine(n: np.ndarray, A: np.ndarray, b: np.ndarray) -> np.ndarray:
+    p = _boy_polynomial(n)
+    result = np.einsum("...i,ji->...j", p, A) + b
+    tol = 1e-10
+    if np.any(result < -tol) or np.any(result > 1.0 + tol):
+        raise ValueError("Director colormap produced RGB values outside [0, 1]")
+    return np.clip(result, 0.0, 1.0)
+
+
+def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
+    """Map directors to RGB with the previous sRGB Pareto solution at J_norm=0.34."""
     A = np.array(
         [
             [0.52868237, 0.05496927, 0.19053080],
@@ -100,22 +63,36 @@ def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
         ],
         dtype=float,
     )
-
-    # For this fixed A, continuous optimization of each channel over S^2 gives
-    # min(A_j p) approximately
-    # (-0.3935070420, -0.3936664308, -0.3934678990).
-    # Add a 1e-7 interior margin so strict [0, 1] validation remains robust to
-    # floating-point noise.
     b = np.array([0.39350715, 0.39366654, 0.39346801], dtype=float)
+    return _apply_boy_affine(n, A, b)
 
-    result = np.einsum("...i,ji->...j", p, A) + b
 
-    # This is only a roundoff guard, not the mechanism used to enforce gamut.
-    # Values materially outside [0, 1] indicate that the map itself is invalid.
-    tol = 1e-10
-    if np.any(result < -tol) or np.any(result > 1.0 + tol):
-        raise ValueError("Pareto director colormap produced RGB values outside [0, 1]")
-    return np.clip(result, 0.0, 1.0)
+def director_color_pareto_oklab_043(n: np.ndarray) -> np.ndarray:
+    """Map directors to RGB with the selected OKLab Pareto knee at J_loc≈0.43.
+
+    The affine map itself remains in encoded sRGB and therefore produces normal
+    display RGB values.  The optimization used OKLab for both the axis-color
+    distance and the local tangent-metric uniformity objective, while retaining
+    the hard global sRGB gamut constraint.
+
+    The selected point is the maximum-distance knee of the normalized Pareto
+    curve over J_loc in [0.30, 0.76].  Before export, the red and blue affine
+    rows were contracted by less than 4.4e-5 and shifted by about 1e-5 so the
+    continuous channel extrema lie strictly inside [0, 1].
+    """
+    A = np.array(
+        [
+            [0.5015275525743265, 0.0814208604228778, 0.4289041134674454],
+            [-0.2426021621724047, 0.3331598986797062, 0.2349957727825471],
+            [-0.2761140886939694, -0.3089204069097675, 0.4083459067954693],
+        ],
+        dtype=float,
+    )
+    b = np.array(
+        [0.3805938025338775, 0.4480306832558079, 0.4044714907877873],
+        dtype=float,
+    )
+    return _apply_boy_affine(n, A, b)
 
 
 def plot_director_color_sphere(
@@ -129,47 +106,7 @@ def plot_director_color_sphere(
     is_off_screen: bool = False,
     figure_size: tuple[int, int] = (1800, 1800),
 ):
-    """Plot a director-color sphere and x/y/z arrows for a colormap function.
-
-    The sphere position itself is the director direction. Each surface point
-    ``n`` is colored with ``color_func(n)``. The three positive Cartesian
-    arrows are colored by the same function evaluated at ``e_x``, ``e_y`` and
-    ``e_z``. This makes different director-to-RGB maps directly comparable.
-
-    Parameters
-    ----------
-    color_func : callable
-        Function accepting an array of directors with shape ``(..., 3)`` and
-        returning RGB values with matching shape ``(..., 3)``. Examples are
-        ``nematics3d.field.n_color_immerse`` (the original Nematics3D map) and
-        :func:`director_color_pareto_034` (the current Pareto comparison map).
-    figure : PlotFigure, optional
-        Existing figure to draw into. If omitted, a new ``PlotFigure`` is
-        created.
-    radius : float, optional
-        Radius of the color sphere.
-    theta_resolution, phi_resolution : int, optional
-        PyVista sphere resolutions.
-    axis_length : float, optional
-        Length of the x/y/z arrows.
-    is_off_screen : bool, optional
-        Used only when this function creates the figure.
-    figure_size : tuple[int, int], optional
-        Figure size used only when this function creates the figure.
-
-    Returns
-    -------
-    dict
-        Dictionary with ``figure``, ``surface`` and ``axes`` entries.
-
-    Examples
-    --------
-    >>> from nematics3d.field import n_color_immerse
-    >>> scene_original = plot_director_color_sphere(n_color_immerse)
-    >>> scene_pareto = plot_director_color_sphere(director_color_pareto_034)
-    """
-    # Local imports keep the lightweight color utilities usable without
-    # importing PyVista and the visualization stack at module import time.
+    """Plot a director-color sphere and x/y/z arrows for a colormap function."""
     import pyvista as pv
 
     from .plot_figure import PlotFigure
@@ -247,8 +184,4 @@ def plot_director_color_sphere(
     figure.pl.camera.zoom(0.85)
     figure.pl.render()
 
-    return {
-        "figure": figure,
-        "surface": surface,
-        "axes": axes,
-    }
+    return {"figure": figure, "surface": surface, "axes": axes}
