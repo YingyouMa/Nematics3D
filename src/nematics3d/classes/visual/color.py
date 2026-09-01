@@ -40,10 +40,17 @@ def blue_red_in_white_bg() -> np.ndarray:
 def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
     """Map directors to RGB with the Stage-I Pareto solution at J_norm = 0.34.
 
-    This is the current comparison candidate for the RP2 colormap project.  It
+    This is the current comparison candidate for the RP2 colormap project. It
     uses the same Boy-surface polynomial as :func:`nematics3d.field.n_color_immerse`
     but replaces the empirical Nematics3D affine color transform with the
     numerically optimized affine map found on the J_norm = 0.34 Pareto point.
+
+    The linear part ``A`` is the Pareto solution. The offset ``b`` below is the
+    gamut-corrected offset for that fixed ``A``: continuous sphere optimization
+    showed that the previously rounded offset allowed minima of about -2.6e-4,
+    which violates the strict RGB validator even though the sampled optimization
+    constraints were nearly satisfied. The corrected offset places each channel
+    just inside the lower gamut boundary without changing ``J_norm``.
 
     Parameters
     ----------
@@ -93,9 +100,22 @@ def director_color_pareto_034(n: np.ndarray) -> np.ndarray:
         ],
         dtype=float,
     )
-    b = np.array([0.39328370, 0.39340467, 0.39325923], dtype=float)
 
-    return np.einsum("...i,ji->...j", p, A) + b
+    # For this fixed A, continuous optimization of each channel over S^2 gives
+    # min(A_j p) approximately
+    # (-0.3935070420, -0.3936664308, -0.3934678990).
+    # Add a 1e-7 interior margin so strict [0, 1] validation remains robust to
+    # floating-point noise.
+    b = np.array([0.39350715, 0.39366654, 0.39346801], dtype=float)
+
+    result = np.einsum("...i,ji->...j", p, A) + b
+
+    # This is only a roundoff guard, not the mechanism used to enforce gamut.
+    # Values materially outside [0, 1] indicate that the map itself is invalid.
+    tol = 1e-10
+    if np.any(result < -tol) or np.any(result > 1.0 + tol):
+        raise ValueError("Pareto director colormap produced RGB values outside [0, 1]")
+    return np.clip(result, 0.0, 1.0)
 
 
 def plot_director_color_sphere(
@@ -111,20 +131,20 @@ def plot_director_color_sphere(
 ):
     """Plot a director-color sphere and x/y/z arrows for a colormap function.
 
-    The sphere position itself is the director direction.  Each surface point
-    ``n`` is colored with ``color_func(n)``.  The three positive Cartesian
+    The sphere position itself is the director direction. Each surface point
+    ``n`` is colored with ``color_func(n)``. The three positive Cartesian
     arrows are colored by the same function evaluated at ``e_x``, ``e_y`` and
-    ``e_z``.  This makes different director-to-RGB maps directly comparable.
+    ``e_z``. This makes different director-to-RGB maps directly comparable.
 
     Parameters
     ----------
     color_func : callable
         Function accepting an array of directors with shape ``(..., 3)`` and
-        returning RGB values with matching shape ``(..., 3)``.  Examples are
+        returning RGB values with matching shape ``(..., 3)``. Examples are
         ``nematics3d.field.n_color_immerse`` (the original Nematics3D map) and
         :func:`director_color_pareto_034` (the current Pareto comparison map).
     figure : PlotFigure, optional
-        Existing figure to draw into.  If omitted, a new ``PlotFigure`` is
+        Existing figure to draw into. If omitted, a new ``PlotFigure`` is
         created.
     radius : float, optional
         Radius of the color sphere.
