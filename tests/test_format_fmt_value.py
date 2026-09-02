@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.format import fmt_value
+from nematics3d.general.format import fmt_value
 
 
 def test_fmt_value_formats_real_scalars_with_fixed_decimals():
