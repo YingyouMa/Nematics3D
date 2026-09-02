@@ -9,8 +9,8 @@ import numpy as np
 
 from nematics3d.datatypes import as_grid_shape, as_qfield9
 
-from ..npy_array_payload import NpyArrayPayload
-from ..result_base import ResultBase
+from ...core.npy_array_payload import NpyArrayPayload
+from ...core.result_base import ResultBase
 from ...grid import (
     as_grid_offset,
     as_grid_transform,

@@ -20,9 +20,9 @@ from nematics3d.grid import generate_fixed_step_grid, resolve_plane_physical_axe
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
-from .class_base import AttrDef
-from .host_base import HostBase, OptsBase
-from .opts import cover_value
+from ..core.class_base import AttrDef
+from ..core.host_base import HostBase, OptsBase
+from ..core.opts import cover_value
 from ..general import select_grid_in_box
 
 

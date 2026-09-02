@@ -17,11 +17,11 @@ from ..datatypes import (
     as_str,
 )
 from ..logging_decorator import logging_and_warning_decorator
-from .class_base import AttrDef, ClassBase
-from .host_base import HostBase, OptsBase
-from .opts import cover_value, diff_dict_values
-from .registry_base import RegistryBase
-from .result_base import ResultBase
+from ..core.class_base import AttrDef, ClassBase
+from ..core.host_base import HostBase, OptsBase
+from ..core.opts import cover_value, diff_dict_values
+from ..core.registry_base import RegistryBase
+from ..core.result_base import ResultBase
 
 # fmt: off
 @dataclass(slots=True, repr=False)

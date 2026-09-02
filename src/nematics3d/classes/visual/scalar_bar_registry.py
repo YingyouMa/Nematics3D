@@ -5,7 +5,7 @@ from __future__ import annotations
 import pyvista as pv
 from pyvista.plotting.tools import parse_font_family
 
-from ..registry_base import RegistryBase
+from ...core.registry_base import RegistryBase
 from .scalar_bar import ScalarBar
 
 

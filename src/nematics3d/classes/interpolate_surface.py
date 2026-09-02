@@ -2,9 +2,9 @@
 
 from typing import Any, Mapping
 
-from .class_base import AttrDef, ClassBase
+from ..core.class_base import AttrDef, ClassBase
 from .grid_field import GridInterpolator
-from .surface_sampling import SurfaceSampling, OptsSurfaceSampling
+from ..sample import OptsSurfaceSampling, SurfaceSampling
 
 
 class InterpolateSurface(ClassBase):

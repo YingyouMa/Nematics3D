@@ -24,10 +24,10 @@ from nematics3d.grid import (
     as_grid_transform,
 )
 
-from .class_base import AttrDef, ClassBase
+from ..core.class_base import AttrDef, ClassBase
 from .bounds import as_bounds
 from .grid_field.input_grid_field import InputGridField
-from .registry_base import RegistryBase
+from ..core.registry_base import RegistryBase
 
 
 def _as_contour_level(value, *, name: str) -> float:

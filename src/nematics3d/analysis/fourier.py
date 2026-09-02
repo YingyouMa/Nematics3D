@@ -9,7 +9,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from nematics3d.classes.result_base import ResultBase
+from nematics3d.core.result_base import ResultBase
 from nematics3d.datatypes import as_number
 from nematics3d.datatypes import as_real_lattice_field
 

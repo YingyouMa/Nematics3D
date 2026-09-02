@@ -20,8 +20,8 @@ from nematics3d.datatypes import (
     as_str,
 )
 
-from ..class_base import AttrDef
-from ..host_base import HostBase, OptsBase
+from ...core.class_base import AttrDef
+from ...core.host_base import HostBase, OptsBase
 
 
 def _as_optional_str(value, desc, *, pool=None):

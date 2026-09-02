@@ -17,8 +17,8 @@ from nematics3d.datatypes import (
 )
 
 from ..bounds import as_bounds
-from ..class_base import AttrDef, ClassBase
-from ..registry_base import RegistryBase
+from ...core.class_base import AttrDef, ClassBase
+from ...core.registry_base import RegistryBase
 from ...grid import (
     VALIDITY_FIELD_NAME,
     apply_linear_transform,
@@ -27,7 +27,7 @@ from ...grid import (
     generate_coordinate_grid,
     is_grid_transform_identity,
 )
-from ..npy_array_payload import NpyArrayPayload
+from ...core.npy_array_payload import NpyArrayPayload
 from ...geometry import get_box_corners
 from .grid_field_dataset_derivatives import (
     GridFieldDatasetDerivativeMixin,

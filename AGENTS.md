@@ -39,3 +39,23 @@ python -c "from pathlib import Path; compile(Path('path/to/file.py').read_text(e
 
 Use the project conda environment for the command when needed. Only clean or
 delete `__pycache__` after confirming it is safe and relevant to the task.
+
+## Core object-model paths
+
+The canonical domain-independent object-model modules now live under:
+
+`src/nematics3d/core/`
+
+In particular, read the current subclassing contracts from:
+
+- `src/nematics3d/core/class_base.py`
+- `src/nematics3d/core/host_base.py`
+
+The corresponding modules under `src/nematics3d/classes/` are temporary
+compatibility imports and are not the authoritative implementations.
+
+## Sampling paths
+
+Sampling-domain objects live under `src/nematics3d/sample/`. Import
+`SurfaceSampling` and `OptsSurfaceSampling` from `nematics3d.sample`;
+`nematics3d.classes.surface_sampling` is only a temporary compatibility path.

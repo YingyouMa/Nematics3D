@@ -14,7 +14,7 @@ from nematics3d import q_diagonalize  # noqa: E402
 from nematics3d.analysis.q_diagonalization._backend import (  # noqa: E402
     is_c_backend_available,
 )
-from nematics3d.classes.result_base import ResultBase  # noqa: E402
+from nematics3d.core.result_base import ResultBase  # noqa: E402
 
 
 def make_uniaxial_q_tensor(director, scalar_order):

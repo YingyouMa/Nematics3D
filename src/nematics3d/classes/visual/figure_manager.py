@@ -1,8 +1,8 @@
 from nematics3d.datatypes import as_bool, as_str
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
-from ..class_base import AttrDef
-from ..registry_base import RegistryBase
+from ...core.class_base import AttrDef
+from ...core.registry_base import RegistryBase
 
 
 # FigureManager developer conventions:

@@ -8,7 +8,7 @@ from typing import ClassVar, Union
 import numexpr as ne
 import numpy as np
 
-from ...classes.result_base import ResultBase
+from ...core.result_base import ResultBase
 from ...datatypes import QField5, QField9, as_bool, as_qfield5, as_qfield9
 from ...logging_decorator import logging_and_warning_decorator
 from ._backend import (

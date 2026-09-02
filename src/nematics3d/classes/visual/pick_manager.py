@@ -13,7 +13,7 @@ from nematics3d.datatypes import (
     ColorRGB,
     as_ColorRGB,
 )
-from ..opts import merge_opts_all
+from ...core.opts import merge_opts_all
 from .qt.panel_base import make_labeled_slider_row, make_RGB_slider
 
 

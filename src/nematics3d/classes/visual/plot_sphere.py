@@ -8,8 +8,8 @@ import numpy as np
 import pyvista as pv
 
 
-from ..class_base import AttrDef
-from ..host_base import HostBase
+from ...core.class_base import AttrDef
+from ...core.host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_sphere import InteractSphere

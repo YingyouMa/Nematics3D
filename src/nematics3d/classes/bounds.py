@@ -24,8 +24,8 @@ from nematics3d.datatypes import (
 )
 from nematics3d.grid import apply_linear_transform
 from nematics3d.logging_decorator import logging_and_warning_decorator
-from .class_base import AttrDef
-from .host_base import HostBase, OptsBase
+from ..core.class_base import AttrDef
+from ..core.host_base import HostBase, OptsBase
 
 BoundsData: TypeAlias = (
     "Bounds | Vect(6) | Tensor((4, 3)) | Tensor((8, 3)) | pv.PolyData"

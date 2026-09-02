@@ -5,15 +5,15 @@ from .grid import *
 from .principal_plane import *
 from .analysis.disclination import *
 from .quick import *
+from .core import *
 
 # from .elastic import *
 # from .coarse import *
-from .classes.opts import *
 from .classes.smoothed_line import *
 from .classes.disclination_line import DisclinationLine
 from .classes.q_field_object import QFieldObject
 from .classes.contour_surface import *
-from .classes.surface_sampling import *
+from .sample import *
 from .classes.visual.plot_tube import *
 from .classes.visual.plot_rod import *
 from .classes.visual.plot_figure import *

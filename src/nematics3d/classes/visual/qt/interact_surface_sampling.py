@@ -2,7 +2,7 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
-from ...surface_sampling import (
+from ....sample import (
     SurfaceSampling,
     _helper_resolve_spacing_for_target_count,
 )

@@ -14,8 +14,8 @@ from nematics3d.general import closest_point_on_polyline, fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
-from ..class_base import AttrDef
-from ..host_base import HostBase
+from ...core.class_base import AttrDef
+from ...core.host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_tube import InteractTube

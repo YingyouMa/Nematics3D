@@ -13,7 +13,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.class_base import ClassBase
+from nematics3d.core.class_base import AttrDef, ClassBase
 from nematics3d.datatypes import as_str
 
 
@@ -40,11 +40,11 @@ class CountingNameBase(ClassBase):
     call_count = 0
 
     __attr_defs__ = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_name": {
-            **dict(ClassBase.__attr_defs__["raw_name"]),
-            "validator": _counting_name_validator,
-        },
+        "raw_name": AttrDef(
+            doc="The underlying string identifier for this instance.",
+            kind="raw",
+            validator=_counting_name_validator,
+        ),
     }
 
     def __init__(self, name="counter"):
@@ -56,11 +56,11 @@ class CountingFieldBase(ClassBase):
     call_count = 0
 
     __attr_defs__ = {
-        **dict(ClassBase.__attr_defs__),
-        "raw_label": {
-            "doc": "The label string for this instance.",
-            "validator": _counting_label_validator,
-        },
+        "raw_label": AttrDef(
+            doc="The label string for this instance.",
+            kind="raw",
+            validator=_counting_label_validator,
+        ),
     }
 
     def __init__(self, name="field", label="label"):
@@ -69,13 +69,12 @@ class CountingFieldBase(ClassBase):
 
 
 class TestClassBase(unittest.TestCase):
-    def test_act_add_attr_stores_extra_value_in_impl_attrs(self):
+    def test_act_add_attr_stores_extra_value_in_impl_extra(self):
         obj = DummyBase()
         obj.act_add_attr("tag", "Original tag doc.", default=1)
 
         self.assertEqual(obj.tag, 1)
-        self.assertEqual(obj.impl_attrs["tag"]["kind"], "extra")
-        self.assertEqual(obj.impl_attrs["tag"]["value"], 1)
+        self.assertEqual(obj.impl_extra["tag"].value, 1)
 
         obj.act_add_attr(
             "tag",
@@ -85,14 +84,13 @@ class TestClassBase(unittest.TestCase):
         )
 
         self.assertEqual(obj.tag, 2)
-        self.assertEqual(obj.impl_attrs["tag"]["doc"], "Updated tag doc.")
-        self.assertEqual(obj.impl_attrs["tag"]["kind"], "extra")
-        self.assertEqual(obj.impl_attrs["tag"]["value"], 2)
+        self.assertEqual(obj.impl_extra["tag"].doc, "Updated tag doc.")
+        self.assertEqual(obj.impl_extra["tag"].value, 2)
 
     def test_act_add_attr_cannot_overwrite_managed_attr(self):
         obj = DummyBase()
 
-        with self.assertRaisesRegex(AttributeError, "managed attribute"):
+        with self.assertRaisesRegex(AttributeError, "statically declared field"):
             obj.act_add_attr("owner", "Should fail.", default=1, is_overwrite=True)
 
     def test_name_validator_runs_once_per_name_assignment_path(self):

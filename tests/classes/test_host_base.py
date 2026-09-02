@@ -15,7 +15,8 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.host_base import HostBase, OptsBase
+from nematics3d.core.class_base import AttrDef
+from nematics3d.core.host_base import HostBase, OptsBase
 
 
 @dataclass(slots=True, repr=False)
@@ -42,16 +43,16 @@ class DemoOpts(OptsBase):
 
 class DemoHost(HostBase):
     __attr_defs__ = {
-        **dict(HostBase.__attr_defs__),
-        "raw_level": {
-            "doc": "The level of the demo host.",
-            "validator": lambda value, desc: int(value),
-        },
-        "theme": {
-            "doc": "Writable display theme.",
-            "kind": "property",
-            "is_public_settable": True,
-        },
+        "raw_level": AttrDef(
+            doc="The level of the demo host.",
+            kind="raw",
+            validator=lambda value, desc: int(value),
+        ),
+        "theme": AttrDef(
+            doc="Writable display theme.",
+            kind="property",
+            is_public_settable=True,
+        ),
     }
 
     __slots__ = ("raw_level", "_theme")

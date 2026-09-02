@@ -4,10 +4,10 @@ from pyvistaqt import BackgroundPlotter
 from copy import deepcopy
 from typing import Any, Mapping
 
-from .class_base import AttrDef
+from ..core.class_base import AttrDef
 from .interpolate_surface import InterpolateSurface
-from .opts import merge_opts_all
-from .surface_sampling import SurfaceSampling, OptsSurfaceSampling
+from ..core.opts import merge_opts_all
+from ..sample import OptsSurfaceSampling, SurfaceSampling
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere

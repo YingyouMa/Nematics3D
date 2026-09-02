@@ -150,11 +150,11 @@ from .plane_grid import OptsPlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
 from .grid_field import FieldData, GridFieldDataset, GridInterpolator, InputGridField
-from .opts import merge_opts_all, cover_value
+from ..core.opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth
-from .registry_base import RegistryBase
+from ..core.registry_base import RegistryBase
 from .disclination_line import DisclinationLine
-from .class_base import AttrDef, ClassBase
+from ..core.class_base import AttrDef, ClassBase
 
 
 @dataclass(slots=True)

@@ -6,10 +6,10 @@ from typing import Any, Mapping
 import numpy as np
 from pyvistaqt import BackgroundPlotter
 
-from .class_base import AttrDef
+from ..core.class_base import AttrDef
 from .grid_field import GridInterpolator
 from .interpolate_plane import InterpolatePlane
-from .opts import merge_opts_all
+from ..core.opts import merge_opts_all
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure

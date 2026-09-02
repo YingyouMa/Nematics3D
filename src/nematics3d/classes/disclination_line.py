@@ -35,15 +35,15 @@ from ..grid import (
 )
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
-from .opts import merge_opts_all, cover_value
+from ..core.opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmooth, SmoothedLine
 from ..format import is_given_str
 from ..geometry import find_plane_normal
-from .class_base import AttrDef, ClassBase
-from .host_base import OptsBase, HostBase
+from ..core.class_base import AttrDef, ClassBase
+from ..core.host_base import OptsBase, HostBase
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from .q_plane import OmegaResult, QPlanePolar
-from .registry_base import RegistryBase
+from ..core.registry_base import RegistryBase
 from .visual.qt.interact_disclination_line import InteractDisclinationLine
 
 

@@ -9,7 +9,7 @@ from scipy.interpolate import RegularGridInterpolator
 
 from nematics3d.datatypes import as_points
 from nematics3d.grid import VALIDITY_FIELD_NAME, apply_linear_transform
-from ..class_base import AttrDef, ClassBase
+from ...core.class_base import AttrDef, ClassBase
 from ...logging_decorator import logging_and_warning_decorator
 
 # A trilinear blend of a 0/1 mask equals 1.0 only when all eight supporting

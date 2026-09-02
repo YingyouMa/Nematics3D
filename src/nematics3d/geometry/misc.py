@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
-from ..classes.result_base import ResultBase
+from ..core.result_base import ResultBase
 from ..datatypes import Tensor, Vect, as_axes, as_dimension_info, as_points, as_vector
 
 

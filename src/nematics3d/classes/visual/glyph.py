@@ -28,8 +28,8 @@ from nematics3d.general import find_nearest_point, fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData, as_bounds
-from ..class_base import AttrDef
-from ..host_base import OptsBase, HostBase
+from ...core.class_base import AttrDef
+from ...core.host_base import OptsBase, HostBase
 from .plot_figure import FigureData, as_plotfigure
 from .scalar_bar import ScalarBar
 

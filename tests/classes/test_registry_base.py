@@ -13,8 +13,8 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.class_base import ClassBase
-from nematics3d.classes.registry_base import RegistryBase
+from nematics3d.core.class_base import ClassBase
+from nematics3d.core.registry_base import RegistryBase
 
 
 class DemoRegistered(ClassBase):

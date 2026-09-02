@@ -15,8 +15,8 @@ from nematics3d.datatypes import (
 )
 from ...grid import as_grid_offset, as_grid_transform
 
-from ..npy_array_payload import NpyArrayPayload
-from ..result_base import ResultBase
+from ...core.npy_array_payload import NpyArrayPayload
+from ...core.result_base import ResultBase
 
 if TYPE_CHECKING:
     from .grid_field_dataset import GridFieldDataset

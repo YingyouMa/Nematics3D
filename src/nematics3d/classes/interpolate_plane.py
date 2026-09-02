@@ -4,7 +4,7 @@ from typing import Any, Mapping
 import numpy as np
 
 
-from .class_base import AttrDef, ClassBase
+from ..core.class_base import AttrDef, ClassBase
 from .grid_field import GridInterpolator
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
@@ -55,8 +55,7 @@ class InterpolatePlane(ClassBase):
     __slots__ = tuple(
         name
         for name, spec in __attr_defs__.items()
-        if spec.kind not in ("relation", "property")
-        and name not in ClassBase.__slots__
+        if spec.kind not in ("relation", "property") and name not in ClassBase.__slots__
     )
 
     # ==================== OVERRIDE ====================

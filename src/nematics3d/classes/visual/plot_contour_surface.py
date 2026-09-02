@@ -11,9 +11,9 @@ import pyvista as pv
 
 from ...datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, as_str
 from ..bounds import BoundsData
-from ..class_base import AttrDef
+from ...core.class_base import AttrDef
 from ..contour_surface import ContourSurface
-from ..host_base import HostBase
+from ...core.host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_contour_surface import InteractContourSurface

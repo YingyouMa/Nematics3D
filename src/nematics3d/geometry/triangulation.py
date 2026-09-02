@@ -6,7 +6,7 @@ from typing import ClassVar
 import numpy as np
 from scipy.spatial import ConvexHull, QhullError
 
-from ..classes.result_base import ResultBase
+from ..core.result_base import ResultBase
 from ..datatypes import as_points
 
 

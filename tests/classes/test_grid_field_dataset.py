@@ -22,7 +22,7 @@ from nematics3d.classes.grid_field import (
     InputGridField,
     SpatialDerivativeInfo,
 )
-from nematics3d.classes.npy_array_payload import NpyArrayPayload
+from nematics3d.core.npy_array_payload import NpyArrayPayload
 from nematics3d.datatypes import (
     UNSET,
     as_number,

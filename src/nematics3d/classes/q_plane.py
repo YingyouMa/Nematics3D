@@ -22,13 +22,13 @@ from nematics3d.general import (
 from nematics3d.geometry import wrap_to_pi
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
-from .class_base import AttrDef
+from ..core.class_base import AttrDef
 from .interpolate_plane import InterpolatePlane
 from .grid_field import GridInterpolator
-from .opts import merge_opts_all
+from ..core.opts import merge_opts_all
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
-from .result_base import ResultBase
+from ..core.result_base import ResultBase
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
 from .visual.plot_rod import OptsRod, PlotRod
 from .visual.plot_sphere import OptsSphere, PlotSphere
