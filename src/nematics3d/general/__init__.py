@@ -8,16 +8,11 @@ __all__ = [
     "find_nearest_point",
     "fmt_value",
     "mark_points_membership",
-    "select_grid_in_box",
 ]
 
 
 def __getattr__(name):
     """Temporarily resolve helpers that have already moved to dedicated modules."""
-    if name == "select_grid_in_box":
-        from ..geometry.box import select_points_in_box
-
-        return select_points_in_box
     if name in {
         "closest_point_on_polyline",
         "find_nearest_point",
