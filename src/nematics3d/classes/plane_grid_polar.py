@@ -7,8 +7,8 @@ from typing import Any, ClassVar, Mapping
 import numpy as np
 
 from nematics3d.datatypes import UNSET, Unset, Vect, as_number, as_bool, as_vector
+from nematics3d.geometry import select_points_in_box
 from nematics3d.grid import resolve_plane_physical_axes
-from nematics3d.general import select_grid_in_box
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from .bounds import Bounds, as_bounds
@@ -19,14 +19,7 @@ from ..core.opts import cover_value
 
 @dataclass(slots=True, repr=False)
 class OptsPlaneGridPolar(OptsBase):
-    """
-    Options for generating a polar point lattice directly in physical space.
-
-    The primary geometry inputs are the physical-space `origin`, `normal`,
-    `theta0_axis`, `r_min`, `dr`, `arc_dist`, and `layers`. The generated
-    points are stored directly in physical space; there is no secondary
-    transform/offset remap stage.
-    """
+    """Options for generating a polar point lattice directly in physical space."""
 
     origin: Vect(3) | Unset = UNSET
     normal: Vect(3) | Unset = UNSET
@@ -91,25 +84,8 @@ class OptsPlaneGridPolar(OptsBase):
     )
 
 
-# PlaneGridPolar keeps the HostBase option pipeline but specializes it for
-# generating concentric-ring sampling points on a plane with optional bounds
-# clipping and diagnostic visualization.
-#
-# Subclasses should preserve the coupling among the polar point caches, ring
-# offsets, and the theta reference axis. If the polar lattice generation is
-# overridden, keep `entity_grid`, `entity_grid_all`, `entity_polar`, and
-# `calc_ring_offsets` synchronized.
 class PlaneGridPolar(HostBase):
-    """
-    PlaneGridPolar generates a polar sampling grid embedded in 3D space.
-
-    Normal users configure the polar lattice through `grid.opts` or
-    `grid.act_commit(...)`, and can iterate over the selected grid points or
-    convert the object to a NumPy array directly. Use
-    `grid.show_modifiable_attrs()` to inspect available settings and
-    `grid.show_relations()` to check the current `field` and `bounds`
-    bindings.
-    """
+    """Generate a polar sampling grid embedded in 3D space."""
 
     __attr_defs__ = {
         "entity_grid": AttrDef(
@@ -172,10 +148,6 @@ class PlaneGridPolar(HostBase):
         and name not in HostBase.__slots__
     )
 
-    # PlaneGridPolar overrides HostBase.__init__ because it must validate
-    # required polar-plane parameters, install the bounds-sync helper state,
-    # and trigger the first polar-grid generation after opts finalization.
-    # ==================================================
     def __init__(
         self,
         name: str | None = None,
@@ -213,11 +185,6 @@ class PlaneGridPolar(HostBase):
         self.act_bind_bounds(bounds, is_apply=False)
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
-    # ==================== OVERRIDE ====================
-    # PlaneGridPolar overrides HostBase._helper_commit_apply_opts_main because
-    # polar-grid opts require custom ring generation, theta-axis handling,
-    # optional bounds filtering, and cache updates specific to polar sampling.
-    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
@@ -291,7 +258,7 @@ class PlaneGridPolar(HostBase):
             points_select = points
             mask = np.ones(len(points), dtype=bool)
         else:
-            _, mask_inside = select_grid_in_box(
+            _, mask_inside = select_points_in_box(
                 points, bounds.corners, is_return_mask=True
             )
             mask = mask_inside if self.opts.is_clip_inside else ~mask_inside
@@ -307,11 +274,6 @@ class PlaneGridPolar(HostBase):
         if self.field:
             self.field.act_refresh()
 
-    # ==================== OVERRIDE ====================
-    # PlaneGridPolar overrides ClassBase.__repr__ because a polar grid is more
-    # useful when represented by its plane orientation and radial settings than
-    # by name alone.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         return (
@@ -326,10 +288,6 @@ class PlaneGridPolar(HostBase):
         """Return one selected polar grid point or slice."""
         return self.entity_grid[idx]
 
-    # ==================== OVERRIDE ====================
-    # PlaneGridPolar overrides ClassBase.__str__ to keep the plain string form
-    # short and aligned with the repository-wide default identity style.
-    # ==================================================
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
