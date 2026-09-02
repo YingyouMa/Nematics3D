@@ -2,8 +2,33 @@
 
 import numpy as np
 
+from ..datatypes import as_bool, as_points, as_vector
+
 
 __all__ = ["closest_point_on_polyline", "find_nearest_point"]
+
+
+def _as_query_and_points(query_pt, points_input, *, points_name):
+    """Validate one query vector and an explicit ``(N, D)`` point collection."""
+    raw_points = np.asarray(points_input)
+    if raw_points.ndim != 2:
+        raise ValueError(
+            f"{points_name!r} must be two-dimensional with shape (N, D). "
+            f"Got shape {raw_points.shape}."
+        )
+
+    points = as_points(
+        points_input,
+        d=None,
+        name=points_name,
+        is_empty=False,
+    )
+    query = as_vector(
+        query_pt,
+        d=points.shape[1],
+        name="query_pt",
+    )
+    return query, points
 
 
 def find_nearest_point(query_pt, coords, is_return_idx=False):
@@ -30,29 +55,8 @@ def find_nearest_point(query_pt, coords, is_return_idx=False):
         A copy of the nearest point, represented as floating-point values,
         optionally together with its index in ``coords``.
     """
-    if not isinstance(is_return_idx, (bool, np.bool_)):
-        raise TypeError("`is_return_idx` must be a boolean.")
-
-    query = np.asarray(query_pt, dtype=float)
-    points = np.asarray(coords, dtype=float)
-
-    if query.ndim != 1:
-        raise ValueError(
-            f"`query_pt` must be one-dimensional. Got shape {query.shape}."
-        )
-    if points.ndim != 2:
-        raise ValueError(f"`coords` must be two-dimensional. Got shape {points.shape}.")
-    if points.shape[0] == 0:
-        raise ValueError("`coords` must contain at least one point.")
-    if points.shape[1] != query.shape[0]:
-        raise ValueError(
-            "`query_pt` and `coords` must have the same coordinate dimension. "
-            f"Got {query.shape[0]} and {points.shape[1]}."
-        )
-    if not np.all(np.isfinite(query)):
-        raise ValueError("`query_pt` must contain only finite values.")
-    if not np.all(np.isfinite(points)):
-        raise ValueError("`coords` must contain only finite values.")
+    is_return_idx = as_bool(is_return_idx, name="is_return_idx")
+    query, points = _as_query_and_points(query_pt, coords, points_name="coords")
 
     delta = points - query
     distance_squared = np.einsum("ij,ij->i", delta, delta)
@@ -83,28 +87,11 @@ def closest_point_on_polyline(query_pt, poly_pts):
     numpy.ndarray
         A floating-point copy of the nearest point on the polyline.
     """
-    query = np.asarray(query_pt, dtype=float)
-    points = np.asarray(poly_pts, dtype=float)
-
-    if query.ndim != 1:
-        raise ValueError(
-            f"`query_pt` must be one-dimensional. Got shape {query.shape}."
-        )
-    if points.ndim != 2:
-        raise ValueError(
-            f"`poly_pts` must be two-dimensional. Got shape {points.shape}."
-        )
-    if points.shape[0] == 0:
-        raise ValueError("`poly_pts` must contain at least one point.")
-    if points.shape[1] != query.shape[0]:
-        raise ValueError(
-            "`query_pt` and `poly_pts` must have the same coordinate dimension. "
-            f"Got {query.shape[0]} and {points.shape[1]}."
-        )
-    if not np.all(np.isfinite(query)):
-        raise ValueError("`query_pt` must contain only finite values.")
-    if not np.all(np.isfinite(points)):
-        raise ValueError("`poly_pts` must contain only finite values.")
+    query, points = _as_query_and_points(
+        query_pt,
+        poly_pts,
+        points_name="poly_pts",
+    )
 
     if points.shape[0] == 1:
         return points[0].copy()
