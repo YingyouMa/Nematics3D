@@ -8,6 +8,7 @@ from .polydata import (
     as_polydata_input,
     copy_polydata_geometry,
 )
+from .rotation import RotationAxisResult, find_rotation_axis
 from .smoothing import *
 from .triangulation import *
 
