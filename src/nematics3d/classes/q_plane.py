@@ -103,7 +103,7 @@ class QPlane(InterpolatePlane):
             is_weak_by_default=False,
         ),
         "visual_defect": AttrDef(
-            doc="Detected defect positions on this Q plane.",
+            doc="The PlotSphere visual showing detected defect positions on this Q plane.",
             kind="relation",
             is_weak_by_default=False,
         ),
