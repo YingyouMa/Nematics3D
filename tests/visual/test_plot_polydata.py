@@ -151,7 +151,7 @@ class TestPlotPolyData(unittest.TestCase):
 
             mesh.opts.is_show_edges = True
             mesh.opts.edge_color = (1.0, 0.0, 0.0)
-            mesh.opts.line_width = 3.0
+            mesh.opts.edge_width = 3.0
             mesh.opts.style = "wireframe"
 
             actor_prop = mesh.entity_actor.prop

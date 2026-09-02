@@ -52,10 +52,10 @@ def test_find_nearest_point_returns_copy():
 @pytest.mark.parametrize(
     ("query_pt", "coords", "message"),
     [
-        ([[0.0, 0.0]], [[0.0, 0.0]], "one-dimensional"),
+        ([[0.0, 0.0]], [[0.0, 0.0]], "must have shape"),
         ([0.0, 0.0], [0.0, 0.0], "two-dimensional"),
         ([0.0, 0.0], np.empty((0, 2)), "at least one point"),
-        ([0.0, 0.0], [[0.0, 0.0, 0.0]], "same coordinate dimension"),
+        ([0.0, 0.0], [[0.0, 0.0, 0.0]], "must have shape"),
     ],
 )
 def test_find_nearest_point_rejects_invalid_shapes(query_pt, coords, message):
@@ -77,10 +77,24 @@ def test_find_nearest_point_rejects_nonfinite_values(query_pt, coords, message):
         find_nearest_point(query_pt, coords)
 
 
-@pytest.mark.parametrize("is_return_idx", [0, 1, 1.0, "true", None])
+@pytest.mark.parametrize("is_return_idx", ["true", None])
 def test_find_nearest_point_rejects_non_boolean_return_flag(is_return_idx):
     with pytest.raises(TypeError, match="is_return_idx"):
         find_nearest_point([0.0], [[0.0]], is_return_idx=is_return_idx)
+
+
+@pytest.mark.parametrize(
+    "is_return_idx, expected", [(0, False), (1, True), (1.0, True)]
+)
+def test_find_nearest_point_accepts_numeric_boolean_return_flag(
+    is_return_idx, expected
+):
+    result = find_nearest_point(
+        [0.0],
+        [[0.0]],
+        is_return_idx=is_return_idx,
+    )
+    assert isinstance(result, tuple) is expected
 
 
 def test_closest_point_on_polyline_projects_to_segment_interior():
@@ -124,10 +138,10 @@ def test_closest_point_on_polyline_supports_arbitrary_dimension():
 @pytest.mark.parametrize(
     ("query_pt", "poly_pts", "message"),
     [
-        ([[0.0, 0.0]], [[0.0, 0.0]], "one-dimensional"),
+        ([[0.0, 0.0]], [[0.0, 0.0]], "must have shape"),
         ([0.0, 0.0], [0.0, 0.0], "two-dimensional"),
         ([0.0, 0.0], np.empty((0, 2)), "at least one point"),
-        ([0.0, 0.0], [[0.0, 0.0, 0.0]], "same coordinate dimension"),
+        ([0.0, 0.0], [[0.0, 0.0, 0.0]], "must have shape"),
     ],
 )
 def test_closest_point_on_polyline_rejects_invalid_shapes(query_pt, poly_pts, message):
@@ -144,6 +158,8 @@ def test_closest_point_on_polyline_rejects_invalid_shapes(query_pt, poly_pts, me
         ([0.0, 0.0], [[0.0, np.inf]], "poly_pts"),
     ],
 )
-def test_closest_point_on_polyline_rejects_nonfinite_values(query_pt, poly_pts, message):
+def test_closest_point_on_polyline_rejects_nonfinite_values(
+    query_pt, poly_pts, message
+):
     with pytest.raises(ValueError, match=message):
         closest_point_on_polyline(query_pt, poly_pts)

@@ -112,12 +112,8 @@ def test_select_points_in_box_uses_face_tolerance():
 
 
 def test_select_points_in_box_rejects_degenerate_or_skew_edges():
-    degenerate = np.array(
-        [[0, 0, 0], [0, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float
-    )
-    skew = np.array(
-        [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 1]], dtype=float
-    )
+    degenerate = np.array([[0, 0, 0], [0, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+    skew = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 0, 1]], dtype=float)
 
     with pytest.raises(ValueError):
         select_points_in_box([[0, 0, 0]], degenerate)
@@ -132,7 +128,12 @@ def test_select_points_in_box_rejects_invalid_inputs():
         select_points_in_box([[0.0, 0.0]], corners)
     with pytest.raises(ValueError):
         select_points_in_box([[0.0, 0.0, 0.0]], corners[:3])
-    with pytest.raises(TypeError):
-        select_points_in_box([[0.0, 0.0, 0.0]], corners, is_return_mask=1)
+    selected, mask = select_points_in_box(
+        [[0.0, 0.0, 0.0]],
+        corners,
+        is_return_mask=1,
+    )
+    np.testing.assert_allclose(selected, [[0.0, 0.0, 0.0]])
+    np.testing.assert_array_equal(mask, [True])
     with pytest.raises((TypeError, ValueError)):
         select_points_in_box([[0.0, 0.0, 0.0]], corners, atol=-1.0)

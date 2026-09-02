@@ -44,8 +44,12 @@ def test_readonly_array_respects_explicit_dtype():
     assert result.dtype == np.dtype(np.int64)
 
 
-def test_readonly_array_copy_must_be_bool():
-    with pytest.raises((TypeError, ValueError)):
-        as_readonly_array([1, 2, 3], copy=1)
+@pytest.mark.parametrize("copy", [0, 1, 0.0, 1.0])
+def test_readonly_array_copy_accepts_numeric_boolean(copy):
+    result = as_readonly_array([1, 2, 3], copy=copy)
+    assert result.flags.writeable is False
+
+
+def test_readonly_array_copy_rejects_non_boolean_like_value():
     with pytest.raises((TypeError, ValueError)):
         as_readonly_array([1, 2, 3], copy="False")

@@ -902,11 +902,8 @@ class DisclinationLineSmooth(SmoothedLine):
                 transform=owner.raw_grid_transform,
                 offset=owner.raw_grid_offset,
             )
-            object.__setattr__(
-                self,
-                "calc_result",
-                result,
-            )
+            self._helper_set_result(result)
+            result = self.calc_result
         else:
             result = self.calc_result
             result_index = apply_linear_transform(

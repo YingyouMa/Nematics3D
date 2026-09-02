@@ -15,7 +15,7 @@ def test_fmt_value_formats_zero_dimensional_array_like_scalar():
 
 
 def test_fmt_value_one_dimensional_array_uses_numpy_behavior_by_default():
-    values = np.arange(100, dtype=float) / 10
+    values = np.arange(1001, dtype=float) / 10
     text = fmt_value(values, ndigits=1)
 
     assert "..." in text

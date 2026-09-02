@@ -45,6 +45,7 @@ def test_as_points_rejects_nonfinite_values_by_default():
     "points",
     [
         [[True, False, True]],
+        [[True, 2.0, 3.0]],
         [["1", "2", "3"]],
         [[1.0 + 1.0j, 2.0, 3.0]],
     ],

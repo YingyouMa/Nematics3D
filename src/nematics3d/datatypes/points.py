@@ -60,6 +60,11 @@ def as_points(
         if min_num < 0:
             raise ValueError(f"'min_num' must be non-negative. Got {min_num}.")
 
+    if not isinstance(input_data, np.ndarray):
+        object_points = np.asarray(input_data, dtype=object)
+        if any(isinstance(value, (bool, np.bool_)) for value in object_points.flat):
+            raise TypeError(f"{name!r} must contain only real numbers.")
+
     raw_points = np.asarray(input_data)
     if raw_points.size == 0 and raw_points.ndim <= 1:
         point_dimension = 0 if d is None else d

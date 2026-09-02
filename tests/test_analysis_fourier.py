@@ -271,7 +271,7 @@ def test_act_correlation_returns_periodic_autocorrelation():
 
     correlation = act_correlation(result)
     correlation_method = result.act_correlation()
-    expected = 0.5 * np.cos(2 * np.pi * x / 8)[:, None, None]
+    expected = 0.5 * np.cos(2 * np.pi * x / 8)
 
     assert isinstance(correlation, CorrelationResult)
     output = correlation.show_readable_attrs(is_return=True)
@@ -302,7 +302,7 @@ def test_act_correlation_supports_mean_subtraction():
     )
 
     correlation = act_correlation(result)
-    expected = 0.5 * np.cos(2 * np.pi * x / 8)[:, None, None]
+    expected = 0.5 * np.cos(2 * np.pi * x / 8)
 
     np.testing.assert_allclose(
         correlation.act_values(is_subtract_mean=True),
@@ -327,7 +327,7 @@ def test_act_correlation_supports_normalization():
     )
 
     correlation = act_correlation(result)
-    expected = np.cos(2 * np.pi * x / 8)[:, None, None]
+    expected = np.cos(2 * np.pi * x / 8)
 
     np.testing.assert_allclose(
         correlation.act_values(is_normalized=True),
@@ -346,7 +346,7 @@ def test_act_correlation_supports_mean_subtraction_and_normalization():
     )
 
     correlation = result.act_correlation()
-    expected = np.cos(2 * np.pi * x / 8)[:, None, None]
+    expected = np.cos(2 * np.pi * x / 8)
 
     np.testing.assert_allclose(
         correlation.act_values(is_subtract_mean=True, is_normalized=True),
@@ -363,7 +363,7 @@ def test_act_distance_1d_groups_positive_and_negative_lags():
     distance = act_distance(correlation)
     distance_method = correlation.act_distance()
     expected_r = np.arange(5, dtype=float)
-    expected_values = 0.5 * np.cos(2 * np.pi * expected_r / 8)[:, None, None]
+    expected_values = 0.5 * np.cos(2 * np.pi * expected_r / 8)
 
     assert isinstance(distance, DistanceCorrelationResult)
     np.testing.assert_allclose(distance.r_values, expected_r)

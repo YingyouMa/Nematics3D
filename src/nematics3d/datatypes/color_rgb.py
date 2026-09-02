@@ -1,13 +1,11 @@
 """RGB color semantic alias and runtime validation helpers."""
 
-from typing import Tuple
-
 import numpy as np
 
 from ..logging_decorator import logging_and_warning_decorator
 
 
-ColorRGB = Tuple[float, float, float]
+ColorRGB = tuple[float, float, float]
 
 
 def _validate_rgb_values(values, *, name: str) -> np.ndarray:
@@ -67,9 +65,7 @@ def as_ColorRGB(
         logger.recovery(f"Set color={replace} in the following.")
         values = np.asarray(replace)
         if values.shape != (3,):
-            raise ValueError(
-                f"replace must have shape (3,). Got shape {values.shape}."
-            )
+            raise ValueError(f"replace must have shape (3,). Got shape {values.shape}.")
         values = _validate_rgb_values(values, name="replace")
 
     if is_norm:

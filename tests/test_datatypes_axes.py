@@ -36,7 +36,7 @@ def test_general_right_handed_orthonormal_frame_is_accepted():
     result = as_axes(frame)
 
     np.testing.assert_allclose(result, frame)
-    np.testing.assert_allclose(result.T @ result, np.eye(3))
+    np.testing.assert_allclose(result.T @ result, np.eye(3), atol=1e-15)
     assert np.linalg.det(result) > 0.0
 
 

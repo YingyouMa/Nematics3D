@@ -129,6 +129,27 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
         self.assertEqual(smooth.linefunc_mode, "wrap")
         self.assertEqual(linefunc.impl_owner_opts_snapshot["linefunc_mode"], "wrap")
 
+    def test_disclination_smooth_fallback_result_is_readonly(self):
+        indices = np.column_stack(
+            (
+                np.arange(8, 19),
+                np.full(11, 0.5),
+                np.full(11, 0.5),
+            )
+        )
+        line = DisclinationLine(
+            InputLine(
+                defect_indices=indices,
+                box_size_periodic_index=(10, 10, 10),
+            )
+        )
+
+        smooth = line.act_smooth(window_length=5, min_line_length=50)
+
+        self.assertFalse(smooth.calc_is_smoothed)
+        self.assertFalse(smooth.result.flags.writeable)
+        self.assertIs(smooth.calc_result_coords, smooth.calc_result)
+
 
 if __name__ == "__main__":
     unittest.main()
