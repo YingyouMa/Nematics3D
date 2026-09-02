@@ -1,5 +1,13 @@
 # Surface Director Projection Plan
 
+> Experimental implementation update: the first prototype now lives in
+> `dev/experiments/surface_streamlines/director_projection.py`. The initial API
+> accepts an existing `pyvista.PolyData` plus one director per surface vertex,
+> rather than reconstructing a surface from `surface_points`. This preserves
+> the exact topology that will later be used for streamline integration. The
+> older point-cloud API discussion below remains as design history for a future
+> independent-coordinate mode.
+
 ## Objective
 
 Add a focused geometry-analysis function that projects directors onto the local
