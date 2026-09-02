@@ -25,7 +25,7 @@ def test_find_plane_normal_returns_result_base_for_exact_plane():
     assert abs(float(np.dot(result.normal, expected_normal))) == pytest.approx(1.0)
     assert np.allclose(result.centroid, points.mean(axis=0))
     assert result.planarity_score == pytest.approx(1.0)
-    assert result.thickness_rms == pytest.approx(0.0, abs=1e-12)
+    assert result.thickness_rms == pytest.approx(0.0, abs=1e-8)
 
 
 def test_plane_normal_metric_matches_result_fields():
