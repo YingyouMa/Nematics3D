@@ -62,7 +62,6 @@ def test_smoothed_surface_initialization_and_result_contract():
 
     np.testing.assert_array_equal(mesh.points, points_before)
     np.testing.assert_array_equal(surface.raw_surface.points, points_before)
-    np.testing.assert_array_equal(surface.calc_faces, surface.result.faces.reshape(-1, 4)[:, 1:])
     np.testing.assert_allclose(surface.result.points, surface.vertices)
 
     assert surface.calc_iterations >= 1
@@ -70,6 +69,18 @@ def test_smoothed_surface_initialization_and_result_contract():
     assert surface.calc_mu < 0.0
     assert surface.calc_kappa_max > 0.0
     assert surface.calc_kappa_cutoff > 0.0
+
+    # Large mesh/operator caches are implementation details, not public calc attrs.
+    for removed_name in (
+        "calc_surface_initial",
+        "calc_vertices_initial",
+        "calc_faces",
+        "calc_mass_lumped",
+        "calc_stiffness_matrix",
+        "calc_vertices_result",
+        "calc_surface_result",
+    ):
+        assert removed_name not in type(surface).__attr_defs__
 
 
 def test_smoothed_surface_complete_cutoff_gain_is_minus_3db():
@@ -117,26 +128,28 @@ def test_smoothed_surface_opts_object_and_default_override():
 
 def test_smoothed_surface_opts_update_reuses_fixed_operator():
     surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-    stiffness_before = surface.calc_stiffness_matrix
-    initial_surface_before = surface.calc_surface_initial
+    stiffness_before = surface.impl_stiffness_matrix
+    initial_vertices_before = surface.impl_vertices_initial
     vertices_before = surface.vertices.copy()
 
     surface.act_commit(cutoff_wavelength=6.5)
 
-    assert surface.calc_stiffness_matrix is stiffness_before
-    assert surface.calc_surface_initial is initial_surface_before
+    assert surface.impl_stiffness_matrix is stiffness_before
+    assert surface.impl_vertices_initial is initial_vertices_before
     assert surface.calc_is_smoothed is True
     assert not np.array_equal(surface.vertices, vertices_before)
 
 
 def test_smoothed_surface_raw_surface_update_rebuilds_operator():
     surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-    stiffness_before = surface.calc_stiffness_matrix
+    stiffness_before = surface.impl_stiffness_matrix
+    initial_vertices_before = surface.impl_vertices_initial
     kappa_before = surface.calc_kappa_max
 
     surface.act_commit(surface=_tetra_surface(scale=2.0))
 
-    assert surface.calc_stiffness_matrix is not stiffness_before
+    assert surface.impl_stiffness_matrix is not stiffness_before
+    assert surface.impl_vertices_initial is not initial_vertices_before
     assert surface.calc_is_smoothed is True
     np.testing.assert_allclose(surface.calc_kappa_max, kappa_before / 4.0, rtol=1e-12, atol=1e-12)
 
