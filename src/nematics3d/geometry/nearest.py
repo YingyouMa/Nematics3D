@@ -100,27 +100,18 @@ def closest_point_on_polyline(query_pt, poly_pts):
     segment_delta = points[1:] - segment_start
     query_delta = query - segment_start
 
-    segment_length_squared = np.einsum(
-        "ij,ij->i", segment_delta, segment_delta
-    )
-    projection_numerator = np.einsum(
-        "ij,ij->i", query_delta, segment_delta
-    )
+    segment_length_squared = np.einsum("ij,ij->i", segment_delta, segment_delta)
+    projection_numerator = np.einsum("ij,ij->i", query_delta, segment_delta)
 
     projection_fraction = np.zeros_like(segment_length_squared)
     nonzero_segment = segment_length_squared > 0.0
     projection_fraction[nonzero_segment] = (
-        projection_numerator[nonzero_segment]
-        / segment_length_squared[nonzero_segment]
+        projection_numerator[nonzero_segment] / segment_length_squared[nonzero_segment]
     )
     np.clip(projection_fraction, 0.0, 1.0, out=projection_fraction)
 
-    projected_points = (
-        segment_start + segment_delta * projection_fraction[:, None]
-    )
+    projected_points = segment_start + segment_delta * projection_fraction[:, None]
     projection_delta = projected_points - query
-    distance_squared = np.einsum(
-        "ij,ij->i", projection_delta, projection_delta
-    )
+    distance_squared = np.einsum("ij,ij->i", projection_delta, projection_delta)
 
     return projected_points[int(np.argmin(distance_squared))].copy()

@@ -104,9 +104,7 @@ def select_points_in_box(
     axes = edges / lengths[:, None]
     gram = axes @ axes.T
     if not np.allclose(gram, np.eye(3), rtol=0.0, atol=1e-8):
-        raise ValueError(
-            "The first three box edges must be mutually perpendicular."
-        )
+        raise ValueError("The first three box edges must be mutually perpendicular.")
 
     local = (points - corners[0]) @ axes.T
     mask = np.all((local >= -atol) & (local <= lengths + atol), axis=1)
