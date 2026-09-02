@@ -345,15 +345,20 @@ class SurfaceSampling(HostBase):
     not enforce an exact nearest-neighbor spacing or minimum separation. The
     optional relaxation stage finds neighbors using 3D Euclidean distance, not
     mesh-geodesic distance, so nearby sheets of a folded surface can interact.
+
+    Updates use local cache signatures. Replacing ``raw_surface`` invalidates
+    every layer; sampling options invalidate sampled points and enabled derived
+    outputs; optional-output switches update only their own derived layer.
+    In-place mutation of ``raw_surface`` is not detected automatically.
     """
 
     # fmt: off
     __attr_defs__ = {
         "raw_surface": AttrDef(
             doc=(
-                "The canonical input surface stored as cleaned pyvista.PolyData. "
-                "Any legal PyVista/VTK PolyData-like object with valid surface "
-                "geometry may be provided."
+                "The canonical input stored as an isolated, geometry-only "
+                "pyvista.PolyData. Surface extraction, triangulation, topology "
+                "cleaning, and normal calculation belong to calc_surface_clean."
             ),
             kind="raw",
             validator=lambda v, d: _as_surface_polydata_input(v, name=d),
@@ -447,6 +452,22 @@ class SurfaceSampling(HostBase):
             ),
             kind="calc",
         ),
+        "impl_surface_signature": AttrDef(
+            doc="Internal identity signature for the prepared surface cache.",
+            kind="impl",
+        ),
+        "impl_sampling_signature": AttrDef(
+            doc="Internal option signature for the sampled-point cache.",
+            kind="impl",
+        ),
+        "impl_is_sample_normals_enabled": AttrDef(
+            doc="Internal cached state of the optional sample-normal layer.",
+            kind="impl",
+        ),
+        "impl_is_spacing_statistics_enabled": AttrDef(
+            doc="Internal cached state of the optional spacing-statistics layer.",
+            kind="impl",
+        ),
         "field": AttrDef(
             doc="The interpolated field object attached to this surface sampling.",
             kind="relation",
@@ -501,6 +522,10 @@ class SurfaceSampling(HostBase):
         object.__setattr__(self, "calc_nearest_distance_mean", UNSET)
         object.__setattr__(self, "calc_nearest_distance_min", UNSET)
         object.__setattr__(self, "calc_nearest_distance_std", UNSET)
+        object.__setattr__(self, "impl_surface_signature", UNSET)
+        object.__setattr__(self, "impl_sampling_signature", UNSET)
+        object.__setattr__(self, "impl_is_sample_normals_enabled", UNSET)
+        object.__setattr__(self, "impl_is_spacing_statistics_enabled", UNSET)
 
         self.opts.act_finalize(defaults=self.opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
@@ -510,26 +535,42 @@ class SurfaceSampling(HostBase):
         """Return the sampled point coordinates."""
         return self.calc_sample_points
 
-    # ==================== OVERRIDE ====================
-    # SurfaceSampling overrides HostBase._helper_commit_apply_opts_main because
-    # finalized opts must be translated into a fresh surface-sampling result.
-    # ==================================================
-    @logging_and_warning_decorator()
-    def _helper_commit_apply_opts_main(
-        self,
-        is_reapply_opts: bool = False,
-        logger=None,
-        **kwargs,
-    ):
-        if not is_reapply_opts and not kwargs:
-            return
+    # -------------------- cache signatures --------------------
 
-        with self.opts.act_internal_update():
-            for key, value in kwargs.items():
-                setattr(self.opts, key, value)
+    def _helper_make_surface_signature(self) -> int:
+        """Return the identity signature used for normalized raw surfaces."""
+        return id(self.raw_surface)
 
+    def _helper_make_sampling_signature(self) -> tuple[Any, ...]:
+        """Return the option signature that determines sampled point positions."""
+        return (
+            self.opts.spacing,
+            self.opts.seed,
+            self.opts.oversample,
+            self.opts.relax_steps,
+            self.opts.k_neighbors,
+            self.opts.default_sample_count_target,
+            self.opts.max_sample_count,
+        )
+
+    # -------------------- cache update layers --------------------
+
+    def _helper_update_surface_cache(self) -> None:
+        """Rebuild cleaned surface geometry and its basic derived arrays."""
         surface_clean = _helper_prepare_surface(self.raw_surface)
-        surface_area = float(surface_clean.area)
+        surface_points = as_readonly_array(surface_clean.points, dtype=None, copy=False)
+        surface_normals = as_readonly_array(
+            surface_clean.point_data["Normals"], dtype=None, copy=False
+        )
+
+        object.__setattr__(self, "calc_surface_clean", surface_clean)
+        object.__setattr__(self, "calc_surface_area", float(surface_clean.area))
+        object.__setattr__(self, "calc_surface_points", surface_points)
+        object.__setattr__(self, "calc_surface_normals", surface_normals)
+
+    def _helper_update_sampling_cache(self, *, logger) -> int:
+        """Regenerate sampled points from the current surface and sampling opts."""
+        surface_area = self.calc_surface_area
         if self.opts.spacing is None:
             spacing_effective = _helper_resolve_spacing_for_target_count(
                 surface_area,
@@ -559,14 +600,14 @@ class SurfaceSampling(HostBase):
                 f"Sampling {sample_count_target} points may be slow because the "
                 "current farthest-point selection scales approximately quadratically."
             )
+
         candidate_count = max(
             int(self.opts.oversample) * sample_count_target,
             sample_count_target + 1,
         )
-
         rng = np.random.default_rng(int(self.opts.seed))
         candidate_points = _helper_sample_triangle_candidates(
-            surface_clean,
+            self.calc_surface_clean,
             candidate_count,
             rng=rng,
         )
@@ -577,58 +618,131 @@ class SurfaceSampling(HostBase):
         )
         sample_points = _helper_relax_points(
             sample_points,
-            surface_clean,
+            self.calc_surface_clean,
             relax_steps=int(self.opts.relax_steps),
             k_neighbors=int(self.opts.k_neighbors),
         )
 
-        if self.opts.is_calc_sample_normals:
-            sample_cell_ids, sample_barycentric, sample_normals = (
-                _helper_calc_sample_surface_geometry(sample_points, surface_clean)
-            )
-            sample_cell_ids = as_readonly_array(sample_cell_ids, dtype=None, copy=False)
-            sample_barycentric = as_readonly_array(
-                sample_barycentric, dtype=None, copy=False
-            )
-            sample_normals = as_readonly_array(sample_normals, dtype=None, copy=False)
-        else:
-            sample_cell_ids = UNSET
-            sample_barycentric = UNSET
-            sample_normals = UNSET
-
-        if self.opts.is_calc_spacing_statistics:
-            nearest_mean, nearest_min, nearest_std = _helper_calc_spacing_statistics(
-                sample_points
-            )
-        else:
-            nearest_mean = UNSET
-            nearest_min = UNSET
-            nearest_std = UNSET
-
-        surface_points = as_readonly_array(surface_clean.points, dtype=None, copy=False)
-        surface_normals = as_readonly_array(
-            surface_clean.point_data["Normals"], dtype=None, copy=False
-        )
-        sample_points = as_readonly_array(sample_points, dtype=None, copy=False)
-        object.__setattr__(self, "calc_surface_clean", surface_clean)
-        object.__setattr__(self, "calc_surface_area", surface_area)
         object.__setattr__(self, "calc_spacing_effective", spacing_effective)
         object.__setattr__(self, "calc_sample_count_target", sample_count_target)
-        object.__setattr__(self, "calc_surface_points", surface_points)
-        object.__setattr__(self, "calc_surface_normals", surface_normals)
-        object.__setattr__(self, "calc_sample_points", sample_points)
-        object.__setattr__(self, "calc_sample_cell_ids", sample_cell_ids)
-        object.__setattr__(self, "calc_sample_barycentric", sample_barycentric)
-        object.__setattr__(self, "calc_sample_normals", sample_normals)
+        object.__setattr__(
+            self,
+            "calc_sample_points",
+            as_readonly_array(sample_points, dtype=None, copy=False),
+        )
+        return candidate_count
+
+    def _helper_update_sample_normals_cache(self) -> None:
+        """Compute or clear optional triangle-location and sample-normal outputs."""
+        if not self.opts.is_calc_sample_normals:
+            object.__setattr__(self, "calc_sample_cell_ids", UNSET)
+            object.__setattr__(self, "calc_sample_barycentric", UNSET)
+            object.__setattr__(self, "calc_sample_normals", UNSET)
+            return
+
+        sample_cell_ids, sample_barycentric, sample_normals = (
+            _helper_calc_sample_surface_geometry(
+                self.calc_sample_points,
+                self.calc_surface_clean,
+            )
+        )
+        object.__setattr__(
+            self,
+            "calc_sample_cell_ids",
+            as_readonly_array(sample_cell_ids, dtype=None, copy=False),
+        )
+        object.__setattr__(
+            self,
+            "calc_sample_barycentric",
+            as_readonly_array(sample_barycentric, dtype=None, copy=False),
+        )
+        object.__setattr__(
+            self,
+            "calc_sample_normals",
+            as_readonly_array(sample_normals, dtype=None, copy=False),
+        )
+
+    def _helper_update_spacing_statistics_cache(self) -> None:
+        """Compute or clear optional nearest-neighbor spacing statistics."""
+        if not self.opts.is_calc_spacing_statistics:
+            object.__setattr__(self, "calc_nearest_distance_mean", UNSET)
+            object.__setattr__(self, "calc_nearest_distance_min", UNSET)
+            object.__setattr__(self, "calc_nearest_distance_std", UNSET)
+            return
+
+        nearest_mean, nearest_min, nearest_std = _helper_calc_spacing_statistics(
+            self.calc_sample_points
+        )
         object.__setattr__(self, "calc_nearest_distance_mean", nearest_mean)
         object.__setattr__(self, "calc_nearest_distance_min", nearest_min)
         object.__setattr__(self, "calc_nearest_distance_std", nearest_std)
 
-        logger.info(
-            f"Resampled {self.name!r}: area={surface_area:.6g}, "
-            f"spacing_effective={spacing_effective:.6g}, "
-            f"target_count={sample_count_target}, candidate_count={candidate_count}."
+    # ==================== OVERRIDE ====================
+    # SurfaceSampling overrides HostBase._helper_commit_apply_opts_main to map
+    # finalized opts onto independently invalidated surface, sampling, and
+    # optional-derived caches.
+    # ==================================================
+    @logging_and_warning_decorator()
+    def _helper_commit_apply_opts_main(
+        self,
+        is_reapply_opts: bool = False,
+        logger=None,
+        **kwargs,
+    ):
+        if not is_reapply_opts and not kwargs:
+            return
+
+        with self.opts.act_internal_update():
+            for key, value in kwargs.items():
+                setattr(self.opts, key, value)
+
+        surface_signature = self._helper_make_surface_signature()
+        sampling_signature = self._helper_make_sampling_signature()
+        is_surface_dirty = surface_signature != self.impl_surface_signature
+        is_sampling_dirty = (
+            is_surface_dirty or sampling_signature != self.impl_sampling_signature
+        )
+        is_sample_normals_dirty = (
+            is_sampling_dirty
+            or self.opts.is_calc_sample_normals != self.impl_is_sample_normals_enabled
+        )
+        is_spacing_statistics_dirty = (
+            is_sampling_dirty
+            or self.opts.is_calc_spacing_statistics
+            != self.impl_is_spacing_statistics_enabled
         )
 
-        if self.field:
-            self.field.act_refresh()
+        if is_surface_dirty:
+            self._helper_update_surface_cache()
+            object.__setattr__(self, "impl_surface_signature", surface_signature)
+
+        candidate_count = None
+        if is_sampling_dirty:
+            candidate_count = self._helper_update_sampling_cache(logger=logger)
+            object.__setattr__(self, "impl_sampling_signature", sampling_signature)
+
+        if is_sample_normals_dirty:
+            self._helper_update_sample_normals_cache()
+            object.__setattr__(
+                self,
+                "impl_is_sample_normals_enabled",
+                self.opts.is_calc_sample_normals,
+            )
+
+        if is_spacing_statistics_dirty:
+            self._helper_update_spacing_statistics_cache()
+            object.__setattr__(
+                self,
+                "impl_is_spacing_statistics_enabled",
+                self.opts.is_calc_spacing_statistics,
+            )
+
+        if is_sampling_dirty:
+            logger.info(
+                f"Resampled {self.name!r}: area={self.calc_surface_area:.6g}, "
+                f"spacing_effective={self.calc_spacing_effective:.6g}, "
+                f"target_count={self.calc_sample_count_target}, "
+                f"candidate_count={candidate_count}."
+            )
+            if self.field:
+                self.field.act_refresh()

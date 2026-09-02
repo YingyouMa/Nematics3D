@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 import pyvista as pv
+import importlib
 
 from nematics3d.datatypes import UNSET
 from nematics3d.classes.surface_sampling import (
@@ -81,3 +82,84 @@ def test_surface_sampling_rejects_target_above_safety_limit():
                 "max_sample_count": 10,
             },
         )
+
+
+def test_surface_sampling_optional_layers_do_not_resample(monkeypatch):
+    sampling_module = importlib.import_module("nematics3d.sample.surface_sampling")
+    sampling = SurfaceSampling(
+        pv.Sphere(theta_resolution=12, phi_resolution=12),
+        opts_defaults_override={"default_sample_count_target": 12},
+    )
+    initial_points = sampling.result
+    call_counts = {
+        "prepare": 0,
+        "candidates": 0,
+        "normals": 0,
+        "statistics": 0,
+    }
+
+    def wrap_helper(name):
+        original = getattr(sampling_module, name)
+        count_key = {
+            "_helper_prepare_surface": "prepare",
+            "_helper_sample_triangle_candidates": "candidates",
+            "_helper_calc_sample_surface_geometry": "normals",
+            "_helper_calc_spacing_statistics": "statistics",
+        }[name]
+
+        def wrapped(*args, **kwargs):
+            call_counts[count_key] += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(sampling_module, name, wrapped)
+
+    for helper_name in (
+        "_helper_prepare_surface",
+        "_helper_sample_triangle_candidates",
+        "_helper_calc_sample_surface_geometry",
+        "_helper_calc_spacing_statistics",
+    ):
+        wrap_helper(helper_name)
+
+    sampling.opts.is_calc_spacing_statistics = True
+    assert call_counts == {
+        "prepare": 0,
+        "candidates": 0,
+        "normals": 0,
+        "statistics": 1,
+    }
+    assert sampling.result is initial_points
+
+    sampling.opts.is_calc_sample_normals = True
+    assert call_counts == {
+        "prepare": 0,
+        "candidates": 0,
+        "normals": 1,
+        "statistics": 1,
+    }
+    assert sampling.result is initial_points
+
+    sampling.opts.seed = 1
+    assert call_counts == {
+        "prepare": 0,
+        "candidates": 1,
+        "normals": 2,
+        "statistics": 2,
+    }
+    assert sampling.result is not initial_points
+
+    sampling.opts.seed = 1
+    assert call_counts == {
+        "prepare": 0,
+        "candidates": 1,
+        "normals": 2,
+        "statistics": 2,
+    }
+
+    sampling.act_commit(surface=pv.Plane())
+    assert call_counts == {
+        "prepare": 1,
+        "candidates": 2,
+        "normals": 3,
+        "statistics": 3,
+    }
