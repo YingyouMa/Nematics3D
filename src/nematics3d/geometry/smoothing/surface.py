@@ -14,57 +14,76 @@ from ...datatypes import Number, UNSET, Unset, as_number
 class OptsSmoothedSurface(OptsBase):
     """Options controlling wavelength-based Taubin smoothing of a surface.
 
-    The public smoothing scale is specified by ``cutoff_wavelength`` rather
-    than by Taubin's raw ``lambda`` and ``mu`` coefficients.
-
-    ``cutoff_wavelength`` is a physical wavelength measured in the same length
-    units as the surface coordinates. For the discrete Laplace--Beltrami mode
-    convention ``L phi = -kappa phi``, wavelength and eigenvalue are related by
+    ``cutoff_wavelength`` is the main geometric smoothing parameter. It is a
+    physical wavelength in the same length units as the surface coordinates,
+    not a mesh spacing or a displacement distance. With the discrete
+    Laplace--Beltrami convention ``L phi = -kappa phi``, define
 
         kappa_c = (2*pi / cutoff_wavelength)**2.
 
-    Nematics3D defines this wavelength as the -3 dB cutoff of the *complete*
-    smoothing pass: a mode at ``kappa_c`` retains an amplitude gain of
-    ``1/sqrt(2)`` after all Taubin iteration pairs. Longer-wavelength modes are
-    preserved more strongly; shorter-wavelength modes are suppressed more
-    strongly. Thus the parameter describes the geometric roughness scale to be
-    filtered, not a mesh spacing and not a displacement distance.
+    Nematics3D defines ``cutoff_wavelength`` as the -3 dB amplitude cutoff of
+    the *complete* smoothing pass:
 
-    The implementation uses the symmetric Taubin family ``mu = -lambda``. If
-    ``N`` is the resolved number of iteration pairs, one pair has spectral gain
+        G_N(kappa_c) = 1/sqrt(2).
 
-        g(kappa) = 1 - lambda**2 * kappa**2,
+    Thus a surface mode whose wavelength equals ``cutoff_wavelength`` retains
+    1/sqrt(2) of its original amplitude after smoothing. Longer-wavelength
+    modes are intended to be preserved more strongly, while shorter-wavelength
+    modes are intended to be suppressed more strongly.
 
-    and the complete pass has
+    A Taubin iteration pair applies coefficients ``lambda > 0`` and ``mu < 0``.
+    This interface parameterizes their relative magnitude by
 
-        G_N(kappa) = (1 - lambda**2 * kappa**2)**N.
+        taubin_ratio = -mu / lambda,
 
-    Requiring ``G_N(kappa_c) = 1/sqrt(2)`` gives
+    so ``mu = -taubin_ratio * lambda``. The default ratio is 1.0674, close to
+    the ratio of the widely used Taubin coefficients 0.6307 and -0.6732. The
+    ratio is dimensionless; unlike those raw coefficients, it remains meaningful
+    when a dimensional Laplace--Beltrami operator is used.
 
-        lambda = sqrt(1 - (1/sqrt(2))**(1/N)) / kappa_c,
-        mu = -lambda.
+    For a resolved iteration count ``N``, let
 
-    Therefore the original Taubin parameters ``(lambda, mu, N)`` are not three
-    independent public controls here. The constraint ``mu = -lambda`` reduces
-    them to two degrees of freedom, represented by
-    ``(cutoff_wavelength, iterations)``. Once those two are known, ``lambda``
-    and ``mu`` are determined uniquely by the equations above.
+        q = 2**(-1 / (2*N)),
+        x = lambda * kappa_c,
+        r = taubin_ratio.
+
+    The cutoff condition requires one iteration pair to satisfy
+
+        (1 - x) * (1 + r*x) = q,
+
+    giving the positive solution
+
+        x = ((r - 1) + sqrt((r - 1)**2 + 4*r*(1 - q))) / (2*r),
+        lambda = x / kappa_c,
+        mu = -r * lambda.
+
+    Therefore ``(cutoff_wavelength, taubin_ratio, iterations)`` is a
+    reparameterization of the original Taubin controls ``(lambda, mu, N)``.
+    The wavelength replaces the less intuitive absolute coefficient scale,
+    while ``taubin_ratio`` controls the lambda/mu asymmetry and ``iterations``
+    controls the number of lambda/mu pairs.
 
     Important readable attributes
     -----------------------------
     cutoff_wavelength
-        Required positive physical wavelength defining the -3 dB cutoff of the
-        complete smoothing pass. No universal default is provided because its
-        appropriate value depends on the physical length scale of the surface.
+        Required positive physical wavelength defining the -3 dB amplitude
+        cutoff of the complete smoothing pass. No universal default exists
+        because the appropriate value depends on the surface length scale.
+    taubin_ratio
+        Positive dimensionless ratio ``-mu/lambda``. Values greater than 1
+        correspond to the usual Taubin choice in which the negative step has a
+        slightly larger magnitude than the positive step. The library default
+        is 1.0674.
     iterations
         Number of Taubin lambda/mu iteration pairs. A positive integer uses that
-        exact count. ``None`` explicitly requests automatic selection of the
-        smallest count satisfying the implementation's stability criterion.
-        If the user leaves this option ``UNSET``, the normal option-default
-        mechanism supplies the library default iteration count.
+        exact count. ``None`` requests automatic selection of the smallest count
+        satisfying the implementation's stability criterion. The library
+        default is also ``None``, so leaving this option ``UNSET`` selects
+        automatic iteration count unless the defaults are overridden.
     """
 
     cutoff_wavelength: Number | Unset = UNSET
+    taubin_ratio: Number | Unset = UNSET
     iterations: int | None | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -73,9 +92,13 @@ class OptsSmoothedSurface(OptsBase):
             "positive physical wavelength defining the -3 dB amplitude cutoff "
             "of the complete surface-smoothing pass"
         ),
+        "taubin_ratio": (
+            "dimensionless Taubin coefficient ratio -mu/lambda; values greater "
+            "than 1 give the usual slightly stronger negative step"
+        ),
         "iterations": (
-            "number of Taubin lambda/mu iteration pairs; None explicitly "
-            "requests automatic stable iteration selection"
+            "number of Taubin lambda/mu iteration pairs; None requests automatic "
+            "selection of the smallest stable count"
         ),
     }
 
@@ -85,6 +108,11 @@ class OptsSmoothedSurface(OptsBase):
             v,
             name=d,
             value_range=(np.nextafter(0.0, 1.0), np.inf),
+        ),
+        "taubin_ratio": lambda v, d: as_number(
+            v,
+            name=d,
+            value_range=(np.nextafter(1.0, np.inf), np.inf),
         ),
         "iterations": lambda v, d: (
             None
@@ -97,6 +125,7 @@ class OptsSmoothedSurface(OptsBase):
         {
             **dict(getattr(OptsBase, "impl_defaults_frozen", {})),
             "tag": "smoothed surface options",
-            "iterations": 10,
+            "taubin_ratio": 1.0674,
+            "iterations": None,
         }
     )
