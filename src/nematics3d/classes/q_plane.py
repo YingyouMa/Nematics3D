@@ -17,9 +17,8 @@ from nematics3d.analysis.q_diagonalization import q_diagonalize
 from nematics3d.general import (
     find_rotation_axis,
     mark_points_membership,
-    select_grid_in_box,
 )
-from nematics3d.geometry import wrap_to_pi
+from nematics3d.geometry import select_points_in_box, wrap_to_pi
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..core.class_base import AttrDef
@@ -57,26 +56,8 @@ class OmegaResult(ResultBase):
     opts: OptsPlaneGridPolar
 
 
-# QPlane extends InterpolatePlane with Q-tensor-specific post-processing and
-# visualization helpers.
-#
-# Subclasses should preserve the coupling among interpolated Q values, the
-# derived director/S caches, defect-detection outputs, and any live visual
-# objects. If the recomputation path is overridden, keep `calc_result`,
-# `calc_n`, `calc_S`, `calc_is_near_defect`, and `calc_defect_pos`
-# synchronized before updating visualization objects.
 class QPlane(InterpolatePlane):
-    """
-    QPlane samples a Q-tensor interpolator on a plane grid and derives
-    director, scalar-order, and defect-related quantities on that plane.
-
-    Normal users access the sampled Q values through `plane.result`, the
-    derived director and order fields through the plane attributes, and can
-    create visual summaries with `act_visualize_n()` and `act_visualize_S()`.
-    For Cartesian `PlaneGrid`, defect positions are reconstructed directly in
-    physical space from the integer sampling topology plus the grid's physical
-    plane basis. Use `plane.show_relations()` to inspect the bound grid.
-    """
+    """Sample a Q-tensor interpolator on a plane grid and derive local structure."""
 
     __attr_defs__ = {
         "calc_n": AttrDef(
@@ -144,11 +125,6 @@ class QPlane(InterpolatePlane):
         "S": {"scalar_bar_title": "S"},
     }
 
-    # ==================== OVERRIDE ====================
-    # QPlane overrides InterpolatePlane.__init__ because it must initialize
-    # Q-plane-specific visual state before delegating to the interpolation
-    # pipeline and triggering the first defect-aware recomputation.
-    # ==================================================
     def __init__(
         self,
         interpolator: GridInterpolator,
@@ -188,11 +164,6 @@ class QPlane(InterpolatePlane):
             **kwargs,
         )
 
-    # ==================== OVERRIDE ====================
-    # QPlane overrides InterpolatePlane.act_refresh because Q-plane updates
-    # must diagonalize interpolated tensors, detect defects, refresh derived
-    # caches, and then propagate the new data into any live visuals.
-    # ==================================================
     def act_refresh(self):
 
         plane_grid = self.grid
@@ -219,7 +190,7 @@ class QPlane(InterpolatePlane):
         else:
             bounds = plane_grid.bounds
             if bounds is not None:
-                _, defect_mask_inside = select_grid_in_box(
+                _, defect_mask_inside = select_points_in_box(
                     defect_centers, bounds.corners, is_return_mask=True
                 )
                 if not plane_grid.opts.is_clip_inside:
@@ -265,9 +236,6 @@ class QPlane(InterpolatePlane):
             step2 = plane_grid.calc_axis2 * space2
             step_both = np.array([step1, step2])
 
-            # Defect topology is detected on the integer lattice, then mapped
-            # directly into physical plane coordinates using the native
-            # PlaneGrid basis instead of any legacy post-transform stage.
             defect_centers = (
                 np.einsum("ai, ib -> ab", defect_plane_index, step_both)
                 + plane_grid.calc_origin_grid0
@@ -388,10 +356,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -407,10 +371,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nb,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -431,10 +391,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -447,10 +403,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -465,10 +417,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_nd,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -482,10 +430,6 @@ class QPlane(InterpolatePlane):
                 category="plane analysis",
                 opts=opts_defect,
                 figure=figure,
-                # Keep the same bounds clip on derived visuals and still register
-                # them as bounds subscribers for shared tooling such as silhouette
-                # suppression, but skip direct bounds-driven commits because
-                # PlaneGrid -> QPlane already drives these updates.
                 bounds=self.grid.bounds,
                 is_subscribe_bounds=True,
                 is_passive_bounds_sync=True,
@@ -542,10 +486,6 @@ class QPlane(InterpolatePlane):
             name=f"S defect of plane {self.name!r}",
             category="plane analysis",
             opts=opts_S,
-            # Keep the same bounds clip on derived visuals and still register
-            # them as bounds subscribers for shared tooling such as silhouette
-            # suppression, but skip direct bounds-driven commits because
-            # PlaneGrid -> QPlane already drives these updates.
             bounds=self.grid.bounds,
             is_subscribe_bounds=True,
             is_passive_bounds_sync=True,
@@ -557,20 +497,8 @@ class QPlane(InterpolatePlane):
         self.act_bind_relation_base("visual_S", visual_S, is_weak=False)
 
 
-# QPlanePolar specializes QPlane for polar plane grids and ring-based
-# defect detection.
-#
-# Subclasses should preserve the expectation that the bound grid is a
-# `PlaneGridPolar`, and keep the ring-offset-based defect traversal aligned
-# with the polar grid cache layout.
 class QPlanePolar(QPlane):
-    """
-    QPlanePolar is the polar-grid variant of QPlane.
-
-    It uses `PlaneGridPolar` sampling and a ring-aware defect-detection path
-    that is better matched to polar lattice topology. Users interact with it
-    through the same main interfaces as `QPlane`.
-    """
+    """Polar-grid variant of QPlane."""
 
     __attr_defs__ = {}
     __slots__ = tuple(
@@ -586,10 +514,6 @@ class QPlanePolar(QPlane):
         "S": {"scalar_bar_title": "S"},
     }
 
-    # ==================== OVERRIDE ====================
-    # QPlanePolar overrides QPlane.__init__ because it must ensure a polar
-    # plane grid is constructed when the caller does not provide one.
-    # ==================================================
     def __init__(
         self,
         interpolator: GridInterpolator,
@@ -622,19 +546,9 @@ class QPlanePolar(QPlane):
             **kwargs,
         )
 
-    # ==================== OVERRIDE ====================
-    # QPlanePolar overrides QPlane._helper_set_visual_interact_with_plane because
-    # polar-plane visuals should open the defect-section interaction UI by
-    # default instead of the Cartesian plane interaction UI.
-    # ==================================================
     def _helper_set_visual_interact_with_plane(self, visual):
         self._helper_set_visual_interact_with_defect_section(visual)
 
-    # ==================== OVERRIDE ====================
-    # QPlanePolar overrides QPlane._helper_detect_defect because polar grids
-    # require ring-aware topology traversal instead of the Cartesian grid
-    # defect-detection path used by QPlane.
-    # ==================================================
     def _helper_detect_defect(self, directors, threshold: float = 0):
 
         plane_grid = self.grid
@@ -646,16 +560,12 @@ class QPlanePolar(QPlane):
         adjacent_mask = np.zeros((points.shape[0],), dtype=bool)
         defect_centers_chunks = []
 
-        # If ring 0 is origin block (size 1 at r=0), skip it for quad loops
         start_ring = 0
         if n_rings >= 1:
             s0, e0 = ring_offsets[0], ring_offsets[1]
             if (e0 - s0) == 1 and np.isclose(polar[s0, 0], 0.0):
                 start_ring = 1
 
-        # ----------------------------
-        # Helper: process one ring-pair (outer -> inner)
-        # ----------------------------
         def _process_outer_to_inner(
             s_outer: int, e_outer: int, s_inner: int, e_inner: int
         ) -> None:
@@ -664,40 +574,34 @@ class QPlanePolar(QPlane):
             if n_outer < 2 or n_inner < 2:
                 return
 
-            theta_outer = polar[s_outer:e_outer, 1]  # (n_outer,)
-            theta_inner = polar[s_inner:e_inner, 1]  # (n_inner,)
+            theta_outer = polar[s_outer:e_outer, 1]
+            theta_inner = polar[s_inner:e_inner, 1]
 
-            # base edges on OUTER ring
             j = np.arange(n_outer, dtype=np.int64)
             jn = (j + 1) % n_outer
 
             idx_a = s_outer + j
             idx_b = s_outer + jn
 
-            theta_a = theta_outer[j]  # (n_outer,)
-            theta_b = theta_outer[jn]  # (n_outer,)
+            theta_a = theta_outer[j]
+            theta_b = theta_outer[jn]
 
-            # c: nearest on INNER ring to theta_b (no sorted assumption)
-            diff_b = wrap_to_pi(
-                theta_inner[None, :] - theta_b[:, None]
-            )  # (n_outer, n_inner)
-            c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)  # (n_outer,)
+            diff_b = wrap_to_pi(theta_inner[None, :] - theta_b[:, None])
+            c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)
 
-            # inner-ring adjacency via sorting theta_inner into a circular order
-            order = np.argsort(theta_inner)  # (n_inner,)
+            order = np.argsort(theta_inner)
             rank_of = np.empty_like(order)
-            rank_of[order] = np.arange(n_inner, dtype=np.int64)  # local_index -> rank
+            rank_of[order] = np.arange(n_inner, dtype=np.int64)
 
-            c_rank = rank_of[c_local]  # (n_outer,)
+            c_rank = rank_of[c_local]
             prev_rank = (c_rank - 1) % n_inner
             next_rank = (c_rank + 1) % n_inner
 
-            prev_local = order[prev_rank]  # (n_outer,)
-            next_local = order[next_rank]  # (n_outer,)
+            prev_local = order[prev_rank]
+            next_local = order[next_rank]
 
-            # d: choose neighbor-of-c closer to theta_a
-            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))  # (n_outer,)
-            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))  # (n_outer,)
+            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))
+            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))
             d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(
                 np.int64
             )
@@ -705,24 +609,21 @@ class QPlanePolar(QPlane):
             idx_c = s_inner + c_local
             idx_d = s_inner + d_local
 
-            # loop vertex coords
             pa = points[idx_a]
             pb = points[idx_b]
             pc = points[idx_c]
             pd = points[idx_d]
 
-            # loop directors
             a = directors[idx_a]
             b_raw = directors[idx_b]
             c_raw = directors[idx_c]
             d_raw = directors[idx_d]
 
-            # align along loop: a -> b -> c -> d
             b = align_directors(a, b_raw)
             c = align_directors(b, c_raw)
             d = align_directors(c, d_raw)
 
-            test = np.einsum("...i,...i->...", a, d)  # (n_outer,)
+            test = np.einsum("...i,...i->...", a, d)
             hit = test < threshold
             if not np.any(hit):
                 return
@@ -735,31 +636,21 @@ class QPlanePolar(QPlane):
             inner_idx = np.unique(np.concatenate([idx_c[hit], idx_d[hit]]))
             adjacent_mask[inner_idx] = True
 
-        # ----------------------------
-        # Outer -> inner traversal with stop rule (inner ring < 6)
-        # ----------------------------
         outermost = n_rings - 1
-        last_good_ring = (
-            None  # the ring index (k) of the last ring with >= 6 points before stopping
-        )
+        last_good_ring = None
 
-        # Walk inward: (outer=r, inner=r-1)
         for r in range(outermost, start_ring, -1):
             s_outer, e_outer = ring_offsets[r], ring_offsets[r + 1]
             s_inner, e_inner = ring_offsets[r - 1], ring_offsets[r]
 
             n_inner = e_inner - s_inner
 
-            # stop condition: we are about to step into a ring with < 6 points
             if n_inner < 6:
-                # Current outer ring is the last ring still >= 6 in practice.
                 last_good_ring = r
                 break
 
-            # process this ring-pair (outer -> inner)
             _process_outer_to_inner(s_outer, e_outer, s_inner, e_inner)
 
-        # If we never hit n_inner < 6, then the innermost ring we reached is start_ring
         if last_good_ring is None:
             last_good_ring = (
                 start_ring
@@ -767,35 +658,25 @@ class QPlanePolar(QPlane):
                 else None
             )
 
-        # ----------------------------
-        # Final-ring internal closure check (only if that ring has >= 6 points)
-        # ----------------------------
         if last_good_ring is not None:
             s, e = ring_offsets[last_good_ring], ring_offsets[last_good_ring + 1]
             n_last = e - s
 
             if n_last >= 6:
-                v = directors[s:e]  # (n_last, 3)
+                v = directors[s:e]
 
-                # Vectorized "sequential alignment" using cumulative signs of neighbor dots.
-                # NOTE: avoid sign==0 zeroing by using a strict <0 test here.
-                dots = np.einsum("ij,ij->i", v[:-1], v[1:])  # (n_last-1,)
-                step_sign = np.where(dots < 0.0, -1.0, 1.0).astype(
-                    v.dtype
-                )  # (n_last-1,)
+                dots = np.einsum("ij,ij->i", v[:-1], v[1:])
+                step_sign = np.where(dots < 0.0, -1.0, 1.0).astype(v.dtype)
 
                 cum_sign = np.concatenate(
                     [np.ones((1,), dtype=v.dtype), np.cumprod(step_sign)]
-                )  # (n_last,)
+                )
 
                 v_aligned_last = v[-1] * cum_sign[-1]
                 closure = float(np.dot(v[0], v_aligned_last))
 
                 if closure < threshold:
-                    # mark this whole ring as adjacent-to-defect
                     adjacent_mask[s:e] = True
-
-                    # put one defect center for this ring (use mean position)
                     defect_centers_chunks.append(
                         points[s:e].mean(axis=0, keepdims=True)
                     )

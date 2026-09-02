@@ -3,67 +3,7 @@
 import numpy as np
 
 
-__all__ = [
-    "mark_points_membership",
-    "select_grid_in_box",
-]
-
-
-def select_grid_in_box(
-    grid: np.ndarray,
-    corners_limit: np.ndarray | None,
-    is_return_mask: bool = False,
-    logger=None,
-):
-    """Filter 3D points by an oriented rectangular box."""
-    grid = np.asarray(grid)
-    n = grid.shape[0] if grid.ndim >= 1 else 0
-
-    if n == 0:
-        if logger is not None:
-            logger.warning("Input `grid` is empty; returning an empty selection.")
-        mask_empty = np.zeros((0,), dtype=bool)
-        return (grid, mask_empty) if is_return_mask else grid
-
-    if corners_limit is None:
-        mask_all = np.ones((n,), dtype=bool)
-        return (grid, mask_all) if is_return_mask else grid
-
-    corners_limit = np.asarray(corners_limit)
-    if (
-        corners_limit.ndim != 2
-        or corners_limit.shape[1] != 3
-        or corners_limit.shape[0] < 4
-    ):
-        raise ValueError(
-            f"`corners_limit` must have shape (>=4, 3). Got {corners_limit.shape} instead."
-        )
-
-    axes = [corners_limit[i] - corners_limit[0] for i in range(1, 4)]
-    lengths = [np.linalg.norm(axis) for axis in axes]
-
-    if any(length <= 0.0 for length in lengths):
-        raise ValueError(
-            "Degenerate `corners_limit`: box edge length(s) must be positive. "
-            f"Got lengths={lengths}."
-        )
-
-    unit_axes = [axis / length for axis, length in zip(axes, lengths)]
-    rel = grid - corners_limit[0]
-    coords = np.stack([rel @ axis for axis in unit_axes], axis=1)
-
-    tol = 1e-9
-    bounds = np.array(lengths, dtype=coords.dtype)
-    mask = np.all((coords >= -tol) & (coords <= bounds + tol), axis=1)
-
-    grid_selected = grid[mask]
-    if grid_selected.shape[0] == 0 and logger is not None:
-        logger.warning(
-            "No points from `grid` fall inside the specified box defined by "
-            f"`corners_limit`:\n{corners_limit}"
-        )
-
-    return (grid_selected, mask) if is_return_mask else grid_selected
+__all__ = ["mark_points_membership"]
 
 
 def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarray:

@@ -17,6 +17,17 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Review commits: migration `2f92ff85ba440c4ce3b7bc63572dcfa1905ed706`; hardened implementation `dbf862d`; focused tests `62a7e17` and tie-order regression `1dd21cb`; circular-import compatibility fix `3afaba2`; tutorial `9fd6dc3` and tie-warning update `8c66860`.
 - Archive note: implementation, API review, focused tests, and documentation are complete. Actual focused pytest/Black/compile/import validation has not yet been recorded, so this component remains reviewed but not formally archived.
 
+### `closest_point_on_polyline()`
+
+- Source: `src/nematics3d/geometry/nearest.py`.
+- Status: reviewed and migrated from `general/misc.py` into the canonical nearest-point geometry module; production use in tube picking now uses the geometry path, while the old `nematics3d.general.closest_point_on_polyline` access path remains temporarily available through lazy compatibility resolution.
+- Behavior reviewed: nearest-point projection onto the union of consecutive line segments; endpoint clamping; multiple-segment selection; repeated consecutive vertices and zero-length segments; one-point polylines; arbitrary spatial dimension; strict dimensional compatibility; finite real inputs; and returned-point copy semantics.
+- Fixes and cleanup: replaced the previous `1e-30` denominator substitution with explicit zero-length-segment handling; centralized input normalization through `datatypes.as_points()`, `as_vector()`, and `as_bool()`-based shared nearest-point validation instead of duplicating real/finite/copy checks in the geometry implementation.
+- Focused tests: `tests/geometry/test_nearest.py`, including interior projection, endpoint clamping, multiple segments, repeated vertices, one-point polylines, arbitrary dimension, empty input, invalid shapes, dimension mismatch, and non-finite values.
+- Tutorial: intentionally not added; this is a low-level geometry primitive used primarily by higher-level picking behavior, and its direct API is sufficiently covered by the docstring and focused tests.
+- Review commits: initial migration and hardening `82ccdca`; geometry export `b4c00a1`; removal from `general/misc.py` `867bdca`; lazy general compatibility `debfad3`; focused tests `db041b7`; datatype-validator refactor `c65455d`.
+- Archive note: implementation, API review, focused tests, and documentation decision are complete. Actual focused pytest/Black/compile/import validation has not yet been recorded, so this component remains reviewed but not formally archived.
+
 ### `as_polydata_input()` and `copy_polydata_geometry()`
 
 - Source: `src/nematics3d/geometry/polydata.py`.
