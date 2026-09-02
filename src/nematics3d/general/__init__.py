@@ -1,13 +1,11 @@
 """General-purpose helpers awaiting more specific long-term homes."""
 
 from .format import fmt_value
-from .misc import mark_points_membership
 
 __all__ = [
     "closest_point_on_polyline",
     "find_nearest_point",
     "fmt_value",
-    "mark_points_membership",
 ]
 
 
