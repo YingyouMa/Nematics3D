@@ -3,6 +3,7 @@
 from .box import get_box_corners, select_points_in_box
 from .misc import *
 from .nearest import closest_point_on_polyline, find_nearest_point
+from .plane import PlaneNormalResult, find_plane_normal
 from .points import points_membership_mask
 from .polydata import (
     as_polydata_input,
