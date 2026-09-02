@@ -5,6 +5,7 @@ from typing import Any, Callable
 import numpy as np
 
 from .datatypes import UNSET
+from .general.format import fmt_value
 
 
 def is_equal_array(v1, v2):
