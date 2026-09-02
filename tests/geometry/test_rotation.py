@@ -7,9 +7,7 @@ from nematics3d.geometry import RotationAxisResult, find_rotation_axis
 
 def test_find_rotation_axis_returns_result_base():
     angles = np.linspace(0.0, np.pi / 2.0, 6)
-    directors = np.column_stack(
-        (np.cos(angles), np.sin(angles), np.zeros_like(angles))
-    )
+    directors = np.column_stack((np.cos(angles), np.sin(angles), np.zeros_like(angles)))
 
     result = find_rotation_axis(directors)
 
@@ -25,9 +23,7 @@ def test_find_rotation_axis_returns_result_base():
 
 def test_rotation_axis_orientation_follows_ordered_rotation():
     angles = np.linspace(0.0, -np.pi / 2.0, 6)
-    directors = np.column_stack(
-        (np.cos(angles), np.sin(angles), np.zeros_like(angles))
-    )
+    directors = np.column_stack((np.cos(angles), np.sin(angles), np.zeros_like(angles)))
 
     result = find_rotation_axis(directors)
 

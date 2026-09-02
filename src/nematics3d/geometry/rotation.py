@@ -100,16 +100,10 @@ def find_rotation_axis(directors) -> RotationAxisResult:
 
     total_variance = float(np.sum(eigenvalues))
     orthogonality_score = (
-        1.0 - float(eigenvalues[0]) / total_variance
-        if total_variance > 0.0
-        else 0.0
+        1.0 - float(eigenvalues[0]) / total_variance if total_variance > 0.0 else 0.0
     )
-    rms_sin_theta = float(
-        np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors))
-    )
-    tilt_angle_degrees = float(
-        np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
-    )
+    rms_sin_theta = float(np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors)))
+    tilt_angle_degrees = float(np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0))))
 
     signed_rotation_steps = cross_products @ axis
     total_signed_rotation = float(np.sum(signed_rotation_steps))

@@ -18,7 +18,7 @@ if "nematics3d" not in sys.modules:
 
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
 from nematics3d.classes.plane_grid import OptsPlaneGrid
-from nematics3d.classes.q_plane import QPlane
+from nematics3d.classes.q_plane import OmegaResult, QPlane, QPlanePolar
 from nematics3d.field import get_q
 
 
@@ -57,6 +57,62 @@ class TestQPlane(unittest.TestCase):
             np.allclose(plane.calc_defect_pos_all, np.array([[12.0, 22.0, 30.0]]))
         )
         self.assertEqual(int(np.sum(plane.calc_is_near_defect)), 1)
+
+    def test_q_plane_polar_maps_structured_rotation_axis_result(self):
+        angles = np.linspace(0.0, np.pi / 2.0, 6)
+        directors = np.column_stack(
+            (np.cos(angles), np.sin(angles), np.zeros_like(angles))
+        )
+        grid_opts = {"source": "bridge regression"}
+        grid = types.SimpleNamespace(
+            calc_ring_offsets=np.array([0, len(directors)]),
+            entity_polar=np.column_stack((np.full(len(directors), 2.5), angles)),
+            entity_grid_all=np.zeros((len(directors), 3)),
+            opts=grid_opts,
+        )
+        interpolator = types.SimpleNamespace(
+            interpolate=lambda points, is_out_warning: (
+                np.zeros((len(points), 5)),
+                np.empty((0, 3)),
+            )
+        )
+        plane = types.SimpleNamespace(
+            grid=grid,
+            interpolator=interpolator,
+            _helper_get_omega_metric_flags=lambda radius, out_points: {
+                "is_out_of_domain": False,
+                "is_defect_inside_R": False,
+                "is_defect_at_center": True,
+            },
+        )
+        logger = types.SimpleNamespace(warning=lambda message: None)
+
+        with patch(
+            "nematics3d.classes.q_plane.q_diagonalize",
+            return_value=types.SimpleNamespace(n=directors),
+        ):
+            result = QPlanePolar.act_calc_omega.__wrapped__(
+                plane,
+                layer=0,
+                logger=logger,
+            )
+
+        self.assertIsInstance(result, OmegaResult)
+        self.assertTrue(np.allclose(result.omega, np.array([0.0, 0.0, 1.0])))
+        self.assertEqual(result.layer, 0)
+        self.assertEqual(result.num_directors, len(directors))
+        self.assertEqual(result.R, 2.5)
+        self.assertEqual(result.metric["orthogonality_score"], 1.0)
+        self.assertEqual(result.metric["rms_sin_theta"], 0.0)
+        self.assertEqual(result.metric["tilt_angle_degrees"], 0.0)
+        self.assertEqual(result.metric["rotation_consistency"], 1.0)
+        self.assertEqual(result.metric["eigenvalues"].shape, (3,))
+        self.assertTrue(np.all(np.diff(result.metric["eigenvalues"]) >= 0.0))
+        self.assertFalse(result.metric["is_out_of_domain"])
+        self.assertFalse(result.metric["is_defect_inside_R"])
+        self.assertTrue(result.metric["is_defect_at_center"])
+        self.assertEqual(result.opts, grid_opts)
+        self.assertIsNot(result.opts, grid_opts)
 
 
 if __name__ == "__main__":
