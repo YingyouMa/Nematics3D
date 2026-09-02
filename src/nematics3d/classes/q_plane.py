@@ -14,8 +14,12 @@ from nematics3d.field import (
     n_color_immerse,
 )
 from nematics3d.analysis.q_diagonalization import q_diagonalize
-from nematics3d.general import find_rotation_axis
-from nematics3d.geometry import points_membership_mask, select_points_in_box, wrap_to_pi
+from nematics3d.geometry import (
+    find_rotation_axis,
+    points_membership_mask,
+    select_points_in_box,
+    wrap_to_pi,
+)
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..core.class_base import AttrDef
@@ -99,7 +103,7 @@ class QPlane(InterpolatePlane):
             is_weak_by_default=False,
         ),
         "visual_defect": AttrDef(
-            doc="The PlotSphere visual showing detected defect positions on this Q plane.",
+            doc="Detected defect positions on this Q plane.",
             kind="relation",
             is_weak_by_default=False,
         ),
@@ -749,7 +753,7 @@ class QPlanePolar(QPlane):
         for i in range(1, len(directors)):
             directors[i] = align_directors(directors[i - 1], directors[i])
 
-        omega, metric = find_rotation_axis(directors, is_return_metric=True)
+        rotation_axis = find_rotation_axis(directors)
         metric_flags = self._helper_get_omega_metric_flags(radius, out_points)
 
         if not metric_flags["is_defect_at_center"]:
@@ -760,9 +764,9 @@ class QPlanePolar(QPlane):
             )
 
         return OmegaResult(
-            omega=omega,
+            omega=rotation_axis.axis,
             metric={
-                **metric,
+                **rotation_axis.metric,
                 **metric_flags,
             },
             layer=layer,
