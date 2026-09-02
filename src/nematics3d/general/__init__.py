@@ -11,14 +11,6 @@ __all__ = [
 
 def __getattr__(name):
     """Temporarily resolve helpers that have already moved to dedicated modules."""
-    if name == "find_rotation_axis":
-        from ..geometry import find_rotation_axis as fit_rotation_axis
-
-        def _legacy_find_rotation_axis(directors, is_return_metric=False):
-            result = fit_rotation_axis(directors)
-            return (result.axis, result.metric) if is_return_metric else result.axis
-
-        return _legacy_find_rotation_axis
     if name in {
         "closest_point_on_polyline",
         "find_nearest_point",
