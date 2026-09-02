@@ -1,6 +1,5 @@
 """General-purpose helpers awaiting more specific long-term homes."""
 
-from ..geometry import find_nearest_point
 from .format import fmt_value
 from .misc import (
     closest_point_on_polyline,
@@ -20,6 +19,7 @@ __all__ = [
 def __getattr__(name):
     """Temporarily resolve helpers that have already moved to dedicated modules."""
     if name in {
+        "find_nearest_point",
         "find_rotation_axis",
         "get_box_corners",
         "rotation_matrix_from_vectors",
