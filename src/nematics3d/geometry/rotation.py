@@ -18,12 +18,27 @@ class RotationAxisResult(ResultBase):
 
     __result_name__: ClassVar[str] = "director rotation-axis fit"
     __field_docs__: ClassVar[dict[str, str]] = {
-        "axis": "Best-fit common rotation axis, oriented by the net ordered rotation of the directors.",
-        "orthogonality_score": "Fractional score approaching 1 when directors lie close to a plane normal to the fitted axis.",
-        "rms_sin_theta": "RMS magnitude of the director component along the fitted axis for normalized directors.",
+        "axis": (
+            "Best-fit common rotation axis, oriented by the net ordered rotation "
+            "of the directors."
+        ),
+        "orthogonality_score": (
+            "Fractional score approaching 1 when directors lie close to a plane "
+            "normal to the fitted axis."
+        ),
+        "rms_sin_theta": (
+            "RMS magnitude of the director component along the fitted axis for "
+            "normalized directors."
+        ),
         "tilt_angle_degrees": "Angle in degrees corresponding to rms_sin_theta.",
-        "rotation_consistency": "Magnitude of net signed rotation divided by the total absolute signed rotation along the ordered sequence.",
-        "eigenvalues": "Ascending eigenvalues of the director second-moment matrix used for the axis fit.",
+        "rotation_consistency": (
+            "Magnitude of net signed rotation divided by the total absolute "
+            "signed rotation along the ordered sequence."
+        ),
+        "eigenvalues": (
+            "Ascending eigenvalues of the director second-moment matrix used for "
+            "the axis fit."
+        ),
     }
 
     axis: np.ndarray
@@ -89,7 +104,9 @@ def find_rotation_axis(directors) -> RotationAxisResult:
         if total_variance > 0.0
         else 0.0
     )
-    rms_sin_theta = float(np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors)))
+    rms_sin_theta = float(
+        np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors))
+    )
     tilt_angle_degrees = float(
         np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
     )
