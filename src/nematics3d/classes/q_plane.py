@@ -14,11 +14,8 @@ from nematics3d.field import (
     n_color_immerse,
 )
 from nematics3d.analysis.q_diagonalization import q_diagonalize
-from nematics3d.general import (
-    find_rotation_axis,
-    mark_points_membership,
-)
-from nematics3d.geometry import select_points_in_box, wrap_to_pi
+from nematics3d.general import find_rotation_axis
+from nematics3d.geometry import points_membership_mask, select_points_in_box, wrap_to_pi
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..core.class_base import AttrDef
@@ -219,7 +216,7 @@ class QPlane(InterpolatePlane):
         ).astype(int)
         defect_vicinity_index = defect_vicinity_index.reshape((-1, 3))[:, :-1]
         defect_plane_index = defect_plane_index[:, :-1]
-        adjacent_mask = mark_points_membership(
+        adjacent_mask = points_membership_mask(
             plane_grid.entity_grid_int.astype(int), defect_vicinity_index
         )
 
