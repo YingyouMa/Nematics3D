@@ -13,10 +13,6 @@ __all__ = [
 
 def __getattr__(name):
     """Temporarily resolve migrated helpers for legacy internal imports."""
-    if name == "fmt_value":
-        from .format import fmt_value
-
-        return fmt_value
     if name in {
         "find_rotation_axis",
         "get_box_corners",
