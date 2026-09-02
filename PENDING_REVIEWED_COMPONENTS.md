@@ -139,3 +139,13 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Tutorial: `tutorials/geometry/points_membership_mask.ipynb`, including inputs/outputs, core examples, implementation semantics, and the current `QPlane._helper_detect_defect()` production caller. The notebook is stored unexecuted.
 - Review commits: canonical helper `ff6d0ba`; geometry export `5ba175e`; focused tests `cef30e4`; structured numerical row comparison `ffe7049`; signed-zero regression `c8a1a64`; direct `QPlane` migration `e31ee35`; removal of the legacy `general` export and alias `ead1e4e` and `6c9f634`; tutorial `61a05db`.
 - Archive note: implementation, API cleanup, caller migration, tests, and tutorial are complete, but focused pytest/Black/compile/import validation has not yet been recorded. Keep this component pending until that validation and a final reviewed commit are recorded.
+
+### `find_rotation_axis()`
+
+- Source: `src/nematics3d/geometry/rotation.py`.
+- Status: reviewed and moved out of the catch-all geometry module into a dedicated rotation-axis module; `QPlanePolar.act_calc_omega()` now calls the canonical geometry API directly and consumes `RotationAxisResult`; the old `general` compatibility adapter and duplicate implementation in `geometry/misc.py` were removed.
+- Behavior reviewed: finite ordered 3D directors; at least two samples; explicit unit-vector validation; smallest-eigenvalue second-moment fit; orientation by net adjacent cross-product rotation; and structured diagnostics through `RotationAxisResult`.
+- Focused tests: `tests/geometry/test_rotation.py`, covering result type, positive and negative ordered rotation, metric/result consistency, minimum sample count, unit-vector validation, and non-finite input rejection.
+- PEP 8 review: long source lines in the result-field documentation and RMS expression were reformatted; naming, imports, spacing, and layout are otherwise consistent with the repository style. Formatting cleanup commit: `ceb2022`.
+- Review commits: structured implementation `18fbeca`; direct QPlane migration `a92fd41`; removal of the `general` adapter `e4ae2a0`; removal of the obsolete `geometry/misc.py` implementation `bda5046`; unrelated QPlane description restoration `a2c0b99`; final formatting cleanup `ceb2022`.
+- Archive note: implementation, caller migration, focused tests, API cleanup, and source-style review are complete. Actual focused pytest/Black/compile/import validation has not yet been recorded, so keep this component pending rather than formally archived.
