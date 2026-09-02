@@ -1,9 +1,9 @@
 """General-purpose helpers awaiting more specific long-term homes."""
 
+from ..geometry import find_nearest_point
 from .format import fmt_value
 from .misc import (
     closest_point_on_polyline,
-    find_nearest_point,
     mark_points_membership,
     select_grid_in_box,
 )
