@@ -2,6 +2,7 @@
 
 from .classification import defect_classify_into_lines
 from .detection import defect_detect
+from .line import get_square, get_square_each
 from .misc import (
     DEFECT_NEIGHBOR,
     defect_detect_surface,
@@ -18,4 +19,6 @@ __all__ = [
     "defect_neighbor_possible_get",
     "defect_validity_from_mask",
     "defect_vicinity_grid",
+    "get_square",
+    "get_square_each",
 ]
