@@ -25,11 +25,11 @@ from ..core.result_base import ResultBase
 
 # fmt: off
 @dataclass(slots=True, repr=False)
-class OptsSmooth(OptsBase):
+class OptsSmoothedLine(OptsBase):
     """
     Options object controlling Savitzky-Golay-based line smoothing.
 
-    OptsSmooth is the user-facing options container paired with SmoothedLine.
+    OptsSmoothedLine is the user-facing options container paired with SmoothedLine.
     It controls how the raw polyline is smoothed, resampled, and wrapped for
     downstream tangent evaluation and function sampling.
 
@@ -96,10 +96,14 @@ class OptsSmooth(OptsBase):
     })
 # fmt: on
 
+# Backward-compatible alias for existing imports; remove when the smoothing
+# subsystem is migrated to geometry/smoothing.
+OptsSmooth = OptsSmoothedLine
 
-class SmoothingConfigError(ValueError):
+
+class LineSmoothingConfigError(ValueError):
     """
-    Recoverable configuration error for smoothing.
+    Recoverable configuration error for line smoothing.
 
     Raised only for explicitly recognized, user-fixable issues inside
     the smoothing helper (e.g., missing window length). This exception
@@ -126,7 +130,7 @@ class SmoothedLine(HostBase):
 
     Important readable attributes:
 
-    - `opts`: the paired OptsSmooth controlling the smoothing pipeline.
+    - `opts`: the paired OptsSmoothedLine controlling the smoothing pipeline.
     - `raw_coords`: the original input polyline coordinates.
     - `calc_coords`: the processed coordinates currently entering the smoother.
     - `calc_num_init`: the number of processed input points currently used.
@@ -256,21 +260,21 @@ class SmoothedLine(HostBase):
     # ==================================================
     def __init__(
         self,
-        line_coord_input: np.ndarray,
+        coords: np.ndarray,
         name: str | None = None,
-        opts: OptsSmooth | None = None,
+        opts: OptsSmoothedLine | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         is_window_warning: bool = True,
         **kwargs,
     ):
 
         super().__init__(
-            OptsSmooth,
+            OptsSmoothedLine,
             opts,
             opts_defaults_override,
             name=name,
             name_replace="line",
-            raw_coords=line_coord_input,
+            raw_coords=coords,
             state_is_window_warning=is_window_warning,
             **kwargs,
         )
@@ -322,11 +326,11 @@ class SmoothedLine(HostBase):
 
         if window_length is None:
             if window_ratio is None:
-                raise SmoothingConfigError(
+                raise LineSmoothingConfigError(
                     "No input value provided for smooth window length."
                 )
             if self.calc_num_init <= 0:
-                raise SmoothingConfigError("Cannot smooth an empty line.")
+                raise LineSmoothingConfigError("Cannot smooth an empty line.")
             window_length = int(self.calc_num_init / window_ratio / 2) * 2 + 1
         else:
             if (
@@ -441,21 +445,21 @@ class SmoothedLine(HostBase):
                     f"the minimum length of line smoothing is set to be {self.opts.min_line_length} "
                     f"points, while the current line has {self.calc_num_init} points"
                 )
-                raise SmoothingConfigError(reason)
+                raise LineSmoothingConfigError(reason)
 
             if self.opts.window_length >= self.calc_num_init:
                 reason = (
                     f"Filter window length {self.opts.window_length} should not be larger than "
                     f"line length {self.calc_num_init}"
                 )
-                raise SmoothingConfigError(reason)
+                raise LineSmoothingConfigError(reason)
 
             if self.opts.window_length <= self.opts.order:
                 reason = (
                     f"Filter window length {self.opts.window_length} should not be smaller than "
                     f"filter order {self.opts.order}"
                 )
-                raise SmoothingConfigError(reason)
+                raise LineSmoothingConfigError(reason)
 
             logger.debug(
                 f"Smoothing window length is finally chosen as {self.opts.window_length}"
@@ -500,7 +504,7 @@ class SmoothedLine(HostBase):
             object.__setattr__(self, "calc_is_smoothed", True)
             object.__setattr__(self, "calc_status", "Success")
 
-        except SmoothingConfigError as e:
+        except LineSmoothingConfigError as e:
             logger.exception("Smoothing aborted (manual check)")
             logger.recovery(
                 "Fallback applied: smoothing disabled; using raw coordinates."
@@ -525,14 +529,14 @@ class SmoothedLine(HostBase):
             name="Whether to return the spline coordinate",
         )
 
-        dr_dx = np.asarray(splev(u, self.entity_tck, der=1), dtype=float)
-        length = float(np.linalg.norm(dr_dx))
+        dr_du = np.asarray(splev(u, self.entity_tck, der=1), dtype=float)
+        length = float(np.linalg.norm(dr_du))
         if (not np.isfinite(length)) or length < 1e-9:
             raise ValueError(
-                f"Degenerate spline derivative at {u}: ||dr/dx||={length}."
+                f"Degenerate spline derivative at {u}: ||dr/du||={length}."
             )
 
-        t_hat = dr_dx / length
+        t_hat = dr_du / length
         if not is_return_coord:
             return t_hat
 
