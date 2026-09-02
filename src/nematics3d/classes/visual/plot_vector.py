@@ -10,7 +10,7 @@ import numpy as np
 import pyvista as pv
 
 from nematics3d.datatypes import UNSET, Unset, as_number, as_points, as_str
-from nematics3d.general import fmt_value
+from nematics3d.format import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData
