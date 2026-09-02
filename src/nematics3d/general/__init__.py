@@ -1,10 +1,7 @@
 """General-purpose helpers awaiting more specific long-term homes."""
 
 from .format import fmt_value
-from .misc import (
-    mark_points_membership,
-    select_grid_in_box,
-)
+from .misc import mark_points_membership
 
 __all__ = [
     "closest_point_on_polyline",
@@ -17,6 +14,10 @@ __all__ = [
 
 def __getattr__(name):
     """Temporarily resolve helpers that have already moved to dedicated modules."""
+    if name == "select_grid_in_box":
+        from ..geometry.box import select_points_in_box
+
+        return select_points_in_box
     if name in {
         "closest_point_on_polyline",
         "find_nearest_point",
