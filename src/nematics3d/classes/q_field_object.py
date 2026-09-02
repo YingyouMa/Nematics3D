@@ -151,7 +151,7 @@ from .plane_grid_polar import OptsPlaneGridPolar
 from .bounds import as_bounds
 from .grid_field import FieldData, GridFieldDataset, GridInterpolator, InputGridField
 from ..core.opts import merge_opts_all, cover_value
-from .smoothed_line import OptsSmooth
+from .smoothed_line import OptsSmoothedLine
 from ..core.registry_base import RegistryBase
 from .disclination_line import DisclinationLine
 from ..core.class_base import AttrDef, ClassBase
@@ -876,7 +876,7 @@ class QFieldObject(ClassBase):
     @logging_and_warning_decorator()
     def act_lines_smooth(
         self,
-        opts: OptsSmooth | None = None,
+        opts: OptsSmoothedLine | None = None,
         logger=None,
         **kwargs,
     ):
@@ -890,10 +890,10 @@ class QFieldObject(ClassBase):
         Parameters
         ----------
         opts
-            Base `OptsSmooth` configuration applied to all candidate lines.
+            Base `OptsSmoothedLine` configuration applied to all candidate lines.
         **kwargs
             Keyword overrides merged into `opts` before smoothing. Supported
-            keys are the fields of `OptsSmooth`, including commonly used
+            keys are the fields of `OptsSmoothedLine`, including commonly used
             options such as `window_length`, `window_ratio`,
             `min_line_length`, and `order`.
 
@@ -924,11 +924,11 @@ class QFieldObject(ClassBase):
 
         See Also
         --------
-        OptsSmooth
+        OptsSmoothedLine
             Full smoothing-option container used by each line.
         """
         if opts is None:
-            opts = OptsSmooth()
+            opts = OptsSmoothedLine()
 
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
 
@@ -1744,7 +1744,7 @@ class QFieldObject(ClassBase):
         index_smooth: int = -1,
         u_samples: np.ndarray | None = None,
         is_new_smooth: bool = False,
-        opts_smooth: OptsSmooth | None = None,
+        opts_smooth: OptsSmoothedLine | None = None,
         name: str | None = None,
         opts_grid: OptsPlaneGridPolar | None = None,
         opts_grid_defaults_override: Mapping[str, Any] | None = None,
@@ -1800,7 +1800,7 @@ class QFieldObject(ClassBase):
             ) from exc
 
         if opts_smooth is None:
-            opts_smooth = OptsSmooth()
+            opts_smooth = OptsSmoothedLine()
         if opts_grid is None:
             opts_grid = OptsPlaneGridPolar()
 

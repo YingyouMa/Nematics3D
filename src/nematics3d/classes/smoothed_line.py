@@ -96,9 +96,6 @@ class OptsSmoothedLine(OptsBase):
     })
 # fmt: on
 
-# Backward-compatible alias for existing imports; remove when the smoothing
-# subsystem is migrated to geometry/smoothing.
-OptsSmooth = OptsSmoothedLine
 
 
 class LineSmoothingConfigError(ValueError):

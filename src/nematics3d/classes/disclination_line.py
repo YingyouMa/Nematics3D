@@ -36,7 +36,7 @@ from ..grid import (
 from .visual.plot_figure import PlotFigure
 from .visual.plot_tube import PlotTube, OptsTube
 from ..core.opts import merge_opts_all, cover_value
-from .smoothed_line import OptsSmooth, SmoothedLine
+from .smoothed_line import OptsSmoothedLine, SmoothedLine
 from ..format import is_given_str
 from ..geometry import find_plane_normal
 from ..core.class_base import AttrDef, ClassBase
@@ -410,7 +410,7 @@ class DisclinationLine(ClassBase):
     def act_smooth(
         self,
         is_new=True,
-        opts: OptsSmooth | None = None,
+        opts: OptsSmoothedLine | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         is_window_warning: bool = True,
         **kwargs,
@@ -682,7 +682,7 @@ class DisclinationLineSmooth(SmoothedLine):
     def __init__(
         self,
         line,
-        opts: OptsSmooth | None = None,
+        opts: OptsSmoothedLine | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         name: str | None = None,
         **kwargs,
