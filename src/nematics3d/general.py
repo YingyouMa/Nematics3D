@@ -11,6 +11,27 @@ __all__ = [
 ]
 
 
+def __getattr__(name):
+    """Temporarily resolve migrated helpers for legacy internal imports."""
+    if name == "fmt_value":
+        from .format import fmt_value
+
+        return fmt_value
+    if name in {
+        "find_rotation_axis",
+        "get_box_corners",
+        "rotation_matrix_from_vectors",
+    }:
+        from . import geometry
+
+        return getattr(geometry, name)
+    if name in {"get_square", "get_square_each"}:
+        from .analysis.disclination.line import get_square, get_square_each
+
+        return {"get_square": get_square, "get_square_each": get_square_each}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 def select_grid_in_box(
     grid: np.ndarray,
     corners_limit: np.ndarray | None,
