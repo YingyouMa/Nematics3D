@@ -1,4 +1,4 @@
-"""Legacy helpers that have not yet moved to dedicated modules."""
+"""General helpers that do not yet have a more specific module home."""
 
 import numpy as np
 
@@ -9,23 +9,6 @@ __all__ = [
     "mark_points_membership",
     "select_grid_in_box",
 ]
-
-
-def __getattr__(name):
-    """Temporarily resolve migrated helpers for legacy internal imports."""
-    if name in {
-        "find_rotation_axis",
-        "get_box_corners",
-        "rotation_matrix_from_vectors",
-    }:
-        from . import geometry
-
-        return getattr(geometry, name)
-    if name in {"get_square", "get_square_each"}:
-        from .analysis.disclination.line import get_square, get_square_each
-
-        return {"get_square": get_square, "get_square_each": get_square_each}[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def select_grid_in_box(
