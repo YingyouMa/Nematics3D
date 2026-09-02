@@ -376,47 +376,6 @@ def rotation_matrix_from_vectors(
     return rot.as_matrix()
 
 
-def find_rotation_axis(directors, is_return_metric=False):
-    """
-    Find the common rotation axis for a sequence of normalized vectors.
-    """
-    M = np.dot(directors.T, directors)
-    eigenvalues, eigenvectors = np.linalg.eigh(M)
-    axis = eigenvectors[:, 0]
-
-    cross_prods = np.cross(directors[:-1], directors[1:])
-    avg_cross = np.sum(cross_prods, axis=0)
-
-    if np.dot(axis, avg_cross) < 0:
-        axis = -axis
-
-    if not is_return_metric:
-        return axis
-
-    total_var = np.sum(eigenvalues)
-    orthogonality_score = 1.0 - (eigenvalues[0] / total_var)
-    rms_sin_theta = np.sqrt(eigenvalues[0] / len(directors))
-    tilt_angle_deg = np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
-
-    signed_rotation_steps = np.dot(cross_prods, axis)
-    total_signed_rotation = np.sum(signed_rotation_steps)
-    total_rotation_magnitude = np.sum(np.abs(signed_rotation_steps))
-    rotation_consistency = (
-        np.abs(total_signed_rotation) / total_rotation_magnitude
-        if total_rotation_magnitude > 1e-12
-        else 0.0
-    )
-
-    metric = {
-        "orthogonality_score": orthogonality_score,
-        "rms_sin_theta": rms_sin_theta,
-        "tilt_angle_degrees": tilt_angle_deg,
-        "rotation_consistency": rotation_consistency,
-        "eigenvalues": eigenvalues,
-    }
-    return axis, metric
-
-
 def find_plane_normal(points, is_return_metric=False):
     """
     Estimate the normal vector of a point cloud and evaluate its planarity.
