@@ -5,7 +5,6 @@ import numpy as np
 
 __all__ = [
     "closest_point_on_polyline",
-    "find_nearest_point",
     "mark_points_membership",
     "select_grid_in_box",
 ]
@@ -88,22 +87,6 @@ def mark_points_membership(points1: np.ndarray, points2: np.ndarray) -> np.ndarr
     b_view = b.view(row_dtype).ravel()
 
     return np.isin(a_view, b_view).reshape(-1)
-
-
-def find_nearest_point(query_pt, coords, is_return_idx=False):
-    """Find the nearest point in ``coords`` to ``query_pt`` in Euclidean distance."""
-    q = np.asarray(query_pt, dtype=float).reshape(-1)
-    pts = np.asarray(coords, dtype=float)
-    if pts.ndim != 2 or pts.shape[1] != len(q):
-        raise ValueError(
-            f"`coords` shape is {pts.shape},"
-            f"while normalized `query_pt` shape is {q.shape}"
-        )
-
-    delta = pts - q
-    distance_squared = np.einsum("ij,ij->i", delta, delta)
-    idx = int(np.argmin(distance_squared))
-    return (pts[idx], idx) if is_return_idx else pts[idx]
 
 
 def closest_point_on_polyline(query_pt: np.ndarray, poly_pts: np.ndarray) -> np.ndarray:
