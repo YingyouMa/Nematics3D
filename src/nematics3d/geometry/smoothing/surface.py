@@ -41,7 +41,13 @@ class OptsSmoothedSurface(OptsBase):
     ratio is dimensionless; unlike those raw coefficients, it remains meaningful
     when a dimensional Laplace--Beltrami operator is used.
 
-    For a resolved iteration count ``N``, let
+    The iteration count is intentionally not a public smoothing option. For a
+    fixed ``cutoff_wavelength`` and ``taubin_ratio``, the implementation chooses
+    the smallest positive integer N for which the resolved Taubin filter is
+    stable over the discrete surface spectrum. This also minimizes the
+    pass-band amplification among stable choices for the same ratio.
+
+    For any candidate N, let
 
         q = 2**(-1 / (2*N)),
         x = lambda * kappa_c,
@@ -57,11 +63,15 @@ class OptsSmoothedSurface(OptsBase):
         lambda = x / kappa_c,
         mu = -r * lambda.
 
-    Therefore ``(cutoff_wavelength, taubin_ratio, iterations)`` is a
-    reparameterization of the original Taubin controls ``(lambda, mu, N)``.
-    The wavelength replaces the less intuitive absolute coefficient scale,
-    while ``taubin_ratio`` controls the lambda/mu asymmetry and ``iterations``
-    controls the number of lambda/mu pairs.
+    If ``kappa_max`` is the largest resolved Laplace--Beltrami eigenvalue, the
+    candidate is accepted only when the high-frequency edge is not amplified:
+
+        abs((1 - lambda*kappa_max) * (1 - mu*kappa_max)) <= 1.
+
+    Candidates are tested in increasing N, and the first accepted N is used.
+    The resolved N, lambda, mu, and kappa_max are calculation results rather
+    than user-controlled options and should be exposed by ``SmoothedSurface``
+    as diagnostics.
 
     Important readable attributes
     -----------------------------
@@ -74,17 +84,10 @@ class OptsSmoothedSurface(OptsBase):
         correspond to the usual Taubin choice in which the negative step has a
         slightly larger magnitude than the positive step. The library default
         is 1.0674.
-    iterations
-        Number of Taubin lambda/mu iteration pairs. A positive integer uses that
-        exact count. ``None`` requests automatic selection of the smallest count
-        satisfying the implementation's stability criterion. The library
-        default is also ``None``, so leaving this option ``UNSET`` selects
-        automatic iteration count unless the defaults are overridden.
     """
 
     cutoff_wavelength: Number | Unset = UNSET
     taubin_ratio: Number | Unset = UNSET
-    iterations: int | None | Unset = UNSET
 
     __attrs__: ClassVar[Mapping[str, str]] = {
         **OptsBase.__attrs__,
@@ -95,10 +98,6 @@ class OptsSmoothedSurface(OptsBase):
         "taubin_ratio": (
             "dimensionless Taubin coefficient ratio -mu/lambda; values greater "
             "than 1 give the usual slightly stronger negative step"
-        ),
-        "iterations": (
-            "number of Taubin lambda/mu iteration pairs; None requests automatic "
-            "selection of the smallest stable count"
         ),
     }
 
@@ -114,11 +113,6 @@ class OptsSmoothedSurface(OptsBase):
             name=d,
             value_range=(np.nextafter(1.0, np.inf), np.inf),
         ),
-        "iterations": lambda v, d: (
-            None
-            if v is None
-            else as_number(v, name=d, is_integer=True, value_range=(1, np.inf))
-        ),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType(
@@ -126,6 +120,5 @@ class OptsSmoothedSurface(OptsBase):
             **dict(getattr(OptsBase, "impl_defaults_frozen", {})),
             "tag": "smoothed surface options",
             "taubin_ratio": 1.0674,
-            "iterations": None,
         }
     )
