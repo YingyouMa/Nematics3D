@@ -16,6 +16,7 @@ from nematics3d.datatypes import (
     as_bool,
     as_str,
 )
+from nematics3d.geometry import select_points_in_box
 from nematics3d.grid import generate_fixed_step_grid, resolve_plane_physical_axes
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
@@ -23,7 +24,6 @@ from .bounds import Bounds, as_bounds
 from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
 from ..core.opts import cover_value
-from ..general import select_grid_in_box
 
 
 #!!! grid unit
@@ -31,17 +31,9 @@ from ..general import select_grid_in_box
 #!!! axis normal figdemo
 
 
-# --- Plane Options ---
 @dataclass(slots=True, repr=False)
 class OptsPlaneGrid(OptsBase):
-    """
-    Options object controlling one PlaneGrid defined directly in physical space.
-
-    The primary geometry inputs are the physical-space `origin`, `normal`,
-    `axis1`, `spacing`, `spacing_extra`, `size`, and `size_extra`. Integer
-    lattice indices remain an internal sampling topology, not the public
-    geometric contract.
-    """
+    """Options object controlling one PlaneGrid defined directly in physical space."""
 
     normal: Vect(3) | Unset = UNSET
     spacing: Number | Unset = UNSET
@@ -108,37 +100,8 @@ class OptsPlaneGrid(OptsBase):
     )
 
 
-# PlaneGrid keeps the HostBase option pipeline but specializes it for
-# generating a 2D lattice embedded in 3D space from one physical plane basis.
-#
-# Subclasses should preserve the relationship among the physical-space
-# `origin`, `normal`, `axis1`, the derived physical `axis2`, and the generated
-# grid caches. If grid generation is overridden, keep `entity_grid`,
-# `entity_grid_all`, `entity_grid_int`, and the derived size/origin-point fields
-# synchronized.
 class PlaneGrid(HostBase):
-    """
-    PlaneGrid generates a 2D sampling grid embedded in 3D physical space.
-
-    The public geometry contract is physical-space first:
-
-    - `origin` is one physical point on the plane
-    - `normal` is one physical unit normal
-    - `axis1` is one physical unit in-plane reference axis
-    - `spacing` / `spacing_extra` are physical step lengths
-    - `size` / `size_extra` are physical plane extents
-    - `alignment` defines where `origin` lies relative to the generated grid
-
-    The integer lattice exists to describe sampling layout only. It should not
-    be treated as the primary geometric basis of the plane.
-
-    Normal users configure the grid through `grid.opts` or
-    `grid.act_commit(...)`, and can iterate over the selected grid points or
-    convert the object to a NumPy array directly. Use
-    `grid.show_modifiable_attrs()` to inspect available settings and
-    `grid.show_relations()` to check the current `field` and `bounds`
-    bindings.
-    """
+    """Generate a 2D sampling grid embedded in 3D physical space."""
 
     __attr_defs__ = {
         "entity_grid": AttrDef(
@@ -239,11 +202,6 @@ class PlaneGrid(HostBase):
         and name not in HostBase.__slots__
     )
 
-    # ==================== OVERRIDE ====================
-    # PlaneGrid overrides HostBase.__init__ because it must validate required
-    # plane parameters, install the bounds-sync helper state, and trigger the
-    # first grid generation immediately after opts finalization.
-    # ==================================================
     def __init__(
         self,
         name: str | None = None,
@@ -283,11 +241,6 @@ class PlaneGrid(HostBase):
 
         self._helper_commit_apply_opts(is_reapply_opts=True)
 
-    # ==================== OVERRIDE ====================
-    # PlaneGrid overrides HostBase._helper_commit_apply_opts_main because
-    # plane-grid opts require custom axis construction, grid generation,
-    # optional bounds filtering, and cache updates specific to plane sampling.
-    # ==================================================
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(
         self, is_reapply_opts=False, logger=None, **kwargs
@@ -343,9 +296,9 @@ class PlaneGrid(HostBase):
             grid_select = grid
         else:
             logger.debug(
-                f"Select the grids against bounds {bounds!r}, keep inside={is_clip_inside}."
+                f"Select the points against bounds {bounds!r}, keep inside={is_clip_inside}."
             )
-            _, mask_inside = select_grid_in_box(
+            _, mask_inside = select_points_in_box(
                 grid, bounds.corners, is_return_mask=True
             )
             mask = mask_inside if is_clip_inside else ~mask_inside
@@ -366,11 +319,6 @@ class PlaneGrid(HostBase):
         if self.field:
             self.field.act_refresh()
 
-    # ==================== OVERRIDE ====================
-    # PlaneGrid overrides ClassBase.__repr__ because a plane grid is more useful
-    # when represented by its geometric orientation and origin than by name
-    # alone.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         msg = (
@@ -379,10 +327,6 @@ class PlaneGrid(HostBase):
         )
         return msg
 
-    # ==================== OVERRIDE ====================
-    # PlaneGrid overrides ClassBase.__str__ to keep the plain string form
-    # short and aligned with the repository-wide default identity style.
-    # ==================================================
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
@@ -403,12 +347,7 @@ class PlaneGrid(HostBase):
         spacing_extra,
         alignment,
     ):
-        """
-        Map integer lattice indices directly into physical-space grid points.
-
-        The integer lattice expresses only sampling topology. Physical geometry
-        is defined by origin, axis1, axis2, and the physical step lengths.
-        """
+        """Map integer lattice indices directly into physical-space grid points."""
         target_shape = np.shape(grid_int)[:2]
         grid_index_flat = np.reshape(grid_int, (-1, 2))
         step_both = np.array([axis1 * spacing, axis2 * spacing_extra])
@@ -506,122 +445,3 @@ class PlaneGrid(HostBase):
         )
         if is_apply:
             self.act_commit(is_reapply_opts=True)
-
-
-#     def act_debug_plot(self,
-#                        opts_extent: OptsTube | None = None,
-#                        opts_points: OptsSphere | None = None,
-#                        opts_figure: OptsFigure | None = None,
-#                        opts_origin: OptsSphere | None = None,
-#                        **kwargs
-#                        ):
-#
-#         if opts_extent is None:
-#             opts_extent = OptsTube()
-#         if opts_points is None:
-#             opts_points = OptsSphere()
-#         if opts_figure is None:
-#             opts_figure = OptsFigure()
-#         if opts_origin is None:
-#             opts_origin = OptsSphere()
-#
-#         merge = merge_opts_all(
-#             {
-#                 "figure_": opts_figure,
-#                 "point_": opts_points,
-#                 "extent_": opts_extent,
-#                 "origin_": opts_origin
-#             },
-#             kwargs, type(self).__name__)
-#
-#         opts_figure = merge["figure_"]
-#         opts_points = merge["point_"]
-#         opts_extent = merge["extent_"]
-#         opts_origin = merge["origin_"]
-#
-#         figure = PlotFigure(
-#             opts=opts_figure,
-#             name=f"Diagnostic plot of plane {self.name!r}"
-#         )
-#         bulk = PlotSphere(
-#             coords=self.entity_grid,
-#             opts=opts_points,
-#             figure=figure,
-#             category="plane_grid_test",
-#             name="grid"
-#             )
-#         PlotSphere(
-#             coords=self.opts.origin,
-#             opts=opts_origin,
-#             figure=figure,
-#             opts_defaults_override={
-#                 "color": (1,0,0),
-#                 "radius": 1.2*bulk._calc_radius[0]
-#             },
-#             category="plane_grid_test",
-#             name="origin"
-#         )
-#         if self.bounds is not None:
-#             self.bounds.act_visualize(
-#                 opts=opts_extent,
-#                 figure=figure,
-#                 category="plane_grid_test",
-#                 name="grid_extent",
-#             )
-#
-#         object.__setattr__(self, "entity_fig_demo", figure)
-#
-#         return figure
-#
-#
-# @logging_and_warning_decorator()
-# def act_log_parameters(self, is_return: bool = False, logger=None) -> None:
-#     """
-#     Log internal filter and output parameters for inspection.
-
-#     This is the standard logging interface used in this library, which
-#     can be redirected to console or to a file depending on the logger
-#     configuration and the behavior of ``logging_and_warning_decorator``.
-
-#     All attributes listed in ``__attrs__`` are included,
-#     formatted in a single log entry with a clear separator.
-#     """
-#     lines = []
-#     lines.append("-------------- PlaneGrid Parameters --------------")
-
-#     lines.append("PlaneGrid parameters and results:")
-#     for attr in self.__slots__:
-#         desc = self.__attrs__.get(attr, "(no description)")
-#         value = getattr(self, attr, None)
-
-#         if attr in ("opts.axis1", "opts.spacing", "opts.spacing_extra"):
-#             lines.append(f"  {attr}: {value!r}  # {desc} (derived final value)")
-#         else:
-#             lines.append(f"  {attr}: {value!r}  # {desc}")
-
-#     lines.append("-----------------------------------------------------")
-
-#     msg = "\n".join(lines)
-
-#     if is_return:
-#         return msg
-#     else:
-#         logger.info(msg)
-
-# def act_save(self, path: str = "save/PlaneGrid.json") -> None:
-#     import json
-#     import os
-#     data = asdict(self._opts_all)
-#     path = as_str(path, name="The path to save PlaneGrid")
-#     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-#     with open(path, "w", encoding="utf-8") as f:
-#         json.dump(data, f, indent=2)
-
-# @classmethod
-# def act_load(cls, path: str = "save/PlaneGrid.json") -> "PlaneGrid":
-#     import json
-#     path = as_str(path, name="The path to load PlaneGrid")
-#     with open(path, "r", encoding="utf-8") as f:
-#         data = json.load(f)
-#     opts = OptsPlaneGrid(**data)
-#     return cls(opts=opts)
