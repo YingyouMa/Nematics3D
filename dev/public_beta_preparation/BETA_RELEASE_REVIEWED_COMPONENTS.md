@@ -805,6 +805,126 @@ Summary of changes and evidence:
 - Kept PyVista as a deferred local import so this heavier optional visualization
   dependency is loaded only when a mesh is constructed.
 
+### `nematics3d.geometry.find_nearest_point` and `closest_point_on_polyline`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public nearest-point geometry functions |
+| Source | [`src/nematics3d/geometry/nearest.py`](../../src/nematics3d/geometry/nearest.py) |
+| Tests | [`tests/geometry/test_nearest.py`](../../tests/geometry/test_nearest.py) |
+| Tutorial | [`tutorials/geometry/find_nearest_point.ipynb`](../../tutorials/geometry/find_nearest_point.ipynb); no separate polyline tutorial is needed for the lower-level picking primitive |
+| Review scope | Arbitrary-dimensional finite inputs, shape and dimension validation, nearest-row selection, optional index return, copy ownership, deterministic first-row tie behavior, segment projection and endpoint clamping, repeated vertices, zero-length segments, and one-point polylines |
+| Validation | Combined pending-function run `python -m pytest tests/geometry/test_nearest.py tests/geometry/test_polydata.py tests/test_geometry_box.py tests/test_van_der_corput.py tests/test_grid_periodic.py tests/test_grid_plane.py tests/geometry/test_points.py -q` (105 passed); Black; canonical import; in-memory syntax compile; complete in-memory execution of the nearest-point tutorial; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Exact nearest-point ties return the first matching row and therefore remain input-order dependent. |
+
+### `nematics3d.geometry.as_polydata_input` and `copy_polydata_geometry`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public PyVista/VTK boundary and geometry-copy functions |
+| Source | [`src/nematics3d/geometry/polydata.py`](../../src/nematics3d/geometry/polydata.py) |
+| Tests | [`tests/geometry/test_polydata.py`](../../tests/geometry/test_polydata.py), with downstream sampling and PlotPolyData coverage |
+| Tutorial | None; these are low-level boundary helpers covered by their API documentation and focused tests |
+| Review scope | Accepted dataset families, conversion fallbacks and failure chaining, existing-PolyData ownership, keyword-only diagnostics, independent geometry/topology copying, attached-array removal, and non-PolyData rejection |
+| Validation | Included in the 105-test combined pending-function run; earlier focused downstream run (15 passed, 1 unrelated deselection); Black; canonical import; in-memory syntax compile; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Geometry-only copying deep-copies attached arrays before removing them, which can temporarily increase memory use for data-heavy meshes. |
+
+### `nematics3d.geometry.get_box_corners` and `select_points_in_box`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public rectangular-box construction and point-selection functions |
+| Source | [`src/nematics3d/geometry/box.py`](../../src/nematics3d/geometry/box.py) |
+| Tests | [`tests/test_geometry_box.py`](../../tests/test_geometry_box.py) |
+| Tutorial | [`tutorials/geometry/box/get_box_corners.ipynb`](../../tutorials/geometry/box/get_box_corners.ipynb) and [`tutorials/geometry/select_points_in_box.ipynb`](../../tutorials/geometry/select_points_in_box.ipynb) |
+| Review scope | Fixed corner ordering, finite non-negative lengths, degenerate dimensions, empty points, all-point selection, translated and rotated rectangular boxes, edge validation, inclusive boundaries, tolerance, mask output, caller migration, and removal of the legacy selector name |
+| Validation | Included in the 105-test combined pending-function run; Black; canonical import; in-memory syntax compile; complete in-memory execution of both tutorials; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | `select_points_in_box()` uses the first four corners and supports oriented rectangular boxes, not general skew parallelepipeds. |
+
+### `nematics3d.analysis.sampling.sample_van_der_corput`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public low-discrepancy sequence function |
+| Source | [`src/nematics3d/analysis/sampling/van_der_corput.py`](../../src/nematics3d/analysis/sampling/van_der_corput.py) |
+| Tests | [`tests/test_van_der_corput.py`](../../tests/test_van_der_corput.py) |
+| Tutorial | [`tutorials/analysis/sampling/sample_van_der_corput.ipynb`](../../tutorials/analysis/sampling/sample_van_der_corput.ipynb) |
+| Review scope | Standard base-2 sequence, optional insertion of one, lengths zero through two, long-sequence output dtype and interval, endpoint count, non-negative integer validation, and boolean-option validation |
+| Validation | Included in the 105-test combined pending-function run; Black; canonical API use; in-memory syntax compile; complete in-memory execution of the tutorial; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | None identified for the documented base-2 sequence contract. |
+
+### `nematics3d.classes.visual.color.blue_red_in_white_bg`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public/internal white-background RGB palette function |
+| Source | [`src/nematics3d/classes/visual/color.py`](../../src/nematics3d/classes/visual/color.py) |
+| Tests | None; direct deterministic numerical validation is sufficient for this zero-input helper |
+| Tutorial | None; the returned palette is an implementation-level visualization preset |
+| Review scope | 511 RGB rows, blue-green-red endpoint and midpoint ordering, single shared green row, normalized coordinates, and unit L2 norm for every color |
+| Validation | Direct numerical smoke validation of shape, endpoints, midpoint, and all row norms; Black; in-memory syntax compile; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | The palette is a fixed deterministic preset and does not expose resolution or interpolation-space options. |
+
+### `nematics3d.grid.wrap_points_to_box`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public periodic-coordinate wrapping function |
+| Source | [`src/nematics3d/grid/periodic.py`](../../src/nematics3d/grid/periodic.py) |
+| Tests | [`tests/test_grid_periodic.py`](../../tests/test_grid_periodic.py) |
+| Tutorial | [`tutorials/grid/periodic/wrap_points_to_box.ipynb`](../../tutorials/grid/periodic/wrap_points_to_box.ipynb) |
+| Review scope | Single and multiple points, mixed periodic axes, transformed and offset lattice coordinates, input isolation, empty collections, strict point validation, and active callers |
+| Validation | Included in the 105-test combined pending-function run; Black; canonical import; in-memory syntax compile; complete in-memory execution of the tutorial; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Wrapping follows the configured per-axis periodicity and the grid transform contract; it does not infer periodic axes. |
+
+### `nematics3d.grid.resolve_plane_physical_axes`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public plane-basis resolution function |
+| Source | [`src/nematics3d/grid/plane.py`](../../src/nematics3d/grid/plane.py) |
+| Tests | [`tests/test_grid_plane.py`](../../tests/test_grid_plane.py) |
+| Tutorial | None; the helper primarily supports `PlaneGrid` and is documented directly in its API |
+| Review scope | Input normalization, deterministic automatic axes, in-plane projection, collinear fallback, right-handed orthonormal basis construction, warning validation, and invalid vectors |
+| Validation | Included in the 105-test combined pending-function run; Black; canonical import; in-memory syntax compile; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | A collinear requested axis falls back to the deterministic automatic-axis policy rather than preserving a user-selected orientation. |
+
+### `nematics3d.geometry.points_membership_mask`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public exact row-membership function |
+| Source | [`src/nematics3d/geometry/points.py`](../../src/nematics3d/geometry/points.py) |
+| Tests | [`tests/geometry/test_points.py`](../../tests/geometry/test_points.py) |
+| Tutorial | [`tutorials/geometry/points_membership_mask.ipynb`](../../tutorials/geometry/points_membership_mask.ipynb) |
+| Review scope | Exact row membership, arbitrary coordinate dimension, finite values, empty inputs, duplicate candidates, common-dtype promotion, signed-zero equality, shape errors, caller migration, and removal of the legacy helper name |
+| Validation | Included in the 105-test combined pending-function run; Black; canonical import; in-memory syntax compile; complete in-memory execution of the tutorial; `git diff --check` |
+| Reviewed commit | `1af0fe771da3611e02b5e973fe2ec21a7270bd03` |
+| Reviewed date | 2026-09-02 |
+| Reviewer | Yingyou Ma and Codex |
+| Remaining limitations | Floating-point membership is intentionally exact and does not apply a tolerance. |
+
 ## Stale review records
 
 Move an entry here when its reviewed source or relevant behavior changes after
