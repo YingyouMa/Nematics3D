@@ -294,6 +294,29 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIsInstance(q.interpolator, GridInterpolator)
         self.assertIs(q.interpolator, q.field.interpolator)
 
+    def test_n_init_uses_broadcast_unit_s_and_direct_q5(self):
+        n = np.zeros((2, 3, 4, 3), dtype=np.float32)
+        n[..., 0] = 1.0
+
+        q = QFieldObject(
+            n=n,
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+
+        self.assertEqual(q.raw_S.shape, n.shape[:-1])
+        self.assertEqual(q.raw_S.strides, (0, 0, 0))
+        self.assertFalse(q.raw_S.flags.writeable)
+        self.assertEqual(q.raw_Q.shape, n.shape[:-1] + (5,))
+        np.testing.assert_allclose(q.raw_S, 1.0)
+        np.testing.assert_allclose(
+            q.raw_Q,
+            np.broadcast_to(
+                np.array([2.0 / 3.0, 0.0, 0.0, -1.0 / 3.0, 0.0]),
+                q.raw_Q.shape,
+            ),
+        )
+
     def test_attached_analysis_init_reuses_existing_dataset_owned_q_field(self):
         shape = (2, 2, 2)
         q_values = np.zeros(shape + (5,), dtype=float)

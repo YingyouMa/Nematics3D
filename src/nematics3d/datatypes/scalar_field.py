@@ -39,10 +39,27 @@ def as_scalar_field(
                 f"{name!r} must have shape (Nx, Ny, Nz). "
                 f"Got shape {raw_value.shape}."
             )
-        if not all(isinstance(component, numbers.Real) for component in raw_value.flat):
-            raise TypeError(f"{name!r} must contain only real numbers. Got {value!r}.")
+        if raw_value.dtype.kind == "O":
+            if not all(
+                isinstance(component, numbers.Real) for component in raw_value.flat
+            ):
+                raise TypeError(
+                    f"{name!r} must contain only real numbers. Got {value!r}."
+                )
+            scalar_field = np.asarray(raw_value, dtype=float)
+        elif np.issubdtype(raw_value.dtype, np.floating):
+            scalar_field = raw_value
+        elif np.issubdtype(raw_value.dtype, np.integer) or np.issubdtype(
+            raw_value.dtype,
+            np.bool_,
+        ):
+            scalar_field = raw_value.astype(float)
+        else:
+            raise TypeError(
+                f"{name!r} must contain only real numbers. Got dtype "
+                f"{raw_value.dtype}."
+            )
 
-        scalar_field = np.asarray(raw_value, dtype=float)
         if not np.isfinite(scalar_field).all():
             raise ValueError(
                 f"{name!r} must contain only finite values. Got {value!r}."

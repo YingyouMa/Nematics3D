@@ -24,6 +24,35 @@ def test_get_q_defaults_to_unit_scalar_order():
     np.testing.assert_allclose(get_q([1.0, 0.0, 0.0]), expected)
 
 
+def test_get_q_can_return_compact_q5_without_changing_values():
+    directors = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    scalar_order = np.array([0.6, 0.3])
+
+    q9 = get_q(directors, S=scalar_order, output="q9")
+    q5 = get_q(directors, S=scalar_order, output="q5")
+
+    assert q5.shape == (2, 5)
+    np.testing.assert_allclose(
+        q5,
+        q9[..., (0, 0, 0, 1, 1), (0, 1, 2, 1, 2)],
+    )
+
+
+def test_get_q_q5_preserves_float32_when_all_inputs_are_float32():
+    directors = np.array([[1.0, 0.0, 0.0]], dtype=np.float32)
+    scalar_order = np.array([0.75], dtype=np.float32)
+
+    result = get_q(directors, S=scalar_order, output="q5")
+
+    assert result.dtype == np.float32
+
+
+@pytest.mark.parametrize("output", ["compact", "Q5", 5])
+def test_get_q_rejects_invalid_output_representation(output):
+    with pytest.raises((TypeError, ValueError)):
+        get_q([1.0, 0.0, 0.0], output=output)
+
+
 @pytest.mark.parametrize("biaxial_order", [-0.2, 0.2])
 def test_get_q_constructs_signed_biaxial_tensor(biaxial_order):
     result = get_q(
@@ -36,6 +65,18 @@ def test_get_q_constructs_signed_biaxial_tensor(biaxial_order):
     expected = np.diag([0.4, -0.2 + biaxial_order, -0.2 - biaxial_order])
     np.testing.assert_allclose(result, expected, atol=1e-15)
     np.testing.assert_allclose(np.trace(result), 0.0, atol=1e-15)
+
+    compact = get_q(
+        [1.0, 0.0, 0.0],
+        S=0.6,
+        m=[0.0, 1.0, 0.0],
+        P=biaxial_order,
+        output="q5",
+    )
+    np.testing.assert_allclose(
+        compact,
+        result[(0, 0, 0, 1, 1), (0, 1, 2, 1, 2)],
+    )
 
 
 def test_get_q_round_trips_complete_diagonalization():

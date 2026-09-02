@@ -123,7 +123,7 @@ from ..datatypes import (
     Unset,
     as_bool,
 )
-from ..field import get_q
+from ..field import _get_q_from_validated
 from ..analysis.q_diagonalization import q_diagonalize
 from ..analysis.sampling import sample_van_der_corput
 from ..grid import (
@@ -176,7 +176,7 @@ class InputQ:
         Q-tensor field on the lattice. Compatible input representations are
         accepted and normalized to the internal `QField5` representation.
     S
-        Scalar order parameter field with shape matching `n.shape[:3]`.
+        Scalar order parameter field broadcast-compatible with `n.shape[:3]`.
         Used together with `n` to reconstruct `Q`.
     n
         Director field with shape `(..., 3)`. Used to reconstruct `Q` when a
@@ -638,20 +638,47 @@ class QFieldObject(ClassBase):
                 if self.raw_S is UNSET:
                     logger.warning("No S input. Set to 1 everywhere.")
                     object.__setattr__(
-                        self, "raw_S", np.zeros(np.shape(self.raw_n)[:-1]) + 1.0
+                        self,
+                        "raw_S",
+                        np.broadcast_to(
+                            np.asarray(1.0, dtype=self.raw_n.dtype),
+                            self.raw_n.shape[:-1],
+                        ),
                     )
                 if self.raw_Q is not UNSET:
                     logger.warning(
                         "Both Q and n are provided to initialize Q field. Q will be IGNORED."
                     )
-                if np.shape(self.raw_S) != np.shape(self.raw_n)[:3]:
+                try:
+                    scalar_shape = np.broadcast_shapes(
+                        np.shape(self.raw_S),
+                        np.shape(self.raw_n)[:-1],
+                    )
+                except ValueError as error:
                     raise ValueError(
-                        "Shape mismatch between director field `n` and scalar field `S`: "
-                        f"expected n.shape[:3] == S.shape, "
-                        f"but got n.shape = {self.raw_n.shape}, S.shape = {self.raw_S.shape}."
+                        "The director field `n` and scalar field `S` must have "
+                        "broadcast-compatible spatial shapes. "
+                        f"Got n.shape={self.raw_n.shape} and "
+                        f"S.shape={np.shape(self.raw_S)}."
+                    ) from error
+                if scalar_shape != self.raw_n.shape[:-1]:
+                    raise ValueError(
+                        "Broadcasting `S` against `n` must resolve to the spatial "
+                        f"shape {self.raw_n.shape[:-1]}. Got {scalar_shape}."
                     )
                 object.__setattr__(
-                    self, "raw_Q", as_qfield5(get_q(self.raw_n, S=self.raw_S))
+                    self,
+                    "raw_S",
+                    np.broadcast_to(self.raw_S, self.raw_n.shape[:-1]),
+                )
+                object.__setattr__(
+                    self,
+                    "raw_Q",
+                    _get_q_from_validated(
+                        self.raw_n,
+                        self.raw_S,
+                        output="q5",
+                    ),
                 )
             else:
                 if self.raw_Q is not UNSET:
