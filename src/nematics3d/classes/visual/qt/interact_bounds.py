@@ -2,8 +2,10 @@ import numpy as np
 from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
-from nematics3d.general import rotation_matrix_from_vectors
-from nematics3d.geometry import calc_vec_from_azimuth_polar
+from nematics3d.geometry import (
+    calc_vec_from_azimuth_polar,
+    rotation_matrix_from_vectors,
+)
 from ..plot_sphere import PlotSphere, OptsSphere
 from ..plot_tube import PlotTube, OptsTube
 

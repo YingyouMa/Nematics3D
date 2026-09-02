@@ -11,7 +11,7 @@ import pyvista as pv
 
 from nematics3d.datatypes import UNSET, Unset, as_bool
 from nematics3d.format import fmt_value
-from nematics3d.general import closest_point_on_polyline
+from nematics3d.geometry import closest_point_on_polyline
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData

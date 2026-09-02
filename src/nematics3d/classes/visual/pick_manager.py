@@ -7,7 +7,7 @@ from qtpy import QtCore, QtGui, QtWidgets
 from dataclasses import dataclass, field
 
 from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.general import find_nearest_point, closest_point_on_polyline
+from nematics3d.geometry import closest_point_on_polyline, find_nearest_point
 from nematics3d.datatypes import (
     as_number,
     ColorRGB,

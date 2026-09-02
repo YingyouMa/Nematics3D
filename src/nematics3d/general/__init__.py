@@ -1,6 +1,6 @@
 """General-purpose helpers awaiting more specific long-term homes."""
 
-from .format import fmt_value
+from ..format import fmt_value
 
 __all__ = [
     "closest_point_on_polyline",

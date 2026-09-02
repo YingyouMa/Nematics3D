@@ -15,6 +15,7 @@ from ...datatypes import (
 )
 from ...field import align_stack
 from ...logging_decorator import logging_and_warning_decorator
+from .line import get_square
 
 DEFECT_NEIGHBOR = np.zeros((10, 3))
 DEFECT_NEIGHBOR[0] = (1, 0, 0)
@@ -516,8 +517,6 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     defectx = defect_indices[indexx]
     defecty = defect_indices[indexy]
     defectz = defect_indices[indexz]
-
-    from ...general import get_square
 
     squarex = get_square(
         square_size_list, square_num_list, origin_list=square_origin_list, dim=3

@@ -25,7 +25,7 @@ from nematics3d.datatypes import (
     as_points,
 )
 from nematics3d.format import fmt_value, save_opts_json
-from nematics3d.general import find_nearest_point
+from nematics3d.geometry import find_nearest_point
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData, as_bounds
@@ -344,8 +344,10 @@ class PlotGlyph(HostBase):
         logger=None,
         **kwargs,
     ):
-        coords = type(self).__attr_defs__["raw_coords"].validator(
-            coords, type(self).__attr_defs__["raw_coords"].doc
+        coords = (
+            type(self)
+            .__attr_defs__["raw_coords"]
+            .validator(coords, type(self).__attr_defs__["raw_coords"].doc)
         )
         object.__setattr__(self, "raw_coords", coords)
         if len(coords) == 0:
@@ -354,19 +356,27 @@ class PlotGlyph(HostBase):
                 "it will initialize as an empty glyph until coordinates are provided."
             )
 
-        clip_mode = type(self).__attr_defs__["state_clip_mode"].validator(
-            clip_mode, type(self).__attr_defs__["state_clip_mode"].doc
+        clip_mode = (
+            type(self)
+            .__attr_defs__["state_clip_mode"]
+            .validator(clip_mode, type(self).__attr_defs__["state_clip_mode"].doc)
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
 
-        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"].validator(
-            is_clip_inside, type(self).__attr_defs__["state_is_clip_inside"].doc
+        is_clip_inside = (
+            type(self)
+            .__attr_defs__["state_is_clip_inside"]
+            .validator(
+                is_clip_inside, type(self).__attr_defs__["state_is_clip_inside"].doc
+            )
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "calc_coords", coords.copy())
 
-        category = type(self).__attr_defs__["raw_category"].validator(
-            category, type(self).__attr_defs__["raw_category"].doc
+        category = (
+            type(self)
+            .__attr_defs__["raw_category"]
+            .validator(category, type(self).__attr_defs__["raw_category"].doc)
         )
         object.__setattr__(self, "raw_category", category)
 
@@ -911,7 +921,10 @@ class PlotGlyph(HostBase):
             is_reresolve = True
             attrs_reresolve_for_source.update(self._pending_resolution_attrs)
 
-        for attr_name, override_key in self._resolver_source_override_attr_names.items():
+        for (
+            attr_name,
+            override_key,
+        ) in self._resolver_source_override_attr_names.items():
             if override_key not in kwargs:
                 continue
             object.__setattr__(self.opts, override_key, kwargs.pop(override_key))

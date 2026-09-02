@@ -36,7 +36,7 @@ from nematics3d.grid import (
     apply_linear_transform,
     generate_coordinate_grid,
 )
-from nematics3d.general import get_box_corners
+from nematics3d.geometry import get_box_corners
 
 
 class TestGridFieldDataset(unittest.TestCase):

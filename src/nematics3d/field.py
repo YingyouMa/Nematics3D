@@ -6,7 +6,6 @@ from typing import List, Tuple
 
 import numpy as np
 
-# from .general import *
 from .datatypes import (
     DimensionInfo,
     GeneralField,

@@ -9,12 +9,12 @@ from .panel_base import (
     LogTickMapper,
     MovePointConsole,
 )
-from nematics3d.general import rotation_matrix_from_vectors
 from nematics3d.geometry import (
     calc_vec_from_azimuth_polar,
     get_azimuth as geometry_get_azimuth,
     get_polar_angle as geometry_get_polar_angle,
     get_axis1_azimuth as geometry_get_axis1_azimuth,
+    rotation_matrix_from_vectors,
 )
 from ..plot_rod import PlotRod
 from ..plot_sphere import PlotSphere
