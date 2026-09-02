@@ -377,31 +377,30 @@ class DisclinationLine(ClassBase):
     # -------------------------------
 
     @logging_and_warning_decorator()
-    def act_calc_norm(self, logger=None) -> np.ndarray:
-        """Estimate and cache one average plane normal for this defect line."""
-        normal, metric = find_plane_normal(
-            self.calc_defect_coords, is_return_metric=True
-        )
+    def act_calc_norm(self, logger=None):
+        """Estimate, cache, and return the average plane fit for this defect line."""
+        result = find_plane_normal(self.calc_defect_coords)
 
-        if metric["linearity_risk"] > 0.5:
+        if result.linearity_risk > 0.5:
             logger.warning(
                 f"Low confidence in normal for {self.name!r}: "
                 f"The disclination line is nearly straight. The calculated normal "
                 f"may rotate arbitrarily around the line axis, "
-                f"with linearity_risk as {metric['linearity_risk']:.2f}"
+                f"with linearity_risk as {result.linearity_risk:.2f}"
             )
 
-        elif metric["planarity_score"] < 0.7:
+        elif result.planarity_score < 0.7:
             logger.warning(
                 f"Low confidence in normal for {self.name!r}: "
-                f"The line is highly non-planar (planarity_score={metric['planarity_score']:.2f}). "
-                f"The result is only an 'average' plane normal."
+                f"The line is highly non-planar "
+                f"(planarity_score={result.planarity_score:.2f}). "
+                "The result is only an 'average' plane normal."
             )
 
-        object.__setattr__(self, "calc_norm", normal)
-        object.__setattr__(self, "calc_norm_metric", metric)
+        object.__setattr__(self, "calc_norm", result.normal)
+        object.__setattr__(self, "calc_norm_metric", result.metric)
 
-        return normal
+        return result
 
     # -------------------------------
     # Smoothing and visualization
