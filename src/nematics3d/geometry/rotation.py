@@ -1,4 +1,4 @@
-"""Rotation-axis fitting helpers for ordered director sequences."""
+"""Rotation helpers for 3D vectors and ordered director sequences."""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -6,10 +6,14 @@ from typing import ClassVar
 import numpy as np
 
 from ..core.result_base import ResultBase
-from ..datatypes import as_points
+from ..datatypes import as_points, as_vector
 
 
-__all__ = ["RotationAxisResult", "find_rotation_axis"]
+__all__ = [
+    "RotationAxisResult",
+    "find_rotation_axis",
+    "rotation_matrix_from_vectors",
+]
 
 
 @dataclass(slots=True, frozen=True, repr=False)
@@ -103,7 +107,9 @@ def find_rotation_axis(directors) -> RotationAxisResult:
         1.0 - float(eigenvalues[0]) / total_variance if total_variance > 0.0 else 0.0
     )
     rms_sin_theta = float(np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors)))
-    tilt_angle_degrees = float(np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0))))
+    tilt_angle_degrees = float(
+        np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
+    )
 
     signed_rotation_steps = cross_products @ axis
     total_signed_rotation = float(np.sum(signed_rotation_steps))
@@ -122,3 +128,62 @@ def find_rotation_axis(directors) -> RotationAxisResult:
         rotation_consistency=float(rotation_consistency),
         eigenvalues=eigenvalues,
     )
+
+
+def rotation_matrix_from_vectors(source_vector, target_vector) -> np.ndarray:
+    """Return the minimal 3D rotation mapping one unit vector onto another.
+
+    Parameters
+    ----------
+    source_vector, target_vector : array-like, shape (3,)
+        Finite normalized 3D vectors.
+
+    Returns
+    -------
+    numpy.ndarray, shape (3, 3)
+        Proper orthogonal rotation matrix ``R`` satisfying
+        ``R @ source_vector == target_vector`` up to floating-point error.
+
+    Notes
+    -----
+    Parallel vectors return the identity matrix. Antiparallel vectors admit
+    infinitely many 180-degree rotations; this implementation chooses a
+    deterministic axis by crossing the source vector with the Cartesian basis
+    direction least aligned with it.
+    """
+    source = as_vector(
+        source_vector,
+        d=3,
+        name="source_vector",
+        is_normalized=True,
+    )
+    target = as_vector(
+        target_vector,
+        d=3,
+        name="target_vector",
+        is_normalized=True,
+    )
+
+    cosine = float(np.clip(source @ target, -1.0, 1.0))
+    cross = np.cross(source, target)
+    sine = float(np.linalg.norm(cross))
+
+    if sine <= 1e-12:
+        if cosine > 0.0:
+            return np.eye(3)
+
+        basis = np.zeros(3)
+        basis[int(np.argmin(np.abs(source)))] = 1.0
+        axis = np.cross(source, basis)
+        axis /= np.linalg.norm(axis)
+        return 2.0 * np.outer(axis, axis) - np.eye(3)
+
+    axis = cross / sine
+    skew = np.array(
+        [
+            [0.0, -axis[2], axis[1]],
+            [axis[2], 0.0, -axis[0]],
+            [-axis[1], axis[0], 0.0],
+        ]
+    )
+    return np.eye(3) + sine * skew + (1.0 - cosine) * (skew @ skew)
