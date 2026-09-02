@@ -1,6 +1,7 @@
 """Glyph visuals, opts resolution, bounds binding, and live figure updates."""
 
 from __future__ import annotations
+
 import datetime
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,8 +24,8 @@ from nematics3d.datatypes import (
     as_vector,
     as_points,
 )
-from nematics3d.format import save_opts_json
-from nematics3d.general import find_nearest_point, fmt_value
+from nematics3d.format import fmt_value, save_opts_json
+from nematics3d.general import find_nearest_point
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from ..bounds import BoundsData, as_bounds
@@ -33,10 +34,6 @@ from ..host_base import OptsBase, HostBase
 from .plot_figure import FigureData, as_plotfigure
 from .scalar_bar import ScalarBar
 
-#!!! colorbar name args manager
-#!!! is_reset_camera commit
-
-# --- Type aliases ---
 ColorMode = ColorRGB | Callable | Sequence
 OpacityMode = float | Callable | Sequence
 RadiusMode = float | Callable | Sequence
@@ -52,48 +49,22 @@ def _as_resolver_source_or_none(value, name, *, pool):
 # fmt: off
 @dataclass(slots=True, repr=False)
 class OptsGlyph(OptsBase):
-    """
-    Glyph-specific opts object for visual style, resolver inputs, and scalar
-    display behavior.
+    """Glyph-specific opts for appearance, resolver inputs, and scalar display."""
 
-    For most users, an ``OptsGlyph`` instance is accessed through ``glyph.opts``
-    rather than created in isolation.
-
-    Important readable attributes on ``OptsGlyph`` include:
-    - ``host`` to access the owning glyph object when attached
-
-    User-facing `act_*` methods on `OptsGlyph` include the inherited `OptsBase`
-    helpers, with glyph-aware JSON export behavior:
-
-    - ``act_finalize()`` to fill defaults and enter the functioning state
-    - ``act_asdict()`` to export the current glyph opts payload
-    - ``act_save_json()`` to serialize glyph opts, replacing callable visual
-      resolvers with the current resolved ``calc_*`` arrays when available
-    - ``act_load_json()`` to load a saved JSON payload back into this instance
-
-    Representation behavior is split intentionally:
-    - ``str(opts)`` gives a compact one-line identity like ``OptsGlyph``
-    - ``repr(opts)`` prints the full field-by-field summary that is meant for
-      interactive inspection
-    """
-    # --- Visibility & Global ---
     is_visible:                 bool | Unset                        = UNSET
     is_pickable:                bool | Unset                        = UNSET
     shading_type:               Literal["phong", "pbr"] | Unset     = UNSET
     is_reset_camera:            bool | Unset                        = UNSET
 
-    # --- Phong Lighting ---
     ambient:                    float | Unset                       = UNSET
     diffuse:                    float | Unset                       = UNSET
     specular:                   float | Unset                       = UNSET
     specular_power:             float | Unset                       = UNSET
     specular_color:             ColorRGB | Unset                    = UNSET
 
-    # --- PBR Lighting ---
     metallic:                   float | Unset                       = UNSET
     roughness:                  float | Unset                       = UNSET
 
-    # --- Shape & Color ---
     paint_by:                   Literal["color", "scalars"] | Unset = UNSET
     color:                      ColorMode | Unset                   = UNSET
     opacity:                    OpacityMode | Unset                 = UNSET
@@ -105,35 +76,26 @@ class OptsGlyph(OptsBase):
     resolver_source_radius:     str | None | Unset                  = UNSET
     resolver_source_scalars:    str | None | Unset                  = UNSET
 
-    # --- Scalars (used if color == "scalars") ---
     scalars_cmap:               str | Unset                         = UNSET
     scalars_clim:               Vect(2) | None | Unset              = UNSET
     is_scalar_bar:              bool | Unset                        = UNSET
     scalar_bar_title:           str | Unset                         = UNSET
 
-    # --- Geometry ---
     sides:                      int | Unset                         = UNSET
+
     __attrs__: ClassVar[Mapping[str, str]] = {
         **(OptsBase.__attrs__),
-
-        # === Visibility & Global Settings ===
         "is_visible":           "Whether the glyph is visible in the scene.",
         "is_pickable":          "Whether the glyph could be picked by mouse in the scene.",
         "shading_type":         "'phong', 'pbr' (Physical)",
         "is_reset_camera":      "Whether to reset the camera settings for each (re-)plot.",
-
-        # === Lighting - Phong ===
         "ambient":              "Reflected light from environment (0-1).",
         "diffuse":              "Standard matte reflection (0-1).",
         "specular":             "Glossy highlight strength (0-1).",
         "specular_power":       "Focus of gloss (1-100). Higher = shinier/smaller spot.",
         "specular_color":       "The color of the glossy highlight (RGB). Usually white [1,1,1].",
-
-        # === Lighting - PBR ===
         "metallic":             "PBR metallic effect (0-1). Needs PBR enabled.",
         "roughness":            "PBR surface roughness (0-1). Needs PBR enabled.",
-
-        # === Shape and Color Control ===
         "paint_by":             "Select rendering pipeline: direct RGBA vs scalar colormap.",
         "color": (
             "Determines point colors. Options: "
@@ -180,14 +142,10 @@ class OptsGlyph(OptsBase):
             "Optional resolver-source override for callable scalars. "
             + "Use None to fall back to resolver_source."
         ),
-
-        # === Scalars Control (Needs color_rule='scalars') ===
         "scalars_cmap":         "Colormap name (e.g., 'viridis') used if color is set to scalar.",
         "scalars_clim":         "Color limits [min, max] for scalar mapping.",
         "is_scalar_bar":        "Whether to display the color legend (scalar bar).",
         "scalar_bar_title":     "Title for the scalar bar (e.g., 'Stress (MPa)').",
-
-        # --- Geometry ---
         "sides":                "Number of facets around the glyph (higher = smoother).",
     }
 
@@ -200,35 +158,22 @@ class OptsGlyph(OptsBase):
         "ambient":              lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
         "diffuse":              lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
         "specular":             lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
-        "specular_power":       lambda v, d: as_number(
-            v, name=d, value_range=(1, 100), is_clipped=True
-        ),
+        "specular_power":       lambda v, d: as_number(v, name=d, value_range=(1, 100), is_clipped=True),
         "specular_color":       lambda v, d: as_ColorRGB(v, name=d),
         "metallic":             lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
         "roughness":            lambda v, d: as_number(v, name=d, value_range=(0, 1), is_clipped=True),
         "paint_by":             lambda v, d: as_str(v, name=d, pool=("color", "scalars")),
         "resolver_source":      lambda v, d: as_str(v, name=d, pool=("coords", "u_percent")),
-        "resolver_source_color": lambda v, d: _as_resolver_source_or_none(
-            v, d, pool=("coords", "u_percent")
-        ),
-        "resolver_source_opacity": lambda v, d: _as_resolver_source_or_none(
-            v, d, pool=("coords", "u_percent")
-        ),
-        "resolver_source_radius": lambda v, d: _as_resolver_source_or_none(
-            v, d, pool=("coords", "u_percent")
-        ),
-        "resolver_source_scalars": lambda v, d: _as_resolver_source_or_none(
-            v, d, pool=("coords", "u_percent")
-        ),
+        "resolver_source_color": lambda v, d: _as_resolver_source_or_none(v, d, pool=("coords", "u_percent")),
+        "resolver_source_opacity": lambda v, d: _as_resolver_source_or_none(v, d, pool=("coords", "u_percent")),
+        "resolver_source_radius": lambda v, d: _as_resolver_source_or_none(v, d, pool=("coords", "u_percent")),
+        "resolver_source_scalars": lambda v, d: _as_resolver_source_or_none(v, d, pool=("coords", "u_percent")),
         "scalars_cmap":         lambda v, d: as_str(v, name=d),
         "scalars_clim":         lambda v, d: (v if v is None else as_vector(v, name=d, d=2)),
         "is_scalar_bar":        lambda v, d: as_bool(v, name=d),
         "scalar_bar_title":     lambda v, d: as_str(v, name=d),
-        "sides":                lambda v, d: as_number(
-            v, name=d, is_integer=True, value_range=(3, 128), is_clipped=True
-        ),
-        }
-
+        "sides":                lambda v, d: as_number(v, name=d, is_integer=True, value_range=(3, 128), is_clipped=True),
+    }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType({
         "tag":                  "glyph options",
@@ -271,23 +216,13 @@ class OptsGlyph(OptsBase):
         "specular_color":       "prop.specular_color",
         "metallic":             "prop.metallic",
         "roughness":            "prop.roughness",
-        }
-
-    # ==================== OVERRIDE ====================
-    # OptsGlyph overrides OptsBase._helper_host_apply so opts updates are
-    # forwarded through the owning glyph commit pipeline.
-    # ==================================================
+    }
 
     def _helper_host_apply(self, key, value, *, host=None):
         host = self.host if host is None else host
         if host:
             host.act_commit(**{key: value})
 
-    # ==================== OVERRIDE ====================
-    # OptsGlyph overrides OptsBase.act_save_json so callable visual resolvers
-    # are saved as the current resolved `calc_*` arrays when the owning glyph
-    # is available.
-    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def act_save_json(
         self,
@@ -319,63 +254,8 @@ class OptsGlyph(OptsBase):
 # fmt: on
 
 
-# Subclassing rules:
-# - PlotGlyph subclasses must preserve the HostBase commit contract while also
-#   keeping the glyph-specific render pipeline consistent: resolved data ->
-#   polydata -> mesh -> actor.
-# - Subclasses should override `_helper_build_mesh()` to define geometry and
-#   should override `_helper_build_poly()` only when the default point-data
-#   preparation is not sufficient.
-# - Keep figure registration, bounds binding, and pick registration aligned so
-#   actor lifecycle stays synchronized with PlotFigure lifecycle.
-# - Preserve the distinction between raw inputs (`raw_*`), resolved arrays
-#   (`calc_*`), and live plotter entities (`entity_*`).
-
-
 class PlotGlyph(HostBase):
-    """
-    Base class for drawable glyph-style objects attached to a PlotFigure.
-
-    For most users, concrete subclasses of ``PlotGlyph`` are created by
-    higher-level visualization helpers rather than instantiated directly.
-
-    A ``PlotGlyph`` combines the normal ``HostBase`` object/opts model with a
-    glyph-specific render pipeline:
-
-    - raw geometric inputs such as ``raw_coords``
-    - resolved visual arrays such as ``calc_color`` and ``calc_radius``
-    - live plotter entities such as the actor and optional silhouette
-
-    Important readable attributes on ``PlotGlyph`` include:
-    - ``opts`` to access the paired ``OptsGlyph`` object controlling rendering
-    - ``fig`` to access the containing ``PlotFigure``
-    - ``bounds`` to inspect the currently bound clipping ``Bounds`` object
-
-    User-facing `show_*` methods on `PlotGlyph` are inherited from `HostBase`:
-
-    - ``show_readable_attrs()`` to list readable glyph, host, and opts surfaces
-    - ``show_attr_desc()`` to explain one glyph attr, relation, alias, or opts attr
-    - ``show_modifiable_attrs()`` to separate host attrs, opts attrs, extra attrs,
-      and writable properties
-    - ``show_relations()`` / ``show_relation_tree()`` to inspect figure, bounds,
-      wrapper, and other object links
-    - ``show_saved_opts()`` to list named snapshots stored in ``opts_backup``
-
-    User-facing `act_*` methods on `PlotGlyph` include both inherited host
-    actions and glyph-specific rendering helpers. Common ones are:
-
-    - ``act_commit()`` to apply host and opts updates through the managed glyph
-      update pipeline
-    - ``act_bind_bounds()`` / ``act_unbind_bounds()`` to manage clipping bounds
-    - ``act_save_opts()`` to snapshot current opts into ``opts_backup``
-    - ``act_highlight()`` / ``act_dehighlight()`` to control silhouette emphasis
-    - ``act_interact()`` / ``act_set_interact_func()`` to manage glyph-side
-      interaction hooks
-    - ``act_remove()`` to detach the glyph from its figure and live plotter state
-
-    PlotGlyph manages both the resolved visual data of the glyph and the live
-    actor created in the plotter.
-    """
+    """Base class for drawable glyph-style objects attached to a PlotFigure."""
 
     # fmt: off
     __attr_defs__ = {
@@ -391,19 +271,13 @@ class PlotGlyph(HostBase):
             is_reapply_opts_after_raw=True,
         ),
         "state_clip_mode": AttrDef(
-            doc=(
-                "Clip strategy for bounds application. 'mesh' clips the built "
-                "mesh while 'center' clips the center representation before meshing."
-            ),
+            doc=("Clip strategy for bounds application. 'mesh' clips the built mesh while 'center' clips the center representation before meshing."),
             kind="state",
             validator=lambda v, d: as_str(v, name=d, pool=("mesh", "center")),
             is_reapply_opts_after_raw=True,
         ),
         "state_is_clip_inside": AttrDef(
-            doc=(
-                "Whether bounds clipping keeps the region inside the bounds "
-                "(True) or outside (False)."
-            ),
+            doc="Whether bounds clipping keeps the region inside the bounds (True) or outside (False).",
             kind="state",
             validator=lambda v, d: as_bool(v, name=d),
             is_reapply_opts_after_raw=True,
@@ -418,78 +292,21 @@ class PlotGlyph(HostBase):
             kind="state",
             validator=lambda v, d: as_bool(v, name=d),
         ),
-        "calc_coords": AttrDef(
-            doc=(
-                "The effective coordinates used for the current glyph build "
-                "after clip-mode preprocessing."
-            ),
-            kind="calc",
-        ),
-        "calc_poly": AttrDef(
-            doc="The generated PyVista PolyData.",
-            kind="calc",
-        ),
-        "calc_color": AttrDef(
-            doc="The resolved per-point RGB color array of the glyph.",
-            kind="calc",
-        ),
-        "calc_opacity": AttrDef(
-            doc="The resolved per-point opacity array of the glyph.",
-            kind="calc",
-        ),
-        "calc_radius": AttrDef(
-            doc="The resolved per-point radius array used for glyph thickness.",
-            kind="calc",
-        ),
-        "calc_scalars": AttrDef(
-            doc="The resolved per-point scalar array used for scalar coloring.",
-            kind="calc",
-        ),
-        "calc_is_empty": AttrDef(
-            doc=(
-                "Whether the glyph currently has no drawable geometry and "
-                "should skip render-side updates."
-            ),
-            kind="calc",
-        ),
-        "entity_actor": AttrDef(
-            doc="The PyVista Actor corresponding to this object in the plotter.",
-            kind="entity",
-        ),
-        "entity_silhouette": AttrDef(
-            doc="The PyVista Actor used as the silhouette highlight for this object.",
-            kind="entity",
-        ),
-        "fig": AttrDef(
-            doc="The PlotFigure instance containing this glyph.",
-            kind="relation",
-            is_weak_by_default=True,
-        ),
-        "bounds": AttrDef(
-            doc="The Bounds instance clipping this glyph.",
-            kind="relation",
-            is_weak_by_default=True,
-        ),
-        "bounds_visual_source": AttrDef(
-            doc="The Bounds instance driving this glyph as a bounds-frame visual.",
-            kind="relation",
-            is_weak_by_default=True,
-        ),
-        "impl_name_pv": AttrDef(
-            doc="The unique identifier of this glyph stored in the PyVista plotter.",
-            kind="impl",
-        ),
-        "impl_is_bounds_enabled": AttrDef(
-            doc="Internal runtime switch controlling whether the bound bounds is applied.",
-            kind="impl",
-        ),
-        "impl_interact_func": AttrDef(
-            doc=(
-                "The function to trigger the control window when the "
-                "instance is double right-clicked."
-            ),
-            kind="impl",
-        ),
+        "calc_coords": AttrDef(doc="The effective coordinates used for the current glyph build after clip-mode preprocessing.", kind="calc"),
+        "calc_poly": AttrDef(doc="The generated PyVista PolyData.", kind="calc"),
+        "calc_color": AttrDef(doc="The resolved per-point RGB color array of the glyph.", kind="calc"),
+        "calc_opacity": AttrDef(doc="The resolved per-point opacity array of the glyph.", kind="calc"),
+        "calc_radius": AttrDef(doc="The resolved per-point radius array used for glyph thickness.", kind="calc"),
+        "calc_scalars": AttrDef(doc="The resolved per-point scalar array used for scalar coloring.", kind="calc"),
+        "calc_is_empty": AttrDef(doc="Whether the glyph currently has no drawable geometry and should skip render-side updates.", kind="calc"),
+        "entity_actor": AttrDef(doc="The PyVista Actor corresponding to this object in the plotter.", kind="entity"),
+        "entity_silhouette": AttrDef(doc="The PyVista Actor used as the silhouette highlight for this object.", kind="entity"),
+        "fig": AttrDef(doc="The PlotFigure instance containing this glyph.", kind="relation", is_weak_by_default=True),
+        "bounds": AttrDef(doc="The Bounds instance clipping this glyph.", kind="relation", is_weak_by_default=True),
+        "bounds_visual_source": AttrDef(doc="The Bounds instance driving this glyph as a bounds-frame visual.", kind="relation", is_weak_by_default=True),
+        "impl_name_pv": AttrDef(doc="The unique identifier of this glyph stored in the PyVista plotter.", kind="impl"),
+        "impl_is_bounds_enabled": AttrDef(doc="Internal runtime switch controlling whether the bound bounds is applied.", kind="impl"),
+        "impl_interact_func": AttrDef(doc="The function to trigger the control window when the instance is double right-clicked.", kind="impl"),
     }
 
     __slots__ = tuple(
@@ -500,21 +317,13 @@ class PlotGlyph(HostBase):
     )
 
     _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
-    _resolver_source_override_attr_names: Mapping[str, str] = MappingProxyType(
-        {
-            "color": "resolver_source_color",
-            "opacity": "resolver_source_opacity",
-            "radius": "resolver_source_radius",
-            "scalars": "resolver_source_scalars",
-        }
-    )
+    _resolver_source_override_attr_names: Mapping[str, str] = MappingProxyType({
+        "color": "resolver_source_color",
+        "opacity": "resolver_source_opacity",
+        "radius": "resolver_source_radius",
+        "scalars": "resolver_source_scalars",
+    })
     # fmt: on
-
-    # ==================== OVERRIDE ====================
-    # PlotGlyph overrides HostBase.__init__ because it must validate glyph
-    # inputs, choose or create a figure, and initialize render-specific state
-    # before the generic host lifecycle is completed.
-    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def __init__(
@@ -535,14 +344,8 @@ class PlotGlyph(HostBase):
         logger=None,
         **kwargs,
     ):
-
-        coords = (
-            type(self)
-            .__attr_defs__["raw_coords"]
-            .validator(
-                coords,
-                type(self).__attr_defs__["raw_coords"].doc,
-            )
+        coords = type(self).__attr_defs__["raw_coords"].validator(
+            coords, type(self).__attr_defs__["raw_coords"].doc
         )
         object.__setattr__(self, "raw_coords", coords)
         if len(coords) == 0:
@@ -550,34 +353,23 @@ class PlotGlyph(HostBase):
                 f"{type(self).__name__} received empty coords with shape {coords.shape}; "
                 "it will initialize as an empty glyph until coordinates are provided."
             )
-        clip_mode = (
-            type(self)
-            .__attr_defs__["state_clip_mode"]
-            .validator(
-                clip_mode,
-                type(self).__attr_defs__["state_clip_mode"].doc,
-            )
+
+        clip_mode = type(self).__attr_defs__["state_clip_mode"].validator(
+            clip_mode, type(self).__attr_defs__["state_clip_mode"].doc
         )
         object.__setattr__(self, "state_clip_mode", clip_mode)
-        is_clip_inside = (
-            type(self)
-            .__attr_defs__["state_is_clip_inside"]
-            .validator(
-                is_clip_inside,
-                type(self).__attr_defs__["state_is_clip_inside"].doc,
-            )
+
+        is_clip_inside = type(self).__attr_defs__["state_is_clip_inside"].validator(
+            is_clip_inside, type(self).__attr_defs__["state_is_clip_inside"].doc
         )
         object.__setattr__(self, "state_is_clip_inside", is_clip_inside)
         object.__setattr__(self, "calc_coords", coords.copy())
-        category = (
-            type(self)
-            .__attr_defs__["raw_category"]
-            .validator(
-                category,
-                type(self).__attr_defs__["raw_category"].doc,
-            )
+
+        category = type(self).__attr_defs__["raw_category"].validator(
+            category, type(self).__attr_defs__["raw_category"].doc
         )
         object.__setattr__(self, "raw_category", category)
+
         if name is None:
             name = name_replace
         else:
@@ -586,6 +378,7 @@ class PlotGlyph(HostBase):
                 name=type(self).__attr_defs__["raw_name"].doc,
                 replace=name_replace,
             )
+
         object.__setattr__(self, "state_is_silhouette", True)
         object.__setattr__(self, "calc_is_empty", False)
         object.__setattr__(self, "state_is_interactable", True)
@@ -606,9 +399,7 @@ class PlotGlyph(HostBase):
                 self.opts.paint_by = "color"
             elif self.opts.color is not UNSET and self.opts.scalars is not UNSET:
                 logger.warning(
-                    "Both 'color' and 'scalars' are provided, but 'paint_by' "
-                    + "is not explicitly specified. The default paint_by strategy "
-                    + "will be applied."
+                    "Both 'color' and 'scalars' are provided, but 'paint_by' is not explicitly specified. "
                     "The default paint_by strategy will be applied."
                 )
 
@@ -620,8 +411,8 @@ class PlotGlyph(HostBase):
         unique_id = self.name + str_now
         object.__setattr__(self, "impl_name_pv", unique_id)
         object.__setattr__(self, "impl_is_bounds_enabled", True)
-
         object.__setattr__(self, "impl_interact_func", None)
+
         self.act_bind_bounds(
             bounds,
             is_apply=False,
@@ -629,9 +420,6 @@ class PlotGlyph(HostBase):
             is_passive_sync=is_passive_bounds_sync,
         )
 
-    # ------------------------------------------------------------------
-    # Figure / Bounds Bootstrap
-    # ------------------------------------------------------------------
     def _helper_init_end(self):
         if self.state_clip_mode == "center":
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())
@@ -650,7 +438,6 @@ class PlotGlyph(HostBase):
         figure.act_register(self)
 
     def act_unbind_bounds(self, is_apply=True):
-        """Detach the current bounds object and optionally reapply the glyph state."""
         bounds_old = self.bounds
         if bounds_old is None:
             return
@@ -669,7 +456,6 @@ class PlotGlyph(HostBase):
         is_passive_sync=False,
         logger=None,
     ):
-        """Bind one bounds object to this glyph and optionally subscribe for sync updates."""
         if bounds is None:
             self.act_unbind_bounds(is_apply=is_apply)
             return
@@ -710,20 +496,17 @@ class PlotGlyph(HostBase):
             self.act_commit(is_reapply_opts=True)
 
     def _helper_get_bounds_effective(self):
-        """Return the bound bounds only when its effect is currently enabled."""
         bounds = self.bounds
         if bounds is None or not self.impl_is_bounds_enabled:
             return None
         return bounds
 
     def act_bounds_enable(self):
-        """Enable the effect of the currently bound bounds without unbinding it."""
         object.__setattr__(self, "impl_is_bounds_enabled", True)
         self.act_commit(is_reapply_opts=True)
         self._helper_trigger_sync_batch(is_bounds_enabled=True)
 
     def act_bounds_disable(self):
-        """Disable the effect of the currently bound bounds without unbinding it."""
         object.__setattr__(self, "impl_is_bounds_enabled", False)
         self.act_commit(is_reapply_opts=True)
         self._helper_trigger_sync_batch(is_bounds_enabled=False)
@@ -741,10 +524,6 @@ class PlotGlyph(HostBase):
         raise NotImplementedError(
             f"{type(self).__name__} does not implement center-based bounds clipping yet."
         )
-
-    # ------------------------------------------------------------------
-    # Resolver Helpers
-    # ------------------------------------------------------------------
 
     def _helper_get_resolver_source_name(self, attr_name=None):
         source_name = None
@@ -770,7 +549,6 @@ class PlotGlyph(HostBase):
         return np.linspace(0.0, 100.0, n_points, dtype=np.float32)
 
     def _helper_apply_empty_input_state(self):
-        """Populate empty resolved arrays and polydata for glyphs with no input points."""
         empty_coords = np.asarray(self.calc_coords, dtype=float)
         if empty_coords.shape != (0, 3):
             empty_coords = np.empty((0, 3), dtype=float)
@@ -787,7 +565,6 @@ class PlotGlyph(HostBase):
     def _helper_resolver_generic(
         self, attr_name, attr_input, default_val, is_recover=False, logger=None
     ):
-
         target_shape = (
             (len(self.raw_coords), 3)
             if attr_name == "color"
@@ -812,14 +589,12 @@ class PlotGlyph(HostBase):
                 resolved = np.full(target_shape, arr, dtype=np.float32)
             else:
                 raise TypeError(
-                    f"Unsupported resolver input for {attr_name!r}: "
-                    f"got {type(attr_input).__name__}."
+                    f"Unsupported resolver input for {attr_name!r}: got {type(attr_input).__name__}."
                 )
 
             if resolved.shape != target_shape:
                 raise ValueError(
-                    f"Shape mismatch for {attr_name!r}: got {resolved.shape}, "
-                    + f"expected {target_shape}."
+                    f"Shape mismatch for {attr_name!r}: got {resolved.shape}, expected {target_shape}."
                 )
 
             if attr_name == "color":
@@ -847,17 +622,11 @@ class PlotGlyph(HostBase):
                 )
 
     def _helper_resolver_spec(self, attr_name, attr_value=None):
-
         if attr_value is None:
             attr_value = getattr(self.opts, attr_name)
-
         return self._helper_resolver_generic(
             attr_name, attr_value, self.opts_defaults[attr_name]
         )
-
-    # ------------------------------------------------------------------
-    # Geometry And Actor Build
-    # ------------------------------------------------------------------
 
     def _helper_build_poly(self):
         poly = pv.PolyData(self.calc_coords)
@@ -898,9 +667,6 @@ class PlotGlyph(HostBase):
             try:
                 plotter.remove_actor(target, render=False)
             except AttributeError:
-                # The Qt panel may outlive the PyVista renderer during shutdown.
-                # In that case, the renderer bookkeeping is already gone and
-                # there is nothing left for us to remove cleanly.
                 pass
 
         if actor is not None:
@@ -917,10 +683,6 @@ class PlotGlyph(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_make_figure(self, logger=None):
-        """
-        Creates or updates the rendering in a PyVista Plotter.
-        """
-
         if len(self.raw_coords) == 0:
             if self.state_clip_mode == "center":
                 object.__setattr__(self, "calc_coords", self._helper_bound_coords())
@@ -933,10 +695,8 @@ class PlotGlyph(HostBase):
             return
 
         is_scalars = self.opts.paint_by == "scalars"
-        unique_id = self.impl_name_pv
-
         input_dir = {
-            "name": unique_id,
+            "name": self.impl_name_pv,
             "pbr": self.opts.shading_type == "pbr",
             "rgb": not is_scalars,
             "scalars": "scalars" if is_scalars else "rgba",
@@ -966,11 +726,9 @@ class PlotGlyph(HostBase):
 
         object.__setattr__(self, "calc_is_empty", False)
         self._helper_clear_live_actor()
-        plotter = self.fig.pl
-        actor = plotter.add_mesh(mesh, **input_dir)
+        actor = self.fig.pl.add_mesh(mesh, **input_dir)
 
         prop = actor.prop
-
         shading = self.opts.shading_type.lower()
         if shading not in ("pbr", "phong"):
             try:
@@ -1006,24 +764,18 @@ class PlotGlyph(HostBase):
             self._helper_clear_silhouette()
 
     def _helper_add_silhouette(self):
-
         plotter = self.fig.pl
-
         self._helper_clear_silhouette()
-
         mesh = self.entity_actor.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
-
         actor_silhouette = plotter.add_silhouette(
             surf,
             color=(0, 0, 0),
             line_width=6,
             opacity=0.8,
         )
-
         actor_silhouette.visibility = False
         actor_silhouette.pickable = False
-
         object.__setattr__(self, "entity_silhouette", actor_silhouette)
 
     def _helper_clear_silhouette(self):
@@ -1032,16 +784,10 @@ class PlotGlyph(HostBase):
         if fig is None or actor_silhouette is None:
             object.__setattr__(self, "entity_silhouette", None)
             return
-
         fig.pl.remove_actor(actor_silhouette)
         object.__setattr__(self, "entity_silhouette", None)
 
-    # ------------------------------------------------------------------
-    # Mapper / Scalar Display
-    # ------------------------------------------------------------------
-
     def _helper_collect_scalar_bars(self):
-        """Return scalar-bar objects in the figure registry that currently source this glyph."""
         fig = self.fig
         if fig is None:
             return []
@@ -1050,11 +796,9 @@ class PlotGlyph(HostBase):
         ]
 
     def _helper_remove_scalar_bars(self):
-        """Remove all scalar-bar objects currently driven by this glyph."""
         fig = self.fig
         if fig is None:
             return []
-
         removed = []
         for bar in list(self._helper_collect_scalar_bars()):
             fig.scalar_bars.act_unregister(bar, is_missing_ok=True)
@@ -1062,7 +806,6 @@ class PlotGlyph(HostBase):
         return removed
 
     def _helper_sync_scalar_bar(self):
-        """Ensure one figure-managed scalar bar matches this glyph's scalar-display state."""
         fig = self.fig
         actor = getattr(self, "entity_actor", None)
         should_have_scalar_bar = (
@@ -1072,7 +815,6 @@ class PlotGlyph(HostBase):
             and self.opts.paint_by == "scalars"
             and self.opts.is_scalar_bar
         )
-
         if not should_have_scalar_bar:
             self._helper_remove_scalar_bars()
             return None
@@ -1086,10 +828,7 @@ class PlotGlyph(HostBase):
         if bars:
             bar = bars[0]
         else:
-            bar = ScalarBar(
-                name=f"{self.name}_scalarbar",
-                mapper_name=self.name,
-            )
+            bar = ScalarBar(name=f"{self.name}_scalarbar", mapper_name=self.name)
             bar.act_bind_relation_base("source", self, is_weak=True)
             fig.scalar_bars.act_register(bar, is_contain_ok=True)
 
@@ -1109,16 +848,12 @@ class PlotGlyph(HostBase):
         self._helper_remove_scalar_bars()
 
     def _helper_update_scalars(self):
-
         mapper = self.entity_actor.mapper
         mesh_data = mapper.dataset.point_data
-
         if "__custom_rgba" in mesh_data.keys():
             mesh_data.remove("__custom_rgba")
-
         if not isinstance(mapper.lookup_table, pv.LookupTable):
             mapper.lookup_table = pv.LookupTable()
-
         mapper.set_scalars(
             mesh_data["scalars"],
             "scalars",
@@ -1127,15 +862,9 @@ class PlotGlyph(HostBase):
             custom_opac=True,
             opacity=mesh_data["opacity"],
         )
-
         self._helper_sync_scalar_bar()
 
-    # ------------------------------------------------------------------
-    # Figure Registration / Picking
-    # ------------------------------------------------------------------
-
     def _helper_register_pick(self, actor):
-
         fig = self.fig
         if fig is None:
             return
@@ -1145,7 +874,6 @@ class PlotGlyph(HostBase):
         pm.act_register(actor=actor, owner=self)
 
     def act_remove(self):
-        """Remove this glyph from its figure, bounds subscriptions, and live actors."""
         bounds_visual_source = getattr(self, "bounds_visual_source", None)
         if bounds_visual_source is not None:
             bounds_visual_source._helper_unregister_visual_sync(tube=self)
@@ -1157,15 +885,6 @@ class PlotGlyph(HostBase):
         if figure is not None:
             figure.act_unregister(self, is_missing_ok=True)
         self.act_unbind_relation_base("fig")
-
-    # ------------------------------------------------------------------
-    # Commit Pipeline
-    # ------------------------------------------------------------------
-    # ==================== OVERRIDE ====================
-    # PlotGlyph overrides HostBase._helper_commit_apply_opts_main to resolve
-    # visual data, rebuild mesh state when needed, and push updates into the
-    # live actor inside the figure plotter.
-    # ==================================================
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_apply_opts_main(
@@ -1192,10 +911,7 @@ class PlotGlyph(HostBase):
             is_reresolve = True
             attrs_reresolve_for_source.update(self._pending_resolution_attrs)
 
-        for (
-            attr_name,
-            override_key,
-        ) in self._resolver_source_override_attr_names.items():
+        for attr_name, override_key in self._resolver_source_override_attr_names.items():
             if override_key not in kwargs:
                 continue
             object.__setattr__(self.opts, override_key, kwargs.pop(override_key))
@@ -1206,7 +922,6 @@ class PlotGlyph(HostBase):
             for attr in self._pending_resolution_attrs:
                 if attr in kwargs:
                     object.__setattr__(self.opts, attr, kwargs.pop(attr))
-
             if "sides" in kwargs:
                 object.__setattr__(self.opts, "sides", kwargs.pop("sides"))
 
@@ -1225,7 +940,6 @@ class PlotGlyph(HostBase):
                 except (AttributeError, TypeError, ValueError, KeyError):
                     logger.exception(f"Failed to reset value of {key!r}")
                     logger.recovery("Ignore this modification")
-
             self.fig.pl.render()
             return
 
@@ -1255,6 +969,7 @@ class PlotGlyph(HostBase):
                 self._helper_build_poly()
                 mesh = self._helper_build_mesh()
                 mesh = self._helper_apply_bounds_mesh(mesh)
+
             if self._helper_is_empty_mesh(mesh):
                 object.__setattr__(self, "calc_is_empty", True)
                 self._helper_clear_live_actor()
@@ -1279,7 +994,6 @@ class PlotGlyph(HostBase):
                     for part in parts[:-1]:
                         obj = getattr(obj, part)
                     setattr(obj, parts[-1], value)
-
                 object.__setattr__(self.opts, key, value)
             except (AttributeError, TypeError, ValueError, KeyError):
                 logger.exception(f"Failed to reset value of {key!r}")
@@ -1293,21 +1007,15 @@ class PlotGlyph(HostBase):
 
         self.fig.pl.render()
 
-    # ------------------------------------------------------------------
-    # Highlighting And Interaction
-    # ------------------------------------------------------------------
     def act_highlight(
         self,
         color: ColorRGB | None = None,
         opacity: float | None = None,
         width: float | None = None,
     ):
-        """Show the silhouette highlight and optionally update its visual style."""
-
         silhouette = getattr(self, "entity_silhouette", None)
         if not silhouette:
             return
-
         silhouette.visibility = True
 
         color = (
@@ -1345,13 +1053,11 @@ class PlotGlyph(HostBase):
             sil_prop.line_width = width
 
     def act_dehighlight(self):
-        """Hide the current silhouette highlight if one exists."""
         silhouette = getattr(self, "entity_silhouette", None)
         if silhouette:
             silhouette.visibility = False
 
     def act_resolve_pick(self, picked_point):
-        """Resolve a picked world point into the glyph-local point report."""
         return self._helper_resolve_pick(picked_point)
 
     def _helper_resolve_pick(self, picked_point):
@@ -1365,16 +1071,14 @@ class PlotGlyph(HostBase):
                 msg = f"Local scalar: {fmt_value(self.calc_scalars[idx])} \n"
             for attr in self._pending_resolution_attrs:
                 if attr in ("color", "scalars"):
-                    pass
-                else:
-                    attr_name = "calc_" + attr
-                    value = object.__getattribute__(self, attr_name)[idx]
-                    value = fmt_value(value)
-                    msg += f"Local {attr}: {value} \n"
+                    continue
+                attr_name = "calc_" + attr
+                value = object.__getattribute__(self, attr_name)[idx]
+                value = fmt_value(value)
+                msg += f"Local {attr}: {value} \n"
         return pos, msg, idx
 
     def act_interact(self):
-        """Open or trigger the configured interaction callback for this glyph."""
         if getattr(self, "state_is_interactable", False):
             func = getattr(self, "impl_interact_func", None)
             if func is None:
@@ -1388,7 +1092,6 @@ class PlotGlyph(HostBase):
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_set_interact_func(self, func, logger=None):
-        """Register the callable used when this glyph enters its interaction flow."""
         if callable(func):
             object.__setattr__(self, "impl_interact_func", func)
         else:
@@ -1398,15 +1101,6 @@ class PlotGlyph(HostBase):
                 logger.exception("Check input.")
                 logger.recovery("Automatically ignore this modification")
 
-    # ------------------------------------------------------------------
-    # Representation
-    # ------------------------------------------------------------------
-    # ==================== OVERRIDE ====================
-    # PlotGlyph overrides ClassBase/HostBase.__repr__ to keep the glyph string
-    # form compact and focused on its class and public name.
-    # ==================================================
-
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
-        msg = f"{cls_name}({self.name!r})"
-        return msg
+        return f"{cls_name}({self.name!r})"
