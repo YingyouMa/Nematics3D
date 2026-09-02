@@ -20,7 +20,7 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 ### `closest_point_on_polyline()`
 
 - Source: `src/nematics3d/geometry/nearest.py`.
-- Status: reviewed and migrated from `general/misc.py` into the canonical nearest-point geometry module; production use in tube picking now uses the geometry path, while the old `nematics3d.general.closest_point_on_polyline` access path remains temporarily available through lazy compatibility resolution.
+- Status: reviewed and migrated from `general/misc.py` into the canonical nearest-point geometry module; the old `nematics3d.general.closest_point_on_polyline` access path remains temporarily available through lazy compatibility resolution. `PlotTube` currently still imports through that compatibility path because `plot_tube.py` was restored exactly after an accidental connector overwrite; changing that import should be handled as a separate deliberate edit.
 - Behavior reviewed: nearest-point projection onto the union of consecutive line segments; endpoint clamping; multiple-segment selection; repeated consecutive vertices and zero-length segments; one-point polylines; arbitrary spatial dimension; strict dimensional compatibility; finite real inputs; and returned-point copy semantics.
 - Fixes and cleanup: replaced the previous `1e-30` denominator substitution with explicit zero-length-segment handling; centralized input normalization through `datatypes.as_points()`, `as_vector()`, and `as_bool()`-based shared nearest-point validation instead of duplicating real/finite/copy checks in the geometry implementation.
 - Focused tests: `tests/geometry/test_nearest.py`, including interior projection, endpoint clamping, multiple segments, repeated vertices, one-point polylines, arbitrary dimension, empty input, invalid shapes, dimension mismatch, and non-finite values.
@@ -46,6 +46,17 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Focused tests: `tests/test_geometry_box.py`.
 - Tutorial: `tutorials/geometry/box/get_box_corners.ipynb`.
 - Archive note: re-run/record final validation before moving to the formal ledger.
+
+### `select_points_in_box()`
+
+- Source: `src/nematics3d/geometry/box.py`.
+- Status: reviewed, renamed from `select_grid_in_box()`, and moved out of the temporary `general` namespace into the canonical `geometry` package. The legacy `select_grid_in_box` name and compatibility alias were intentionally removed; active `PlaneGrid`, `PlaneGridPolar`, and `QPlane` callers now use `select_points_in_box()` directly.
+- Behavior reviewed: finite 3D point input; empty point collections; `corners=None` selecting all points; first-four-corner box convention; translated and rotated rectangular boxes; positive edge lengths; explicit mutual-perpendicularity validation; inclusive face selection; optional boolean mask return in original point order; and non-negative absolute boundary tolerance through keyword-only `atol`.
+- Geometry contract: the first row of `corners` is the reference corner and rows 1--3 terminate the three outgoing box edges. Additional corner rows are accepted but are not used in the calculation. The helper intentionally supports oriented rectangular boxes, not general skew parallelepipeds.
+- Validation reuse: point, boolean, and tolerance inputs are normalized through `datatypes.as_points()`, `as_bool()`, and `as_number()` rather than ad hoc coercion.
+- Tutorial: `tutorials/geometry/select_points_in_box.ipynb`, covering axis-aligned selection, `is_return_mask`, rotated/translated boxes, `corners=None`, `atol`, and the local-coordinate projection criterion. The notebook is currently stored unexecuted.
+- Review commits: removal of legacy compatibility and canonicalization `e7c9df4`; caller migrations `6fb69a2`, `c3e2a95`, and `5967d00`; tutorial `b7f119b`.
+- Archive note: implementation/API/tutorial review is complete, but focused pytest/Black/compile/import validation has not yet been recorded. Do not move this component to the formal ledger until that validation and an exact final reviewed commit are recorded.
 
 ### `sample_van_der_corput()`
 
