@@ -475,14 +475,14 @@ class SmoothedLine(HostBase):
                 # of the first one. Provide that seam explicitly so no genuine
                 # endpoint sample is overwritten in-place by `splprep(per=1)`.
                 line_points_spline = np.concatenate((line_points, [line_points[0]]))
-                uspline = np.linspace(0.0, 1.0, len(line_points_spline))
+                u_spline = np.linspace(0.0, 1.0, len(line_points_spline))
             else:
                 line_points_spline = line_points
-                uspline = np.linspace(0.0, 1.0, self.calc_num_init)
+                u_spline = np.linspace(0.0, 1.0, self.calc_num_init)
 
             tck = splprep(
                 line_points_spline.T,
-                u=uspline,
+                u=u_spline,
                 s=0,
                 per=int(is_periodic),
             )[0]
@@ -491,7 +491,7 @@ class SmoothedLine(HostBase):
             # temporaries before allocating the final resampled output.
             del line_points_spline
             del line_points
-            del uspline
+            del u_spline
 
             result = self._helper_sample_spline_result(tck)
             object.__setattr__(self, "entity_tck", tck)

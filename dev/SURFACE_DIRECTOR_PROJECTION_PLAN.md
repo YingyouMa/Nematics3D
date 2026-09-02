@@ -16,13 +16,20 @@ This design is independent of `QSurface`. The initial workflow assumes that:
 The word *plane* below means the local tangent plane at each surface vertex.
 For a curved surface there is no single shared projection plane.
 
-## Proposed API
+## Public API Split
 
-Keep surface reconstruction separate from director projection:
+Use two public functions because directors defined at the surface sampling
+vertices and directors queried independently of the surface point cloud require
+different normal-resolution algorithms. Avoid one function whose behavior
+changes substantially when an optional `surface_points` argument is supplied.
+
+### Directors defined at the surface sampling points
+
+Implement this path first:
 
 ```python
-def project_directors_to_surface(
-    surface,
+def project_surface_point_directors(
+    surface_points,
     directors,
     *,
     max_tilt_degrees=None,
@@ -31,20 +38,87 @@ def project_directors_to_surface(
     ...
 ```
 
-A later convenience wrapper may accept `coords`, call
-`triangulate_surface_points(coords)`, and delegate to this core function. The
-core function should remain reusable with a surface mesh produced by another
-reconstruction method.
-
-The initial version should require:
+This function requires:
 
 ```python
-surface.n_points == len(directors)
+surface_points.shape == directors.shape == (N, 3)
+surface_points[i] <-> directors[i]
 ```
 
-It should not silently perform nearest-neighbor matching. Supporting director
-coordinates that differ from the mesh vertices should be a separate extension
-with an explicit interpolation contract.
+It calls `triangulate_surface_points(surface_points)`. Because the reconstructed
+mesh preserves the input vertex order, point normal `i` is used directly for
+director `i`. This path requires neither nearest-neighbor matching nor normal
+interpolation and is the preferred initial implementation.
+
+### Directors independent of the surface sampling points
+
+Add this separately after the vertex-aligned path is stable:
+
+```python
+def project_directors_to_point_cloud_surface(
+    director_coords,
+    directors,
+    surface_points,
+    *,
+    point_match_tolerance=None,
+    max_tilt_degrees=None,
+    tangent_tolerance=1e-10,
+) -> PointCloudSurfaceDirectorProjectionResult:
+    ...
+```
+
+This function permits:
+
+```python
+director_coords.shape == directors.shape == (N, 3)
+surface_points.shape == (M, 3)
+```
+
+Resolve the normal for each director coordinate as follows:
+
+1. triangulate `surface_points` and compute smooth vertex normals;
+2. detect director coordinates that coincide with surface vertices within
+   `point_match_tolerance` and use those vertex normals directly;
+3. for every remaining coordinate, find its closest location and containing
+   triangle on the reconstructed surface;
+4. compute barycentric coordinates at that surface location;
+5. interpolate the triangle's three vertex normals and normalize the result.
+
+Do not use an arbitrarily selected incident face normal when a director lies on
+a mesh vertex, and do not use only the nearest vertex normal for an interior
+query. Both choices make the resolved normal change discontinuously as the
+query moves across face or nearest-vertex boundaries.
+
+The independent-coordinate result should additionally report:
+
+- closest locations on the reconstructed surface;
+- distances from director coordinates to those locations;
+- matched surface-vertex indices, using a documented sentinel for coordinates
+  resolved through triangle interpolation.
+
+These diagnostics distinguish director tilt from the separate error that a
+director coordinate may not lie exactly on the reconstructed surface.
+
+## Shared Projection Core
+
+The two public functions should share one private numerical core rather than
+duplicate projection, validation, threshold, and warning logic:
+
+```python
+def _project_directors_with_normals(
+    directors,
+    surface_normals,
+    *,
+    max_tilt_degrees,
+    tangent_tolerance,
+) -> SurfaceDirectorProjectionResult:
+    ...
+```
+
+The public functions differ only in how they obtain one local surface normal
+for each director. The shared core performs tangent projection, computes all
+error measures, collects threshold violations, emits the consolidated warning,
+and constructs the common result.
 
 ## Result Type
 
@@ -82,6 +156,20 @@ Field meanings:
   `max_tilt_degrees`;
 - `max_tilt_degrees`: the configured threshold, or `None` when threshold
   checking is disabled.
+
+The independent-coordinate function may wrap this common result:
+
+```python
+@dataclass(slots=True, frozen=True, repr=False)
+class PointCloudSurfaceDirectorProjectionResult(ResultBase):
+    projection: SurfaceDirectorProjectionResult
+    surface_locations: np.ndarray
+    surface_distances: np.ndarray
+    matched_vertex_indices: np.ndarray
+```
+
+This keeps the projection semantics identical between both modes while making
+the point-cloud query diagnostics explicit.
 
 ## Geometry and Error Definition
 
