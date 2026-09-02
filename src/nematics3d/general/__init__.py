@@ -2,7 +2,6 @@
 
 from .format import fmt_value
 from .misc import (
-    closest_point_on_polyline,
     mark_points_membership,
     select_grid_in_box,
 )
@@ -19,6 +18,7 @@ __all__ = [
 def __getattr__(name):
     """Temporarily resolve helpers that have already moved to dedicated modules."""
     if name in {
+        "closest_point_on_polyline",
         "find_nearest_point",
         "find_rotation_axis",
         "get_box_corners",
