@@ -10,7 +10,7 @@ import numpy as np
 import pyvista as pv
 from scipy.spatial import cKDTree
 
-from ..datatypes import UNSET, Unset, as_number
+from ..datatypes import UNSET, Unset, as_bool, as_number, as_readonly_array
 from ..logging_decorator import logging_and_warning_decorator
 from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
@@ -19,34 +19,32 @@ from ..geometry.polydata import as_polydata_input, copy_polydata_geometry
 
 def _as_surface_polydata_input(data, *, name: str):
     """
-    Normalize one input to clean ``pyvista.PolyData`` and require real surface area.
+    Normalize one input to an isolated geometry-only ``pyvista.PolyData``.
 
-    SurfaceSampling needs an actual surface, not merely any PolyData container.
-    Point-only or line-only PolyData inputs are therefore rejected even though
-    they remain valid inputs for the more general PlotPolyData visual wrapper.
+    Surface extraction, triangulation, topology cleaning, and area validation
+    are intentionally deferred to :func:`_helper_prepare_surface`, so each raw
+    input is processed through that comparatively expensive pipeline only once.
     """
 
-    poly = copy_polydata_geometry(as_polydata_input(data, name=name))
+    return copy_polydata_geometry(as_polydata_input(data, name=name))
+
+
+def _helper_prepare_surface(poly: pv.PolyData) -> pv.PolyData:
+    """Return one validated, triangulated surface with point normals attached."""
     surface = poly.extract_surface().triangulate().clean()
 
     if surface.n_cells == 0:
         raise ValueError(
-            f"{name} must contain surface cells after triangulation; got an empty "
+            "surface must contain surface cells after triangulation; got an empty "
             "surface."
         )
 
     if float(surface.area) <= 0.0:
         raise ValueError(
-            f"{name} must contain a nonzero-area surface; point-only or line-only "
+            "surface must contain a nonzero-area surface; point-only or line-only "
             "PolyData is not valid for surface sampling."
         )
 
-    return poly
-
-
-def _helper_prepare_surface(poly: pv.PolyData) -> pv.PolyData:
-    """Return one cleaned triangulated surface with point normals attached."""
-    surface = poly.extract_surface().triangulate().clean()
     surface = surface.compute_normals(
         cell_normals=False,
         point_normals=True,
@@ -209,6 +207,68 @@ def _helper_relax_points(
     return points
 
 
+def _helper_calc_sample_surface_geometry(
+    points: np.ndarray,
+    surface: pv.PolyData,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Resolve closest triangles, barycentrics, and interpolated point normals."""
+    cell_ids = np.asarray(surface.find_closest_cell(points), dtype=int).reshape(-1)
+    point_ids = []
+    for cell_id in cell_ids:
+        cell_point_ids = np.asarray(surface.get_cell(int(cell_id)).point_ids, dtype=int)
+        if cell_point_ids.shape != (3,):
+            raise ValueError(
+                "Sample-normal interpolation requires a fully triangulated surface; "
+                f"closest cell {int(cell_id)} has {len(cell_point_ids)} points."
+            )
+        point_ids.append(cell_point_ids)
+
+    triangle_point_ids = np.asarray(point_ids, dtype=int)
+    triangles = np.asarray(surface.points, dtype=float)[triangle_point_ids]
+    point_offsets = np.asarray(points, dtype=float) - triangles[:, 0]
+    edge_0 = triangles[:, 1] - triangles[:, 0]
+    edge_1 = triangles[:, 2] - triangles[:, 0]
+
+    dot_00 = np.einsum("ij,ij->i", edge_0, edge_0)
+    dot_01 = np.einsum("ij,ij->i", edge_0, edge_1)
+    dot_11 = np.einsum("ij,ij->i", edge_1, edge_1)
+    dot_20 = np.einsum("ij,ij->i", point_offsets, edge_0)
+    dot_21 = np.einsum("ij,ij->i", point_offsets, edge_1)
+    denominator = dot_00 * dot_11 - dot_01 * dot_01
+    if np.any(denominator <= np.finfo(float).eps):
+        raise ValueError(
+            "Sample-normal interpolation encountered a degenerate triangle."
+        )
+
+    bary_1 = (dot_11 * dot_20 - dot_01 * dot_21) / denominator
+    bary_2 = (dot_00 * dot_21 - dot_01 * dot_20) / denominator
+    barycentric = np.column_stack((1.0 - bary_1 - bary_2, bary_1, bary_2))
+    barycentric = np.clip(barycentric, 0.0, 1.0)
+    barycentric /= np.sum(barycentric, axis=1, keepdims=True)
+
+    point_normals = np.asarray(surface.point_data["Normals"], dtype=float)
+    triangle_normals = point_normals[triangle_point_ids]
+    sample_normals = np.einsum("ni,nij->nj", barycentric, triangle_normals)
+    normal_magnitudes = np.linalg.norm(sample_normals, axis=1, keepdims=True)
+    if np.any(normal_magnitudes <= np.finfo(float).eps):
+        raise ValueError("Interpolated sample normal has zero magnitude.")
+    sample_normals /= normal_magnitudes
+    return cell_ids, barycentric, sample_normals
+
+
+def _helper_calc_spacing_statistics(points: np.ndarray) -> tuple[float, float, float]:
+    """Return mean, minimum, and standard deviation of nearest-neighbor distance."""
+    if len(points) <= 1:
+        return float("nan"), float("nan"), float("nan")
+
+    nearest_distances = cKDTree(points).query(points, k=2)[0][:, 1]
+    return (
+        float(np.mean(nearest_distances)),
+        float(np.min(nearest_distances)),
+        float(np.std(nearest_distances)),
+    )
+
+
 @dataclass(slots=True, repr=False)
 class OptsSurfaceSampling(OptsBase):
     """
@@ -226,6 +286,9 @@ class OptsSurfaceSampling(OptsBase):
     relax_steps: int | Unset = UNSET
     k_neighbors: int | Unset = UNSET
     default_sample_count_target: int | Unset = UNSET
+    max_sample_count: int | None | Unset = UNSET
+    is_calc_sample_normals: bool | Unset = UNSET
+    is_calc_spacing_statistics: bool | Unset = UNSET
 
     # fmt: off
     __attrs__: ClassVar[Mapping[str, str]] = {
@@ -236,6 +299,9 @@ class OptsSurfaceSampling(OptsBase):
         "relax_steps": "Number of optional local relaxation passes applied after farthest-point sampling.",
         "k_neighbors": "Nearest-neighbor count used by each relaxation pass when relax_steps is positive.",
         "default_sample_count_target": "Fallback target point count used when spacing is None and the host enters automatic spacing mode.",
+        "max_sample_count": "Hard safety limit checked before candidate allocation. None disables the limit.",
+        "is_calc_sample_normals": "Whether each update computes closest triangle IDs, barycentric coordinates, and interpolated sample-point normals.",
+        "is_calc_spacing_statistics": "Whether each update computes nearest-neighbor mean, minimum, and standard-deviation spacing statistics.",
     }
 
     impl_validators: ClassVar[Mapping[str, Any]] = {
@@ -246,6 +312,9 @@ class OptsSurfaceSampling(OptsBase):
         "relax_steps": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(0, np.inf)),
         "k_neighbors": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
         "default_sample_count_target": lambda v, d: as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
+        "max_sample_count": lambda v, d: None if v is None else as_number(v, name=d, is_integer=True, value_range=(1, np.inf)),
+        "is_calc_sample_normals": lambda v, d: as_bool(v, name=d),
+        "is_calc_spacing_statistics": lambda v, d: as_bool(v, name=d),
     }
 
     impl_defaults_frozen: ClassVar[Mapping[str, Any]] = MappingProxyType({
@@ -257,6 +326,9 @@ class OptsSurfaceSampling(OptsBase):
         "relax_steps":                 0,
         "k_neighbors":                 8,
         "default_sample_count_target": 100,
+        "max_sample_count":            100_000,
+        "is_calc_sample_normals":      False,
+        "is_calc_spacing_statistics":  False,
     })
     # fmt: on
 
@@ -301,6 +373,13 @@ class SurfaceSampling(HostBase):
             ),
             kind="calc",
         ),
+        "calc_spacing_effective": AttrDef(
+            doc=(
+                "The approximate mean spacing actually used to infer the target "
+                "sample count, including automatically resolved spacing."
+            ),
+            kind="calc",
+        ),
         "calc_sample_count_target": AttrDef(
             doc=(
                 "Resolved target number of sample points inferred from the current "
@@ -323,6 +402,48 @@ class SurfaceSampling(HostBase):
             doc=(
                 "The final sampled point coordinates exposed by this host as an "
                 "(N, 3) array."
+            ),
+            kind="calc",
+        ),
+        "calc_sample_cell_ids": AttrDef(
+            doc=(
+                "Closest triangulated-surface cell ID for each sample point, or "
+                "UNSET when is_calc_sample_normals is false."
+            ),
+            kind="calc",
+        ),
+        "calc_sample_barycentric": AttrDef(
+            doc=(
+                "Triangle barycentric coordinates for each sample point, or UNSET "
+                "when is_calc_sample_normals is false."
+            ),
+            kind="calc",
+        ),
+        "calc_sample_normals": AttrDef(
+            doc=(
+                "Unit normals interpolated from triangle-vertex normals at sample "
+                "locations, or UNSET when is_calc_sample_normals is false."
+            ),
+            kind="calc",
+        ),
+        "calc_nearest_distance_mean": AttrDef(
+            doc=(
+                "Mean nearest-neighbor sample distance, or UNSET when spacing "
+                "statistics are disabled. NaN when only one point is sampled."
+            ),
+            kind="calc",
+        ),
+        "calc_nearest_distance_min": AttrDef(
+            doc=(
+                "Minimum nearest-neighbor sample distance, or UNSET when spacing "
+                "statistics are disabled. NaN when only one point is sampled."
+            ),
+            kind="calc",
+        ),
+        "calc_nearest_distance_std": AttrDef(
+            doc=(
+                "Standard deviation of nearest-neighbor sample distances, or UNSET "
+                "when spacing statistics are disabled. NaN for one sample point."
             ),
             kind="calc",
         ),
@@ -369,10 +490,17 @@ class SurfaceSampling(HostBase):
 
         object.__setattr__(self, "calc_surface_clean", None)
         object.__setattr__(self, "calc_surface_area", 0.0)
+        object.__setattr__(self, "calc_spacing_effective", 0.0)
         object.__setattr__(self, "calc_sample_count_target", 0)
         object.__setattr__(self, "calc_surface_points", np.empty((0, 3), dtype=float))
         object.__setattr__(self, "calc_surface_normals", np.empty((0, 3), dtype=float))
         object.__setattr__(self, "calc_sample_points", np.empty((0, 3), dtype=float))
+        object.__setattr__(self, "calc_sample_cell_ids", UNSET)
+        object.__setattr__(self, "calc_sample_barycentric", UNSET)
+        object.__setattr__(self, "calc_sample_normals", UNSET)
+        object.__setattr__(self, "calc_nearest_distance_mean", UNSET)
+        object.__setattr__(self, "calc_nearest_distance_min", UNSET)
+        object.__setattr__(self, "calc_nearest_distance_std", UNSET)
 
         self.opts.act_finalize(defaults=self.opts_defaults)
         self._helper_commit_apply_opts(is_reapply_opts=True)
@@ -414,6 +542,23 @@ class SurfaceSampling(HostBase):
             surface_area,
             spacing_effective,
         )
+        if self.opts.max_sample_count is not None and sample_count_target > int(
+            self.opts.max_sample_count
+        ):
+            candidate_count_requested = int(self.opts.oversample) * sample_count_target
+            raise ValueError(
+                f"Requested spacing {spacing_effective:.6g} on a surface with area "
+                f"{surface_area:.6g} implies {sample_count_target} sample points and "
+                f"at least {candidate_count_requested} candidates, exceeding "
+                f"max_sample_count={int(self.opts.max_sample_count)}. Increase the "
+                "spacing, raise max_sample_count, or set max_sample_count=None to "
+                "disable this safety limit."
+            )
+        if sample_count_target > 10_000:
+            logger.warning(
+                f"Sampling {sample_count_target} points may be slow because the "
+                "current farthest-point selection scales approximately quadratically."
+            )
         candidate_count = max(
             int(self.opts.oversample) * sample_count_target,
             sample_count_target + 1,
@@ -437,14 +582,47 @@ class SurfaceSampling(HostBase):
             k_neighbors=int(self.opts.k_neighbors),
         )
 
-        surface_points = np.asarray(surface_clean.points, dtype=float)
-        surface_normals = np.asarray(surface_clean.point_data["Normals"], dtype=float)
+        if self.opts.is_calc_sample_normals:
+            sample_cell_ids, sample_barycentric, sample_normals = (
+                _helper_calc_sample_surface_geometry(sample_points, surface_clean)
+            )
+            sample_cell_ids = as_readonly_array(sample_cell_ids, dtype=None, copy=False)
+            sample_barycentric = as_readonly_array(
+                sample_barycentric, dtype=None, copy=False
+            )
+            sample_normals = as_readonly_array(sample_normals, dtype=None, copy=False)
+        else:
+            sample_cell_ids = UNSET
+            sample_barycentric = UNSET
+            sample_normals = UNSET
+
+        if self.opts.is_calc_spacing_statistics:
+            nearest_mean, nearest_min, nearest_std = _helper_calc_spacing_statistics(
+                sample_points
+            )
+        else:
+            nearest_mean = UNSET
+            nearest_min = UNSET
+            nearest_std = UNSET
+
+        surface_points = as_readonly_array(surface_clean.points, dtype=None, copy=False)
+        surface_normals = as_readonly_array(
+            surface_clean.point_data["Normals"], dtype=None, copy=False
+        )
+        sample_points = as_readonly_array(sample_points, dtype=None, copy=False)
         object.__setattr__(self, "calc_surface_clean", surface_clean)
         object.__setattr__(self, "calc_surface_area", surface_area)
+        object.__setattr__(self, "calc_spacing_effective", spacing_effective)
         object.__setattr__(self, "calc_sample_count_target", sample_count_target)
         object.__setattr__(self, "calc_surface_points", surface_points)
         object.__setattr__(self, "calc_surface_normals", surface_normals)
         object.__setattr__(self, "calc_sample_points", sample_points)
+        object.__setattr__(self, "calc_sample_cell_ids", sample_cell_ids)
+        object.__setattr__(self, "calc_sample_barycentric", sample_barycentric)
+        object.__setattr__(self, "calc_sample_normals", sample_normals)
+        object.__setattr__(self, "calc_nearest_distance_mean", nearest_mean)
+        object.__setattr__(self, "calc_nearest_distance_min", nearest_min)
+        object.__setattr__(self, "calc_nearest_distance_std", nearest_std)
 
         logger.info(
             f"Resampled {self.name!r}: area={surface_area:.6g}, "
