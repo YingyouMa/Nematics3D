@@ -377,31 +377,30 @@ class DisclinationLine(ClassBase):
     # -------------------------------
 
     @logging_and_warning_decorator()
-    def act_calc_norm(self, logger=None) -> np.ndarray:
-        """Estimate and cache one average plane normal for this defect line."""
-        normal, metric = find_plane_normal(
-            self.calc_defect_coords, is_return_metric=True
-        )
+    def act_calc_norm(self, logger=None):
+        """Estimate, cache, and return the average plane fit for this defect line."""
+        result = find_plane_normal(self.calc_defect_coords)
 
-        if metric["linearity_risk"] > 0.5:
+        if result.linearity_risk > 0.5:
             logger.warning(
                 f"Low confidence in normal for {self.name!r}: "
                 f"The disclination line is nearly straight. The calculated normal "
                 f"may rotate arbitrarily around the line axis, "
-                f"with linearity_risk as {metric['linearity_risk']:.2f}"
+                f"with linearity_risk as {result.linearity_risk:.2f}"
             )
 
-        elif metric["planarity_score"] < 0.7:
+        elif result.planarity_score < 0.7:
             logger.warning(
                 f"Low confidence in normal for {self.name!r}: "
-                f"The line is highly non-planar (planarity_score={metric['planarity_score']:.2f}). "
+                f"The line is highly non-planar "
+                f"(planarity_score={result.planarity_score:.2f}). "
                 f"The result is only an 'average' plane normal."
             )
 
-        object.__setattr__(self, "calc_norm", normal)
-        object.__setattr__(self, "calc_norm_metric", metric)
+        object.__setattr__(self, "calc_norm", result.normal)
+        object.__setattr__(self, "calc_norm_metric", result.metric)
 
-        return normal
+        return result
 
     # -------------------------------
     # Smoothing and visualization
@@ -1319,12 +1318,6 @@ class DisclinationLineSmoothPlot(HostBase):
     # Wrapped-geometry resolution
     # -------------------------------
 
-    # ==================== OVERRIDE ====================
-    # DisclinationLineSmoothPlot adds `_helper_get_coords()` as the internal
-    # coordinate resolver for wrapped visualization because the displayed
-    # geometry depends on both smoothing and wrapping choices.
-    # ==================================================
-    @logging_and_warning_decorator()
     def _helper_get_coords(self, logger=None):
 
         is_smooth = bool(self.opts.is_smooth)
@@ -1357,9 +1350,6 @@ class DisclinationLineSmoothPlot(HostBase):
 
             diff = line_coords_origin[1:] - line_coords_origin[:-1]
             if np.any(boundary_flag):
-                # Split the rendered polyline only at actual periodic seams.
-                # Normal spacing between neighboring smoothed samples should
-                # remain connected inside the same periodic image.
                 jump = np.any(
                     np.abs(diff[:, boundary_flag])
                     > owner.owner.raw_box_size_periodic_index[boundary_flag] / 2,
@@ -1383,13 +1373,6 @@ class DisclinationLineSmoothPlot(HostBase):
         return line_coords, line_index
 
     def act_remove(self):
-        """
-        Remove the wrapped tube glyph and detach this wrapper from its owner.
-
-        After removal, both the owner-side `visual` relation and the internal
-        wrapped/wrapper links are cleared so the wrapper no longer counts as the
-        managed visualization of the smoothed line.
-        """
         owner = self.owner
         wrapped = self.wrapped
         if wrapped is not None:
@@ -1406,15 +1389,6 @@ class DisclinationLineSmoothPlot(HostBase):
         line_coords, line_index = self._helper_get_coords()
         return {"coords": line_coords, "line_index": line_index}
 
-    # -------------------------------
-    # Representation
-    # -------------------------------
-
-    # ==================== OVERRIDE ====================
-    # DisclinationLineSmoothPlot overrides ClassBase.__repr__ because the
-    # visualization wrapper is most useful when summarized by its two display
-    # toggles in addition to its identity.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         return (
@@ -1422,23 +1396,9 @@ class DisclinationLineSmoothPlot(HostBase):
             f"is_wrap={self.opts.is_wrap}"
         )
 
-    # ==================== OVERRIDE ====================
-    # DisclinationLineSmoothPlot overrides ClassBase.__str__ to keep the plain
-    # string form short and aligned with the repository-wide default identity
-    # style.
-    # ==================================================
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
-    # -------------------------------
-    # Wrapped-state commit pipeline
-    # -------------------------------
-
-    # ==================== OVERRIDE ====================
-    # DisclinationLineSmoothPlot overrides HostBase._helper_commit_apply_opts_main
-    # because its own opts only control wrapped-visualization state and should
-    # be applied without redefining the wrapped PlotTube opts interface.
-    # ==================================================
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         if not is_reapply_opts and not kwargs:
             return
@@ -1463,25 +1423,6 @@ class OptsDefectSectionGrid(OptsBase):
 
     This opts object is paired with DefectSectionGrid and currently exposes the
     normalized spline position used to place the local polar section plane.
-
-    Important readable attributes:
-
-    - `host`: the DefectSectionGrid currently using this opts object, if any.
-    - `u_percent`: normalized spline position along the smoothed defect line.
-    - `is_wrap`: whether the resolved section origin should be wrapped into the
-      principal periodic box before building the local polar plane.
-
-    Common user actions:
-
-    - `act_finalize()`: validate defaults and lock the opts into functioning use.
-    - `act_asdict()`: export the current opts values as a plain dictionary.
-    - `act_save_json()`: save the current opts to JSON.
-    - `act_load_json()`: load a JSON snapshot into this existing opts object.
-
-    Representation:
-
-    - `str(opts)` returns a short one-line identity.
-    - `repr(opts)` returns the full current opts summary.
     """
 
     u_percent: float | Unset = UNSET
@@ -1515,54 +1456,7 @@ class OptsDefectSectionGrid(OptsBase):
     )
 
 
-# DefectSectionGrid is the HostBase wrapper for a local polar section
-# constructed along a smoothed disclination line.
-# constructed along a smoothed disclination line.
-#
-# Subclasses should preserve the coupling among the owner line, the current
-# section position (`u_percent`), the resolved section normal, and the wrapped
-# `PlaneGridPolar`. If pose resolution changes, keep `calc_normal` and the
-# wrapped-section enrichment task synchronized.
 class DefectSectionGrid(HostBase):
-    """
-    DefectSectionGrid builds a local polar sampling plane along a smoothed
-    disclination line.
-
-    This wrapper resolves a local section pose from a smoothed defect line,
-    chooses a normal from either the tangent, a registered named normal, or a
-    direct vector, and then forwards the resulting pose into a wrapped
-    PlaneGridPolar.
-
-    Important readable attributes:
-
-    - `opts`: the paired OptsDefectSectionGrid controlling the section position.
-    - `owner`: the DisclinationLineSmooth that this section belongs to.
-    - `wrapped`: the internal PlaneGridPolar used for actual sampling geometry.
-    - `state_normal`: current normal selector, either `"tangent"`, a registered
-      normal name, or a direct vector.
-    - `calc_normal`: the resolved normal currently driving the wrapped section.
-    - `impl_normals`: registered named normal providers for this section.
-
-    Common inspection helpers:
-
-    - `show_readable_attrs()`: show the main readable section-grid attributes.
-    - `show_attr_desc(name)`: describe a specific readable attribute.
-    - `show_relations()`: show object relations such as the owner and wrapped grid.
-    - `show_normals()`: show the currently registered named normals.
-
-    Common user actions:
-
-    - `act_commit(...)`: update section position or normal selection.
-    - `act_set_name(name)`: rename the section wrapper.
-    - `act_register_normal(name, value)`: register a named normal provider.
-
-    Representation:
-
-    - `str(obj)` returns the short HostBase-style identity.
-    - `repr(obj)` returns a compact summary including `u_percent` and the current
-      `state_normal`.
-    """
-
     __attr_defs__ = {
         "state_normal": AttrDef(
             doc=(
@@ -1598,15 +1492,6 @@ class DefectSectionGrid(HostBase):
         and name not in HostBase.__slots__
     )
 
-    # -------------------------------
-    # Initialization
-    # -------------------------------
-
-    # ==================== OVERRIDE ====================
-    # DefectSectionGrid overrides HostBase.__init__ because it must resolve an
-    # initial section pose, create a wrapped PlaneGridPolar, and bind the
-    # section back into the owning smoothed line registry.
-    # ==================================================
     def __init__(
         self,
         line: DisclinationLineSmooth,
@@ -1698,10 +1583,6 @@ class DefectSectionGrid(HostBase):
         )
         line.sections.act_register(self)
 
-    # -------------------------------
-    # Normal validation and pose resolution
-    # -------------------------------
-
     def _helper_check_state_normal(self, state_normal, desc):
         if isinstance(state_normal, str):
             state_normal = as_str(
@@ -1754,17 +1635,6 @@ class DefectSectionGrid(HostBase):
         del host, kwargs
         return self._helper_resolve_pose()
 
-    # -------------------------------
-    # Commit pipeline
-    # -------------------------------
-
-    # `state_normal` needs an instance-aware validator because valid string names
-    # depend on this section's currently registered normals.
-    # ==================== OVERRIDE ====================
-    # DefectSectionGrid overrides HostBase._helper_commit_pre_opts because
-    # `state_normal` uses instance-aware validation against the currently
-    # registered normal names.
-    # ==================================================
     def _helper_commit_pre_opts(self, kwargs):
         kwargs_sync, is_reapply_opts = super()._helper_commit_pre_opts(kwargs)
         kwargs_applied_state, is_reapply_state = self._helper_commit_pop_raw(
@@ -1774,25 +1644,11 @@ class DefectSectionGrid(HostBase):
         )
         return kwargs_sync | kwargs_applied_state, (is_reapply_opts or is_reapply_state)
 
-    # ==================== OVERRIDE ====================
-    # DefectSectionGrid overrides HostBase._helper_commit_apply_opts_main
-    # because section opts only update the local section pose and then forward
-    # the resolved origin/normal to the wrapped polar grid.
-    # ==================================================
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         for key, value in kwargs.items():
             object.__setattr__(self.opts, key, value)
         return self._helper_resolve_pose(), kwargs
 
-    # -------------------------------
-    # Representation
-    # -------------------------------
-
-    # ==================== OVERRIDE ====================
-    # DefectSectionGrid overrides ClassBase.__repr__ because a section grid is
-    # most useful when summarized by its current section position and normal
-    # selector in addition to its identity.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         return (
@@ -1800,20 +1656,11 @@ class DefectSectionGrid(HostBase):
             f"state_normal={self.state_normal!r}"
         )
 
-    # ==================== OVERRIDE ====================
-    # DefectSectionGrid overrides ClassBase.__str__ to keep the plain string
-    # form short and aligned with the repository-wide default identity style.
-    # ==================================================
     def __str__(self) -> str:
         return f"{type(self).__name__}({self.name!r})"
 
-    # -------------------------------
-    # Normal registry helpers
-    # -------------------------------
-
     @logging_and_warning_decorator()
     def act_register_normal(self, key, value, logger=None):
-        """Register one named normal provider for this defect section."""
         try:
             key = as_str(key, name="The name of a registered defect-section normal")
         except (TypeError, ValueError):
