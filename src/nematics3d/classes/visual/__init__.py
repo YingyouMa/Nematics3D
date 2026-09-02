@@ -12,7 +12,6 @@ from .plot_polydata import (
     OptsPolyData,
     PlotPolyData,
     as_polydata_input,
-    make_clean_polydata,
 )
 from .plot_vector import OptsVector, PlotVector
 from .scalar_bar import OptsScalarBar, ScalarBar
@@ -30,7 +29,6 @@ __all__ = [
     "OptsPolyData",
     "PlotPolyData",
     "as_polydata_input",
-    "make_clean_polydata",
     "OptsVector",
     "PlotVector",
     "OptsScalarBar",

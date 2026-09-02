@@ -6,6 +6,16 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 
 ## Pending archive
 
+### `as_polydata_input()` and `copy_polydata_geometry()`
+
+- Source: `src/nematics3d/geometry/polydata.py`.
+- Status: reviewed geometry-boundary helpers, exported canonically through `nematics3d.geometry`; all active production callers use the geometry path, and the former `make_clean_polydata` name has been removed without a compatibility alias.
+- Behavior reviewed: accepted PyVista/VTK dataset families and conversion fallbacks; existing `pyvista.PolyData` ownership semantics; keyword-only diagnostic naming; conversion failure chaining; independent geometry/topology deep copies; removal of point, cell, and field arrays; explicit rejection of non-PolyData copy inputs; and explicit distinction between geometry-only copying and `PolyData.clean()` topology cleanup.
+- Focused tests: `tests/geometry/test_polydata.py`, with downstream coverage from `tests/sample/test_surface_sampling_package.py` and `tests/visual/test_plot_polydata.py`.
+- Validation actually run: focused geometry, sampling, and PlotPolyData run reported `15 passed, 1 deselected`; the deselected test is the pre-existing `line_width` versus `edge_width` option-name mismatch and is unrelated to these helpers. Black and `git diff --check` passed for the modified files.
+- Remaining limitation: geometry-only copying currently deep-copies attached arrays before removing them, which can create a temporary memory peak for data-heavy meshes; changing VTK topology ownership is deferred to a dedicated optimization.
+- Archive note: implementation and focused review are complete; record the exact reviewed commit after these working-tree changes are committed, then move this entry to `dev/public_beta_preparation/BETA_RELEASE_REVIEWED_COMPONENTS.md`.
+
 ### `get_box_corners()`
 
 - Source: `src/nematics3d/geometry/box.py`

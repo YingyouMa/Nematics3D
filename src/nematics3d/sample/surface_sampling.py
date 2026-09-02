@@ -14,7 +14,7 @@ from ..datatypes import UNSET, Unset, as_number
 from ..logging_decorator import logging_and_warning_decorator
 from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
-from ..classes.visual.plot_polydata import as_polydata_input, make_clean_polydata
+from ..geometry.polydata import as_polydata_input, copy_polydata_geometry
 
 
 def _as_surface_polydata_input(data, *, name: str):
@@ -26,7 +26,7 @@ def _as_surface_polydata_input(data, *, name: str):
     they remain valid inputs for the more general PlotPolyData visual wrapper.
     """
 
-    poly = make_clean_polydata(as_polydata_input(data, name=name))
+    poly = copy_polydata_geometry(as_polydata_input(data, name=name))
     surface = poly.extract_surface().triangulate().clean()
 
     if surface.n_cells == 0:

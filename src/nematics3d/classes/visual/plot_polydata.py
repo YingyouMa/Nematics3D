@@ -7,87 +7,18 @@ from types import MappingProxyType
 from typing import Any, ClassVar, Mapping
 
 import numpy as np
-import pyvista as pv
-import vtk
 
 from ...datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, as_str
+from ...geometry.polydata import (
+    as_polydata_input,
+    copy_polydata_geometry,
+)
 from ..bounds import BoundsData
 from ...core.class_base import AttrDef
 from ...core.host_base import HostBase
 from .glyph import OptsGlyph, PlotGlyph
 from .plot_figure import FigureData
 from .qt.interact_polydata import InteractPolyData
-
-
-def as_polydata_input(data, name: str = "polydata input") -> pv.PolyData:
-    """
-    Normalize supported mesh-like inputs to ``pyvista.PolyData``.
-
-    Supported inputs currently include:
-
-    - ``pyvista.PolyData``
-    - ``vtk.vtkPolyData``
-    - surface-like ``pyvista.DataSet`` / ``vtk.vtkDataSet`` objects that can
-      be converted through ``extract_surface()`` or ``cast_to_polydata()``
-    """
-
-    if isinstance(data, pv.PolyData):
-        return data
-
-    wrapped = None
-    if isinstance(data, vtk.vtkPolyData):
-        wrapped = pv.wrap(data)
-    elif isinstance(data, pv.DataSet):
-        wrapped = data
-    elif isinstance(data, vtk.vtkDataSet):
-        wrapped = pv.wrap(data)
-    else:
-        raise TypeError(
-            f"{name} must be a pyvista.PolyData, vtkPolyData, or another "
-            f"surface-like PyVista/VTK dataset. Got {type(data).__name__}."
-        )
-
-    if isinstance(wrapped, pv.PolyData):
-        return wrapped
-
-    for method_name in ("extract_surface", "cast_to_polydata"):
-        method = getattr(wrapped, method_name, None)
-        if method is None:
-            continue
-        try:
-            candidate = method()
-        except Exception:
-            continue
-        if isinstance(candidate, pv.PolyData):
-            return candidate
-        if candidate is not None:
-            candidate = pv.wrap(candidate)
-            if isinstance(candidate, pv.PolyData):
-                return candidate
-
-    raise TypeError(
-        f"{name} with type {type(data).__name__} could not be converted to "
-        "pyvista.PolyData."
-    )
-
-
-def make_clean_polydata(poly: pv.PolyData) -> pv.PolyData:
-    """
-    Return a deep-copied PolyData that keeps only geometry/topology.
-
-    All attached point, cell, and field arrays are removed from the returned
-    copy so the plot wrapper starts from a clean internal template.
-    """
-
-    poly_clean = poly.copy(deep=True)
-    for attr_name in ("point_data", "cell_data", "field_data"):
-        data_attr = getattr(poly_clean, attr_name, None)
-        if data_attr is None:
-            continue
-        clear_method = getattr(data_attr, "clear", None)
-        if callable(clear_method):
-            clear_method()
-    return poly_clean
 
 
 @dataclass(slots=True, repr=False)
@@ -282,7 +213,7 @@ class PlotPolyData(PlotGlyph):
             **kwargs,
         )
 
-        object.__setattr__(self, "raw_poly", make_clean_polydata(poly))
+        object.__setattr__(self, "raw_poly", copy_polydata_geometry(poly))
         self.act_register_protected_attr(["coords", "raw_coords", "poly", "raw_poly"])
         self.act_set_interact_func(lambda: InteractPolyData.show_once(self, self.fig))
         self._helper_init_end()
