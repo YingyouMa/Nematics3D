@@ -31,6 +31,19 @@ def test_find_nearest_point_uses_first_point_on_tie():
     assert index == 0
 
 
+def test_find_nearest_point_tie_result_depends_on_input_order():
+    query = [0.0, 0.0]
+    coords_a = np.array([[-1.0, 0.0], [1.0, 0.0]])
+    coords_b = coords_a[::-1].copy()
+
+    point_a, index_a = find_nearest_point(query, coords_a, is_return_idx=True)
+    point_b, index_b = find_nearest_point(query, coords_b, is_return_idx=True)
+
+    np.testing.assert_allclose(point_a, [-1.0, 0.0])
+    np.testing.assert_allclose(point_b, [1.0, 0.0])
+    assert index_a == index_b == 0
+
+
 def test_find_nearest_point_supports_arbitrary_dimension():
     coords = np.array([[0.0, 0.0, 0.0, 0.0], [1.0, 2.0, 3.0, 4.0]])
 
