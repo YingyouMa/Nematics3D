@@ -107,7 +107,7 @@ class SmoothedSurface(HostBase):
     it before smoothing again.
 
     ``result`` is the smoothed geometry-only ``pyvista.PolyData``. ``vertices``
-    exposes the same final point coordinates as a read-only NumPy array.
+    exposes its final point coordinates as a read-only NumPy view.
     Surface-function sampling/interpolation is intentionally handled separately.
     """
 
@@ -118,26 +118,25 @@ class SmoothedSurface(HostBase):
             validator=lambda v, d: as_polydata_input(v, name=d),
             is_reapply_opts_after_raw=True,
         ),
-        "calc_surface_initial": AttrDef(
-            doc="Geometry-only triangulated copy defining the fixed smoothing operator.",
-            kind="calc",
+        # Internal fixed-operator cache. These values are required to re-smooth
+        # after an opts-only change, but are not part of the user-facing result.
+        "impl_vertices_initial": AttrDef(
+            doc="Internal read-only copy of the initial triangulated vertices.",
+            kind="impl",
         ),
-        "calc_vertices_initial": AttrDef(
-            doc="Read-only initial surface vertices used by the smoothing operator.",
-            kind="calc",
+        "impl_mass_lumped": AttrDef(
+            doc="Internal lumped vertex masses for the fixed cotangent operator.",
+            kind="impl",
         ),
-        "calc_faces": AttrDef(
-            doc="Read-only triangle connectivity with shape (n_faces, 3).",
-            kind="calc",
+        "impl_stiffness_matrix": AttrDef(
+            doc="Internal fixed cotangent stiffness matrix K.",
+            kind="impl",
         ),
-        "calc_mass_lumped": AttrDef(
-            doc="Read-only lumped vertex masses of the cotangent discretization.",
-            kind="calc",
+        "impl_surface_result": AttrDef(
+            doc="Internal storage for the current smoothed PolyData result.",
+            kind="impl",
         ),
-        "calc_stiffness_matrix": AttrDef(
-            doc="Fixed cotangent stiffness matrix K for K phi = kappa M phi.",
-            kind="calc",
-        ),
+        # User-useful diagnostics describing the resolved spectral filter.
         "calc_kappa_cutoff": AttrDef(
             doc="Cutoff Laplace--Beltrami eigenvalue (2*pi/cutoff_wavelength)^2.",
             kind="calc",
@@ -156,14 +155,6 @@ class SmoothedSurface(HostBase):
         ),
         "calc_mu": AttrDef(
             doc="Resolved negative Taubin mu coefficient, in length squared.",
-            kind="calc",
-        ),
-        "calc_vertices_result": AttrDef(
-            doc="Read-only smoothed vertex coordinates with shape (n_points, 3).",
-            kind="calc",
-        ),
-        "calc_surface_result": AttrDef(
-            doc="Geometry-only smoothed PolyData with topology inherited from the initial mesh.",
             kind="calc",
         ),
         "calc_is_smoothed": AttrDef(
@@ -191,10 +182,6 @@ class SmoothedSurface(HostBase):
         for name, spec in __attr_defs__.items()
         if spec.kind not in ("relation", "property", "opts")
     )
-
-    # -------------------------------
-    # Initialization
-    # -------------------------------
 
     def __init__(
         self,
@@ -373,23 +360,25 @@ class SmoothedSurface(HostBase):
         stiffness, mass = self._helper_build_cotangent_operator(vertices, faces)
         kappa_max = self._helper_largest_generalized_eigenvalue(stiffness, mass)
 
-        object.__setattr__(self, "calc_surface_initial", poly_tri)
+        # Triangle connectivity is only needed while K is being assembled, so
+        # do not keep a second persistent copy of `faces` after this point.
+        del faces
+
         object.__setattr__(
             self,
-            "calc_vertices_initial",
+            "impl_vertices_initial",
             as_readonly_array(vertices, dtype=None, copy=False),
         )
         object.__setattr__(
             self,
-            "calc_faces",
-            as_readonly_array(faces, dtype=None, copy=False),
-        )
-        object.__setattr__(
-            self,
-            "calc_mass_lumped",
+            "impl_mass_lumped",
             as_readonly_array(mass, dtype=None, copy=False),
         )
-        object.__setattr__(self, "calc_stiffness_matrix", stiffness)
+        object.__setattr__(self, "impl_stiffness_matrix", stiffness)
+        # Reuse this same PolyData object as the topology carrier for the first
+        # result. Once smoothed points are installed it becomes the result, so
+        # no separate initial-surface PolyData cache is retained.
+        object.__setattr__(self, "impl_surface_result", poly_tri)
         object.__setattr__(self, "calc_kappa_max", kappa_max)
 
     # -------------------------------
@@ -438,9 +427,6 @@ class SmoothedSurface(HostBase):
         if abs(gain_1) <= 1.0 + tol:
             return 1, lambda_1, mu_1
 
-        # lambda_N decreases monotonically toward a positive limit. If N=1
-        # already places kappa_max in the low-frequency amplified branch, larger
-        # N cannot move that mode into the attenuating branch.
         if gain_1 > 1.0:
             raise SurfaceSmoothingConfigError(
                 "No stable Taubin iteration count exists for this combination "
@@ -474,7 +460,6 @@ class SmoothedSurface(HostBase):
         n_float = (0.5 * np.log(2.0)) / (-np.log(q_required))
         iterations = max(2, int(np.ceil(n_float)))
 
-        # Protect against floating-point rounding at an integer boundary.
         while True:
             lambda_, mu = cls._helper_coefficients_for_iterations(
                 kappa_cutoff,
@@ -508,12 +493,12 @@ class SmoothedSurface(HostBase):
     def _helper_apply_laplacian(self, vertices: np.ndarray) -> np.ndarray:
         """Apply the fixed negative-semidefinite L = -M^-1 K to coordinates."""
         return -(
-            self.calc_stiffness_matrix @ vertices
-        ) / self.calc_mass_lumped[:, None]
+            self.impl_stiffness_matrix @ vertices
+        ) / self.impl_mass_lumped[:, None]
 
     def _helper_smooth_vertices(self) -> np.ndarray:
         """Apply the resolved number of fixed-operator Taubin pairs."""
-        vertices = np.asarray(self.calc_vertices_initial, dtype=float).copy()
+        vertices = np.asarray(self.impl_vertices_initial, dtype=float).copy()
         lambda_ = float(self.calc_lambda)
         mu = float(self.calc_mu)
 
@@ -529,12 +514,10 @@ class SmoothedSurface(HostBase):
         return vertices
 
     def _helper_set_result(self, vertices: np.ndarray) -> None:
-        vertices_readonly = as_readonly_array(vertices, dtype=None, copy=False)
-        surface_result = copy_polydata_geometry(self.calc_surface_initial)
-        surface_result.points = np.asarray(vertices_readonly).copy()
-
-        object.__setattr__(self, "calc_vertices_result", vertices_readonly)
-        object.__setattr__(self, "calc_surface_result", surface_result)
+        # `impl_surface_result` already carries the required triangulated
+        # topology. Replacing only its points avoids retaining an additional
+        # PolyData copy solely as an initial-geometry template.
+        self.impl_surface_result.points = np.asarray(vertices, dtype=float).copy()
         object.__setattr__(self, "calc_is_smoothed", True)
         object.__setattr__(self, "calc_status", "Success")
 
@@ -571,8 +554,8 @@ class SmoothedSurface(HostBase):
             "cutoff_wavelength=%s, taubin_ratio=%s, iterations=%d, "
             "lambda=%g, mu=%g, kappa_max=%g.",
             self.name,
-            len(self.calc_vertices_initial),
-            len(self.calc_faces),
+            len(self.impl_vertices_initial),
+            self.impl_surface_result.n_cells,
             self.opts.cutoff_wavelength,
             self.opts.taubin_ratio,
             self.calc_iterations,
@@ -596,11 +579,15 @@ class SmoothedSurface(HostBase):
 
     @property
     def result(self):
-        return self.calc_surface_result
+        return self.impl_surface_result
 
     @property
     def vertices(self):
-        return self.calc_vertices_result
+        return as_readonly_array(
+            np.asarray(self.impl_surface_result.points),
+            dtype=None,
+            copy=False,
+        )
 
 
 __all__ = [
