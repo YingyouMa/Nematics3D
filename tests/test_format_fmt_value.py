@@ -14,11 +14,19 @@ def test_fmt_value_formats_zero_dimensional_array_like_scalar():
     assert fmt_value(np.array(1.2345), ndigits=3) == "1.234"
 
 
-def test_fmt_value_keeps_one_dimensional_array_on_one_line():
+def test_fmt_value_one_dimensional_array_uses_numpy_behavior_by_default():
     values = np.arange(100, dtype=float) / 10
     text = fmt_value(values, ndigits=1)
 
+    assert "..." in text
+
+
+def test_fmt_value_can_force_one_dimensional_array_onto_one_line():
+    values = np.arange(100, dtype=float) / 10
+    text = fmt_value(values, ndigits=1, is_1d_single_line=True)
+
     assert "\n" not in text
+    assert "..." not in text
     assert text.startswith("[0.0, 0.1, 0.2")
     assert text.endswith("9.9]")
 
@@ -27,6 +35,12 @@ def test_fmt_value_preserves_multidimensional_array_structure():
     values = np.array([[1, 2], [3.456, -4]])
 
     assert fmt_value(values) == "[[1.00, 2.00],\n [3.46, -4.00]]"
+
+
+def test_fmt_value_summarizes_large_multidimensional_array():
+    values = np.arange(10_000, dtype=float).reshape(100, 100)
+
+    assert "..." in fmt_value(values)
 
 
 def test_fmt_value_supports_nan_and_infinity():
@@ -44,6 +58,12 @@ def test_fmt_value_rejects_non_integer_ndigits(ndigits):
 def test_fmt_value_rejects_negative_ndigits():
     with pytest.raises(ValueError, match="non-negative"):
         fmt_value(1.0, ndigits=-1)
+
+
+@pytest.mark.parametrize("is_1d_single_line", [0, 1, 1.0, "true", None])
+def test_fmt_value_rejects_non_boolean_single_line_flag(is_1d_single_line):
+    with pytest.raises(TypeError, match="is_1d_single_line"):
+        fmt_value(np.array([1.0]), is_1d_single_line=is_1d_single_line)
 
 
 @pytest.mark.parametrize(
