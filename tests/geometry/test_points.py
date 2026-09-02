@@ -68,6 +68,15 @@ def test_points_membership_mask_float_comparison_is_exact():
     np.testing.assert_array_equal(result, [True, False])
 
 
+def test_points_membership_mask_treats_signed_zero_as_equal():
+    points = np.array([[-0.0, 1.0]])
+    candidates = np.array([[0.0, 1.0]])
+
+    result = points_membership_mask(points, candidates)
+
+    np.testing.assert_array_equal(result, [True])
+
+
 def test_points_membership_mask_rejects_non_2d_input():
     with pytest.raises(ValueError, match="two-dimensional"):
         points_membership_mask(np.array([1, 2]), np.array([[1, 2]]))
