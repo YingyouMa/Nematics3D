@@ -374,36 +374,3 @@ def rotation_matrix_from_vectors(
 
     rot, _ = R.align_vectors([target_vector], [source_vector])
     return rot.as_matrix()
-
-
-def find_plane_normal(points, is_return_metric=False):
-    """
-    Estimate the normal vector of a point cloud and evaluate its planarity.
-    """
-    if len(points) < 3:
-        raise ValueError("At least 3 points are required to define a plane.")
-
-    centroid = np.mean(points, axis=0)
-    centered_points = points - centroid
-    M = np.dot(centered_points.T, centered_points)
-    eigenvalues, eigenvectors = np.linalg.eigh(M)
-    normal = eigenvectors[:, 0]
-
-    if not is_return_metric:
-        return normal
-
-    total_variance = np.sum(eigenvalues)
-    planarity = (
-        1.0 - (3.0 * eigenvalues[0] / total_variance) if total_variance > 0 else 1.0
-    )
-    thickness_rms = np.sqrt(eigenvalues[0] / len(points))
-    linearity_risk = eigenvalues[0] / eigenvalues[1] if eigenvalues[1] > 1e-9 else 1.0
-
-    metric = {
-        "centroid": centroid,
-        "planarity_score": np.clip(planarity, 0, 1),
-        "thickness_rms": thickness_rms,
-        "eigenvalues": eigenvalues,
-        "linearity_risk": linearity_risk,
-    }
-    return normal, metric
