@@ -55,9 +55,10 @@ def points_membership_mask(points, candidates) -> np.ndarray:
     points_array = np.ascontiguousarray(points_array, dtype=common_dtype)
     candidates_array = np.ascontiguousarray(candidates_array, dtype=common_dtype)
 
-    row_nbytes = common_dtype.itemsize * points_array.shape[1]
-    row_dtype = np.dtype((np.void, row_nbytes))
-    points_rows = points_array.view(row_dtype).ravel()
-    candidate_rows = candidates_array.view(row_dtype).ravel()
+    row_dtype = np.dtype(
+        [(f"coord_{i}", common_dtype) for i in range(points_array.shape[1])]
+    )
+    points_rows = points_array.view(row_dtype).reshape(-1)
+    candidate_rows = candidates_array.view(row_dtype).reshape(-1)
 
     return np.isin(points_rows, candidate_rows)
