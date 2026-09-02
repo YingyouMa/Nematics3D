@@ -179,20 +179,11 @@ class SmoothedSurface(HostBase):
     def __init__(
         self,
         surface,
-        cutoff_wavelength: Number | Unset = UNSET,
-        *,
-        taubin_ratio: Number | Unset = UNSET,
         name: str | None = None,
         opts: OptsSmoothedSurface | None = None,
         opts_defaults_override: Mapping[str, Any] | None = None,
         **kwargs,
     ):
-        opts_kwargs: dict[str, Any] = dict(kwargs)
-        if cutoff_wavelength is not UNSET:
-            opts_kwargs["cutoff_wavelength"] = cutoff_wavelength
-        if taubin_ratio is not UNSET:
-            opts_kwargs["taubin_ratio"] = taubin_ratio
-
         super().__init__(
             OptsSmoothedSurface,
             opts,
@@ -200,7 +191,7 @@ class SmoothedSurface(HostBase):
             name=name,
             name_replace="surface",
             raw_surface=surface,
-            **opts_kwargs,
+            **kwargs,
         )
 
         try:
