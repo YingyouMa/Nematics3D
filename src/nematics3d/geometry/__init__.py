@@ -1,6 +1,6 @@
 """Geometry helpers."""
 
-from .box import get_box_corners
+from .box import get_box_corners, select_points_in_box
 from .misc import *
 from .nearest import closest_point_on_polyline, find_nearest_point
 from .polydata import (
