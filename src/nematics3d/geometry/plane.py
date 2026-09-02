@@ -6,7 +6,7 @@ from typing import ClassVar
 import numpy as np
 
 from ..core.result_base import ResultBase
-from ..datatypes import as_points
+from ..datatypes import as_bool, as_points
 
 
 __all__ = ["PlaneNormalResult", "find_plane_normal"]
@@ -22,7 +22,9 @@ class PlaneNormalResult(ResultBase):
             "Unit normal of the least-squares best-fit plane. Its sign is "
             "intrinsically ambiguous."
         ),
-        "centroid": "Centroid of the input points; the fitted plane passes through it.",
+        "centroid": (
+            "Centroid of the input points; the fitted plane passes through it."
+        ),
         "planarity_score": (
             "Dimensionless score in [0, 1] approaching 1 when the point cloud "
             "has little variance normal to the fitted plane."
@@ -36,7 +38,8 @@ class PlaneNormalResult(ResultBase):
             "to one-dimensional."
         ),
         "eigenvalues": (
-            "Ascending eigenvalues of the centered point-cloud second-moment matrix."
+            "Ascending eigenvalues of the centered point-cloud second-moment "
+            "matrix."
         ),
     }
 
@@ -59,7 +62,15 @@ class PlaneNormalResult(ResultBase):
         }
 
 
-def find_plane_normal(points) -> PlaneNormalResult:
+class _LegacyPlaneNormalResult(PlaneNormalResult):
+    """Temporary private adapter for one unmigrated internal tuple-unpack caller."""
+
+    def __iter__(self):
+        yield self.normal
+        yield self.metric
+
+
+def find_plane_normal(points, is_return_metric=False) -> PlaneNormalResult:
     """Fit a least-squares plane to finite 3D points.
 
     The fitted plane passes through the point-cloud centroid. Its normal is the
@@ -71,6 +82,10 @@ def find_plane_normal(points) -> PlaneNormalResult:
     ----------
     points : array-like, shape (N, 3)
         Finite 3D points. At least three points are required.
+    is_return_metric : bool, default=False
+        Temporary compatibility flag for the current internal
+        ``DisclinationLine.act_calc_norm()`` caller. New code should omit this
+        argument and consume the returned ``PlaneNormalResult`` directly.
 
     Returns
     -------
@@ -78,6 +93,7 @@ def find_plane_normal(points) -> PlaneNormalResult:
         Fitted unit normal, centroid, and fixed diagnostics describing
         planarity, thickness, and normal-direction degeneracy.
     """
+    is_return_metric = as_bool(is_return_metric, name="is_return_metric")
     points = as_points(
         points,
         d=3,
@@ -107,7 +123,8 @@ def find_plane_normal(points) -> PlaneNormalResult:
         else 1.0
     )
 
-    return PlaneNormalResult(
+    result_type = _LegacyPlaneNormalResult if is_return_metric else PlaneNormalResult
+    return result_type(
         normal=normal,
         centroid=centroid,
         planarity_score=planarity_score,
