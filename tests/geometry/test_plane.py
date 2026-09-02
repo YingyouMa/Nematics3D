@@ -48,6 +48,24 @@ def test_plane_normal_metric_matches_result_fields():
     assert metric["eigenvalues"] is result.eigenvalues
 
 
+def test_current_internal_tuple_unpack_path_still_returns_result_base():
+    points = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]
+    )
+
+    result = find_plane_normal(points, is_return_metric=True)
+    normal, metric = result
+
+    assert isinstance(result, PlaneNormalResult)
+    assert isinstance(result, ResultBase)
+    assert np.allclose(normal, result.normal)
+    assert metric["planarity_score"] == result.planarity_score
+
+
 def test_linearity_risk_detects_exact_line():
     points = np.array(
         [
