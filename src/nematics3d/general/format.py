@@ -8,18 +8,20 @@ import numpy as np
 __all__ = ["fmt_value"]
 
 
-def fmt_value(v, ndigits=2):
+def fmt_value(v, ndigits=2, is_1d_single_line=False):
     """Format a real scalar or numeric ndarray with fixed decimal places.
 
-    One-dimensional arrays are always rendered on a single line so the result
-    can be embedded cleanly in interactive messages. Higher-dimensional arrays
-    retain NumPy's structured array layout and normal summarization behavior.
+    Arrays normally use NumPy's structured display and summarization behavior.
+    Set ``is_1d_single_line=True`` to force a one-dimensional array to be
+    rendered completely on one line without NumPy line wrapping or omission.
     """
     if isinstance(ndigits, (bool, np.bool_)) or not isinstance(ndigits, Integral):
         raise TypeError("`ndigits` must be a non-negative integer.")
     ndigits = int(ndigits)
     if ndigits < 0:
         raise ValueError("`ndigits` must be non-negative.")
+    if not isinstance(is_1d_single_line, (bool, np.bool_)):
+        raise TypeError("`is_1d_single_line` must be a boolean.")
 
     def _format_number(value):
         return f"{float(value):.{ndigits}f}"
@@ -33,7 +35,7 @@ def fmt_value(v, ndigits=2):
 
         if v.ndim == 0:
             return _format_number(v.item())
-        if v.ndim == 1:
+        if v.ndim == 1 and is_1d_single_line:
             return "[" + ", ".join(_format_number(value) for value in v) + "]"
 
         values = v.astype(float, copy=False)
