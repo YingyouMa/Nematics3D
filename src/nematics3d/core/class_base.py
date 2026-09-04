@@ -34,6 +34,7 @@ real slot-backed instance attributes on the fast path.
 
 from __future__ import annotations
 
+import inspect
 import weakref
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -744,6 +745,21 @@ class ClassBase:
     # ------------------------------------------------------------------
     # Inspection helpers
     # ------------------------------------------------------------------
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_doc(self, is_return=False, logger=None):
+        """Show the class docstring for this instance's concrete type."""
+        cls = type(self)
+        doc = cls.__dict__.get("__doc__")
+        if doc is None:
+            output = f"{cls.__name__} has no class docstring."
+        else:
+            output = inspect.cleandoc(doc)
+
+        logger.info(output)
+        if is_return:
+            return output
+        return None
 
     @logging_and_warning_decorator(start_finish_level=5)
     def show_readable_attrs(self, is_return=False, is_desc=True, logger=None):

@@ -2,7 +2,11 @@ import numpy as np
 import pytest
 
 from nematics3d.core.result_base import ResultBase
-from nematics3d.geometry import RotationAxisResult, find_rotation_axis
+from nematics3d.geometry import (
+    RotationAxisResult,
+    find_rotation_axis,
+    rotation_matrix_from_vectors,
+)
 
 
 def test_find_rotation_axis_returns_result_base():
@@ -62,3 +66,45 @@ def test_find_rotation_axis_requires_unit_directors():
 def test_find_rotation_axis_rejects_nonfinite_directors():
     with pytest.raises(ValueError):
         find_rotation_axis([[1.0, 0.0, 0.0], [0.0, np.nan, 1.0]])
+
+
+def test_rotation_matrix_maps_source_to_target_and_is_proper_rotation():
+    source = np.array([1.0, 0.0, 0.0])
+    target = np.array([0.0, 1.0, 0.0])
+
+    rotation = rotation_matrix_from_vectors(source, target)
+
+    assert np.allclose(rotation @ source, target)
+    assert np.allclose(rotation.T @ rotation, np.eye(3))
+    assert np.linalg.det(rotation) == pytest.approx(1.0)
+
+
+def test_rotation_matrix_parallel_vectors_returns_identity():
+    vector = np.array([1.0, 2.0, 3.0])
+    vector /= np.linalg.norm(vector)
+
+    rotation = rotation_matrix_from_vectors(vector, vector)
+
+    assert np.allclose(rotation, np.eye(3))
+
+
+def test_rotation_matrix_antiparallel_vectors_is_deterministic():
+    source = np.array([1.0, 0.0, 0.0])
+    target = -source
+
+    rotation = rotation_matrix_from_vectors(source, target)
+
+    expected = np.diag([-1.0, -1.0, 1.0])
+    assert np.allclose(rotation, expected)
+    assert np.allclose(rotation @ source, target)
+    assert np.linalg.det(rotation) == pytest.approx(1.0)
+
+
+def test_rotation_matrix_rejects_non_unit_vectors():
+    with pytest.raises(ValueError):
+        rotation_matrix_from_vectors([2.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+
+
+def test_rotation_matrix_rejects_nonfinite_vectors():
+    with pytest.raises(ValueError):
+        rotation_matrix_from_vectors([1.0, 0.0, 0.0], [0.0, np.nan, 1.0])

@@ -10,7 +10,8 @@ from scipy.spatial import ConvexHull, QhullError
 from scipy.spatial.transform import Rotation as R
 
 from ..core.result_base import ResultBase
-from ..datatypes import Tensor, Vect, as_axes, as_dimension_info, as_points, as_vector
+from ..datatypes import as_axes, as_dimension_info, as_points, as_vector
+from .rotation import rotation_matrix_from_vectors
 
 
 # ===========================================================================
@@ -346,31 +347,3 @@ def get_axis1_azimuth(axis1, normal):
 def wrap_to_pi(angle):
     """Wrap angles in radians into the half-open interval ``[-pi, pi)``."""
     return (np.asarray(angle) + np.pi) % (2.0 * np.pi) - np.pi
-
-
-def rotation_matrix_from_vectors(
-    source_vector: Vect(3), target_vector: Vect(3)
-) -> Tensor((3, 3)):
-    """
-    Construct a rotation matrix that rotates one vector to another.
-
-    This function computes a 3x3 rotation matrix `R` such that:
-        R @ source_vector ~= target_vector
-
-    It internally uses SciPy's `Rotation.align_vectors` to find the
-    minimal rotation that maps the source direction to the target
-    direction.
-    """
-    source_vector = as_vector(
-        source_vector,
-        name="The vector used as the starting source when constructing the rotation matrix",
-        is_normalized=True,
-    )
-    target_vector = as_vector(
-        target_vector,
-        name="The vector used as the ending target when constructing the rotation matrix",
-        is_normalized=True,
-    )
-
-    rot, _ = R.align_vectors([target_vector], [source_vector])
-    return rot.as_matrix()
