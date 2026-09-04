@@ -53,3 +53,5 @@ decrypted by the same Windows user on the same computer.
 After setup, double-click `start-nematics3d-mcp.cmd`. Keep its terminal window
 open while ChatGPT uses the MCP server. Press Ctrl+C to stop the tunnel, then
 enter `R` to restart it in the same window or `Q` to quit.
+`commit_changes` commits only the explicitly selected paths and never pushes.
+
