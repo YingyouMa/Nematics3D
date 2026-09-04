@@ -25,10 +25,9 @@ At a high level the workflow is:
    through ``host.act_commit(...)``.
 4. ``HostBase.act_commit()`` separates host-side raw/state changes, opts-side
    changes, synchronization callbacks, and wrapped-host forwarding.
-5. Inspection helpers such as ``show_readable_attrs()``,
-   ``show_modifiable_attrs()``, ``show_relations()``, and
-   ``show_saved_opts()`` help users explore an unfamiliar host object before
-   mutating it.
+5. Inspection helpers such as ``show_readable_attrs()``, ``show_attr_doc()``,
+   ``show_modifiable_attrs()``, ``show_relations()``, and ``show_saved_opts()``
+   help users explore an unfamiliar host object before mutating it.
 
 Concrete subclasses are expected to define their own opts class and to
 implement ``_helper_commit_apply_opts_main()`` so finalized opts values can be
@@ -280,9 +279,6 @@ class OptsBase:
             object.__setattr__(self, key, value)
             return
 
-        # If a validator exists, validate first and then let the later branches
-        # decide whether this should remain a local assignment or be forwarded
-        # through the host pipeline.
         if key in type(self).impl_validators:
             desc = f"{key!r}: {type(self).__attrs__[key]}"
             try:
@@ -296,14 +292,6 @@ class OptsBase:
                 logger.recovery("Reset this assignment to UNSET.")
                 object.__setattr__(self, key, UNSET)
                 return
-        # If no validator exists, there are two intended cases:
-        # 1. internal `impl_` fields: these are implementation storage, so they
-        #    can be assigned directly.
-        # 2. non-internal public fields without a local validator: before opts
-        #    is functioning, store the draft value locally; after opts becomes
-        #    functioning and is attached to a host, let the host own the update
-        #    path because that host may perform more complex validation and
-        #    application than OptsBase can know about locally.
         elif is_internal_key or (not is_functioning):
             object.__setattr__(self, key, value)
             return
@@ -331,7 +319,6 @@ class OptsBase:
         is_allow_unset: bool = False,
     ) -> None:
         """Fill ``UNSET`` values by defaults, then enter the functioning state."""
-
         if getattr(self, "impl_is_functioning", False):
             raise RuntimeError("This Opts has already been finalized.")
 
@@ -422,24 +409,12 @@ class OptsBase:
     # Object protocol
     # ------------------------------------------------------------------
 
-    # ==================== OVERRIDE ====================
-    # OptsBase overrides object.__setattr__ so every public opts assignment
-    # runs through validation, lifecycle checks, and optional host forwarding.
-    # ==================================================
     def __setattr__(self, key, value):
         self._helper_setattr_basic(key, value)
 
-    # ==================== OVERRIDE ====================
-    # OptsBase overrides object.__str__ to keep opts instances readable as a
-    # short one-line identity in logs and interactive inspection.
-    # ==================================================
     def __str__(self) -> str:
         return type(self).__name__
 
-    # ==================== OVERRIDE ====================
-    # OptsBase overrides object.__repr__ so the full public opts payload is
-    # visible during debugging and interactive exploration.
-    # ==================================================
     def __repr__(self) -> str:
         cls_name = type(self).__name__
 
@@ -543,8 +518,9 @@ class HostBase(ClassBase):
     Important user-facing inspection helpers are:
 
     - ``show_readable_attrs()`` to list readable host fields and opts attrs
-    - ``show_attr_desc()`` to explain one host attr, relation, alias, extra
-      attr, or opts attr
+    - ``show_attr_doc()`` to explain one host attr, relation, alias, extra attr,
+      or opts attr
+    - ``show_attr_info()`` to inspect one host-side attribute in more detail
     - ``show_modifiable_attrs()`` to separate host attrs, opts attrs, extra
       attrs, and writable host properties
     - ``show_relations()`` / ``show_relation_tree()`` to inspect object links
@@ -569,13 +545,9 @@ class HostBase(ClassBase):
     can be translated into actual host-side state updates.
     """
 
-    # "opts" covers the three bridge fields: opts, opts_defaults, opts_backup.
-    # These use direct public names with no prefix and are not public-settable
-    # through the normal setattr/commit path.
     _VALID_KINDS: ClassVar[frozenset[str]] = ClassBase._VALID_KINDS | {"opts"}
 
     __attr_defs__ = {
-        # no manual merge — __init_subclass__ handles MRO merging automatically
         "opts": AttrDef(
             doc="The Opts instance controlling options.",
             kind="opts",
@@ -672,11 +644,6 @@ class HostBase(ClassBase):
     # Initialization
     # ------------------------------------------------------------------
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.__init__ because a host must bind a paired
-    # OptsBase instance and initialize host-side runtime stores in addition to
-    # the base ClassBase identity and relation skeleton.
-    # ==================================================
     def __init__(
         self,
         opts_type: Type[OptsBase],
@@ -686,13 +653,8 @@ class HostBase(ClassBase):
         name_replace: str = "unnamed",
         **kwargs,
     ):
-        # Initialize the ClassBase identity and base relation skeleton first.
-        # Naming/kind consistency is validated by __init_subclass__ at import
-        # time, so no runtime _helper_check_attr_naming() call is needed here.
         super().__init__(name=name, name_replace=name_replace)
 
-        # Split out host-side initialization kwargs so opts kwargs can be
-        # merged into the paired opts object separately.
         attr_defs = type(self).__attr_defs__
         kwargs_host = {}
         for key in list(kwargs):
@@ -701,15 +663,11 @@ class HostBase(ClassBase):
             elif f"raw_{key}" in attr_defs:
                 kwargs_host[key] = kwargs.pop(key)
 
-        # Normalize or create the paired opts instance, then merge any
-        # remaining option kwargs into it.
         opts = self._helper_check_opts(opts, opts_type=opts_type)
         opts = merge_opts_all({"": opts}, kwargs, type(self).__name__)[""]
         object.__setattr__(opts, "impl_host_ref", weakref.ref(self))
         object.__setattr__(self, "opts", opts)
 
-        # Build the frozen-on-init opts default payload used by later host
-        # commit/finalize steps.
         opts_defaults = {
             **{key: UNSET for key in type(opts).__attrs__},
             **dict(opts.defaults_frozen),
@@ -720,22 +678,14 @@ class HostBase(ClassBase):
             name=type(opts).__name__,
         )
 
-        # Initialize host-side runtime stores for opts snapshots, sync hooks,
-        # wrapped attr bookkeeping, and host-declared protected attrs.
         object.__setattr__(self, "opts_defaults", opts_defaults)
         object.__setattr__(self, "opts_backup", {})
         object.__setattr__(self, "impl_sync_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_wrapped_func", {})
         object.__setattr__(self, "impl_enrich_kwargs_sync_func", {})
 
-        # Apply any host-side raw/state initialization values that were
-        # separated from the opts kwargs above.
         if kwargs_host:
             self._helper_commit_raw(kwargs_host)
-
-        # HostBase intentionally stops here.
-        # Concrete subclasses remain responsible for choosing when to finalize
-        # opts and when to trigger the first opts->host application pass.
 
     # ------------------------------------------------------------------
     # Readable properties / basic helpers
@@ -795,37 +745,6 @@ class HostBase(ClassBase):
         **kwargs,
     ) -> None:
         """Apply host and opts updates through the managed commit pipeline."""
-        # _helper_pop_private_key:
-        #       remove keys starting with '_' or 'impl_' from ``kwargs``.
-        #       These keys are treated as non-public commit inputs and are ignored.
-        #
-        # _helper_commit_pre_opts:
-        #       preprocess kwargs for this host before opts-level application.
-        #       _helper_check_protected_attr: remove attrs protected by wrapper or
-        #                                     by host declaration.
-        #       _helper_commit_name: consume ``name`` / ``raw_name`` and update host name.
-        #       _helper_commit_raw: consume host-side raw/state attrs, validate if configured,
-        #                           then write directly to host storage.
-        #
-        # _helper_commit_self:
-        #       handle updates that belong to this host's opts domain.
-        #       _helper_merge_opts_kwargs: merge explicit ``opts`` + opts-like kwargs,
-        #                                  normalize to one opts payload.
-        #       _helper_commit_apply_opts: perform protected-attr check + apply opts updates.
-        #       _helper_commit_apply_opts_main: subclass-defined real apply logic;
-        #                                       should write resolved values back to ``self.opts``.
-        #
-        # sync stage:
-        #       merge pre-opts sync kwargs and opts-applied kwargs,
-        #       then run _helper_commit_enrich_kwargs_sync(...) to enrich the sync payload.
-        #       Each enrich callback may add/override keys on the current payload.
-        #       If the final payload is non-empty, call _helper_trigger_sync_batch(**kwargs_sync).
-        #
-        # forwarding stage:
-        #       call _helper_kwargs_to_wrapped(kwargs, opts_wrapped=opts_wrapped).
-        #       _helper_commit_enrich_kwargs_wrapped(...) may enrich forwarded kwargs first.
-        #       If wrapped exists, forward via self.wrapped.act_commit(...);
-        #       otherwise warn about unhandled remaining kwargs/opts_wrapped.
         self._helper_pop_private_key(kwargs)
         kwargs_sync, is_reapply_opts_from_raw = self._helper_commit_pre_opts(kwargs)
         is_reapply_opts = is_reapply_opts or is_reapply_opts_from_raw
@@ -1266,10 +1185,38 @@ class HostBase(ClassBase):
     # Attribute inspection
     # ------------------------------------------------------------------
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.show_readable_attrs so the readable surface also
-    # includes the paired opts fields in addition to host-side attrs.
-    # ==================================================
+    def _helper_get_attr_doc(self, name: str) -> str:
+        """Return documentation from the host layer or paired opts layer."""
+        try:
+            return super()._helper_get_attr_doc(name)
+        except AttributeError as host_error:
+            opts = getattr(self, "opts", None)
+            if opts is not None and name in type(opts).__attrs__:
+                return type(opts).__attrs__[name]
+            if opts is None:
+                raise AttributeError(
+                    f"Readable attribute {name!r} was not found in "
+                    f"{type(self).__name__}.__attr_defs__. The opts attrs are not "
+                    "available yet because self.opts has not been initialized."
+                ) from host_error
+            raise AttributeError(
+                f"Readable attribute {name!r} was not found in "
+                f"{type(self).__name__}.__attr_defs__ or "
+                f"{type(opts).__name__}.__attrs__."
+            ) from host_error
+
+    def _helper_format_attr_doc(self, name: str) -> str:
+        """Format one host/opts attr name and its documentation for list output."""
+        opts = getattr(self, "opts", None)
+        if opts is not None and name in type(opts).__attrs__:
+            return f"{name!r}: {self._helper_get_attr_doc(name)}"
+
+        canonical_name = self._helper_resolve_attr_name(name)
+        doc = self._helper_get_attr_doc(name)
+        if canonical_name.startswith("raw_") and name != canonical_name:
+            return f"{name!r}: Alias of {canonical_name!r}. {doc}"
+        return f"{name!r}: {doc}"
+
     @logging_and_warning_decorator(start_finish_level=5)
     def show_readable_attrs(self, is_return=False, logger=None):
         """Show readable host and opts-facing surfaces."""
@@ -1284,12 +1231,12 @@ class HostBase(ClassBase):
             if name not in {"opts", "opts_defaults"}
         )
         for attr_name in host_names:
-            lines.append(self.show_attr_desc(attr_name))
+            lines.append(self._helper_format_attr_doc(attr_name))
 
         if self.opts is not None:
             lines.append("[Opts attributes]")
             for attr_name in type(self.opts).__attrs__:
-                lines.append(self.show_attr_desc(attr_name))
+                lines.append(self._helper_format_attr_doc(attr_name))
 
         if len(lines) == 1:
             lines.append("<none>")
@@ -1300,38 +1247,6 @@ class HostBase(ClassBase):
             return output
         return None
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.show_attr_desc so descriptions can be
-    # resolved from both the host layer and the paired opts layer.
-    # ==================================================
-    def show_attr_desc(self, attr_name: str) -> str:
-        """Return a description from the host layer or the paired opts layer."""
-        try:
-            return super().show_attr_desc(attr_name)
-        except KeyError:
-            pass
-
-        opts = getattr(self, "opts", None)
-        if opts is not None:
-            descriptions_opts = type(opts).__attrs__
-            if attr_name in descriptions_opts:
-                return f"{attr_name!r}: {descriptions_opts[attr_name]}"
-            raise KeyError(
-                f"Attribute {attr_name!r} was not found in "
-                f"{type(self).__name__}.__attr_defs__ or {type(opts).__name__}.__attrs__."
-            )
-
-        raise KeyError(
-            f"Attribute {attr_name!r} was not found in "
-            f"{type(self).__name__}.__attr_defs__. "
-            "The opts attrs are not available yet because self.opts has not been "
-            "initialized; the attribute may belong to opts."
-        )
-
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.show_modifiable_attrs so writable surfaces
-    # are presented by host-side attrs, opts attrs, and host properties.
-    # ==================================================
     @logging_and_warning_decorator(start_finish_level=5)
     def show_modifiable_attrs(self, is_return=False, logger=None):
         """Show modifiable host and opts attributes by category."""
@@ -1345,7 +1260,6 @@ class HostBase(ClassBase):
         attrs_extra = []
         attrs_properties = []
 
-        # impl_assign_state contains exactly the public-settable host fields.
         for attr_name, state in self.impl_assign_state.items():
             if attr_name in attrs_forbidden or state.is_protected:
                 continue
@@ -1370,7 +1284,7 @@ class HostBase(ClassBase):
         if attrs_host:
             lines.append("[Host attributes]")
             for attr_name in sorted(attrs_host):
-                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+                lines.append(f"  - {self._helper_format_attr_doc(attr_name)}")
         else:
             lines.append("[Host attributes]")
             lines.append("  - <none>")
@@ -1378,7 +1292,7 @@ class HostBase(ClassBase):
         if attrs_opts:
             lines.append("[Opts attributes]")
             for attr_name in attrs_opts:
-                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+                lines.append(f"  - {self._helper_format_attr_doc(attr_name)}")
         else:
             lines.append("[Opts attributes]")
             lines.append("  - <none>")
@@ -1386,12 +1300,12 @@ class HostBase(ClassBase):
         if attrs_extra:
             lines.append("[Extra attributes]")
             for attr_name in sorted(attrs_extra):
-                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+                lines.append(f"  - {self._helper_format_attr_doc(attr_name)}")
 
         if attrs_properties:
             lines.append("[Host writable properties]")
             for attr_name in sorted(attrs_properties):
-                lines.append(f"  - {self.show_attr_desc(attr_name)}")
+                lines.append(f"  - {self._helper_format_attr_doc(attr_name)}")
         else:
             lines.append("[Host writable properties]")
             lines.append("  - <none>")
@@ -1460,13 +1374,10 @@ class HostBase(ClassBase):
             try:
                 attr = as_str(attr, name=attr_name)
 
-                # Opts attr — stored in opts.impl_attr_flags, not impl_assign_state.
                 if attr in type(self.opts).__attrs__:
                     self.opts.impl_attr_flags[attr][flag_name] = is_enabled
                     continue
 
-                # Resolve to the canonical key in impl_assign_state.
-                # Accept both the raw_ form and the public alias.
                 target_key = attr
                 if target_key not in self.impl_assign_state:
                     raw_key = f"raw_{attr}"
@@ -1543,11 +1454,6 @@ class HostBase(ClassBase):
             attr_name="The name of attr to be unwrapped",
         )
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.act_register_protected_attr because
-    # protected names may belong either to the host itself or to its paired
-    # opts object.
-    # ==================================================
     def act_register_protected_attr(self, attrs: Sequence[str] | str) -> None:
         """Register a group of public attributes as directly protected."""
         self._helper_set_protection_flag(
@@ -1557,10 +1463,6 @@ class HostBase(ClassBase):
             attr_name="The name of attr to be protected",
         )
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.act_unregister_protected_attr because the
-    # protected-name surface may include host aliases and paired opts attrs.
-    # ==================================================
     def act_unregister_protected_attr(self, attrs: Sequence[str] | str) -> None:
         """Remove direct protection from one or more host/opts public names."""
         self._helper_set_protection_flag(
@@ -1628,19 +1530,11 @@ class HostBase(ClassBase):
     # Object protocol
     # ------------------------------------------------------------------
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase._helper_setattr_final so validated public
-    # host assignment is routed through the managed act_commit() pipeline.
-    # ==================================================
     def _helper_setattr_final(self, key, value, *, target_key=None):
         """Route validated public host assignment through the commit pipeline."""
         del target_key
         self.act_commit(**{key: value})
 
-    # ==================== OVERRIDE ====================
-    # HostBase overrides ClassBase.__setattr__ so paired opts fields are also
-    # routed through the managed act_commit() pipeline.
-    # ==================================================
     def __setattr__(self, key, value):
         is_opts_key = hasattr(self, "opts") and (key in type(self.opts).__attrs__)
 
