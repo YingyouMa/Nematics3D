@@ -15,8 +15,9 @@ that expose:
 Design overview
 ---------------
 ``__attr_defs__`` is a class-level dict of frozen ``AttrDef`` instances.  It
-is auto-merged from the full MRO by ``__init_subclass__`` so subclasses never
-write ``{**Parent.__attr_defs__, ...}`` manually.  The static schema is shared
+is auto-merged from the full method resolution order (MRO) by
+``__init_subclass__`` so subclasses never write
+``{**Parent.__attr_defs__, ...}`` manually.  The static schema is shared
 across all instances and is never copied at instance creation time.
 
 Per-instance mutable state is split into three purpose-specific containers:

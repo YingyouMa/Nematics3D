@@ -28,20 +28,27 @@ $credential = [System.Net.NetworkCredential]::new("", $secureKey)
 $env:CONTROL_PLANE_API_KEY = $credential.Password
 
 try {
-    Write-Host "Checking Nematics3D MCP Tunnel..."
-    & $tunnelClient doctor --profile-file $profileFile
-    if ($LASTEXITCODE -ne 0) {
-        throw "tunnel-client doctor failed with exit code $LASTEXITCODE."
-    }
+    while ($true) {
+        Write-Host "Checking Nematics3D MCP Tunnel..."
+        & $tunnelClient doctor --profile-file $profileFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "tunnel-client doctor failed with exit code $LASTEXITCODE."
+        }
 
-    Write-Host ""
-    Write-Host "Starting Nematics3D MCP Tunnel."
-    Write-Host "Keep this window open; press Ctrl+C to stop."
-    Write-Host ""
+        Write-Host ""
+        Write-Host "Starting Nematics3D MCP Tunnel."
+        Write-Host "Keep this window open; press Ctrl+C to stop."
+        Write-Host ""
 
-    & $tunnelClient run --profile-file $profileFile
-    if ($LASTEXITCODE -ne 0) {
-        throw "tunnel-client exited with code $LASTEXITCODE."
+        & $tunnelClient run --profile-file $profileFile
+
+        Write-Host ""
+        Write-Host "Nematics3D MCP Tunnel stopped."
+        $choice = Read-Host "Enter R to restart or Q to quit"
+        if ($choice.Trim().ToUpperInvariant() -ne "R") {
+            break
+        }
+        Write-Host ""
     }
 } finally {
     Remove-Item Env:CONTROL_PLANE_API_KEY -ErrorAction SilentlyContinue

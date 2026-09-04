@@ -9,6 +9,9 @@ description = "Private MCP bridge for the local Nematics3D repository"
 requires-python = ">=3.12,<3.13"
 dependencies = ["mcp>=1.13,<2"]
 
+[project.optional-dependencies]
+test = ["pytest>=9,<10"]
+
 [project.scripts]
 nematics3d-mcp = "nematics3d_mcp.server:main"
 

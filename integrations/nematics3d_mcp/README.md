@@ -1,9 +1,22 @@
 # Nematics3D MCP
 
-Private MCP connection layer for the local Nematics3D repository.
+Private MCP connection layer for the local Nematics3D repository. It exposes
+repository-scoped file browsing, text search, unified-diff patching, Git change
+inspection, and a small allowlist of project validation tasks.
 
-The initial server intentionally exposes no project tools. Its first milestone is
-to validate the stdio MCP handshake through OpenAI Secure MCP Tunnel.
+All paths are repository-relative. Access to `.git` and paths outside the
+Nematics3D checkout is rejected. Project commands run without a shell.
+
+## MCP tools
+
+- `get_server_status`
+- `list_files`
+- `read_file`
+- `search_text`
+- `apply_patch`
+- `get_git_changes`
+- `commit_changes`
+- `run_project_task`
 
 ## Local development
 
@@ -38,4 +51,5 @@ data and protects the key with Windows DPAPI. The encrypted value can only be
 decrypted by the same Windows user on the same computer.
 
 After setup, double-click `start-nematics3d-mcp.cmd`. Keep its terminal window
-open while ChatGPT uses the MCP server; press Ctrl+C to stop it.
+open while ChatGPT uses the MCP server. Press Ctrl+C to stop the tunnel, then
+enter `R` to restart it in the same window or `Q` to quit.
