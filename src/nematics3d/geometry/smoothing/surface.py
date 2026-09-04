@@ -393,10 +393,7 @@ class SmoothedSurface(HostBase):
     ) -> tuple[float, float]:
         q = 2.0 ** (-1.0 / (2.0 * iterations))
         r = taubin_ratio
-        x = (
-            (r - 1.0)
-            + np.sqrt((r - 1.0) ** 2 + 4.0 * r * (1.0 - q))
-        ) / (2.0 * r)
+        x = ((r - 1.0) + np.sqrt((r - 1.0) ** 2 + 4.0 * r * (1.0 - q))) / (2.0 * r)
         lambda_ = float(x / kappa_cutoff)
         mu = float(-r * lambda_)
         return lambda_, mu
@@ -412,10 +409,7 @@ class SmoothedSurface(HostBase):
         """Resolve the minimum stable N and its lambda/mu coefficients."""
 
         def edge_gain(lambda_: float, mu: float) -> float:
-            return float(
-                (1.0 - lambda_ * kappa_max)
-                * (1.0 - mu * kappa_max)
-            )
+            return float((1.0 - lambda_ * kappa_max) * (1.0 - mu * kappa_max))
 
         lambda_1, mu_1 = cls._helper_coefficients_for_iterations(
             kappa_cutoff,
@@ -436,9 +430,7 @@ class SmoothedSurface(HostBase):
 
         r = taubin_ratio
         y_cross = (r - 1.0) / r
-        y_stable_max = (
-            (r - 1.0) + np.sqrt((r - 1.0) ** 2 + 8.0 * r)
-        ) / (2.0 * r)
+        y_stable_max = ((r - 1.0) + np.sqrt((r - 1.0) ** 2 + 8.0 * r)) / (2.0 * r)
         spectral_ratio = kappa_max / kappa_cutoff
         y_infinite = y_cross * spectral_ratio
 
@@ -492,9 +484,7 @@ class SmoothedSurface(HostBase):
 
     def _helper_apply_laplacian(self, vertices: np.ndarray) -> np.ndarray:
         """Apply the fixed negative-semidefinite L = -M^-1 K to coordinates."""
-        return -(
-            self.impl_stiffness_matrix @ vertices
-        ) / self.impl_mass_lumped[:, None]
+        return -(self.impl_stiffness_matrix @ vertices) / self.impl_mass_lumped[:, None]
 
     def _helper_smooth_vertices(self) -> np.ndarray:
         """Apply the resolved number of fixed-operator Taubin pairs."""
@@ -550,18 +540,13 @@ class SmoothedSurface(HostBase):
         self._helper_resolve_filter_parameters()
 
         logger.debug(
-            "Smoothing surface %r with %d vertices and %d faces; "
-            "cutoff_wavelength=%s, taubin_ratio=%s, iterations=%d, "
-            "lambda=%g, mu=%g, kappa_max=%g.",
-            self.name,
-            len(self.impl_vertices_initial),
-            self.impl_surface_result.n_cells,
-            self.opts.cutoff_wavelength,
-            self.opts.taubin_ratio,
-            self.calc_iterations,
-            self.calc_lambda,
-            self.calc_mu,
-            self.calc_kappa_max,
+            f"Smoothing surface {self.name!r} with "
+            f"{len(self.impl_vertices_initial)} vertices and "
+            f"{self.impl_surface_result.n_cells} faces; "
+            f"cutoff_wavelength={self.opts.cutoff_wavelength}, "
+            f"taubin_ratio={self.opts.taubin_ratio}, "
+            f"iterations={self.calc_iterations}, lambda={self.calc_lambda:g}, "
+            f"mu={self.calc_mu:g}, kappa_max={self.calc_kappa_max:g}."
         )
 
         try:

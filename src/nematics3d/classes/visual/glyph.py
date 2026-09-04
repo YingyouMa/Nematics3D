@@ -716,6 +716,9 @@ class PlotGlyph(HostBase):
             input_dir["opacity"] = "opacity"
             input_dir["cmap"] = self.opts.scalars_cmap
             input_dir["clim"] = self.opts.scalars_clim
+            # Scalar bars are owned and synchronized by Nematics3D's
+            # ScalarBar registry. Suppress PyVista's automatic duplicate.
+            input_dir["show_scalar_bar"] = False
 
         if self.state_clip_mode == "center":
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())

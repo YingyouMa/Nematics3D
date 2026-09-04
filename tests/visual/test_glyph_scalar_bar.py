@@ -46,6 +46,7 @@ class TestGlyphScalarBar(unittest.TestCase):
                 figure.pl.scalar_bars[scalar_bar.impl_name_pv],
                 scalar_bar.backend,
             )
+            self.assertEqual(len(figure.pl.scalar_bars), 1)
         finally:
             figure.act_close()
 
