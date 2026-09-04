@@ -4,6 +4,7 @@ import types
 
 import numpy as np
 import pyvista as pv
+import pytest
 
 SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 PKG_DIR = SRC_DIR / "nematics3d"
@@ -25,7 +26,7 @@ from nematics3d.geometry.smoothing.surface import (
 def _tetra_surface(scale=1.0):
     points = scale * np.array(
         [
-            [1.0, 1.0, 1.0],
+            [1.0, 1.0, 1.2],
             [1.0, -1.0, -1.0],
             [-1.0, 1.0, -1.0],
             [-1.0, -1.0, 1.0],
@@ -44,120 +45,132 @@ def _tetra_surface(scale=1.0):
     return pv.PolyData(points, faces)
 
 
-def test_smoothed_surface_initialization_and_result_contract():
+def _direct_smooth(mesh, opts):
+    return mesh.smooth_taubin(
+        n_iter=opts.n_iter,
+        pass_band=opts.pass_band,
+        edge_angle=opts.edge_angle,
+        feature_angle=opts.feature_angle,
+        boundary_smoothing=opts.boundary_smoothing,
+        feature_smoothing=opts.feature_smoothing,
+        non_manifold_smoothing=False,
+        normalize_coordinates=opts.normalize_coordinates,
+        inplace=False,
+        progress_bar=False,
+    )
+
+
+def test_smoothed_surface_matches_pyvista_and_result_contract():
     mesh = _tetra_surface()
+    mesh.point_data["sample"] = np.arange(mesh.n_points)
     points_before = np.asarray(mesh.points).copy()
 
-    surface = SmoothedSurface(mesh, cutoff_wavelength=7.0)
+    surface = SmoothedSurface(mesh)
+    expected = _direct_smooth(mesh, surface.opts)
 
-    assert surface.calc_is_smoothed is True
-    assert surface.calc_status == "Success"
     assert isinstance(surface.result, pv.PolyData)
-    assert surface.result.is_all_triangles
     assert surface.result.n_points == mesh.n_points
     assert surface.result.n_cells == mesh.n_cells
-    assert surface.vertices.shape == points_before.shape
-    assert np.all(np.isfinite(surface.vertices))
-    assert surface.vertices.flags.writeable is False
+    assert len(surface.result.point_data) == 0
+    assert len(surface.result.cell_data) == 0
+    assert len(surface.result.field_data) == 0
 
     np.testing.assert_array_equal(mesh.points, points_before)
     np.testing.assert_array_equal(surface.raw_surface.points, points_before)
-    np.testing.assert_allclose(surface.result.points, surface.vertices)
+    np.testing.assert_allclose(surface.vertices, expected.points)
+    assert surface.vertices.flags.writeable is False
 
-    assert surface.calc_iterations >= 1
-    assert surface.calc_lambda > 0.0
-    assert surface.calc_mu < 0.0
-    assert surface.calc_kappa_max > 0.0
-    assert surface.calc_kappa_cutoff > 0.0
-
-    # Large mesh/operator caches are implementation details, not public calc attrs.
-    for removed_name in (
-        "calc_surface_initial",
-        "calc_vertices_initial",
-        "calc_faces",
-        "calc_mass_lumped",
-        "calc_stiffness_matrix",
-        "calc_vertices_result",
-        "calc_surface_result",
-    ):
-        assert removed_name not in type(surface).__attr_defs__
-
-
-def test_smoothed_surface_complete_cutoff_gain_is_minus_3db():
-    surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-
-    pair_gain = (
-        (1.0 - surface.calc_lambda * surface.calc_kappa_cutoff)
-        * (1.0 - surface.calc_mu * surface.calc_kappa_cutoff)
+    expected_vectors = surface.vertices - points_before
+    np.testing.assert_allclose(surface.error_vectors, expected_vectors)
+    np.testing.assert_allclose(
+        surface.error_scalars,
+        np.linalg.norm(expected_vectors, axis=1),
     )
-    total_gain = pair_gain ** surface.calc_iterations
-
-    np.testing.assert_allclose(total_gain, 1.0 / np.sqrt(2.0), rtol=1e-12, atol=1e-12)
-
-
-def test_smoothed_surface_iteration_count_is_minimum_stable():
-    surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-
-    def edge_gain(iterations):
-        lambda_, mu = surface._helper_coefficients_for_iterations(
-            surface.calc_kappa_cutoff,
-            surface.opts.taubin_ratio,
-            iterations,
-        )
-        return (
-            (1.0 - lambda_ * surface.calc_kappa_max)
-            * (1.0 - mu * surface.calc_kappa_max)
-        )
-
-    assert abs(edge_gain(surface.calc_iterations)) <= 1.0 + 1e-12
-    if surface.calc_iterations > 1:
-        assert abs(edge_gain(surface.calc_iterations - 1)) > 1.0
+    assert surface.error_vectors.shape == (mesh.n_points, 3)
+    assert surface.error_scalars.shape == (mesh.n_points,)
+    assert surface.error_vectors.flags.writeable is False
+    assert surface.error_scalars.flags.writeable is False
 
 
-def test_smoothed_surface_opts_object_and_default_override():
-    opts = OptsSmoothedSurface(cutoff_wavelength=7.0)
+def test_smoothed_surface_defaults_and_override():
+    opts = OptsSmoothedSurface()
     surface = SmoothedSurface(
         _tetra_surface(),
         opts=opts,
-        opts_defaults_override={"taubin_ratio": 1.05},
+        opts_defaults_override={"pass_band": 0.2},
     )
 
-    assert surface.opts is opts
-    np.testing.assert_allclose(surface.opts.taubin_ratio, 1.05)
+    assert surface.opts is not opts
+    assert surface.opts.n_iter == 20
+    assert surface.opts.pass_band == 0.2
+    assert surface.opts.boundary_smoothing is True
+    assert surface.opts.feature_smoothing is False
+    assert surface.opts.feature_angle == 45.0
+    assert surface.opts.edge_angle == 15.0
+    assert surface.opts.normalize_coordinates is False
 
 
-def test_smoothed_surface_opts_update_reuses_fixed_operator():
-    surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-    stiffness_before = surface.impl_stiffness_matrix
-    initial_vertices_before = surface.impl_vertices_initial
+def test_smoothed_surface_opts_commit_recomputes_from_raw_surface():
+    mesh = _tetra_surface()
+    surface = SmoothedSurface(mesh, pass_band=0.2)
     vertices_before = surface.vertices.copy()
 
-    surface.act_commit(cutoff_wavelength=6.5)
+    surface.act_commit(pass_band=0.02)
 
-    assert surface.impl_stiffness_matrix is stiffness_before
-    assert surface.impl_vertices_initial is initial_vertices_before
-    assert surface.calc_is_smoothed is True
+    expected = _direct_smooth(mesh, surface.opts)
+    np.testing.assert_allclose(surface.vertices, expected.points)
     assert not np.array_equal(surface.vertices, vertices_before)
 
 
-def test_smoothed_surface_raw_surface_update_rebuilds_operator():
-    surface = SmoothedSurface(_tetra_surface(), cutoff_wavelength=7.0)
-    stiffness_before = surface.impl_stiffness_matrix
-    initial_vertices_before = surface.impl_vertices_initial
-    kappa_before = surface.calc_kappa_max
+def test_smoothed_surface_raw_surface_commit_recomputes():
+    surface = SmoothedSurface(_tetra_surface(), pass_band=0.05)
+    replacement = _tetra_surface(scale=2.0)
 
-    surface.act_commit(surface=_tetra_surface(scale=2.0))
+    surface.act_commit(surface=replacement)
 
-    assert surface.impl_stiffness_matrix is not stiffness_before
-    assert surface.impl_vertices_initial is not initial_vertices_before
-    assert surface.calc_is_smoothed is True
-    np.testing.assert_allclose(surface.calc_kappa_max, kappa_before / 4.0, rtol=1e-12, atol=1e-12)
+    expected = _direct_smooth(replacement, surface.opts)
+    np.testing.assert_allclose(surface.vertices, expected.points)
+    np.testing.assert_allclose(
+        surface.error_vectors,
+        expected.points - replacement.points,
+    )
 
 
-def test_smoothed_surface_requires_cutoff_wavelength():
-    try:
-        SmoothedSurface(_tetra_surface())
-    except SurfaceSmoothingConfigError as error:
-        assert "cutoff_wavelength" in str(error)
-    else:
-        raise AssertionError("missing cutoff_wavelength should raise")
+def test_smoothed_surface_zero_iterations_is_identity():
+    mesh = _tetra_surface()
+
+    surface = SmoothedSurface(mesh, n_iter=0)
+
+    np.testing.assert_array_equal(surface.vertices, mesh.points)
+    np.testing.assert_array_equal(surface.error_vectors, np.zeros((mesh.n_points, 3)))
+    np.testing.assert_array_equal(surface.error_scalars, np.zeros(mesh.n_points))
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "attr_name", "default"),
+    [
+        ({"n_iter": -1}, "n_iter", 20),
+        ({"n_iter": 1.5}, "n_iter", 20),
+        ({"pass_band": -0.1}, "pass_band", 0.1),
+        ({"pass_band": 2.1}, "pass_band", 0.1),
+        ({"feature_angle": 181}, "feature_angle", 45.0),
+        ({"edge_angle": -1}, "edge_angle", 15.0),
+        ({"boundary_smoothing": 1}, "boundary_smoothing", True),
+    ],
+)
+def test_smoothed_surface_invalid_opts_fall_back_to_defaults(
+    kwargs, attr_name, default
+):
+    surface = SmoothedSurface(_tetra_surface(), **kwargs)
+
+    assert getattr(surface.opts, attr_name) == default
+
+
+def test_smoothed_surface_rejects_empty_or_nonfinite_surface():
+    with pytest.raises(SurfaceSmoothingConfigError, match="non-empty"):
+        SmoothedSurface(pv.PolyData())
+
+    mesh = _tetra_surface()
+    mesh.points[0, 0] = np.nan
+    with pytest.raises(SurfaceSmoothingConfigError, match="finite"):
+        SmoothedSurface(mesh)
