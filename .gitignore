@@ -7,3 +7,5 @@ dist_test/
 *.pyd
 *.so
 example/data/record.txt
+integrations/nematics3d_mcp/.venv/
+integrations/nematics3d_mcp/*.log
