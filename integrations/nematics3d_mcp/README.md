@@ -55,3 +55,11 @@ open while ChatGPT uses the MCP server. Press Ctrl+C to stop the tunnel, then
 enter `R` to restart it in the same window or `Q` to quit.
 `commit_changes` commits only the explicitly selected paths and never pushes.
 
+
+## Controlled push
+
+`push_current_branch(expected_commit)` pushes the verified current HEAD to the
+same branch on `origin`. It requires the full expected commit SHA, never
+force-pushes, and does not accept arbitrary remotes, branches, refspecs, or Git
+arguments.
+
