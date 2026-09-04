@@ -14,9 +14,9 @@ that expose:
 
 Design overview
 ---------------
-``__attr_defs__`` is a class-level dict of frozen ``AttrDef`` instances.  It
-is auto-merged from the full MRO by ``__init_subclass__`` so subclasses never
-write ``{**Parent.__attr_defs__, ...}`` manually.  The static schema is shared
+``__attr_defs__`` is a class-level dict of frozen ``AttrDef`` instances. It is
+auto-merged from the full MRO by ``__init_subclass__`` so subclasses never
+write ``{**Parent.__attr_defs__, ...}`` manually. The static schema is shared
 across all instances and is never copied at instance creation time.
 
 Per-instance mutable state is split into three purpose-specific containers:
@@ -24,7 +24,7 @@ Per-instance mutable state is split into three purpose-specific containers:
 - ``impl_relation_state`` — one ``RelationState`` per declared relation field,
   tracking the live binding (target, weak-ref flag, runtime doc override).
 - ``impl_assign_state`` — one ``AssignState`` per public-settable field,
-  tracking the ``is_protected`` flag.
+  tracking assignment-control flags.
 - ``impl_extra`` — one ``ExtraAttrEntry`` per dynamically registered extra
   attribute (registered at runtime via ``act_add_attr()``).
 
@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import inspect
 import weakref
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Callable, ClassVar
 
@@ -54,7 +54,7 @@ class AttrDef:
     """Frozen static schema entry for one managed attribute.
 
     Instances live in ``__attr_defs__`` at the class level and are shared
-    across all instances of that class.  Because the dataclass is frozen they
+    across all instances of that class. Because the dataclass is frozen they
     cannot be mutated at runtime.
 
     Parameters
@@ -65,7 +65,7 @@ class AttrDef:
         Semantic category — see the naming-convention table in ``ClassBase``.
     validator:
         Optional callable ``(value, doc) -> value`` called on public
-        assignment.  Not auto-called for ``kind="property"`` — property
+        assignment. Not auto-called for ``kind="property"`` — property
         setters must invoke it explicitly.
     is_reapply_opts_after_raw:
         If ``True``, opts are re-applied after this raw field is set.
@@ -75,7 +75,7 @@ class AttrDef:
     is_public_settable:
         Explicit override for whether the public surface is writable.
         Required for ``kind="property"``; inferred automatically for
-        ``raw_``, ``state_``, ``default_``, and extra attrs.
+        ``raw_``, ``state_``, and ``default_`` fields.
     is_weak_by_default:
         For ``kind="relation"`` only — whether the initial binding is a
         weak reference when ``is_weak`` is not supplied explicitly.
@@ -100,7 +100,7 @@ class RelationState:
 
     is_weak: bool | None = None
     relation_value: object = None
-    doc_runtime: str | None = None  # runtime override for AttrDef.doc
+    doc_runtime: str | None = None
 
 
 @dataclass(slots=True)
@@ -114,18 +114,16 @@ class AssignState:
     """
 
     is_protected: bool = False
-    is_wrapped: bool = False  # HostBase only; ignored by ClassBase
+    is_wrapped: bool = False
 
 
 @dataclass(slots=True)
 class ExtraAttrEntry:
     """Container for one dynamically registered extra attribute.
 
-    Protection state (``is_protected``) is intentionally absent here.  It
-    lives exclusively in ``impl_assign_state[name]``, which is the single
-    authoritative source for protection across *all* public-settable fields —
-    both statically declared and dynamically registered.  Keeping it here too
-    would create a second, diverging copy that could silently go out of sync.
+    Protection state intentionally lives only in
+    ``impl_assign_state[name]``. This keeps one authoritative protection state
+    for every public-settable field, whether statically declared or dynamic.
     """
 
     doc: str
@@ -137,14 +135,21 @@ class ExtraAttrEntry:
 # Name / kind validation
 # ---------------------------------------------------------------------------
 
-# Prefixed kinds: every kind that enforces a name prefix.
-# The prefix is always kind + "_", so the kind can be recovered by stripping
-# the trailing underscore — no explicit mapping needed.
-# Any kind NOT in this set is "free" (no prefix required), so subclasses can
-# introduce new free kinds (e.g. "opts") via _VALID_KINDS without touching
-# this constant.
+
 _PREFIXED_KINDS: frozenset[str] = frozenset(
     {"raw", "state", "default", "calc", "entity", "impl"}
+)
+
+_ATTR_KIND_ORDER: MappingProxyType = MappingProxyType(
+    {
+        "raw": 0,
+        "state": 1,
+        "default": 2,
+        "relation": 3,
+        "calc": 4,
+        "entity": 5,
+        "property": 6,
+    }
 )
 
 
@@ -160,10 +165,10 @@ def _validate_name_kind(
     Checks are bidirectional:
 
     - A field whose name starts with ``raw_`` must have ``kind="raw"``, and
-      vice versa.  The same rule applies for ``state_``, ``default_``,
+      vice versa. The same rule applies for ``state_``, ``default_``,
       ``calc_``, ``entity_``, and ``impl_``.
-    - Fields with ``kind`` in ``_FREE_KINDS`` (``"relation"``, ``"property"``)
-      may use any non-prefixed name.
+    - Kinds not listed in ``_PREFIXED_KINDS`` (for example ``relation`` and
+      ``property``) may use any non-prefixed name.
     - Unknown ``kind`` values are rejected outright.
     """
     ctx = f" (class {cls_name!r})" if cls_name else ""
@@ -174,8 +179,6 @@ def _validate_name_kind(
             f"Valid kinds: {sorted(valid_kinds)}."
         )
 
-    # Determine which prefix (if any) this name carries.
-    # Prefix is always kind + "_", so stripping "_" recovers the kind directly.
     matched_prefix: str | None = None
     for prefixed_kind in _PREFIXED_KINDS:
         prefix = prefixed_kind + "_"
@@ -184,26 +187,21 @@ def _validate_name_kind(
             break
 
     if matched_prefix is not None:
-        required_kind = matched_prefix[:-1]  # strip trailing "_"
+        required_kind = matched_prefix[:-1]
         if kind != required_kind:
-            # calc_ fields may be explicitly declared as kind="property" to
-            # indicate a read-only computed value backed by a Python property
-            # rather than a stored slot.  The calc_ prefix still signals
-            # "computed output" to readers; only the implementation differs.
+            # A calc_-prefixed Python property is still a computed public
+            # output; only its storage mechanism differs.
             if matched_prefix == "calc_" and kind == "property":
-                pass  # allowed explicitly
-            else:
-                raise ValueError(
-                    f"AttrDef {name!r}{ctx}: name prefix {matched_prefix!r} "
-                    f"requires kind={required_kind!r}, but got kind={kind!r}."
-                )
-    else:
-        # No prefix — only reject if the kind is one that *requires* a prefix.
-        if kind in _PREFIXED_KINDS:
+                return
             raise ValueError(
-                f"AttrDef {name!r}{ctx}: kind={kind!r} requires the name "
-                f"prefix '{kind}_', but the name has no such prefix."
+                f"AttrDef {name!r}{ctx}: name prefix {matched_prefix!r} "
+                f"requires kind={required_kind!r}, but got kind={kind!r}."
             )
+    elif kind in _PREFIXED_KINDS:
+        raise ValueError(
+            f"AttrDef {name!r}{ctx}: kind={kind!r} requires the name "
+            f"prefix '{kind}_', but the name has no such prefix."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -224,8 +222,8 @@ class ClassBase:
       schema, auto-merged from the full MRO.
     - ``impl_relation_state`` (per instance) tracks the live binding of every
       declared relation.
-    - ``impl_assign_state`` (per instance) tracks protection flags for every
-      public-settable field.
+    - ``impl_assign_state`` (per instance) tracks assignment-control flags for
+      every public-settable field.
     - ``impl_extra`` (per instance) holds dynamically registered extra attrs.
 
     Naming conventions for subclass ``__attr_defs__`` declarations
@@ -233,9 +231,9 @@ class ClassBase:
     =========  ==========  ==================================================
     Prefix     kind        Meaning
     =========  ==========  ==================================================
-    ``raw_``   ``raw``     Canonical stored public input field.  Exposes a
+    ``raw_``   ``raw``     Canonical stored public input field. Exposes a
                            readable alias without the prefix.
-    ``state_`` ``state``   Writable runtime state input.  No shortened alias.
+    ``state_`` ``state``   Writable runtime state input. No shortened alias.
     ``default_``  ``default`` Optional managed default-layer input.
     ``calc_``  ``calc``    Computed readable output (read-only).
     ``entity_`` ``entity`` Computed object output (read-only).
@@ -249,7 +247,6 @@ class ClassBase:
     Read-only outputs and ``impl_`` fields do not.
     """
 
-    # Subclasses may extend this frozenset to introduce new field categories.
     _VALID_KINDS: ClassVar[frozenset[str]] = frozenset(
         {
             "raw",
@@ -318,18 +315,12 @@ class ClassBase:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        # 1. Auto-merge __attr_defs__ from the full MRO (most-base first).
         merged: dict[str, AttrDef] = {}
         for base in reversed(cls.__mro__[1:]):
             merged.update(getattr(base, "__attr_defs__", {}))
-        # The class's own definitions override ancestors.
         merged.update(vars(cls).get("__attr_defs__", {}))
-        # Wrap in MappingProxyType so the table is read-only at runtime.
-        # AttrDef entries are already frozen; this seals the outer mapping too,
-        # preventing runtime insertion or deletion of schema entries.
         cls.__attr_defs__ = MappingProxyType(merged)
 
-        # 2. Validate name–kind consistency for every declared field.
         for name, defn in cls.__attr_defs__.items():
             _validate_name_kind(
                 name, defn.kind, cls._VALID_KINDS, cls_name=cls.__name__
@@ -346,29 +337,22 @@ class ClassBase:
         name_replace: str,
         is_fixed: bool = False,
     ):
-        cls = type(self)
-        attr_defs = cls.__attr_defs__
+        attr_defs = type(self).__attr_defs__
 
-        # --- impl_relation_state: one entry per declared relation ---
         relation_state: dict[str, RelationState] = {
             n: RelationState() for n, d in attr_defs.items() if d.kind == "relation"
         }
         object.__setattr__(self, "impl_relation_state", relation_state)
 
-        # --- impl_assign_state: one entry per public-settable field ---
         assign_state: dict[str, AssignState] = {}
         for n, d in attr_defs.items():
             if self._helper_is_public_settable_from_def(n, d):
                 assign_state[n] = self._helper_make_assign_state()
         object.__setattr__(self, "impl_assign_state", assign_state)
 
-        # --- impl_extra: empty; populated by act_add_attr() at runtime ---
         object.__setattr__(self, "impl_extra", {})
-
-        # --- impl_is_fixed ---
         object.__setattr__(self, "impl_is_fixed", bool(is_fixed))
 
-        # Normalize the initial name and route through registry-aware path.
         self._helper_assign_name(
             self._helper_validate_name(name, replace=name_replace),
         )
@@ -380,6 +364,7 @@ class ClassBase:
     @classmethod
     def _helper_is_public_settable_from_def(cls, name: str, defn: AttrDef) -> bool:
         """Return whether one field is public-settable, given its ``AttrDef``."""
+        del name
         if defn.kind in ("raw", "state", "default"):
             return True
         if defn.kind == "property":
@@ -422,7 +407,7 @@ class ClassBase:
         return name
 
     # ------------------------------------------------------------------
-    # Attribute classification helpers
+    # Attribute classification / resolution helpers
     # ------------------------------------------------------------------
 
     def _helper_is_impl_attr(self, attr_name: str) -> bool:
@@ -447,7 +432,14 @@ class ClassBase:
 
     def _helper_is_fixed_blocked_attr(self, attr_name: str) -> bool:
         """Return whether one attr belongs to the fixed raw/state core surface."""
-        return (attr_name != "raw_name") and attr_name.startswith(("raw_", "state_"))
+        if attr_name in self.impl_extra:
+            return False
+        defn = type(self).__attr_defs__.get(attr_name)
+        return (
+            attr_name != "raw_name"
+            and defn is not None
+            and defn.kind in ("raw", "state")
+        )
 
     def _helper_raise_fixed_assignment_error(self, target_key: str) -> None:
         """Raise the standard assignment error for fixed raw/state attrs."""
@@ -464,13 +456,67 @@ class ClassBase:
 
     def _helper_is_public_settable_attr(self, attr_name: str) -> bool:
         """Return whether one managed attribute is writable from the public surface."""
-        # Extra attrs are always public-settable.
         if attr_name in self.impl_extra:
             return True
         defn = type(self).__attr_defs__.get(attr_name)
         if defn is None:
             return False
         return self._helper_is_public_settable_from_def(attr_name, defn)
+
+    def _helper_resolve_attr_name(
+        self,
+        name: str,
+        *,
+        is_allow_impl: bool = False,
+    ) -> str:
+        """Resolve a public attribute name or raw alias to its canonical name."""
+        name = as_str(name, name="Attribute name")
+        attr_defs = type(self).__attr_defs__
+
+        if name in self.impl_extra:
+            return name
+
+        if name in attr_defs:
+            if (not is_allow_impl) and self._helper_is_impl_attr(name):
+                raise AttributeError(
+                    f"Attribute {name!r} is internal implementation metadata, "
+                    "not a readable public attribute."
+                )
+            return name
+
+        raw_name = f"raw_{name}"
+        if raw_name in attr_defs:
+            return raw_name
+
+        raise AttributeError(
+            f"Readable attribute {name!r} is not registered in "
+            f"{type(self).__name__}."
+        )
+
+    def _helper_get_attr_doc(self, name: str) -> str:
+        """Return the public documentation string for one attribute or alias."""
+        canonical_name = self._helper_resolve_attr_name(name)
+        if canonical_name in self.impl_extra:
+            return self.impl_extra[canonical_name].doc
+        if self._helper_is_relation_attr(canonical_name):
+            return self._helper_get_relation_doc(canonical_name)
+        return type(self).__attr_defs__[canonical_name].doc
+
+    @staticmethod
+    def _helper_truncate_repr(value, max_length: int = 240) -> str:
+        """Return a bounded one-line repr suitable for inspection output."""
+        text = repr(value).replace("\n", " ")
+        if len(text) <= max_length:
+            return text
+        return text[: max_length - 3] + "..."
+
+    @classmethod
+    def _helper_attr_sort_key(cls, attr_name: str) -> tuple[int, str]:
+        """Return the standard display sort key for one declared attribute."""
+        defn = cls.__attr_defs__.get(attr_name)
+        if defn is None:
+            return len(_ATTR_KIND_ORDER), attr_name
+        return _ATTR_KIND_ORDER.get(defn.kind, len(_ATTR_KIND_ORDER)), attr_name
 
     # ------------------------------------------------------------------
     # Extra attribute registration
@@ -485,7 +531,6 @@ class ClassBase:
         """Collect the currently occupied readable attribute surface names."""
         readable_names: set[str] = set()
 
-        # Declared attributes from the class schema.
         for attr_name, defn in type(self).__attr_defs__.items():
             if attr_name == is_exclude_name:
                 continue
@@ -495,11 +540,9 @@ class ClassBase:
             if attr_name.startswith("raw_"):
                 readable_names.add(attr_name[4:])
 
-        # Dynamically registered extra attrs.
         for attr_name in self.impl_extra:
-            if attr_name == is_exclude_name:
-                continue
-            readable_names.add(attr_name)
+            if attr_name != is_exclude_name:
+                readable_names.add(attr_name)
 
         return readable_names
 
@@ -511,13 +554,16 @@ class ClassBase:
     ) -> None:
         """Reject new registrations whose readable names collide with existing ones."""
         readable_names = {name}
-        if name.startswith("raw_"):
-            readable_names.add(name[4:])
-
         existing_names = self._helper_collect_readable_names(
             is_exclude_name=name if is_overwrite else None,
         )
         conflict_names = readable_names & existing_names
+
+        # Extra attrs must also stay clear of methods/properties and other
+        # class-level public surfaces that are not represented in __attr_defs__.
+        class_conflicts = {candidate for candidate in readable_names if hasattr(type(self), candidate)}
+        conflict_names |= class_conflicts
+
         if conflict_names:
             raise AttributeError(
                 "Cannot register readable name(s) "
@@ -533,10 +579,10 @@ class ClassBase:
         validator=None,
         is_overwrite: bool = False,
     ):
-        """Register a dynamic extra attribute with documentation and a default value.
+        """Register a documented dynamic side-data attribute on this instance.
 
-        Extra attributes are stored in ``impl_extra`` and are intentionally
-        kept out of the static ``__attr_defs__`` schema.
+        Extra attrs deliberately do not participate in the ``raw_`` / ``calc_``
+        semantic data model. Their values are instance-local user side data.
         """
         name = as_str(name, name="Extra attribute name")
         if not name.isidentifier():
@@ -544,7 +590,16 @@ class ClassBase:
                 f"Invalid attribute name {name!r}: must be a valid Python identifier."
             )
 
-        # Guard against clobbering a statically declared field.
+        for prefixed_kind in _PREFIXED_KINDS:
+            if name.startswith(prefixed_kind + "_"):
+                raise ValueError(
+                    f"Extra attribute name {name!r} uses the reserved semantic "
+                    f"prefix {prefixed_kind + '_'!r}. Choose an unprefixed side-data name."
+                )
+
+        if validator is not None and not callable(validator):
+            raise TypeError("validator must be callable or None.")
+
         if name in type(self).__attr_defs__ and name not in self.impl_extra:
             raise AttributeError(
                 f"Cannot register extra attribute {name!r}: it is already a "
@@ -559,16 +614,31 @@ class ClassBase:
 
         self._helper_check_readable_name_conflict(name, is_overwrite=is_overwrite)
 
+        doc = as_str(doc, name=f"Extra attr doc for {name!r}")
+        if validator is not None:
+            default = validator(default, doc)
+
         entry = ExtraAttrEntry(
-            doc=as_str(doc, name=f"Extra attr doc for {name!r}"),
+            doc=doc,
             value=default,
             validator=validator,
         )
         self.impl_extra[name] = entry
 
-        # Ensure an assign-state entry exists for protection tracking.
         if name not in self.impl_assign_state:
             self.impl_assign_state[name] = self._helper_make_assign_state()
+
+    def act_remove_attr(self, name: str):
+        """Remove one dynamic extra attribute and return its previous value."""
+        name = as_str(name, name="Extra attribute name")
+        if name not in self.impl_extra:
+            raise AttributeError(
+                f"Cannot remove {name!r}: it is not a dynamic extra attribute of "
+                f"{type(self).__name__}."
+            )
+        value = self.impl_extra.pop(name).value
+        self.impl_assign_state.pop(name, None)
+        return value
 
     # ------------------------------------------------------------------
     # Protection
@@ -691,8 +761,7 @@ class ClassBase:
         """Bind or update a named relation on this instance.
 
         The relation must be declared in ``__attr_defs__`` before calling
-        this method.  Dynamic creation of undeclared relations is not
-        permitted.
+        this method. Dynamic creation of undeclared relations is not permitted.
         """
         name = as_str(name, name=f"Relation name for instance {self.raw_name!r}")
 
@@ -768,48 +837,23 @@ class ClassBase:
             "When reading, the raw_ prefix may be omitted where a public alias exists."
         ]
 
-        def _sort_key(attr_name: str) -> tuple[int, str]:
-            defn = type(self).__attr_defs__.get(attr_name)
-            if defn is None:  # extra attr
-                return 6, attr_name
-            if defn.kind == "raw":
-                return 0, attr_name
-            if defn.kind == "state":
-                return 1, attr_name
-            if defn.kind == "default":
-                return 2, attr_name
-            if defn.kind == "relation":
-                return 3, attr_name
-            if defn.kind == "calc":
-                return 4, attr_name
-            if defn.kind == "property":
-                return 5, attr_name
-            return 6, attr_name
-
         attr_names = sorted(
             (
                 name
                 for name, defn in type(self).__attr_defs__.items()
                 if defn.kind != "impl"
             ),
-            key=_sort_key,
+            key=type(self)._helper_attr_sort_key,
         )
-        # Append extra attrs at the end.
         attr_names += sorted(self.impl_extra)
 
         if not attr_names:
             lines.append("- <none>")
         else:
             for attr_name in attr_names:
-                if self._helper_is_relation_attr(attr_name):
-                    desc = self._helper_get_relation_doc(attr_name)
-                elif attr_name in self.impl_extra:
-                    desc = self.impl_extra[attr_name].doc
-                else:
-                    desc = type(self).__attr_defs__[attr_name].doc
                 lines.append(f"- {attr_name}")
                 if is_desc:
-                    lines.append(f"    {desc}")
+                    lines.append(f"    {self._helper_get_attr_doc(attr_name)}")
 
         output = "\n".join(lines)
         logger.info(output)
@@ -819,35 +863,57 @@ class ClassBase:
 
     @logging_and_warning_decorator(start_finish_level=5)
     def show_attr_doc(self, name: str, is_return=False, logger=None):
-        """Show the description for one registered readable attribute."""
-        name = as_str(name, name="Readable attribute name")
-        attr_defs = type(self).__attr_defs__
-
-        if name not in attr_defs:
-            raw_name = f"raw_{name}"
-            if raw_name in attr_defs:
-                name = raw_name
-            elif name not in self.impl_extra:
-                raise AttributeError(
-                    f"Readable attribute {name!r} is not registered in "
-                    f"{type(self).__name__}."
-                )
-
-        if name in self.impl_extra:
-            doc = self.impl_extra[name].doc
-        elif self._helper_is_impl_attr(name):
-            raise AttributeError(
-                f"Attribute {name!r} is internal implementation metadata, "
-                "not a readable public attribute."
-            )
-        elif self._helper_is_relation_attr(name):
-            doc = self._helper_get_relation_doc(name)
-        else:
-            doc = attr_defs[name].doc
-
+        """Show the documentation for one registered readable attribute."""
+        doc = self._helper_get_attr_doc(name)
         logger.info(doc)
         if is_return:
             return doc
+        return None
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def show_attr_info(self, name: str, is_return=False, logger=None):
+        """Show one attribute's role, mutability, current value, and documentation."""
+        requested_name = as_str(name, name="Readable attribute name")
+        canonical_name = self._helper_resolve_attr_name(requested_name)
+        is_extra = canonical_name in self.impl_extra
+
+        if is_extra:
+            kind = "extra"
+        else:
+            kind = type(self).__attr_defs__[canonical_name].kind
+
+        is_modifiable = self._helper_is_public_settable_attr(canonical_name)
+        state = self.impl_assign_state.get(canonical_name)
+        is_protected = bool(state is not None and state.is_protected)
+        if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(canonical_name):
+            is_modifiable = False
+        if is_protected:
+            is_modifiable = False
+
+        if self._helper_is_relation_attr(canonical_name):
+            value = self._helper_resolve_relation_value(canonical_name)
+        else:
+            value = getattr(self, requested_name)
+
+        lines = [
+            f"name: {canonical_name}",
+            f"kind: {kind}",
+        ]
+        if canonical_name.startswith("raw_"):
+            lines.append(f"alias: {canonical_name[4:]}")
+        lines.extend(
+            [
+                f"modifiable: {'yes' if is_modifiable else 'no'}",
+                f"protected: {'yes' if is_protected else 'no'}",
+                f"value: {self._helper_truncate_repr(value)}",
+                f"doc: {self._helper_get_attr_doc(requested_name)}",
+            ]
+        )
+
+        output = "\n".join(lines)
+        logger.info(output)
+        if is_return:
+            return output
         return None
 
     @logging_and_warning_decorator(start_finish_level=5)
@@ -855,7 +921,7 @@ class ClassBase:
         """Show currently bound relations and their descriptions."""
         lines = []
 
-        for attr_name, rel in self.impl_relation_state.items():
+        for attr_name in self.impl_relation_state:
             target = self._helper_resolve_relation_value(attr_name)
             if target is None:
                 continue
@@ -896,30 +962,6 @@ class ClassBase:
             return output
         return None
 
-    def show_attr_desc(self, attr_name: str) -> str:
-        """Return the description of a registered attribute or its public alias."""
-        attr_defs = type(self).__attr_defs__
-
-        if attr_name in attr_defs:
-            if self._helper_is_relation_attr(attr_name):
-                return f"{attr_name!r}: {self._helper_get_relation_doc(attr_name)}"
-            return f"{attr_name!r}: {attr_defs[attr_name].doc}"
-
-        if attr_name in self.impl_extra:
-            return f"{attr_name!r}: {self.impl_extra[attr_name].doc}"
-
-        raw_attr_name = f"raw_{attr_name}"
-        if raw_attr_name in attr_defs:
-            return (
-                f"{attr_name!r}: Alias of {raw_attr_name!r}. "
-                f"{attr_defs[raw_attr_name].doc}"
-            )
-
-        raise KeyError(
-            f"Attribute {attr_name!r} was not found in "
-            f"{type(self).__name__}.__attr_defs__."
-        )
-
     @logging_and_warning_decorator(start_finish_level=5)
     def show_modifiable_attrs(self, is_return=False, is_desc=True, logger=None):
         """Show public attributes and properties intended for assignment."""
@@ -927,51 +969,23 @@ class ClassBase:
             "When assigning, the raw_ prefix may be omitted where a public alias exists."
         ]
 
-        def _sort_key(attr_name: str) -> tuple[int, str]:
-            defn = type(self).__attr_defs__.get(attr_name)
-            if defn is None:  # extra attr
-                return 4, attr_name
-            if defn.kind == "raw":
-                return 0, attr_name
-            if defn.kind == "state":
-                return 1, attr_name
-            if defn.kind == "default":
-                return 2, attr_name
-            if defn.kind == "property":
-                return 3, attr_name
-            return 4, attr_name
-
         attr_names = []
-        # Static declared fields.
         for attr_name, state in self.impl_assign_state.items():
-            if attr_name in self.impl_extra:
-                continue  # handled below
             if state.is_protected:
                 continue
             if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(attr_name):
                 continue
             attr_names.append(attr_name)
-        # Extra attrs — protection is always read from impl_assign_state,
-        # never from ExtraAttrEntry (which carries no is_protected field).
-        for attr_name in self.impl_extra:
-            state = self.impl_assign_state.get(attr_name)
-            if state is not None and state.is_protected:
-                continue
-            attr_names.append(attr_name)
 
-        attr_names = sorted(attr_names, key=_sort_key)
+        attr_names = sorted(attr_names, key=type(self)._helper_attr_sort_key)
 
         if not attr_names:
             lines.append("- <none>")
         else:
             for attr_name in attr_names:
-                if attr_name in self.impl_extra:
-                    desc = self.impl_extra[attr_name].doc
-                else:
-                    desc = type(self).__attr_defs__[attr_name].doc
                 lines.append(f"- {attr_name}")
                 if is_desc:
-                    lines.append(f"    {desc}")
+                    lines.append(f"    {self._helper_get_attr_doc(attr_name)}")
 
         output = "\n".join(lines)
         logger.info(output)
@@ -986,16 +1000,13 @@ class ClassBase:
     def __getattr__(self, key):
         attr_defs = type(self).__attr_defs__
 
-        # Public alias: ``name`` → ``raw_name``.
         raw_key = f"raw_{key}"
         if raw_key in attr_defs:
             return object.__getattribute__(self, raw_key)
 
-        if key in attr_defs:
-            if self._helper_is_relation_attr(key):
-                return self._helper_resolve_relation_value(key)
+        if key in attr_defs and self._helper_is_relation_attr(key):
+            return self._helper_resolve_relation_value(key)
 
-        # Extra attr.
         impl_extra = object.__getattribute__(self, "impl_extra")
         if key in impl_extra:
             return impl_extra[key].value
@@ -1015,7 +1026,6 @@ class ClassBase:
         attr_defs = type(self).__attr_defs__
         target_key = key
 
-        # Resolve public alias (e.g. ``obj.name = ...`` → ``raw_name``).
         if target_key not in attr_defs and target_key not in self.impl_extra:
             raw_key = f"raw_{key}"
             if raw_key in attr_defs:
@@ -1040,7 +1050,6 @@ class ClassBase:
         if self.impl_is_fixed and self._helper_is_fixed_blocked_attr(target_key):
             self._helper_raise_fixed_assignment_error(target_key)
 
-        # Protection check.
         assign_state = self.impl_assign_state.get(target_key)
         if assign_state is not None and assign_state.is_protected:
             cls_name = type(self).__name__
@@ -1050,7 +1059,6 @@ class ClassBase:
                 f"{target_key!r} is protected."
             )
 
-        # Validation.
         if target_key in self.impl_extra:
             entry = self.impl_extra[target_key]
             if entry.validator is not None:
