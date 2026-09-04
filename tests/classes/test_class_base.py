@@ -35,6 +35,18 @@ class DummyBase(ClassBase):
         super().__init__(name=name, name_replace="dummy")
 
 
+class DocumentedBase(ClassBase):
+    """A documented ClassBase test object.
+
+    Used to verify concrete-class documentation inspection.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, name="documented"):
+        super().__init__(name=name, name_replace="documented")
+
+
 class CountingNameBase(ClassBase):
     __slots__ = ()
     call_count = 0
@@ -116,6 +128,17 @@ class TestClassBase(unittest.TestCase):
         obj.raw_label = "direct-update"
         self.assertEqual(obj.raw_label, "direct-update")
         self.assertEqual(CountingFieldBase.call_count, 2)
+
+    def test_show_doc_returns_concrete_class_docstring(self):
+        obj = DocumentedBase()
+
+        self.assertEqual(
+            obj.show_doc(is_return=True),
+            (
+                "A documented ClassBase test object.\n\n"
+                "Used to verify concrete-class documentation inspection."
+            ),
+        )
 
     def test_show_attr_doc_returns_registered_doc(self):
         obj = CountingFieldBase()
