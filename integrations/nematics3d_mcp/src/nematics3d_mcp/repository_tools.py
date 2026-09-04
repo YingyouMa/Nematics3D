@@ -546,3 +546,68 @@ def run_project_task(
         "stderr": stderr,
         "is_output_truncated": is_stdout_truncated or is_stderr_truncated,
     }
+
+
+def push_current_branch(expected_commit: str) -> dict[str, object]:
+    """Push exactly the expected current HEAD to the same branch on origin.
+
+    The operation exposes no caller-controlled remote, branch, refspec, force
+    flag, or arbitrary Git arguments. A non-fast-forward push is rejected.
+    """
+    clean_expected = expected_commit.strip()
+    if not clean_expected:
+        raise ValueError("expected_commit cannot be empty.")
+    if any(character not in "0123456789abcdefABCDEF" for character in clean_expected):
+        raise ValueError("expected_commit must be a hexadecimal Git commit SHA.")
+
+    head_result = _run_process(["git", "rev-parse", "--verify", "HEAD"])
+    if head_result.returncode != 0:
+        raise RuntimeError(head_result.stderr.strip() or "Cannot resolve HEAD.")
+    head = head_result.stdout.strip()
+    if clean_expected.casefold() != head.casefold():
+        raise ValueError(
+            "Refusing to push because expected_commit does not match the current "
+            f"HEAD ({head})."
+        )
+
+    branch_result = _run_process(["git", "symbolic-ref", "--quiet", "--short", "HEAD"])
+    if branch_result.returncode != 0:
+        raise ValueError("Cannot push while HEAD is detached.")
+    branch = branch_result.stdout.strip()
+    if not branch:
+        raise ValueError("Cannot determine the current Git branch.")
+
+    remote_result = _run_process(["git", "remote", "get-url", "origin"])
+    if remote_result.returncode != 0:
+        raise RuntimeError(
+            remote_result.stderr.strip() or "The origin remote is not configured."
+        )
+    remote_url = remote_result.stdout.strip()
+
+    push_result = _run_process(
+        [
+            "git",
+            "push",
+            "--porcelain",
+            "--",
+            "origin",
+            f"HEAD:refs/heads/{branch}",
+        ],
+        timeout=120,
+    )
+    stdout, is_stdout_truncated = _bounded_output(push_result.stdout)
+    stderr, is_stderr_truncated = _bounded_output(push_result.stderr)
+    if push_result.returncode != 0:
+        detail = stderr.strip() or stdout.strip() or "git push failed."
+        raise RuntimeError(detail)
+
+    return {
+        "pushed": True,
+        "remote": "origin",
+        "remote_url": remote_url,
+        "branch": branch,
+        "commit": head,
+        "stdout": stdout,
+        "stderr": stderr,
+        "is_output_truncated": is_stdout_truncated or is_stderr_truncated,
+    }
