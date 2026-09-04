@@ -3,8 +3,8 @@ from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
 from nematics3d.geometry import (
-    calc_vec_from_azimuth_polar,
     rotation_matrix_from_vectors,
+    vector_from_spherical_angles,
 )
 from ..plot_sphere import PlotSphere, OptsSphere
 from ..plot_tube import PlotTube, OptsTube
@@ -412,7 +412,7 @@ class InteractBounds(PanelBase):
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
         axis1_polar = np.deg2rad(self.state["axis1_polar_angle"])
         axis1_now = np.asarray(
-            calc_vec_from_azimuth_polar(axis1_azimuth, axis1_polar),
+            vector_from_spherical_angles(axis1_azimuth, axis1_polar),
             dtype=float,
         )
 

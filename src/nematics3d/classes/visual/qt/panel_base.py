@@ -7,9 +7,9 @@ import numpy as np
 
 from nematics3d.datatypes import as_str, Vect
 from nematics3d.geometry import (
-    calc_vec_from_azimuth_polar,
-    get_azimuth as geometry_get_azimuth,
-    get_polar_angle as geometry_get_polar_angle,
+    azimuth_from_vector,
+    polar_angle_from_vector,
+    vector_from_spherical_angles,
 )
 from .ui_throttle import UIThrottle
 
@@ -976,15 +976,15 @@ class PanelBase(QtWidgets.QWidget):
 
     @staticmethod
     def _helper_calc_vec(azimuth, polar_angle):
-        return calc_vec_from_azimuth_polar(azimuth, polar_angle)
+        return vector_from_spherical_angles(azimuth, polar_angle)
 
     @staticmethod
     def get_azimuth(vec):
-        return geometry_get_azimuth(vec)
+        return np.rad2deg(azimuth_from_vector(vec))
 
     @staticmethod
     def get_polar_angle(vec):
-        return geometry_get_polar_angle(vec)
+        return np.rad2deg(polar_angle_from_vector(vec))
 
     # -------------------------------
     # Readable identity

@@ -1,6 +1,4 @@
-"""
-Geometry helpers for vector parameterization, angle wrapping, and local frame conversions.
-"""
+"""Approximate oriented bounding-box geometry helpers."""
 
 from dataclasses import dataclass
 from typing import ClassVar
@@ -11,7 +9,6 @@ from scipy.spatial.transform import Rotation as R
 
 from ..core.result_base import ResultBase
 from ..datatypes import as_axes, as_dimension_info, as_points, as_vector
-from .rotation import rotation_matrix_from_vectors
 
 
 # ===========================================================================
@@ -305,45 +302,3 @@ def _obb_fit_in_axes(points, axes):
         local_max=local_max,
         volume=volume,
     )
-
-
-def calc_vec_from_azimuth_polar(azimuth, polar_angle):
-    x = np.sin(polar_angle) * np.cos(azimuth)
-    y = np.sin(polar_angle) * np.sin(azimuth)
-    z = np.cos(polar_angle)
-    return np.array((x, y, z), dtype=float)
-
-
-def get_azimuth(vec):
-    vec = np.asarray(vec, dtype=float)
-    az_rad = np.arctan2(vec[1], vec[0])
-    return np.degrees(az_rad) % 360
-
-
-def get_polar_angle(vec):
-    vec = np.asarray(vec, dtype=float).copy()
-    vec /= np.linalg.norm(vec, axis=-1, keepdims=True)
-    polar = np.arccos(vec[2])
-    return np.degrees(polar)
-
-
-def get_axis1_azimuth(axis1, normal):
-    """
-    Measure the azimuth of `axis1` in the local plane orthogonal to `normal`.
-
-    The local reference frame is built by rotating the global z-axis onto
-    `normal`, then taking the rotated global x/y axes as the in-plane basis.
-    The returned angle is in degrees within ``[0, 360)``.
-    """
-    axis1 = np.asarray(axis1, dtype=float).copy()
-    axis1 /= np.linalg.norm(axis1, axis=-1, keepdims=True)
-    rotation = rotation_matrix_from_vectors((0, 0, 1), normal)
-    axisx = rotation @ np.array([1.0, 0.0, 0.0])
-    axisy = rotation @ np.array([0.0, 1.0, 0.0])
-    az_rad = np.arctan2(axis1 @ axisy, axis1 @ axisx)
-    return np.degrees(az_rad) % 360
-
-
-def wrap_to_pi(angle):
-    """Wrap angles in radians into the half-open interval ``[-pi, pi)``."""
-    return (np.asarray(angle) + np.pi) % (2.0 * np.pi) - np.pi

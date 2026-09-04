@@ -18,7 +18,7 @@ from nematics3d.geometry import (
     find_rotation_axis,
     points_membership_mask,
     select_points_in_box,
-    wrap_to_pi,
+    wrap_angle_to_pi,
 )
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
@@ -587,7 +587,7 @@ class QPlanePolar(QPlane):
             theta_a = theta_outer[j]
             theta_b = theta_outer[jn]
 
-            diff_b = wrap_to_pi(theta_inner[None, :] - theta_b[:, None])
+            diff_b = wrap_angle_to_pi(theta_inner[None, :] - theta_b[:, None])
             c_local = np.argmin(np.abs(diff_b), axis=1).astype(np.int64)
 
             order = np.argsort(theta_inner)
@@ -601,8 +601,8 @@ class QPlanePolar(QPlane):
             prev_local = order[prev_rank]
             next_local = order[next_rank]
 
-            d_prev = np.abs(wrap_to_pi(theta_inner[prev_local] - theta_a))
-            d_next = np.abs(wrap_to_pi(theta_inner[next_local] - theta_a))
+            d_prev = np.abs(wrap_angle_to_pi(theta_inner[prev_local] - theta_a))
+            d_next = np.abs(wrap_angle_to_pi(theta_inner[next_local] - theta_a))
             d_local = np.where(d_prev <= d_next, prev_local, next_local).astype(
                 np.int64
             )
