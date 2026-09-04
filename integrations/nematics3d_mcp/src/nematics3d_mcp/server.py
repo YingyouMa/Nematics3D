@@ -153,6 +153,26 @@ def commit_changes(message: str, paths: list[str]) -> dict[str, object]:
 
 
 @mcp.tool(
+    title="Push the current Nematics3D branch",
+    description=(
+        "Push exactly the expected current HEAD commit to the same branch on "
+        "origin. The expected full commit SHA must match HEAD. This tool never "
+        "force-pushes and does not accept caller-controlled remotes, branches, "
+        "refspecs, or arbitrary Git arguments."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
+def push_current_branch(expected_commit: str) -> dict[str, object]:
+    """Push the verified current branch to its origin counterpart."""
+    return repository_tools.push_current_branch(expected_commit)
+
+
+@mcp.tool(
     title="Run an approved Nematics3D project task",
     description=(
         "Run pytest, Black, Ruff, or package build in the Nematics3D conda "
