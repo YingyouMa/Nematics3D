@@ -142,3 +142,52 @@ def test_commit_changes_commits_only_selected_paths(
     assert result["paths"] == ["selected.txt"]
     assert result["pushed"] is False
     assert "?? unrelated.txt" in result["remaining_status"]
+
+
+def test_push_current_branch_pushes_only_verified_head(
+    temporary_repository: Path,
+) -> None:
+    """The controlled push updates only the matching branch on origin."""
+    repository_tools._run_process(["git", "config", "user.name", "MCP Test"])
+    repository_tools._run_process(
+        ["git", "config", "user.email", "mcp-test@example.invalid"]
+    )
+    repository_tools._run_process(["git", "checkout", "-b", "develop"])
+
+    target = temporary_repository / "example.txt"
+    target.write_text("example\n", encoding="utf-8")
+    repository_tools._run_process(["git", "add", "--", "example.txt"])
+    repository_tools._run_process(["git", "commit", "-m", "Initial commit"])
+    head = repository_tools._run_process(["git", "rev-parse", "HEAD"]).stdout.strip()
+
+    remote = temporary_repository.parent / "remote.git"
+    repository_tools._run_process(["git", "init", "--bare", str(remote)])
+    repository_tools._run_process(["git", "remote", "add", "origin", str(remote)])
+
+    result = repository_tools.push_current_branch(head)
+
+    assert result["pushed"] is True
+    assert result["remote"] == "origin"
+    assert result["branch"] == "develop"
+    assert result["commit"] == head
+    remote_head = repository_tools._run_process(
+        ["git", "--git-dir", str(remote), "rev-parse", "refs/heads/develop"]
+    )
+    assert remote_head.stdout.strip() == head
+
+
+def test_push_current_branch_rejects_unexpected_head(
+    temporary_repository: Path,
+) -> None:
+    """A stale or invented expected SHA cannot push repository state."""
+    repository_tools._run_process(["git", "config", "user.name", "MCP Test"])
+    repository_tools._run_process(
+        ["git", "config", "user.email", "mcp-test@example.invalid"]
+    )
+    target = temporary_repository / "example.txt"
+    target.write_text("example\n", encoding="utf-8")
+    repository_tools._run_process(["git", "add", "--", "example.txt"])
+    repository_tools._run_process(["git", "commit", "-m", "Initial commit"])
+
+    with pytest.raises(ValueError, match="does not match"):
+        repository_tools.push_current_branch("0" * 40)
