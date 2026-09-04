@@ -3,6 +3,7 @@
 import pytest
 
 from nematics3d.core.class_base import AttrDef, ClassBase
+from nematics3d.core.host_base import HostBase, OptsBase
 
 
 def _as_positive_int(value, doc):
@@ -34,10 +35,35 @@ class DemoBase(ClassBase):
         object.__setattr__(self, "calc_double", 2 * self.raw_value)
 
 
+class DemoHost(HostBase):
+    __attr_defs__ = {
+        "raw_value": AttrDef(
+            doc="Primary host input.",
+            kind="raw",
+            validator=_as_positive_int,
+        ),
+    }
+
+    __slots__ = ("raw_value",)
+
+    def __init__(self, value=2):
+        super().__init__(OptsBase, name="host")
+        object.__setattr__(self, "raw_value", _as_positive_int(value, "raw_value"))
+
+    def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
+        del is_reapply_opts
+        return kwargs, {}
+
+
 def test_show_attr_doc_resolves_raw_alias():
     obj = DemoBase()
     assert obj.show_attr_doc("value", is_return=True) == "Primary integer input."
     assert obj.show_attr_doc("raw_value", is_return=True) == "Primary integer input."
+
+
+def test_show_attr_desc_historical_duplicate_is_removed():
+    obj = DemoBase()
+    assert not hasattr(obj, "show_attr_desc")
 
 
 def test_extra_default_is_validated_before_storage():
@@ -110,3 +136,20 @@ def test_calc_output_is_not_modifiable():
     assert "modifiable: no" in output
     with pytest.raises(AttributeError):
         obj.calc_double = 10
+
+
+def test_host_show_attr_doc_resolves_host_and_opts_surfaces():
+    host = DemoHost()
+    assert host.show_attr_doc("value", is_return=True) == "Primary host input."
+    assert (
+        host.show_attr_doc("tag", is_return=True)
+        == "name identifier of the option settings"
+    )
+
+
+def test_host_readable_attrs_uses_unified_doc_path():
+    host = DemoHost()
+    output = host.show_readable_attrs(is_return=True)
+    assert "'value': Alias of 'raw_value'. Primary host input." in output
+    assert "'tag': name identifier of the option settings" in output
+    assert not hasattr(host, "show_attr_desc")
