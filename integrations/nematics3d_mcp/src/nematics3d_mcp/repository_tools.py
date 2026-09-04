@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import shlex
 import subprocess
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -228,6 +229,137 @@ def extract_patch_paths(patch: str) -> list[str]:
     return sorted(paths)
 
 
+def _apply_wrapped_update(path: str, body: list[str]) -> tuple[str, str]:
+    """Apply wrapped-format update hunks in memory and return old/new text."""
+    target = resolve_repo_path(path)
+    if not target.is_file():
+        raise FileNotFoundError(f"File does not exist: {path}")
+    try:
+        old_text = target.read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise ValueError("Only UTF-8 text files can be patched.") from error
+
+    current_lines = old_text.splitlines()
+    search_start = 0
+    index = 0
+    while index < len(body):
+        if not body[index].startswith("@@"):
+            raise ValueError("Wrapped update content must begin with an @@ hunk.")
+        index += 1
+        hunk: list[str] = []
+        while index < len(body) and not body[index].startswith("@@"):
+            line = body[index]
+            if not line or line[0] not in {" ", "+", "-"}:
+                raise ValueError("Malformed wrapped patch hunk line.")
+            hunk.append(line)
+            index += 1
+
+        old_hunk = [line[1:] for line in hunk if line[0] in {" ", "-"}]
+        new_hunk = [line[1:] for line in hunk if line[0] in {" ", "+"}]
+        if not old_hunk:
+            raise ValueError("Wrapped update hunks require context or removed lines.")
+
+        matches = [
+            position
+            for position in range(search_start, len(current_lines) - len(old_hunk) + 1)
+            if current_lines[position : position + len(old_hunk)] == old_hunk
+        ]
+        if not matches:
+            raise ValueError(f"Wrapped patch context was not found in {path}.")
+        if len(matches) > 1:
+            raise ValueError(f"Wrapped patch context is ambiguous in {path}.")
+
+        position = matches[0]
+        current_lines[position : position + len(old_hunk)] = new_hunk
+        search_start = position + len(new_hunk)
+
+    trailing_newline = old_text.endswith(("\n", "\r"))
+    new_text = "\n".join(current_lines) + ("\n" if trailing_newline else "")
+    return old_text, new_text
+
+
+def _convert_wrapped_patch(patch: str) -> str:
+    """Convert a Begin Patch wrapper into a Git-compatible unified diff."""
+    lines = patch.strip().splitlines()
+    if not lines or lines[0] != "*** Begin Patch" or lines[-1] != "*** End Patch":
+        raise ValueError("Malformed Begin Patch wrapper.")
+
+    sections: list[tuple[str, str, list[str]]] = []
+    index = 1
+    while index < len(lines) - 1:
+        header = lines[index]
+        operations = {
+            "*** Update File: ": "update",
+            "*** Add File: ": "add",
+            "*** Delete File: ": "delete",
+        }
+        matched = next(
+            (
+                (prefix, operation)
+                for prefix, operation in operations.items()
+                if header.startswith(prefix)
+            ),
+            None,
+        )
+        if matched is None:
+            raise ValueError(f"Unsupported wrapped patch directive: {header}")
+        prefix, operation = matched
+        path = header[len(prefix) :].strip()
+        if not path:
+            raise ValueError("Wrapped patch file paths cannot be empty.")
+        _normalize_patch_path(path)
+
+        index += 1
+        body: list[str] = []
+        while index < len(lines) - 1 and not lines[index].startswith("*** "):
+            body.append(lines[index])
+            index += 1
+        sections.append((operation, path, body))
+
+    if not sections:
+        raise ValueError("Wrapped patch contains no file operations.")
+
+    converted: list[str] = []
+    seen_paths: set[str] = set()
+    for operation, path, body in sections:
+        if path in seen_paths:
+            raise ValueError(f"Wrapped patch repeats a file path: {path}")
+        seen_paths.add(path)
+
+        if operation == "update":
+            old_text, new_text = _apply_wrapped_update(path, body)
+            from_file, to_file = f"a/{path}", f"b/{path}"
+        elif operation == "add":
+            target = resolve_repo_path(path)
+            if target.exists():
+                raise FileExistsError(f"File already exists: {path}")
+            if any(not line.startswith("+") for line in body):
+                raise ValueError("Every wrapped Add File line must begin with +.")
+            old_text = ""
+            new_text = "\n".join(line[1:] for line in body) + ("\n" if body else "")
+            from_file, to_file = "/dev/null", f"b/{path}"
+        else:
+            target = resolve_repo_path(path)
+            if not target.is_file():
+                raise FileNotFoundError(f"File does not exist: {path}")
+            if body:
+                raise ValueError("Delete File directives cannot contain patch lines.")
+            old_text = target.read_text(encoding="utf-8")
+            new_text = ""
+            from_file, to_file = f"a/{path}", "/dev/null"
+
+        converted.extend(
+            difflib.unified_diff(
+                old_text.splitlines(keepends=True),
+                new_text.splitlines(keepends=True),
+                fromfile=from_file,
+                tofile=to_file,
+            )
+        )
+
+    return "".join(converted)
+
+
 def _run_process(
     command: list[str],
     *,
@@ -256,7 +388,9 @@ def _bounded_output(text: str) -> tuple[str, bool]:
 
 
 def apply_patch(patch: str) -> dict[str, object]:
-    """Validate and apply a Git-style unified diff to the repository."""
+    """Validate and apply a Git diff or Begin Patch wrapped patch."""
+    if patch.lstrip().startswith("*** Begin Patch"):
+        patch = _convert_wrapped_patch(patch)
     paths = extract_patch_paths(patch)
     check_result = _run_process(
         ["git", "apply", "--check", "--whitespace=nowarn", "-"],

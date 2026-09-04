@@ -102,8 +102,10 @@ def search_text(
 @mcp.tool(
     title="Apply a patch to Nematics3D",
     description=(
-        "Create, modify, or delete repository files by applying a Git-style "
-        "unified diff. Paths outside the repository and .git are forbidden."
+        "Create, modify, or delete repository files using either a standard "
+        "Git unified diff or a *** Begin Patch wrapper with Update File, Add "
+        "File, and Delete File directives. Paths outside the repository and "
+        ".git are forbidden."
     ),
     annotations=ToolAnnotations(
         readOnlyHint=False,
@@ -113,7 +115,7 @@ def search_text(
     ),
 )
 def apply_patch(patch: str) -> dict[str, object]:
-    """Apply a validated unified diff."""
+    """Apply a validated Git diff or Begin Patch wrapper."""
     return repository_tools.apply_patch(patch)
 
 

@@ -51,6 +51,61 @@ def test_apply_patch_modifies_repository_file(temporary_repository: Path) -> Non
     assert target.read_text(encoding="utf-8") == "value = 2\n"
 
 
+def test_apply_patch_accepts_begin_patch_update(temporary_repository: Path) -> None:
+    """The model's Begin Patch update format changes an existing file."""
+    target = temporary_repository / "example.py"
+    target.write_text("value = 1\nother = 3\n", encoding="utf-8")
+
+    result = repository_tools.apply_patch(
+        """*** Begin Patch
+*** Update File: example.py
+@@
+-value = 1
++value = 2
+ other = 3
+*** End Patch
+"""
+    )
+
+    assert result["paths"] == ["example.py"]
+    assert target.read_text(encoding="utf-8") == "value = 2\nother = 3\n"
+
+
+def test_apply_patch_accepts_begin_patch_add_and_delete(
+    temporary_repository: Path,
+) -> None:
+    """The wrapped format can create one file and delete another."""
+    removed = temporary_repository / "removed.txt"
+    removed.write_text("remove me\n", encoding="utf-8")
+
+    result = repository_tools.apply_patch(
+        """*** Begin Patch
+*** Add File: added.txt
++created
+*** Delete File: removed.txt
+*** End Patch
+"""
+    )
+
+    assert result["paths"] == ["added.txt", "removed.txt"]
+    assert (temporary_repository / "added.txt").read_text(
+        encoding="utf-8"
+    ) == "created\n"
+    assert not removed.exists()
+
+
+def test_begin_patch_rejects_unsafe_path(temporary_repository: Path) -> None:
+    """Wrapped patches retain the repository path boundary."""
+    with pytest.raises(ValueError, match="Unsafe patch path"):
+        repository_tools.apply_patch(
+            """*** Begin Patch
+*** Add File: ../outside.txt
++unsafe
+*** End Patch
+"""
+        )
+
+
 def test_extract_patch_paths_rejects_git_directory() -> None:
     """A patch cannot target Git internals."""
     with pytest.raises(ValueError, match="Unsafe patch path"):

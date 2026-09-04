@@ -276,83 +276,54 @@ def n_color_immerse(n: nField) -> List[Tuple]:
     """
     Map a nematic director field to RGB colors for visualization.
 
-    This function encodes the orientation of a unit director vector `n`
-    into RGB color values using a nonlinear polynomial mapping followed by
-    a fixed linear transformation and scaling. The colormap is an immersion
-    from RP^2 to R^3. This ensures that similar orientatioin of n refer to
-    similar colors but different orientations might refer to the same color.
-
-    The colormap is modified from boy's surface.
-
-    The color is specifically desined to be distince on white background,
-    and to get x, y, z direction closed to red, blue and green colors.
-
-    x: [0.90535893, 0.22874911, 0.22062688]
-    y: [0.05416607, 0.27934554, 0.48937438]
-    z: [0.30416607, 0.90434554, 0.22687438]
+    The mapping combines a Boy-surface polynomial immersion of RP^2 with the
+    selected OKLab-optimized affine transform at the Pareto knee
+    ``J_loc ~= 0.43``. The optimization improves perceptual separation and
+    local color uniformity while keeping the output inside the sRGB gamut.
 
     Parameters
     ----------
     n : array_like, shape (..., 3)
         Nematic director field.
-        Can be of arbitrary leading dimensions.
 
     Returns
     -------
-    colors : list of tuples. Each tuple has 3 elements
-        RGB color with values typically in [0, 1], suitable for plotting.
-
-    Examples
-    --------
-    >>> n = np.array([[1, 1, 0], [0, 1, 1], [1, 0, 1]])
-    >>> colors = n_color_immerse(n)
-    >>> colors
-    [(0.39345357, 0.1364875 , 0.60187625),
-     (0.09285714, 0.47428571, 0.605     ),
-     (0.51845357, 0.4489875 , 0.47062625)]
+    colors : list of tuple
+        RGB colors in [0, 1], suitable for plotting.
     """
-
     n = as_director_field(n, name="n", is_normalized=True)
-
-    RGB = np.zeros((*(np.shape(n)[:-1]), 3))
-
+    boy = np.empty(n.shape, dtype=float)
     x = n[..., 0]
     y = n[..., 1]
     z = n[..., 2]
-
     x2 = x**2
     y2 = y**2
     z2 = z**2
 
-    RGB[..., 0] = (
-        (2 * x2 - y2 - z2)
-        + 2 * y * z * (y2 - z2)
+    boy[..., 0] = 0.5 * (
+        (2.0 * x2 - y2 - z2)
+        + 2.0 * y * z * (y2 - z2)
         + z * x * (x2 - z2)
         + x * y * (y2 - x2)
     )
-    RGB[..., 1] = (y2 - z2) + z * x * (z2 - x2) + x * y * (y2 - x2)
-    RGB[..., 2] = (x + y + z) * ((x + y + z) ** 3 + 4 * (y - x) * (z - y) * (x - z))
-
-    RGB[..., 0] = RGB[..., 0] / 2
-    RGB[..., 1] = RGB[..., 1] * 7 / 8
-    RGB[..., 2] = RGB[..., 2] / 8
-
-    M = np.array(
-        [
-            [1.01667, -0.3, -0.48333],
-            [-1.01667, -1.5, -1.31667],
-            [-0.18333, 0.3, 1.31667],
-        ]
+    boy[..., 1] = (7.0 / 8.0) * ((y2 - z2) + z * x * (z2 - x2) + x * y * (y2 - x2))
+    boy[..., 2] = (
+        (1.0 / 8.0)
+        * (x + y + z)
+        * ((x + y + z) ** 3 + 4.0 * (y - x) * (z - y) * (x - z))
     )
 
-    result = np.einsum("...i, ji -> ...j", RGB, M)
-
-    scales = np.array([2.1, 4.2, 2.0])
-    offsets = np.array([0.45, 0.51, 0.23])
-    result = result / scales + offsets
-
-    colors = []
-    for color in result:
-        colors.append(tuple(color))
-
-    return colors
+    transform = np.array(
+        [
+            [0.5015275525743265, 0.0814208604228778, 0.4289041134674454],
+            [-0.2426021621724047, 0.3331598986797062, 0.2349957727825471],
+            [-0.2761140886939694, -0.3089204069097675, 0.4083459067954693],
+        ],
+        dtype=float,
+    )
+    offset = np.array(
+        [0.3805938025338775, 0.4480306832558079, 0.4044714907877873],
+        dtype=float,
+    )
+    result = np.einsum("...i,ji->...j", boy, transform) + offset
+    return [tuple(color) for color in np.clip(result, 0.0, 1.0)]

@@ -40,7 +40,43 @@ try {
         Write-Host "Keep this window open; press Ctrl+C to stop."
         Write-Host ""
 
-        & $tunnelClient run --profile-file $profileFile
+        $originalTreatControlCAsInput = [Console]::TreatControlCAsInput
+        $tunnelProcess = $null
+        try {
+            # Keep Ctrl+C from terminating this wrapper. The wrapper stops only
+            # the tunnel process, then continues to the restart prompt below.
+            [Console]::TreatControlCAsInput = $true
+            $tunnelProcess = Start-Process `
+                -FilePath $tunnelClient `
+                -ArgumentList @("run", "--profile-file", $profileFile) `
+                -NoNewWindow `
+                -PassThru
+
+            while (-not $tunnelProcess.HasExited) {
+                if ([Console]::KeyAvailable) {
+                    $key = [Console]::ReadKey($true)
+                    $isControlC = (
+                        $key.Key -eq [ConsoleKey]::C -and
+                        ($key.Modifiers -band [ConsoleModifiers]::Control)
+                    )
+                    if ($isControlC) {
+                        Write-Host ""
+                        Write-Host "Stopping Nematics3D MCP Tunnel..."
+                        & taskkill.exe /PID $tunnelProcess.Id /T /F 2>&1 | Out-Null
+                        $tunnelProcess.WaitForExit()
+                        break
+                    }
+                }
+
+                Start-Sleep -Milliseconds 100
+                $tunnelProcess.Refresh()
+            }
+        } finally {
+            [Console]::TreatControlCAsInput = $originalTreatControlCAsInput
+            if ($null -ne $tunnelProcess) {
+                $tunnelProcess.Dispose()
+            }
+        }
 
         Write-Host ""
         Write-Host "Nematics3D MCP Tunnel stopped."
