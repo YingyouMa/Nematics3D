@@ -98,8 +98,13 @@ class RegistryBase(ClassBase):
         return f"Registry {self.name!r}"
 
     @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_check_name(self, name: str, logger=None):
-        name_set = {item.name for item in self.impl_entity}
+    def _helper_check_name(self, name: str, *, exclude=None, logger=None):
+        """Return a unique registry name, optionally ignoring one registered object."""
+        name_set = {
+            item.name
+            for item in self.impl_entity
+            if exclude is None or item is not exclude
+        }
         name = as_str(name, name="The name of the term to register")
         name_input = name
         if name_input in name_set:
@@ -128,7 +133,7 @@ class RegistryBase(ClassBase):
         is_bind_registry_relation=True,
         logger=None,
     ):
-        """Register one object and keep its name unique inside this registry."""
+        """Register one object, keep its name unique, and return that object."""
         if term in self.impl_entity:
             if not is_contain_ok:
                 try:
@@ -138,7 +143,7 @@ class RegistryBase(ClassBase):
                 except ValueError:
                     logger.exception("Check input.")
                     logger.recovery("Ignore this process.")
-            return
+            return term
 
         if not hasattr(term, "name"):
             raise TypeError("term must have attribute `name`.")
@@ -161,7 +166,7 @@ class RegistryBase(ClassBase):
         self.impl_entity.append(term)
 
         if not is_bind_registry_relation:
-            return
+            return term
 
         bind_relation = getattr(term, "act_bind_relation_base", None)
         if callable(bind_relation):
@@ -172,6 +177,7 @@ class RegistryBase(ClassBase):
                 "This registration is one-way only because the object "
                 "does not expose act_bind_relation_base()."
             )
+        return term
 
     @logging_and_warning_decorator(start_finish_level=5)
     def act_unregister(self, term, is_missing_ok=False, logger=None):

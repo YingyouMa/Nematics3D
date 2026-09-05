@@ -409,7 +409,7 @@ class ClassBase:
             getattr(self, "registry", None), "_helper_check_name", None
         )
         if callable(check_name):
-            name = check_name(name)
+            name = check_name(name, exclude=self)
         object.__setattr__(self, "raw_name", name)
         return name
 
