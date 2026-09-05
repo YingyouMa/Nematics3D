@@ -45,6 +45,34 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.core.RegistryBase`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public ordered registry for named repository objects |
+| Source | [`src/nematics3d/core/registry_base.py`](../../src/nematics3d/core/registry_base.py), with the registry-aware rename hook in [`src/nematics3d/core/class_base.py`](../../src/nematics3d/core/class_base.py) |
+| Tests | [`tests/classes/test_registry_base.py`](../../tests/classes/test_registry_base.py), plus `tests/classes/test_class_base.py`, `tests/smooth/test_smoothed_line_func_registry.py`, `tests/core/test_core_package.py`, `tests/visual/test_figure_manager.py`, and `tests/visual/test_glyph_scalar_bar.py` as downstream compatibility checks |
+| Tutorial | [`tutorials/core/RegistryBase.ipynb`](../../tutorials/core/RegistryBase.ipynb) |
+| Review scope | Construction and managed state; ordered storage and immutable public tuple view; registration return value; duplicate-object handling; duplicate-name uniquification; registry-aware object renaming without self-conflict; moving objects between registries; weak `registry` relation binding/unbinding; lookup by name, integer index, and `None` passthrough; containment, iteration, length, clearing, and representation helpers. Existing `is_contain_ok` / `is_missing_ok` recovery semantics are intentionally retained. |
+| Validation | `python -m pytest tests/classes/test_registry_base.py tests/classes/test_class_base.py tests/smooth/test_smoothed_line_func_registry.py tests/core/test_core_package.py tests/visual/test_figure_manager.py tests/visual/test_glyph_scalar_bar.py` passed twice with no failures (41 passed, then 29 passed under the environment's optional-test collection state); Black passed on `src/nematics3d/core/registry_base.py`, `src/nematics3d/core/class_base.py`, and `tests/classes/test_registry_base.py`; Ruff passed on the same Python files; all code cells in `tutorials/core/RegistryBase.ipynb` were executed sequentially in a temporary focused pytest harness (1 passed) and that harness was removed afterward |
+| Reviewed commit | `ac78f14dddec8ade4a801cb8826234afe4eb3e20` |
+| Reviewed date | 2026-09-05 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | Name lookup and duplicate-name detection remain linear in registry size by design; current registries are small, and adding a synchronized name index would increase mutation complexity. `registry[None]` intentionally returns `None` for convenience. Duplicate registration and missing-unregister cases keep the repository's existing logger recovery behavior rather than raising through to callers when their corresponding `*_ok` flag is false. |
+
+Summary of changes and evidence:
+
+- Fixed registry-aware renaming so a registered object does not conflict with
+  its own current name while still avoiding names used by other objects.
+- Standardized `act_register()` to return the registered object on successful
+  and already-contained paths.
+- Expanded focused coverage across registration, lookup, ordering, rename,
+  move, relation cleanup, clear, and invalid-key behavior, and removed the
+  obsolete import workaround from the focused test file.
+- Rewrote and executed the dedicated tutorial according to
+  `tutorials/for_developers/tutorial_writing_guide.md`, using real public
+  `Nematics3D` objects rather than a developer-only demo subclass.
+
 ### `nematics3d.classes.OptsSmoothedLine` and `SmoothedLine`
 
 | Field | Evidence |
