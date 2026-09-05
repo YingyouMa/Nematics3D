@@ -1,21 +1,4 @@
-import sys
-from pathlib import Path
-import types
-
 import numpy as np
-
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-PKG_DIR = SRC_DIR / "nematics3d"
-
-sys.path.insert(0, str(SRC_DIR))
-
-# Keep this regression focused on SmoothedLine itself while bypassing the
-# top-level nematics3d package import, matching the existing smooth tests.
-if "nematics3d" not in sys.modules:
-    pkg = types.ModuleType("nematics3d")
-    pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["nematics3d"] = pkg
-
 import nematics3d.classes.smoothed_line as smoothed_line_module
 from nematics3d.classes.smoothed_line import SmoothedLine
 from scipy.interpolate import splev
@@ -322,3 +305,70 @@ def test_smoothed_line_resample_fast_path_keeps_result_readonly(monkeypatch):
     assert line.calc_result.flags.writeable is False
     with np.testing.assert_raises(ValueError):
         line.result[0, 0] = 0.0
+
+
+def test_smoothed_line_raw_coords_commit_reapplies_smoothing():
+    """Changing raw coordinates must rebuild all dependent smoothing state."""
+    _, noisy = _build_noisy_line(num_points=121, seed=7)
+    _, replacement = _build_noisy_line(num_points=81, seed=19)
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1,
+        min_line_length=2,
+        mode="interp",
+    )
+    tck_before = line.entity_tck
+
+    line.act_commit(coords=replacement)
+
+    np.testing.assert_array_equal(line.raw_coords, replacement)
+    np.testing.assert_array_equal(line.calc_coords, replacement)
+    assert line.calc_num_init == len(replacement)
+    assert line.calc_num_out == len(replacement)
+    assert line.entity_tck is not None
+    assert line.entity_tck is not tck_before
+    assert line.calc_is_smoothed is True
+    assert line.calc_status == "Success"
+    assert line.result.shape == replacement.shape
+    assert line.result.flags.writeable is False
+
+
+def test_smoothed_line_can_recover_from_fallback_after_valid_commit():
+    """A recoverable fallback must return to a complete success state."""
+    _, noisy = _build_noisy_line(num_points=31)
+    line = SmoothedLine(
+        noisy,
+        window_length=5,
+        order=3,
+        min_line_length=50,
+        mode="interp",
+    )
+    assert line.calc_is_smoothed is False
+    assert line.entity_tck is None
+
+    line.act_commit(min_line_length=2)
+
+    assert line.calc_is_smoothed is True
+    assert line.calc_status == "Success"
+    assert line.entity_tck is not None
+    assert line.result.shape == noisy.shape
+    assert line.result.flags.writeable is False
+
+
+def test_smoothed_line_tiny_output_ratio_produces_one_sample():
+    """Output density is clamped to at least one sampled spline point."""
+    _, noisy = _build_noisy_line()
+    line = SmoothedLine(
+        noisy,
+        window_length=9,
+        order=3,
+        num_out_ratio=1e-6,
+        min_line_length=2,
+        mode="interp",
+    )
+
+    assert line.calc_num_out == 1
+    assert line.result.shape == (1, noisy.shape[1])
+    assert np.all(np.isfinite(line.result))

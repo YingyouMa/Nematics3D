@@ -97,7 +97,6 @@ class OptsSmoothedLine(OptsBase):
 # fmt: on
 
 
-
 class LineSmoothingConfigError(ValueError):
     """
     Recoverable configuration error for line smoothing.
