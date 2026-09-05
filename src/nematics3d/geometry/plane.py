@@ -93,6 +93,15 @@ def find_plane_normal(points) -> PlaneNormalResult:
     moment = centered_points.T @ centered_points
     eigenvalues, eigenvectors = np.linalg.eigh(moment)
     eigenvalues = np.maximum(eigenvalues, 0.0)
+    # ``eigh`` can return a tiny positive eigenvalue for an exactly rank-2
+    # point cloud. Treat values at the matrix roundoff scale as numerical zero
+    # so exact planes report zero thickness without masking real finite noise.
+    eigenvalue_tol = (
+        np.finfo(eigenvalues.dtype).eps
+        * moment.shape[0]
+        * max(float(eigenvalues[-1]), 1.0)
+    )
+    eigenvalues[eigenvalues <= eigenvalue_tol] = 0.0
     normal = eigenvectors[:, 0]
 
     total_variance = float(np.sum(eigenvalues))
