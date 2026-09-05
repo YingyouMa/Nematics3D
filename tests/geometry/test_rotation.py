@@ -100,9 +100,21 @@ def test_rotation_matrix_antiparallel_vectors_is_deterministic():
     assert np.linalg.det(rotation) == pytest.approx(1.0)
 
 
-def test_rotation_matrix_rejects_non_unit_vectors():
+def test_rotation_matrix_ignores_vector_magnitudes():
+    rotation = rotation_matrix_from_vectors([2.0, 0.0, 0.0], [0.0, 3.0, 0.0])
+    expected = rotation_matrix_from_vectors([1.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+
+    assert np.allclose(rotation, expected)
+
+
+def test_rotation_matrix_rejects_zero_vectors():
     with pytest.raises(ValueError):
-        rotation_matrix_from_vectors([2.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+        rotation_matrix_from_vectors([0.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+
+
+def test_rotation_matrix_rejects_wrong_shape():
+    with pytest.raises(ValueError):
+        rotation_matrix_from_vectors([1.0, 0.0], [0.0, 1.0, 0.0])
 
 
 def test_rotation_matrix_rejects_nonfinite_vectors():

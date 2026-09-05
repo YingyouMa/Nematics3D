@@ -107,9 +107,7 @@ def find_rotation_axis(directors) -> RotationAxisResult:
         1.0 - float(eigenvalues[0]) / total_variance if total_variance > 0.0 else 0.0
     )
     rms_sin_theta = float(np.sqrt(max(float(eigenvalues[0]), 0.0) / len(directors)))
-    tilt_angle_degrees = float(
-        np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0)))
-    )
+    tilt_angle_degrees = float(np.degrees(np.arcsin(np.clip(rms_sin_theta, -1.0, 1.0))))
 
     signed_rotation_steps = cross_products @ axis
     total_signed_rotation = float(np.sum(signed_rotation_steps))
@@ -131,18 +129,20 @@ def find_rotation_axis(directors) -> RotationAxisResult:
 
 
 def rotation_matrix_from_vectors(source_vector, target_vector) -> np.ndarray:
-    """Return the minimal 3D rotation mapping one unit vector onto another.
+    """Return the minimal 3D rotation mapping one direction onto another.
 
     Parameters
     ----------
     source_vector, target_vector : array-like, shape (3,)
-        Finite normalized 3D vectors.
+        Finite non-zero 3D vectors. Their magnitudes are ignored; each input is
+        normalized internally before the rotation is constructed.
 
     Returns
     -------
     numpy.ndarray, shape (3, 3)
         Proper orthogonal rotation matrix ``R`` satisfying
-        ``R @ source_vector == target_vector`` up to floating-point error.
+        ``R`` maps the direction of ``source_vector`` onto the direction of
+        ``target_vector`` up to floating-point error.
 
     Notes
     -----
