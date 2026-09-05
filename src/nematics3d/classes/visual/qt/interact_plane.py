@@ -10,11 +10,11 @@ from .panel_base import (
     MovePointConsole,
 )
 from nematics3d.geometry import (
-    calc_vec_from_azimuth_polar,
-    get_azimuth as geometry_get_azimuth,
-    get_polar_angle as geometry_get_polar_angle,
-    get_axis1_azimuth as geometry_get_axis1_azimuth,
+    azimuth_from_vector,
+    plane_azimuth_from_direction,
+    polar_angle_from_vector,
     rotation_matrix_from_vectors,
+    vector_from_spherical_angles,
 )
 from ..plot_rod import PlotRod
 from ..plot_sphere import PlotSphere
@@ -577,7 +577,8 @@ class InteractPlane(PanelBase):
         normal_azimuth = np.deg2rad(self.state["normal_azimuth"])
         normal_polar_angle = np.deg2rad(self.state["normal_polar_angle"])
         normal_now = np.asarray(
-            calc_vec_from_azimuth_polar(normal_azimuth, normal_polar_angle), dtype=float
+            vector_from_spherical_angles(normal_azimuth, normal_polar_angle),
+            dtype=float,
         )
 
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
@@ -618,15 +619,15 @@ class InteractPlane(PanelBase):
 
     @staticmethod
     def get_azimuth(vec):
-        return geometry_get_azimuth(vec)
+        return np.rad2deg(azimuth_from_vector(vec))
 
     @staticmethod
     def get_polar_angle(vec):
-        return geometry_get_polar_angle(vec)
+        return np.rad2deg(polar_angle_from_vector(vec))
 
     @staticmethod
     def get_axis1_azimuth(axis1, normal):
-        return geometry_get_axis1_azimuth(axis1, normal)
+        return np.rad2deg(plane_azimuth_from_direction(axis1, normal))
 
     # InteractPlane overrides PanelBase._sync_func because the plane
     # panel must keep multiple coupled widgets and helper visuals in sync
