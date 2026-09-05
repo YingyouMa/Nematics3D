@@ -91,6 +91,4 @@ def test_find_plane_normal_requires_3d_points():
 
 def test_find_plane_normal_rejects_nonfinite_points():
     with pytest.raises(ValueError):
-        find_plane_normal(
-            [[0.0, 0.0, 0.0], [1.0, np.nan, 0.0], [0.0, 1.0, 0.0]]
-        )
+        find_plane_normal([[0.0, 0.0, 0.0], [1.0, np.nan, 0.0], [0.0, 1.0, 0.0]])

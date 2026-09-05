@@ -38,8 +38,7 @@ class PlaneNormalResult(ResultBase):
             "to one-dimensional."
         ),
         "eigenvalues": (
-            "Ascending eigenvalues of the centered point-cloud second-moment "
-            "matrix."
+            "Ascending eigenvalues of the centered point-cloud second-moment " "matrix."
         ),
     }
 
@@ -114,9 +113,7 @@ def find_plane_normal(points) -> PlaneNormalResult:
     thickness_rms = float(np.sqrt(float(eigenvalues[0]) / len(points)))
     second_eigenvalue = float(eigenvalues[1])
     linearity_risk = (
-        float(eigenvalues[0]) / second_eigenvalue
-        if second_eigenvalue > 0.0
-        else 1.0
+        float(eigenvalues[0]) / second_eigenvalue if second_eigenvalue > 0.0 else 1.0
     )
 
     return PlaneNormalResult(
