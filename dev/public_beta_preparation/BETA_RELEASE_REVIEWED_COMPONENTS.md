@@ -45,6 +45,36 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.geometry` angle utilities
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public geometry angle-conversion and wrapping utilities |
+| Source | [`src/nematics3d/geometry/angles.py`](../../src/nematics3d/geometry/angles.py) |
+| Tests | [`tests/geometry/test_angles.py`](../../tests/geometry/test_angles.py) and downstream [`tests/classes/test_q_plane.py`](../../tests/classes/test_q_plane.py) |
+| Tutorial | None; these are compact mathematical helpers whose conventions and contracts are documented in their public docstrings |
+| Review scope | `vector_from_spherical_angles()`, `azimuth_from_vector()`, `polar_angle_from_vector()`, `plane_azimuth_from_direction()`, `wrap_angle_to_pi()`, private validation helpers, public geometry exports, and active repository callers |
+| Validation | `python -m pytest tests/geometry/test_angles.py tests/classes/test_q_plane.py` (23 passed); `python -m pytest tests/geometry` (91 passed, 2 unrelated existing failures in plane/rotation tests); full `python -m pytest` blocked during collection by duplicate `test_class_base.py` module names; Black passed on source and focused tests; Ruff unavailable in the project environment; active caller/export audit completed |
+| Reviewed commit | `4c69a9f1bb536efc59c7e982cb6976092c65c66c` |
+| Reviewed date | 2026-09-05 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | Azimuth at either spherical pole is defined as zero by convention. Vector rejection uses the existing absolute norm threshold of `1e-12`. `plane_azimuth_from_direction()` inherits the rotation module's local-frame convention. No logger is used because these are small deterministic mathematical helpers called in interactive and numerical paths. The broader geometry failures and full-suite collection blocker are outside this review. |
+
+Summary of changes and evidence:
+
+- Consolidated the angle helpers in the dedicated geometry module and confirmed
+  that active downstream callers use the public geometry API.
+- Made scalar output behavior consistent: single-vector angle extraction and
+  scalar wrapping return Python `float`, while batched operations return NumPy
+  arrays with preserved leading shape.
+- Documented radians, coordinate conventions, broadcasting, output shape,
+  failure behavior, and non-mutation guarantees.
+- Added focused tests for round trips, poles, scalar and batched return types,
+  shape preservation, non-mutation, invalid input, plane projection, and angle
+  wrapping boundaries.
+- Explicit logging decision: no logger is appropriate for these low-level,
+  deterministic helpers.
+
 ### `nematics3d.datatypes.Vect` and `as_vector`
 
 | Field | Evidence |
