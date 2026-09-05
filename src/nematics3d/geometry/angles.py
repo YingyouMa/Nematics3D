@@ -46,6 +46,19 @@ def vector_from_spherical_angles(azimuth, polar_angle) -> np.ndarray:
     ``azimuth`` is measured from positive x toward positive y. ``polar_angle``
     is measured from positive z. The inputs may be scalars or broadcastable
     arrays; the returned coordinate axis is always last, with shape ``(..., 3)``.
+
+    Both inputs must contain finite real numeric data. Scalar inputs return an
+    array of shape ``(3,)``; broadcast array inputs return a floating-point
+    array whose leading shape is the broadcast shape. The inputs are never
+    modified.
+
+    Raises
+    ------
+    TypeError
+        If either input does not contain real numeric values.
+    ValueError
+        If either input contains a non-finite value or the two inputs cannot be
+        broadcast together.
     """
     azimuth = _as_finite_angles(azimuth, name="azimuth")
     polar_angle = _as_finite_angles(polar_angle, name="polar_angle")
@@ -70,7 +83,17 @@ def azimuth_from_vector(vector):
 
     ``vector`` may have shape ``(3,)`` or ``(..., 3)``. At either pole the
     azimuth is geometrically undefined and this function returns zero by
-    convention.
+    convention. Magnitude does not affect the result. A single vector returns
+    a Python ``float``; batched vectors return a floating-point ``ndarray`` with
+    the leading input shape. The input is never modified.
+
+    Raises
+    ------
+    TypeError
+        If ``vector`` does not contain real numeric values.
+    ValueError
+        If the final axis does not have length three, or if any vector is zero
+        or contains a non-finite value.
     """
     vector = _as_nonzero_vectors(vector, name="vector")
     is_single_vector = vector.ndim == 1
@@ -84,12 +107,24 @@ def polar_angle_from_vector(vector):
     """Return vector polar angles in radians within ``[0, pi]``.
 
     ``vector`` may have shape ``(3,)`` or ``(..., 3)``. Magnitude does not
-    affect the returned angle.
+    affect the returned angle. A single vector returns a Python ``float``;
+    batched vectors return a floating-point ``ndarray`` with the leading input
+    shape. The input is never modified.
+
+    Raises
+    ------
+    TypeError
+        If ``vector`` does not contain real numeric values.
+    ValueError
+        If the final axis does not have length three, or if any vector is zero
+        or contains a non-finite value.
     """
     vector = _as_nonzero_vectors(vector, name="vector")
+    is_single_vector = vector.ndim == 1
     norm = np.linalg.norm(vector, axis=-1)
     cosine = np.clip(vector[..., 2] / norm, -1.0, 1.0)
-    return np.arccos(cosine)
+    polar_angle = np.arccos(cosine)
+    return float(polar_angle) if is_single_vector else polar_angle
 
 
 def plane_azimuth_from_direction(direction, normal) -> float:
@@ -98,7 +133,17 @@ def plane_azimuth_from_direction(direction, normal) -> float:
     The local reference frame is built by rotating the global z-axis onto the
     plane normal. The direction is projected into that plane before its angle
     is measured. A direction parallel to the normal has no in-plane azimuth
-    and is rejected.
+    and is rejected. Both inputs are three-component finite real vectors;
+    ``normal`` must already be normalized. The returned value is a Python
+    ``float`` and neither input is modified.
+
+    Raises
+    ------
+    TypeError
+        If an input does not contain real numeric values.
+    ValueError
+        If an input has the wrong shape, is invalid under the vector contract,
+        or ``direction`` is parallel to ``normal``.
     """
     direction = as_vector(
         direction,
@@ -122,6 +167,19 @@ def plane_azimuth_from_direction(direction, normal) -> float:
 
 
 def wrap_angle_to_pi(angle):
-    """Wrap finite angles in radians into the half-open interval ``[-pi, pi)``."""
+    """Wrap finite real angles in radians into ``[-pi, pi)``.
+
+    A scalar input returns a Python ``float``. An array-like input returns a
+    floating-point ``ndarray`` with the same shape. The input is never modified.
+
+    Raises
+    ------
+    TypeError
+        If ``angle`` does not contain real numeric values.
+    ValueError
+        If ``angle`` contains a non-finite value.
+    """
     angle = _as_finite_angles(angle, name="angle")
-    return (angle + np.pi) % (2.0 * np.pi) - np.pi
+    is_scalar = angle.ndim == 0
+    wrapped = (angle + np.pi) % (2.0 * np.pi) - np.pi
+    return float(wrapped) if is_scalar else wrapped
