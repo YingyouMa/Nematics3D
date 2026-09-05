@@ -6,18 +6,6 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 
 ## Pending archive
 
-### `SmoothedLine`
-
-- Source: `src/nematics3d/classes/smoothed_line.py`
-- Status: smoothing behavior, initialization, spline-fitting/resampling allocation, NumPy array conversion, and result mutability have been reviewed without changing the Savitzky-Golay plus FITPACK algorithm, the window-selection formula, or public smoothing semantics.
-- Fixes and cleanup: `window_ratio` is constrained to positive values; internal option normalization uses `OptsBase.act_internal_update()` with validated assignment; coupled `window_length`/`window_ratio` resolution is isolated in `_helper_resolve_window_opts()`; duplicate short-line fallback was removed; spline-position parameter handling is shared; initialization flows through `HostBase.__init__`; redundant constructor bootstrap assignments were removed; `__array__` implements the NumPy 2.x protocol.
-- Performance/memory cleanup: final spline output uses one preallocated result array and evaluates one spline component at a time; avoidable large temporaries and a full transpose copy were removed.
-- Cached resampling: changing only `num_out_ratio` after successful smoothing reuses the existing spline and skips filtering and fitting.
-- Read-only result contract: canonical results are exposed as read-only arrays without an unnecessary second large copy.
-- Focused tests: `tests/smooth/test_smoothed_line.py`, covering smoothing equivalence, fallback, cached resampling, NumPy conversion, and result mutability.
-- Earlier validation: the recorded cleanup sequence culminated in ten passing focused tests plus syntax and Black checks.
-- Remaining review before archive: the source has since undergone naming cleanup and currently needs formatting and a final source review against the latest object-model contracts before a new exact reviewed commit can be recorded.
-
 ### `SmoothedLineFunc`
 
 - Source: `src/nematics3d/classes/smoothed_line.py`.

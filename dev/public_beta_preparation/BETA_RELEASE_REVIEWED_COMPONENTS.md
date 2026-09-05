@@ -45,6 +45,35 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.classes.OptsSmoothedLine` and `SmoothedLine`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public managed polyline-smoothing object and paired options container |
+| Source | [`src/nematics3d/classes/smoothed_line.py`](../../src/nematics3d/classes/smoothed_line.py) |
+| Tests | [`tests/smooth/test_smoothed_line.py`](../../tests/smooth/test_smoothed_line.py), plus `tests/smooth/test_smoothed_line_func_registry.py` as a downstream registry/integration check |
+| Tutorial | [`tutorials/smooth/SmoothedLine.ipynb`](../../tutorials/smooth/SmoothedLine.ipynb) |
+| Review scope | `OptsSmoothedLine`, `LineSmoothingConfigError`, and `SmoothedLine` only; construction, HostBase commit/reapply behavior, window normalization, Savitzky-Golay filtering, FITPACK spline creation, output resampling, cached resampling, fallback/recovery, raw-coordinate replacement, position/tangent queries, NumPy array protocol, and read-only result behavior. `SmoothedLineFunc` and its helper functions are explicitly outside this review scope. |
+| Validation | `python -m pytest tests/smooth/test_smoothed_line.py` (13 passed); `python -m pytest tests/smooth/test_smoothed_line.py tests/smooth/test_smooth.py tests/smooth/test_smoothed_line_func_registry.py` (19 passed); Black applied to source and focused tests; Ruff passed on source and focused tests; all code cells in `tutorials/smooth/SmoothedLine.ipynb` were executed sequentially in a temporary focused pytest harness (1 passed) and that harness was removed afterward |
+| Reviewed commit | `ac62b2c595f203aaf2509abdc536b474858d2dd2` |
+| Reviewed date | 2026-09-05 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | The smoothing algorithm intentionally remains Savitzky-Golay filtering followed by a FITPACK spline rather than an arc-length-preserving or exact geometric smoother. `mode="wrap"` assumes periodic geometry. Recognized smoothing/configuration failures fall back to processed raw coordinates and clear the spline cache. The source file also contains unreviewed `SmoothedLineFunc` code, so this record applies only to the explicitly listed classes and methods. |
+
+Summary of changes and evidence:
+
+- Preserved the established smoothing algorithm while cleaning initialization,
+  option normalization, spline sampling allocation, and NumPy 2.x conversion.
+- Output-only `num_out_ratio` changes reuse the cached spline and avoid
+  refiltering/refitting.
+- Canonical outputs are read-only without an unnecessary second large copy.
+- Added regression coverage for raw-coordinate commits, complete fallback-to-
+  success recovery, and the minimum one-sample output-density boundary.
+- Removed the obsolete focused-test import workaround now that normal package
+  imports work in the project test environment.
+- Added and executed a dedicated `SmoothedLine` tutorial; `SmoothedLineFunc` is
+  deliberately deferred to its own review.
+
 ### `nematics3d.geometry.find_plane_normal`
 
 | Field | Evidence |
@@ -1025,6 +1054,7 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-05 | `OptsSmoothedLine` and `SmoothedLine` | `src/nematics3d/classes/smoothed_line.py` | `tests/smooth/test_smoothed_line.py` and downstream registry check | `ac62b2c595f203aaf2509abdc536b474858d2dd2` | Confirmed |
 | 2026-09-05 | `find_plane_normal()` | `src/nematics3d/geometry/plane.py` | `tests/geometry/test_plane.py` and downstream geometry/class tests | `eef44b2caf70b7d1df4ec2113196e415c36dc12f` | Confirmed |
 | 2026-09-05 | `find_rotation_axis()` and `rotation_matrix_from_vectors()` | `src/nematics3d/geometry/rotation.py` | `tests/geometry/test_rotation.py` and downstream geometry/class tests | `d6275a5a6657858e7838c69ad786076ce6624d20` | Confirmed |
 | 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
