@@ -45,6 +45,33 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.geometry.find_plane_normal`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public least-squares 3D plane-fitting utility with structured diagnostics |
+| Source | [`src/nematics3d/geometry/plane.py`](../../src/nematics3d/geometry/plane.py) |
+| Tests | [`tests/geometry/test_plane.py`](../../tests/geometry/test_plane.py) plus downstream geometry/class validation |
+| Tutorial | [`tutorials/geometry/find_plane_normal.ipynb`](../../tutorials/geometry/find_plane_normal.ipynb) |
+| Review scope | `PlaneNormalResult`, finite 3D point validation, least-squares normal fit, centroid, eigenvalue diagnostics, exact-plane numerical roundoff handling, planarity, RMS thickness, linearity risk, canonical export, and `DisclinationLine.act_calc_norm()` migration |
+| Validation | `python -m pytest tests/geometry/test_plane.py tests/geometry/test_rotation.py tests/classes/test_q_plane.py tests/classes/test_plane_grid_polar.py tests/classes/test_q_field_object_phase2.py` (39 passed); Black applied to source and focused tests; Ruff passed on source and focused tests; tutorial content and notebook structure were reviewed during the component cleanup |
+| Reviewed commit | `eef44b2caf70b7d1df4ec2113196e415c36dc12f` |
+| Reviewed date | 2026-09-05 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | The fitted normal has the unavoidable sign ambiguity of an unoriented plane. Exactly or nearly one-dimensional point sets do not determine a stable plane normal; `linearity_risk` exposes that degeneracy. Eigenvalues at the matrix roundoff scale are treated as numerical zero so mathematically exact planes report zero RMS thickness. No logger is used in this low-level deterministic geometry helper. |
+
+Summary of changes and evidence:
+
+- Consolidated the plane fit into the dedicated geometry module and removed the
+  obsolete compatibility implementation and return-mode flag.
+- The public call returns `PlaneNormalResult`, including the normal, centroid,
+  eigenvalues, planarity, thickness, and linearity-risk diagnostics.
+- Exact rank-2 point clouds now treat smallest eigenvalues at the matrix
+  roundoff scale as zero rather than reporting artificial finite thickness.
+- `DisclinationLine.act_calc_norm()` consumes the structured result directly.
+- Explicit logging decision: no logger is appropriate for this deterministic
+  numerical helper.
+
 ### `nematics3d.geometry.find_rotation_axis` and `rotation_matrix_from_vectors`
 
 | Field | Evidence |
@@ -998,6 +1025,7 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-05 | `find_plane_normal()` | `src/nematics3d/geometry/plane.py` | `tests/geometry/test_plane.py` and downstream geometry/class tests | `eef44b2caf70b7d1df4ec2113196e415c36dc12f` | Confirmed |
 | 2026-09-05 | `find_rotation_axis()` and `rotation_matrix_from_vectors()` | `src/nematics3d/geometry/rotation.py` | `tests/geometry/test_rotation.py` and downstream geometry/class tests | `d6275a5a6657858e7838c69ad786076ce6624d20` | Confirmed |
 | 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes/tensor.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
