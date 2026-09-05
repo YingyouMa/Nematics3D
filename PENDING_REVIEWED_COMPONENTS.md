@@ -29,18 +29,6 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 - Review commits: streamed-delta implementation/tests `74b23bb`; ResultBase sample protocol and beta-integration migration `9d75108`.
 - Remaining review before archive: inspect constructor/state initialization, `act_update()`, scalar/vector output shape handling, interpolation behavior, registry interactions, and any remaining edge cases; then run the final focused suite and record the exact reviewed commit.
 
-### `find_rotation_axis()`
-
-- Source: `src/nematics3d/geometry/rotation.py`.
-- Status: reviewed and moved out of the catch-all geometry module into a dedicated rotation-axis module; `QPlanePolar.act_calc_omega()` now calls the canonical geometry API directly and consumes `RotationAxisResult`; the old `general` compatibility adapter and duplicate implementation in `geometry/misc.py` were removed.
-- Behavior reviewed: finite ordered 3D directors; at least two samples; explicit unit-vector validation; smallest-eigenvalue second-moment fit; orientation by net adjacent cross-product rotation; and structured diagnostics through `RotationAxisResult`.
-- Focused tests: `tests/geometry/test_rotation.py`, covering result type, positive and negative ordered rotation, metric/result consistency, minimum sample count, unit-vector validation, and non-finite input rejection.
-- Downstream integration: `tests/classes/test_q_plane.py` directly exercises the real `find_rotation_axis()` result through `QPlanePolar.act_calc_omega()` and confirms that `axis`, every fit diagnostic, defect-domain flags, ring metadata, and the copied opts snapshot are represented correctly in `OmegaResult`.
-- Tutorial: `tutorials/geometry/rotation/find_rotation_axis.ipynb`, covering orientation, the structured result fields and metric view, reversed ordering, input requirements, and the zero-net-rotation sign limitation.
-- Validation actually run: `python -m pytest tests/geometry/test_rotation.py tests/classes/test_q_plane.py tests/classes/test_plane_grid_polar.py tests/classes/test_q_field_object_phase2.py -q` reported `25 passed`; Black formatting and `black --check` passed for the implementation, downstream, and focused tests; in-memory syntax compile passed; notebook JSON and nbformat schema validation passed; the complete tutorial executed successfully; `git diff --check` passed.
-- Review commits: structured implementation `18fbeca`; direct QPlane migration `a92fd41`; removal of the `general` adapter `e4ae2a0`; removal of the obsolete `geometry/misc.py` implementation `bda5046`; initial formatting cleanup `ceb2022`; final downstream review, integration test, formatting, and tutorial `b1ffd66d7ab290aa1f23d0b6cfa3207d24e1ca51`.
-- Archive note: implementation, structured output, caller migration, focused and downstream integration tests, API cleanup, tutorial, source formatting, and final validation are complete. This component is ready to move to the formal reviewed-components ledger using reviewed commit `b1ffd66d7ab290aa1f23d0b6cfa3207d24e1ca51`.
-
 ### `find_plane_normal()`
 
 - Source: `src/nematics3d/geometry/plane.py`.

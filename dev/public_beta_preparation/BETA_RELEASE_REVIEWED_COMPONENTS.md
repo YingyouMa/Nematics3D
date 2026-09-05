@@ -45,6 +45,34 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.geometry.find_rotation_axis` and `rotation_matrix_from_vectors`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public 3D rotation-axis fitting and direction-to-direction rotation utilities |
+| Source | [`src/nematics3d/geometry/rotation.py`](../../src/nematics3d/geometry/rotation.py) |
+| Tests | [`tests/geometry/test_rotation.py`](../../tests/geometry/test_rotation.py) plus downstream `tests/classes/test_q_plane.py`, `tests/classes/test_plane_grid_polar.py`, `tests/classes/test_q_field_object_phase2.py`, and `tests/geometry/test_angles.py` |
+| Tutorials | [`tutorials/geometry/rotation/find_rotation_axis.ipynb`](../../tutorials/geometry/rotation/find_rotation_axis.ipynb) and [`tutorials/geometry/rotation_matrix_from_vectors.ipynb`](../../tutorials/geometry/rotation_matrix_from_vectors.ipynb) |
+| Review scope | Structured rotation-axis fitting for ordered unit directors; fit diagnostics and orientation convention; direction-to-direction minimal rotation; parallel and antiparallel cases; finite/non-zero input validation; internal normalization of rotation-matrix inputs; public exports and active downstream callers |
+| Validation | `python -m pytest tests/geometry/test_rotation.py tests/classes/test_q_plane.py tests/classes/test_plane_grid_polar.py tests/classes/test_q_field_object_phase2.py tests/geometry/test_angles.py` (53 passed); Black applied to source and focused tests; Ruff passed on source and focused tests; both tutorials were previously reviewed for executable examples, and the rotation-matrix tutorial contract text was synchronized with the tested internal-normalization behavior |
+| Reviewed commit | `d6275a5a6657858e7838c69ad786076ce6624d20` |
+| Reviewed date | 2026-09-05 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | `find_rotation_axis()` requires pre-normalized directors and its fitted-axis sign is intrinsically weak when the ordered sequence has zero net rotation. For exactly antiparallel source/target directions, `rotation_matrix_from_vectors()` chooses one deterministic perpendicular axis because the minimal 180-degree rotation is not unique. No logger is used because these are deterministic low-level geometry helpers. |
+
+Summary of changes and evidence:
+
+- `find_rotation_axis()` returns a typed `RotationAxisResult`, validates ordered
+  unit directors, and is exercised through its principal `QPlanePolar`
+  downstream integration.
+- `rotation_matrix_from_vectors()` accepts arbitrary finite non-zero vectors,
+  ignores their magnitudes through internal normalization, and is tested for
+  generic, parallel, antiparallel, zero, non-finite, and wrong-shape inputs.
+- The rotation-matrix tutorial now documents the same normalization contract as
+  the implementation and tests.
+- Explicit logging decision: no logger is appropriate for these small,
+  deterministic numerical helpers.
+
 ### `nematics3d.geometry` angle utilities
 
 | Field | Evidence |
@@ -970,6 +998,7 @@ above.
 
 | Date | Component | Source | Tests | Commit | Status |
 | --- | --- | --- | --- | --- | --- |
+| 2026-09-05 | `find_rotation_axis()` and `rotation_matrix_from_vectors()` | `src/nematics3d/geometry/rotation.py` | `tests/geometry/test_rotation.py` and downstream geometry/class tests | `d6275a5a6657858e7838c69ad786076ce6624d20` | Confirmed |
 | 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes/tensor.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
