@@ -54,7 +54,7 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | Tests | [`tests/geometry/test_angles.py`](../../tests/geometry/test_angles.py) and downstream [`tests/classes/test_q_plane.py`](../../tests/classes/test_q_plane.py) |
 | Tutorial | None; these are compact mathematical helpers whose conventions and contracts are documented in their public docstrings |
 | Review scope | `vector_from_spherical_angles()`, `azimuth_from_vector()`, `polar_angle_from_vector()`, `plane_azimuth_from_direction()`, `wrap_angle_to_pi()`, private validation helpers, public geometry exports, and active repository callers |
-| Validation | `python -m pytest tests/geometry/test_angles.py tests/classes/test_q_plane.py` (23 passed); `python -m pytest tests/geometry` (91 passed, 2 unrelated existing failures in plane/rotation tests); full `python -m pytest` blocked during collection by duplicate `test_class_base.py` module names; Black passed on source and focused tests; Ruff unavailable in the project environment; active caller/export audit completed |
+| Validation | `python -m pytest tests/geometry/test_angles.py tests/classes/test_q_plane.py` (23 passed); `python -m pytest tests/geometry` (91 passed, 2 unrelated existing failures in plane/rotation tests); full `python -m pytest` blocked during collection by duplicate `test_class_base.py` module names; Black passed on source and focused tests; `ruff check src/nematics3d/geometry/angles.py tests/geometry/test_angles.py` passed; active caller/export audit completed |
 | Reviewed commit | `4c69a9f1bb536efc59c7e982cb6976092c65c66c` |
 | Reviewed date | 2026-09-05 |
 | Reviewer | Yingyou Ma and ChatGPT |
