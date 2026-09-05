@@ -791,9 +791,13 @@ class HostBase(ClassBase):
         self._helper_check_protected_attr(kwargs)
         kwargs_applied_name = self._helper_commit_name(kwargs)
         kwargs_applied_raw, is_reapply_opts = self._helper_commit_raw(kwargs)
+        kwargs_applied_property = self._helper_commit_property(kwargs)
         kwargs_applied_extra = self._helper_commit_extra(kwargs)
         return (
-            kwargs_applied_raw | kwargs_applied_name | kwargs_applied_extra,
+            kwargs_applied_raw
+            | kwargs_applied_name
+            | kwargs_applied_property
+            | kwargs_applied_extra,
             is_reapply_opts,
         )
 
@@ -870,6 +874,30 @@ class HostBase(ClassBase):
                 is_reapply_opts = is_reapply_opts or is_reapply_opts_here
 
         return kwargs_applied_raw, is_reapply_opts
+
+    def _helper_commit_property(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Consume writable public property updates through their setters."""
+        if not kwargs:
+            return {}
+
+        attr_defs = type(self).__attr_defs__
+        kwargs_applied_property: dict[str, Any] = {}
+        for key in list(kwargs):
+            defn = attr_defs.get(key)
+            if defn is None or defn.kind != "property" or not defn.is_public_settable:
+                continue
+
+            descriptor = getattr(type(self), key, None)
+            if not isinstance(descriptor, property) or descriptor.fset is None:
+                raise AttributeError(
+                    f"Writable property {key!r} must define a property setter."
+                )
+
+            value = kwargs.pop(key)
+            descriptor.fset(self, value)
+            kwargs_applied_property[key] = getattr(self, key)
+
+        return kwargs_applied_property
 
     @logging_and_warning_decorator(start_finish_level=5)
     def _helper_commit_extra(
