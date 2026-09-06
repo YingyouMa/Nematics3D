@@ -218,11 +218,6 @@ class OptsGlyph(OptsBase):
         "roughness":            "prop.roughness",
     }
 
-    def _helper_host_apply(self, key, value, *, host=None):
-        host = self.host if host is None else host
-        if host:
-            host.act_commit(**{key: value})
-
     @logging_and_warning_decorator(start_finish_level=5)
     def act_save_json(
         self,
