@@ -194,7 +194,7 @@ def add_periodic_boundary(
 
     This function appends one extra grid slice along each of the periodic dimensions.
     The added slice is a copy of the first slice along that axis, ensuring periodic continuity.
-    If a dimension is non-periodic, it is left unchanged.
+    If a dimension is non-periodic, the dimension is unchanged.
 
     Parameters
     ----------
@@ -276,10 +276,10 @@ def n_color_immerse(n: nField) -> List[Tuple]:
     """
     Map a nematic director field to RGB colors for visualization.
 
-    The mapping combines a Boy-surface polynomial immersion of RP^2 with the
-    selected OKLab-optimized affine transform at the Pareto knee
-    ``J_loc ~= 0.43``. The optimization improves perceptual separation and
-    local color uniformity while keeping the output inside the sRGB gamut.
+    The mapping combines a Boy-surface polynomial immersion of RP^2 with a
+    vividness-optimized affine transform. The selected map maximizes mean
+    OKLab chroma subject to ``J_loc <= 0.55``, calibrated red/green/blue axis
+    tolerances, and the sRGB gamut constraint.
 
     Parameters
     ----------
@@ -306,7 +306,9 @@ def n_color_immerse(n: nField) -> List[Tuple]:
         + z * x * (x2 - z2)
         + x * y * (y2 - x2)
     )
-    boy[..., 1] = (7.0 / 8.0) * ((y2 - z2) + z * x * (z2 - x2) + x * y * (y2 - x2))
+    boy[..., 1] = (7.0 / 8.0) * (
+        (y2 - z2) + z * x * (z2 - x2) + x * y * (y2 - x2)
+    )
     boy[..., 2] = (
         (1.0 / 8.0)
         * (x + y + z)
@@ -315,14 +317,14 @@ def n_color_immerse(n: nField) -> List[Tuple]:
 
     transform = np.array(
         [
-            [0.5015275525743265, 0.0814208604228778, 0.4289041134674454],
-            [-0.2426021621724047, 0.3331598986797062, 0.2349957727825471],
-            [-0.2761140886939694, -0.3089204069097675, 0.4083459067954693],
+            [0.5022508927293965, 0.0814191819777772, 0.4278817282953531],
+            [-0.2622468169155294, 0.4198664552518698, 0.2843783905850694],
+            [-0.2603273418569074, -0.3829942092529955, 0.3705024138608909],
         ],
         dtype=float,
     )
     offset = np.array(
-        [0.3805938025338775, 0.4480306832558079, 0.4044714907877873],
+        [0.3810134662659256, 0.4051244318995519, 0.4114207201942865],
         dtype=float,
     )
     result = np.einsum("...i,ji->...j", boy, transform) + offset
