@@ -1,0 +1,1581 @@
+{
+  "description": "Synthetic PlotGlyph construction benchmark: eager vs lazy silhouette",
+  "repeats": 5,
+  "sizes": [
+    500,
+    2000,
+    5000
+  ],
+  "summary": {
+    "points": {
+      "500": {
+        "eager_median_seconds": 0.023717200001556193,
+        "lazy_median_seconds": 0.012713600001006853,
+        "speedup_x": 1.8654983639313736,
+        "time_saved_percent": 46.395021333999566,
+        "eager_samples_seconds": [
+          0.023717200001556193,
+          0.023313400000915863,
+          0.022379699999873992,
+          0.02427900000111549,
+          0.024048100000072736
+        ],
+        "lazy_samples_seconds": [
+          0.01357070000085514,
+          0.013242599998193327,
+          0.012713600001006853,
+          0.011854100001073675,
+          0.012275400000362424
+        ]
+      },
+      "2000": {
+        "eager_median_seconds": 0.11037219999707304,
+        "lazy_median_seconds": 0.03342999999949825,
+        "speedup_x": 3.3015913849455463,
+        "time_saved_percent": 69.71157592184917,
+        "eager_samples_seconds": [
+          0.11187000000063563,
+          0.11037219999707304,
+          0.13364780000119936,
+          0.10051519999979064,
+          0.10896240000147372
+        ],
+        "lazy_samples_seconds": [
+          0.03526830000191694,
+          0.03098350000072969,
+          0.032475399999384535,
+          0.034619300000485964,
+          0.03342999999949825
+        ]
+      },
+      "5000": {
+        "eager_median_seconds": 0.24423549999846728,
+        "lazy_median_seconds": 0.06369769999946584,
+        "speedup_x": 3.8342907200811864,
+        "time_saved_percent": 73.91955714879057,
+        "eager_samples_seconds": [
+          0.24423549999846728,
+          0.24252469999919413,
+          0.25638619999881485,
+          0.24246839999977965,
+          0.25994920000084676
+        ],
+        "lazy_samples_seconds": [
+          0.06369769999946584,
+          0.05962569999974221,
+          0.07043049999992945,
+          0.06259009999848786,
+          0.07712940000055823
+        ]
+      }
+    },
+    "rods": {
+      "500": {
+        "eager_median_seconds": 0.022770200001104968,
+        "lazy_median_seconds": 0.017510999998194166,
+        "speedup_x": 1.300336931269097,
+        "time_saved_percent": 23.096854672579028,
+        "eager_samples_seconds": [
+          0.020087500000954606,
+          0.02489910000076634,
+          0.022311299999273615,
+          0.022770200001104968,
+          0.024458199997752672
+        ],
+        "lazy_samples_seconds": [
+          0.018621999999595573,
+          0.014895899999828544,
+          0.017510999998194166,
+          0.013666900002135662,
+          0.01945969999724184
+        ]
+      },
+      "2000": {
+        "eager_median_seconds": 0.05233500000031199,
+        "lazy_median_seconds": 0.025169299999106443,
+        "speedup_x": 2.0793188528155326,
+        "time_saved_percent": 51.90732779410261,
+        "eager_samples_seconds": [
+          0.04927730000053998,
+          0.05252610000025015,
+          0.052005699999426724,
+          0.05233500000031199,
+          0.05781299999944167
+        ],
+        "lazy_samples_seconds": [
+          0.025169299999106443,
+          0.03036400000200956,
+          0.02295659999799682,
+          0.026688400001148693,
+          0.016490699999849312
+        ]
+      },
+      "5000": {
+        "eager_median_seconds": 0.10033040000053006,
+        "lazy_median_seconds": 0.04329599999982747,
+        "speedup_x": 2.317313377700708,
+        "time_saved_percent": 56.84657890370343,
+        "eager_samples_seconds": [
+          0.11112819999834755,
+          0.0991308000011486,
+          0.10033040000053006,
+          0.10230990000127349,
+          0.0954433999977482
+        ],
+        "lazy_samples_seconds": [
+          0.04329599999982747,
+          0.03444399999716552,
+          0.04579349999767146,
+          0.03776099999959115,
+          0.04757850000169128
+        ]
+      }
+    },
+    "surface": {
+      "500": {
+        "eager_median_seconds": 0.021051399999123532,
+        "lazy_median_seconds": 0.013937699997768505,
+        "speedup_x": 1.5103926761584743,
+        "time_saved_percent": 33.79205184287603,
+        "eager_samples_seconds": [
+          0.021051399999123532,
+          0.034541799999715295,
+          0.024222000000008848,
+          0.02017590000104974,
+          0.01892289999886998
+        ],
+        "lazy_samples_seconds": [
+          0.012284600001294166,
+          0.01584269999875687,
+          0.01262960000167368,
+          0.013937699997768505,
+          0.01804959999935818
+        ]
+      },
+      "2000": {
+        "eager_median_seconds": 0.03937419999783742,
+        "lazy_median_seconds": 0.02675939999971888,
+        "speedup_x": 1.4714156520045691,
+        "time_saved_percent": 32.03823823420258,
+        "eager_samples_seconds": [
+          0.04037360000074841,
+          0.03933390000020154,
+          0.04687660000126925,
+          0.03937419999783742,
+          0.03318140000192216
+        ],
+        "lazy_samples_seconds": [
+          0.021304300000338117,
+          0.030736500000784872,
+          0.022865800001454772,
+          0.03128900000228896,
+          0.02675939999971888
+        ]
+      },
+      "5000": {
+        "eager_median_seconds": 0.06645990000106394,
+        "lazy_median_seconds": 0.05359210000096937,
+        "speedup_x": 1.2401062843191781,
+        "time_saved_percent": 19.3617504689122,
+        "eager_samples_seconds": [
+          0.07759749999968335,
+          0.06645990000106394,
+          0.06842560000222875,
+          0.06597560000227531,
+          0.05176919999939855
+        ],
+        "lazy_samples_seconds": [
+          0.05359210000096937,
+          0.06296600000132457,
+          0.053701799999544164,
+          0.04655710000224644,
+          0.04191290000017034
+        ]
+      }
+    },
+    "combined": {
+      "500": {
+        "eager_median_seconds": 0.08966959999816027,
+        "lazy_median_seconds": 0.053292700002202764,
+        "speedup_x": 1.6825869208063005,
+        "time_saved_percent": 40.56770633158154,
+        "eager_samples_seconds": [
+          0.08966959999816027,
+          0.08054679999986547,
+          0.09099399999831803,
+          0.09554019999995944,
+          0.08111640000061016
+        ],
+        "lazy_samples_seconds": [
+          0.045134299998608185,
+          0.03600200000073528,
+          0.053292700002202764,
+          0.05624879999959376,
+          0.0542717000025732
+        ]
+      },
+      "2000": {
+        "eager_median_seconds": 0.18525539999973262,
+        "lazy_median_seconds": 0.09183570000095642,
+        "speedup_x": 2.017248194305736,
+        "time_saved_percent": 50.427517901724336,
+        "eager_samples_seconds": [
+          0.1879166999970039,
+          0.16699490000246442,
+          0.18525539999973262,
+          0.17498239999986254,
+          0.18928159999995842
+        ],
+        "lazy_samples_seconds": [
+          0.1014458999998169,
+          0.0872601000010036,
+          0.09183570000095642,
+          0.10654449999856297,
+          0.09095410000008997
+        ]
+      },
+      "5000": {
+        "eager_median_seconds": 0.4093661999977485,
+        "lazy_median_seconds": 0.18332620000001043,
+        "speedup_x": 2.232993429186473,
+        "time_saved_percent": 55.21706481848801,
+        "eager_samples_seconds": [
+          0.4236187999995309,
+          0.39901909999753116,
+          0.39743319999979576,
+          0.4093661999977485,
+          0.4454005000006873
+        ],
+        "lazy_samples_seconds": [
+          0.18332620000001043,
+          0.19010640000124113,
+          0.1659916999997222,
+          0.1833403000018734,
+          0.16212929999892367
+        ]
+      }
+    }
+  },
+  "samples": [
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.023717200001556193,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.01357070000085514,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.013242599998193327,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.023313400000915863,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.022379699999873992,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.012713600001006853,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.011854100001073675,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.02427900000111549,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.024048100000072736,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.012275400000362424,
+      "input_points": 484,
+      "mesh_points": 24200,
+      "mesh_cells": 46464,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.11187000000063563,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.03526830000191694,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.03098350000072969,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.11037219999707304,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.13364780000119936,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.032475399999384535,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.034619300000485964,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.10051519999979064,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.10896240000147372,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.03342999999949825,
+      "input_points": 2025,
+      "mesh_points": 101250,
+      "mesh_cells": 194400,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.24423549999846728,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.06369769999946584,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.05962569999974221,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.24252469999919413,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.25638619999881485,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.07043049999992945,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.06259009999848786,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": false
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.24246839999977965,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.25994920000084676,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": true
+    },
+    {
+      "kind": "points",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.07712940000055823,
+      "input_points": 5041,
+      "mesh_points": 252050,
+      "mesh_cells": 483936,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.020087500000954606,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.018621999999595573,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.014895899999828544,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.02489910000076634,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.022311299999273615,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.017510999998194166,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.013666900002135662,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.022770200001104968,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.024458199997752672,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.01945969999724184,
+      "input_points": 484,
+      "mesh_points": 15488,
+      "mesh_cells": 4840,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.04927730000053998,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.025169299999106443,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.03036400000200956,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.05252610000025015,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.052005699999426724,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.02295659999799682,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.026688400001148693,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.05233500000031199,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.05781299999944167,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.016490699999849312,
+      "input_points": 2025,
+      "mesh_points": 64800,
+      "mesh_cells": 20250,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.11112819999834755,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.04329599999982747,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.03444399999716552,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.0991308000011486,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.10033040000053006,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.04579349999767146,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.03776099999959115,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": false
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.10230990000127349,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.0954433999977482,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": true
+    },
+    {
+      "kind": "rods",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.04757850000169128,
+      "input_points": 5041,
+      "mesh_points": 161312,
+      "mesh_cells": 50410,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.021051399999123532,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.012284600001294166,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.01584269999875687,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.034541799999715295,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.024222000000008848,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.01262960000167368,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.013937699997768505,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.02017590000104974,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.01892289999886998,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.01804959999935818,
+      "input_points": 484,
+      "mesh_points": 484,
+      "mesh_cells": 882,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.04037360000074841,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.021304300000338117,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.030736500000784872,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.03933390000020154,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.04687660000126925,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.022865800001454772,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.03128900000228896,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.03937419999783742,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.03318140000192216,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.02675939999971888,
+      "input_points": 2025,
+      "mesh_points": 2025,
+      "mesh_cells": 3872,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.07759749999968335,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.05359210000096937,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.06296600000132457,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.06645990000106394,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.06842560000222875,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.053701799999544164,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.04655710000224644,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": false
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.06597560000227531,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.05176919999939855,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": true
+    },
+    {
+      "kind": "surface",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.04191290000017034,
+      "input_points": 5041,
+      "mesh_points": 5041,
+      "mesh_cells": 9800,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.08966959999816027,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.045134299998608185,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.03600200000073528,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.08054679999986547,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.09099399999831803,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.053292700002202764,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.05624879999959376,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.09554019999995944,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.08111640000061016,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 500,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.0542717000025732,
+      "input_points": 484,
+      "mesh_points": 40172,
+      "mesh_cells": 52186,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.1879166999970039,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.1014458999998169,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.0872601000010036,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.16699490000246442,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.18525539999973262,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.09183570000095642,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.10654449999856297,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.17498239999986254,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.18928159999995842,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 2000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.09095410000008997,
+      "input_points": 2025,
+      "mesh_points": 168075,
+      "mesh_cells": 218522,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "eager",
+      "seconds": 0.4236187999995309,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 0,
+      "mode": "lazy",
+      "seconds": 0.18332620000001043,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "lazy",
+      "seconds": 0.19010640000124113,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 1,
+      "mode": "eager",
+      "seconds": 0.39901909999753116,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "eager",
+      "seconds": 0.39743319999979576,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 2,
+      "mode": "lazy",
+      "seconds": 0.1659916999997222,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "lazy",
+      "seconds": 0.1833403000018734,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": false
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 3,
+      "mode": "eager",
+      "seconds": 0.4093661999977485,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "eager",
+      "seconds": 0.4454005000006873,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": true
+    },
+    {
+      "kind": "combined",
+      "requested_n": 5000,
+      "repeat": 4,
+      "mode": "lazy",
+      "seconds": 0.16212929999892367,
+      "input_points": 5041,
+      "mesh_points": 418403,
+      "mesh_cells": 544146,
+      "silhouette_created": false
+    }
+  ]
+}

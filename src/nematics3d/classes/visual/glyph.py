@@ -766,9 +766,7 @@ class PlotGlyph(HostBase):
         self._helper_register_pick(actor)
         self._helper_sync_scalar_bar()
 
-        if self.state_is_silhouette:
-            self._helper_add_silhouette()
-        else:
+        if not self.state_is_silhouette:
             self._helper_clear_silhouette()
 
     def _helper_add_silhouette(self):
@@ -794,6 +792,17 @@ class PlotGlyph(HostBase):
             return
         fig.pl.remove_actor(actor_silhouette)
         object.__setattr__(self, "entity_silhouette", None)
+
+    def _helper_refresh_silhouette_after_remesh(self):
+        silhouette = getattr(self, "entity_silhouette", None)
+        if not self.state_is_silhouette:
+            self._helper_clear_silhouette()
+            return
+        if silhouette is None:
+            return
+        was_visible = bool(silhouette.visibility)
+        self._helper_add_silhouette()
+        self.entity_silhouette.visibility = was_visible
 
     def _helper_collect_scalar_bars(self):
         fig = self.fig
@@ -991,10 +1000,7 @@ class PlotGlyph(HostBase):
                 else:
                     self.entity_actor.mapper.SetInputData(mesh)
                     self.entity_actor.mapper.Update()
-                    if self.state_is_silhouette:
-                        self._helper_add_silhouette()
-                    else:
-                        self._helper_clear_silhouette()
+                    self._helper_refresh_silhouette_after_remesh()
 
         for key, value in kwargs.items():
             try:
@@ -1025,7 +1031,14 @@ class PlotGlyph(HostBase):
         width: float | None = None,
     ):
         silhouette = getattr(self, "entity_silhouette", None)
-        if not silhouette:
+        if silhouette is None:
+            if not self.state_is_silhouette:
+                return
+            if getattr(self, "entity_actor", None) is None or self.calc_is_empty:
+                return
+            self._helper_add_silhouette()
+            silhouette = self.entity_silhouette
+        if silhouette is None:
             return
         silhouette.visibility = True
 

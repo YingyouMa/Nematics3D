@@ -222,17 +222,46 @@ def test_protected_opts_reject_live_updates(figure):
 
 def test_highlight_and_dehighlight_update_silhouette(figure):
     sphere = PlotSphere(_coords(), figure=figure, sides=8)
-    silhouette = sphere.entity_silhouette
-    assert silhouette is not None
-    assert not silhouette.visibility
+    assert sphere.entity_silhouette is None
 
     sphere.act_highlight(color=(1.0, 0.0, 0.0), opacity=0.5, width=3.0)
+    silhouette = sphere.entity_silhouette
+    assert silhouette is not None
     assert silhouette.visibility
     assert silhouette.prop.opacity == pytest.approx(0.5)
     assert silhouette.prop.line_width == pytest.approx(3.0)
 
     sphere.act_dehighlight()
     assert not silhouette.visibility
+
+
+def test_lazy_silhouette_is_not_built_until_first_highlight(figure):
+    sphere = PlotSphere(_coords(), figure=figure, sides=8)
+
+    assert sphere.entity_silhouette is None
+
+    sphere.act_highlight()
+
+    assert sphere.entity_silhouette is not None
+    assert sphere.entity_silhouette.visibility
+
+
+def test_existing_silhouette_is_rebuilt_on_remesh_and_keeps_visibility(figure):
+    sphere = PlotSphere(_coords(), figure=figure, radius=0.2, sides=8)
+    sphere.act_highlight()
+    silhouette_before = sphere.entity_silhouette
+
+    sphere.opts.radius = 0.4
+
+    assert sphere.entity_silhouette is not None
+    assert sphere.entity_silhouette is not silhouette_before
+    assert sphere.entity_silhouette.visibility
+
+    sphere.act_dehighlight()
+    silhouette_hidden = sphere.entity_silhouette
+    sphere.opts.radius = 0.3
+    assert sphere.entity_silhouette is not silhouette_hidden
+    assert not sphere.entity_silhouette.visibility
 
 
 def test_pick_reports_nearest_point_visual_values(figure):
