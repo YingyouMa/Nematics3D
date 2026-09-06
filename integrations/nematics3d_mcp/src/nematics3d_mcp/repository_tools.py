@@ -367,17 +367,31 @@ def _run_process(
     timeout: int = 300,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command without a shell from the repository root."""
-    common_arguments = {
-        "args": command,
-        "cwd": REPO_ROOT,
-        "text": True,
-        "capture_output": True,
-        "timeout": timeout,
-        "check": False,
-    }
     if input_text is None:
-        return subprocess.run(stdin=subprocess.DEVNULL, **common_arguments)
-    return subprocess.run(input=input_text, **common_arguments)
+        return subprocess.run(
+            command,
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+            stdin=subprocess.DEVNULL,
+        )
+
+    result = subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        input=input_text.encode("utf-8"),
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    return subprocess.CompletedProcess(
+        result.args,
+        result.returncode,
+        result.stdout.decode("utf-8", errors="replace"),
+        result.stderr.decode("utf-8", errors="replace"),
+    )
 
 
 def _bounded_output(text: str) -> tuple[str, bool]:

@@ -71,6 +71,36 @@ def test_apply_patch_accepts_begin_patch_update(temporary_repository: Path) -> N
     assert target.read_text(encoding="utf-8") == "value = 2\nother = 3\n"
 
 
+def test_apply_patch_preserves_lf_patch_input(temporary_repository: Path) -> None:
+    """LF-only targets remain LF-only when patch text crosses process stdin."""
+    repository_tools._run_process(["git", "config", "core.autocrlf", "false"])
+    target = temporary_repository / "example.ipynb"
+    target.write_bytes(
+        b"{\n"
+        b' "cells": [\n'
+        b"  {\n"
+        b'   "value": "before"\n'
+        b"  }\n"
+        b" ]\n"
+        b"}\n"
+    )
+
+    result = repository_tools.apply_patch(
+        """*** Begin Patch
+*** Update File: example.ipynb
+@@
+-   \"value\": \"before\"
++   \"value\": \"after\"
+*** End Patch
+"""
+    )
+
+    assert result["applied"] is True
+    data = target.read_bytes()
+    assert b'"value": "after"' in data
+    assert b"\r\n" not in data
+
+
 def test_apply_patch_accepts_begin_patch_add_and_delete(
     temporary_repository: Path,
 ) -> None:

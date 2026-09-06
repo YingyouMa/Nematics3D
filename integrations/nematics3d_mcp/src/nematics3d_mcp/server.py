@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from nematics3d_mcp import repository_tools
+from nematics3d_mcp import hpcc_tools, repository_tools
 
 
 SERVER_NAME = "nematics3d-local"
@@ -191,6 +191,35 @@ def run_project_task(
 ) -> dict[str, object]:
     """Run one allowlisted project task."""
     return repository_tools.run_project_task(task, paths)
+
+
+@mcp.tool(
+    title="Run an arbitrary command on Brandeis HPCC",
+    description=(
+        "Run an arbitrary remote shell command as yingyouma@hpcc.brandeis.edu. "
+        "The working directory must stay under /work/yingyouma. This is a "
+        "high-risk, unrestricted shell capability: inspect relevant state first "
+        "and use it only when the user has authorized the remote action. Do not "
+        "run Git on HPCC; transfer files and perform Git operations locally."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=True,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+def run_hpcc_command(
+    command: str,
+    working_directory: str = "/work/yingyouma",
+    timeout_seconds: int = 300,
+) -> dict[str, object]:
+    """Run an arbitrary command through non-interactive SSH."""
+    return hpcc_tools.run_hpcc_command(
+        command,
+        working_directory,
+        timeout_seconds,
+    )
 
 
 def main() -> None:
