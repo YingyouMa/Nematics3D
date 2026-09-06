@@ -6,6 +6,16 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 
 ## Pending archive
 
+### `HostBase` / `OptsBase`
+
+- Source: `src/nematics3d/core/host_base.py`.
+- Status: black-box behavior has been substantially reviewed and hardened without attempting an architectural refactor of the implementation.
+- Covered contract: opts lifecycle and validation, host/opts commit routing, raw/state updates and opts reapplication, writable properties, extra attrs, protection/wrapping, wrapper forwarding, sync/enrichment callbacks, snapshots, JSON persistence, and HostBase inspection surfaces.
+- Focused tests: `tests/classes/test_host_base.py` (59 passed at the current review point).
+- Broader validation at the behavior-hardening commit covered representative smoothing, geometry, and visual HostBase descendants (95 passed), with Black and Ruff clean for the touched HostBase/test files.
+- Review commit: black-box coverage and the minimal writable-property commit fix `4126db2`; reference tutorial added in `0c48290` at `tutorials/reference/core/HostBase.ipynb`.
+- Remaining review before archive: exercise the reference tutorial itself, inspect representative real HostBase subclasses for integration-specific contracts, and record final archive validation/evidence. `PlotGlyph` is the next subclass being inspected.
+
 ### `SmoothedLineFunc`
 
 - Source: `src/nematics3d/classes/smoothed_line.py`.
