@@ -1051,10 +1051,9 @@ class PlotFigure(HostBase):
         camera.position = pos
         camera.focal_point = focal
         camera.up = up
-        self.pl.render()
-
         self.pl.set_background(self.opts.bg_color)
         self.pl.window_size = tuple(int(x) for x in self.opts.size)
+        self.pl.render()
 
     # -------------------------------
     # Camera view actions
