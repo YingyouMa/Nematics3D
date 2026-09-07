@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from nematics3d import q_diagonalize
-from nematics3d.field import get_q
+from nematics3d.q_field import get_q
 
 NX = NY = NZ = 128
 S_VALUE = 1.0

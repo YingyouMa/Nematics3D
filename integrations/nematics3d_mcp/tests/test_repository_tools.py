@@ -31,6 +31,22 @@ def test_resolve_repo_path_rejects_git_directory(
         repository_tools.resolve_repo_path(".git/config")
 
 
+def test_list_files_allows_explicit_ignored_directory(
+    temporary_repository: Path,
+) -> None:
+    """Explicitly requested build-output directories remain inspectable."""
+    dist = temporary_repository / "dist"
+    dist.mkdir()
+    wheel = dist / "example.whl"
+    wheel.write_bytes(b"wheel")
+
+    root_result = repository_tools.list_files()
+    dist_result = repository_tools.list_files("dist")
+
+    assert "dist/example.whl" not in root_result["files"]
+    assert dist_result["files"] == ["dist/example.whl"]
+
+
 def test_apply_patch_modifies_repository_file(temporary_repository: Path) -> None:
     """A valid unified diff changes a file inside the repository."""
     target = temporary_repository / "example.py"

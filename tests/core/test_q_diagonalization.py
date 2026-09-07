@@ -11,7 +11,7 @@ SRC_DIR = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(SRC_DIR))
 
 from nematics3d import q_diagonalize  # noqa: E402
-from nematics3d.analysis.q_diagonalization._backend import (  # noqa: E402
+from nematics3d.q_field.diagonalization._backend import (  # noqa: E402
     is_c_backend_available,
 )
 from nematics3d.core.result_base import ResultBase  # noqa: E402
@@ -96,7 +96,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
         q_tensor = make_uniaxial_q_tensor([1.0, 0.0, 0.0], 1.0)
 
         with patch(
-            "nematics3d.analysis.q_diagonalization._solver.is_c_backend_available",
+            "nematics3d.q_field.diagonalization._solver.is_c_backend_available",
             return_value=False,
         ):
             fallback = q_diagonalize(q_tensor, log_mode="none")
@@ -142,7 +142,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
         q_tensor = make_uniaxial_q_tensor([1.0, 0.0, 0.0], 1.0)
 
         with patch(
-            "nematics3d.analysis.q_diagonalization._solver._eigh3_q_sd",
+            "nematics3d.q_field.diagonalization._solver._eigh3_q_sd",
             side_effect=AssertionError("The default path must stay principal-only."),
         ):
             result = q_diagonalize(q_tensor, log_mode="none")
@@ -160,7 +160,7 @@ class TestQDiagonalizeResult(unittest.TestCase):
         q_tensors = symmetric_tensors - traces[..., None, None] * np.eye(3) / 3.0
 
         with patch(
-            "nematics3d.analysis.q_diagonalization._solver.np.linalg.eigh",
+            "nematics3d.q_field.diagonalization._solver.np.linalg.eigh",
             side_effect=AssertionError("The analytic path must not fall back."),
         ):
             result = q_diagonalize(

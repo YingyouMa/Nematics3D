@@ -19,7 +19,7 @@ if "nematics3d" not in sys.modules:
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
 from nematics3d.classes.plane_grid import OptsPlaneGrid
 from nematics3d.classes.q_plane import OmegaResult, QPlane, QPlanePolar
-from nematics3d.field import get_q
+from nematics3d.q_field import get_q
 
 
 class TestQPlane(unittest.TestCase):

@@ -20,9 +20,8 @@ from .classes.bounds import (
 )
 from .core.result_base import ResultBase
 from .datatypes import as_axes, as_dimension_info, as_points
-from .field import get_q
+from .q_field import get_q, q_diagonalize
 from .geometry import align_axes_to_reference, axes_angle_changes_deg
-from .analysis.q_diagonalization import q_diagonalize
 
 
 @dataclass(slots=True, frozen=True, repr=False)

@@ -26,17 +26,21 @@ def _coords():
     )
 
 
-def test_opts_assignment_updates_resolved_radius_and_live_mesh(figure):
+def test_opts_assignment_updates_resolved_radius_and_live_instance_data(figure):
     sphere = PlotSphere(_coords(), figure=figure, radius=0.2, sides=8)
-    mesh_before = sphere.entity_actor.mapper.dataset
+    mapper_before = sphere.entity_actor.mapper
+    poly_before = mapper_before.GetInput()
+    assert poly_before.GetNumberOfPoints() == 3
 
     sphere.opts.radius = 0.4
 
     np.testing.assert_allclose(sphere.calc_radius, 0.4)
     assert sphere.opts.radius == pytest.approx(0.4)
-    mesh_after = sphere.entity_actor.mapper.dataset
-    assert mesh_after.n_points > 0
-    assert mesh_after is not mesh_before
+    mapper_after = sphere.entity_actor.mapper
+    poly_after = mapper_after.GetInput()
+    assert poly_after.GetNumberOfPoints() == 3
+    assert poly_after is not poly_before
+    np.testing.assert_allclose(poly_after.point_data["radius"], 0.4)
 
 
 def test_batch_commit_updates_multiple_visual_inputs(figure):
@@ -187,6 +191,11 @@ def test_center_bounds_bind_disable_enable_and_unbind(figure):
     sphere.act_unbind_bounds()
     assert sphere.bounds is None
     np.testing.assert_array_equal(sphere.calc_keep_index, [0, 1, 2])
+
+
+def test_instanced_sphere_mesh_clip_is_explicitly_deferred(figure):
+    with pytest.raises(NotImplementedError, match="mesh clip_mode"):
+        PlotSphere(_coords(), figure=figure, clip_mode="mesh", sides=8)
 
 
 def test_empty_to_nonempty_and_back_transition(figure):

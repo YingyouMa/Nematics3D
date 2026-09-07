@@ -1211,17 +1211,18 @@ class PickManager:
         object.__setattr__(self, "_state_last_rclick_time", now)
         object.__setattr__(self, "_state_last_rclick_actor", actor)
 
-        # Once clicked, switch the highlight status
+        # Once clicked, switch the highlight status.  Silhouettes are created
+        # lazily, so the first right-click must call act_highlight() even when
+        # entity_silhouette does not exist yet.
         silhouette = getattr(owner, "entity_silhouette", None)
-        if silhouette is not None:
-            if silhouette.visibility == True:
-                owner.act_dehighlight()
-            else:
-                owner.act_highlight(
-                    color=self.opts.sil_color,
-                    opacity=self.opts.sil_opacity,
-                    width=self.opts.sil_width,
-                )
+        if silhouette is not None and silhouette.visibility:
+            owner.act_dehighlight()
+        elif getattr(owner, "state_is_silhouette", False):
+            owner.act_highlight(
+                color=self.opts.sil_color,
+                opacity=self.opts.sil_opacity,
+                width=self.opts.sil_width,
+            )
 
         # Single click: print only.
         if not is_double:

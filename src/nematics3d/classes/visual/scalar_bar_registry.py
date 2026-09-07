@@ -52,6 +52,21 @@ class ScalarBarRegistry(RegistryBase):
         actor = getattr(source, "entity_actor", None)
         mapper = getattr(actor, "mapper", None)
         if mapper is not None:
+            if not hasattr(mapper, "lookup_table") and hasattr(
+                mapper, "GetLookupTable"
+            ):
+                # PyVista's scalar-bar manager expects its mapper wrapper API
+                # (lookup_table/scalar_range), while vtkGlyph3DMapper exposes
+                # the same VTK state only through Get*/Set* methods.  The
+                # scalar bar needs only a mapper carrying the same LUT/range,
+                # so provide a lightweight PyVista adapter without changing
+                # the mapper that actually renders the glyphs.
+                mapper_scalar_bar = pv.DataSetMapper(dataset=source.calc_poly)
+                lookup_table = mapper.GetLookupTable()
+                if lookup_table is not None:
+                    mapper_scalar_bar.lookup_table = lookup_table
+                mapper_scalar_bar.scalar_range = mapper.GetScalarRange()
+                return mapper_scalar_bar
             return mapper
 
         mapper = getattr(source, "mapper", None)
@@ -213,8 +228,6 @@ class ScalarBarRegistry(RegistryBase):
             return None
 
         opts = scalar_bar.opts
-        mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
-        lut = getattr(mapper, "lookup_table", None)
         label_text = backend.GetLabelTextProperty()
         title_text = backend.GetTitleTextProperty()
         background_prop = backend.GetBackgroundProperty()
@@ -273,20 +286,30 @@ class ScalarBarRegistry(RegistryBase):
         kwargs_pyvista = dict(getattr(scalar_bar, "calc_pyvista_kwargs", {}))
         mapper = self._helper_resolve_scalar_bar_mapper(scalar_bar)
         source_display = self._helper_resolve_scalar_bar_source_display(scalar_bar)
-        if not isinstance(mapper.lookup_table, pv.LookupTable):
-            mapper.lookup_table = pv.LookupTable()
+        is_pyvista_mapper = hasattr(mapper, "lookup_table")
+        lookup_table = (
+            mapper.lookup_table if is_pyvista_mapper else mapper.GetLookupTable()
+        )
+        if not isinstance(lookup_table, pv.LookupTable):
+            lookup_table = pv.LookupTable()
+            if is_pyvista_mapper:
+                mapper.lookup_table = lookup_table
+            else:
+                mapper.SetLookupTable(lookup_table)
         if source_display["cmap"] is not None:
             n_values = (
                 scalar_bar.opts.n_colors
                 if scalar_bar.opts.n_colors is not None
-                else mapper.lookup_table.n_values
+                else lookup_table.n_values
             )
-            mapper.lookup_table.apply_cmap(source_display["cmap"], n_values=n_values)
+            lookup_table.apply_cmap(source_display["cmap"], n_values=n_values)
         if source_display["clim"] is not None:
-            mapper.scalar_range = tuple(float(x) for x in source_display["clim"])
-            mapper.lookup_table.scalar_range = tuple(
-                float(x) for x in source_display["clim"]
-            )
+            scalar_range = tuple(float(x) for x in source_display["clim"])
+            if is_pyvista_mapper:
+                mapper.scalar_range = scalar_range
+            else:
+                mapper.SetScalarRange(*scalar_range)
+            lookup_table.scalar_range = scalar_range
         kwargs_create = dict(kwargs_pyvista)
         kwargs_create["title"] = scalar_bar.impl_name_pv
         kwargs_create["mapper"] = mapper

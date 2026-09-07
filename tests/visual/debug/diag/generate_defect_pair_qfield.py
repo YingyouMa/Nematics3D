@@ -59,7 +59,7 @@ Q[..., 1, 2] += noise[..., 4]
 Q[..., 2, 1] += noise[..., 4]
 Q[..., 2, 2] = -(Q[..., 0, 0] + Q[..., 1, 1])
 
-input_q = n3d.classes.q_field_object.InputQ(
+input_q = n3d.q_field.q_field_object.InputQ(
     Q=Q,
     box_periodic_flag=[True, True, True],
 )

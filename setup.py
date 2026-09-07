@@ -22,20 +22,20 @@ def _qdiag_libraries():
 setup(
     ext_modules=[
         Extension(
-            "nematics3d.analysis.q_diagonalization._core",
+            "nematics3d.q_field.diagonalization._core",
             sources=[
                 os.path.join(
                     "src",
                     "nematics3d",
-                    "analysis",
-                    "q_diagonalization",
+                    "q_field",
+                    "diagonalization",
                     "qdiag_module.c",
                 ),
                 os.path.join(
                     "src",
                     "nematics3d",
-                    "analysis",
-                    "q_diagonalization",
+                    "q_field",
+                    "diagonalization",
                     "qdiag_kernel.c",
                 ),
             ],
@@ -43,14 +43,14 @@ setup(
                 os.path.join(
                     "src",
                     "nematics3d",
-                    "analysis",
-                    "q_diagonalization",
+                    "q_field",
+                    "diagonalization",
                     "qdiag_kernel.h",
                 )
             ],
             include_dirs=[
                 np.get_include(),
-                os.path.join("src", "nematics3d", "analysis", "q_diagonalization"),
+                os.path.join("src", "nematics3d", "q_field", "diagonalization"),
             ],
             libraries=_qdiag_libraries(),
             extra_compile_args=_qdiag_compile_args(),

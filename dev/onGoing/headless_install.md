@@ -26,7 +26,7 @@ conda install -c conda-forge "vtk-base=9.3.1=osmesa*"
 
 ## 问题二：`pyvistaqt` 是顶层 import，headless 也必须装
 
-`src/nematics3d/classes/q_field_object.py` 第 103 行：
+`src/nematics3d/q_field/q_field_object.py` 第 103 行：
 
 ```python
 from pyvistaqt import BackgroundPlotter

@@ -13,7 +13,7 @@ from nematics3d.field import (
     align_directors,
     n_color_immerse,
 )
-from nematics3d.analysis.q_diagonalization import q_diagonalize
+from nematics3d.q_field.diagonalization import q_diagonalize
 from nematics3d.geometry import (
     find_rotation_axis,
     points_membership_mask,

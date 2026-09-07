@@ -408,15 +408,15 @@ Summary of changes and evidence:
   parameterized subtests, and the reviewed source and test file pass Black,
   Ruff, syntax, notebook, and whitespace validation.
 
-### `nematics3d.analysis.q_diagonalization.q_diagonalize`
+### `nematics3d.q_field.diagonalization.q_diagonalize`
 
 | Field | Evidence |
 | --- | --- |
 | Kind | Public scientific function with private Python and compiled C backends |
-| Source | [`src/nematics3d/analysis/q_diagonalization/`](../../src/nematics3d/analysis/q_diagonalization/) |
+| Source | [`src/nematics3d/q_field/diagonalization/`](../../src/nematics3d/q_field/diagonalization/) |
 | Build configuration | [`setup.py`](../../setup.py), [`pyproject.toml`](../../pyproject.toml), and [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
 | Tests | [`tests/core/test_q_diagonalization.py`](../../tests/core/test_q_diagonalization.py) and [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
-| Tutorial | [`tutorials/analysis/q_diagonalization/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalization/q_diagonalize.ipynb) |
+| Tutorial | [`tutorials/reference/q_field/diagonalization/q_diagonalize.ipynb`](../../tutorials/reference/q_field/diagonalization/q_diagonalize.ipynb) |
 | Review scope | Public Q5/Q9 contract, named result, principal-only and complete eigensystems, C and `NumExpr` backend selection, Python worker threading, isotropic classification, near-degenerate orthonormality, optional right-handed frames, validation and errors, logging, performance documentation, packaging, exports, and direct callers |
 | Validation | `python -m pytest tests/core -q` (25 passed, 31 subtests passed); focused `tests/core/test_q_diagonalization.py` run (10 passed, 8 subtests passed); `black --check setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; `ruff check --select E,F,W,N,I setup.py src/nematics3d/analysis/q_diagonalization src/nematics3d/classes/result_base.py tests/core`; in-memory syntax compile; notebook JSON, code-cell, local-link, and stale-term validation; `git diff --check`; isolated `python -m build`; wheel installation and public-API smoke test outside the repository |
 | Reviewed commit | `5089673` |
@@ -490,7 +490,7 @@ Summary of changes and evidence:
 | Kind | Public Q-field representation validators and converters |
 | Source | [`src/nematics3d/datatypes/q_field.py`](../../src/nematics3d/datatypes/q_field.py) |
 | Tests | [`tests/core/test_datatypes_qfield.py`](../../tests/core/test_datatypes_qfield.py) |
-| Tutorial | [`tutorials/analysis/q_diagonalization/q_diagonalize.ipynb`](../../tutorials/analysis/q_diagonalization/q_diagonalize.ipynb) |
+| Tutorial | [`tutorials/reference/q_field/diagonalization/q_diagonalize.ipynb`](../../tutorials/reference/q_field/diagonalization/q_diagonalize.ipynb) |
 | Review scope | Compact five-component and full symmetric-traceless 3x3 representations, strict 3D and relaxed leading dimensions, dtype and finite-value validation, symmetry and trace tolerances, empty relaxed inputs, conversion behavior, zero-copy same-representation returns, public exports, and diagonalization integration |
 | Validation | `python -m pytest tests/core/test_datatypes_qfield.py -q` (15 passed, 23 subtests passed); focused datatypes and disclination regression run (68 passed, 23 subtests passed); Black; in-memory syntax and import checks; `git diff --check` |
 | Reviewed commit | `35af036` |
@@ -761,14 +761,14 @@ Summary of changes and evidence:
   validator has no useful intermediate state or workflow boundary to log. Its
   only repository-function dependency is the already confirmed `as_bool()`.
 
-### `nematics3d.field.get_q`
+### `nematics3d.q_field.get_q`
 
 | Field | Evidence |
 | --- | --- |
 | Kind | Public uniaxial and biaxial Q-tensor field constructor |
-| Source | [`src/nematics3d/field.py`](../../src/nematics3d/field.py) |
+| Source | [`src/nematics3d/q_field/get_q.py`](../../src/nematics3d/q_field/get_q.py) |
 | Tests | [`tests/core/test_get_q.py`](../../tests/core/test_get_q.py), with downstream initialization coverage in [`tests/classes/test_q_plane.py`](../../tests/classes/test_q_plane.py) and [`tests/classes/test_q_field_object_phase2.py`](../../tests/classes/test_q_field_object_phase2.py) |
-| Tutorial | None; the physical convention, parameter pairing, broadcasting, and failure behavior are documented in the function docstring and focused scientific tests |
+| Tutorial | [`tutorials/reference/q_field/get_q.ipynb`](../../tutorials/reference/q_field/get_q.ipynb) |
 | Review scope | Uniaxial convention $Q=S(nn-I/3)$, optional signed biaxial contribution $P(mm-ll)$ with $l=n\times m$, director normalization, default unit scalar order, scalar and field broadcasting, symmetric-traceless invariants, director-sign invariance, positive and negative biaxial order, orthogonality tolerance, paired `m`/`P` inputs, zero directors, incompatible shapes, input isolation, floating output, top-level public export, `q_diagonalize()` round trip, active callers, and logging decision |
 | Validation | `python -m pytest tests/core/test_get_q.py tests/core/test_q_diagonalization.py tests/classes/test_q_plane.py -q` (23 passed, 8 subtests passed); `tests/classes/test_q_field_object_phase2.py` downstream run (10 passed, with 1 unrelated pre-existing `FieldData.interpolator` relation failure); Black and `black --check` on the implementation and focused tests; in-memory syntax compile; active-source caller and export audit; `git diff --check` |
 | Reviewed commit | `70871e394effca0755983efe6888a377180871ea` |
@@ -787,7 +787,7 @@ Summary of changes and evidence:
 - Reconstructed a randomized biaxial tensor from the complete
   `q_diagonalize()` result and recovered the original tensor within numerical
   tolerance.
-- Confirmed both `nematics3d.field.get_q` and the top-level `nematics3d.get_q`
+- Confirmed both `nematics3d.q_field.get_q` and the top-level `nematics3d.get_q`
   public surface, together with the `QFieldObject` and principal-plane callers.
 - Kept the function undecorated because it is a deterministic vectorized
   tensor construction with no useful workflow event or recovery path to log.
@@ -1088,7 +1088,7 @@ above.
 | 2026-08-24 | `Vect(d)` and `as_vector()` | `src/nematics3d/datatypes/vector.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `Tensor(shape)` and `as_tensor()` | `src/nematics3d/datatypes/tensor.py` | Direct contract checks and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-24 | `ResultBase` | `src/nematics3d/classes/result_base.py` | `tests/core/test_q_diagonalization.py` | `faa6259b6dc48d2296a7d60aa2958613b0f26bf8` | Confirmed |
-| 2026-08-26 | `q_diagonalize()` | `src/nematics3d/analysis/q_diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `5089673` | Confirmed |
+| 2026-08-26 | `q_diagonalize()` | `src/nematics3d/q_field/diagonalization/` | `tests/core/test_q_diagonalization.py`, `tests/core/test_datatypes_qfield.py` | `5089673` | Confirmed |
 | 2026-08-25 | `as_director_field()` and `as_scalar_field()` | `src/nematics3d/datatypes/director_field.py`; `src/nematics3d/datatypes/scalar_field.py` | `tests/test_datatypes_director_field.py` and downstream tests | `bdb7e25` | Confirmed |
 | 2026-08-26 | `as_bool()` | `src/nematics3d/datatypes/bool.py` | `tests/test_datatypes_bool.py` and downstream tests | `5089673` | Confirmed |
 | 2026-08-26 | `defect_detect()` | `src/nematics3d/analysis/disclination/detection.py` | `tests/test_disclination_defect_detect.py`, `tests/test_datatypes_director_field.py` | `5089673` | Confirmed |

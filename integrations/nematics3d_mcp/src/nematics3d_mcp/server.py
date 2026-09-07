@@ -3,7 +3,7 @@
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from nematics3d_mcp import hpcc_tools, repository_tools
+from nematics3d_mcp import caspar_tools, hpcc_tools, repository_tools
 
 
 SERVER_NAME = "nematics3d-local"
@@ -220,6 +220,99 @@ def run_hpcc_command(
         working_directory,
         timeout_seconds,
     )
+
+
+@mcp.tool(
+    title="List files on Brandeis Caspar",
+    description=(
+        "List files and directories beneath the fixed Caspar working root "
+        "reached by cd ../../current2/yingyou. Paths must be relative to that root."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
+def list_caspar_files(
+    path: str = "", max_depth: int = 2, timeout_seconds: int = 60
+) -> dict[str, object]:
+    """List Caspar files within the fixed user working root."""
+    return caspar_tools.list_caspar_files(path, max_depth, timeout_seconds)
+
+
+@mcp.tool(
+    title="Read a text file on Brandeis Caspar",
+    description=(
+        "Read a text file beneath the fixed Caspar working root, optionally "
+        "selecting a one-based inclusive line range."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    ),
+)
+def read_caspar_file(
+    path: str,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    timeout_seconds: int = 60,
+) -> dict[str, object]:
+    """Read a Caspar text file within the fixed user working root."""
+    return caspar_tools.read_caspar_file(path, start_line, end_line, timeout_seconds)
+
+
+@mcp.tool(
+    title="Back up a local Nematics3D path to Caspar",
+    description=(
+        "Copy one file or subdirectory from the local Nematics3D repository into "
+        "a new timestamped directory under ../../current2/yingyou/backups on "
+        "Caspar. Paths outside this repository and the whole repository root are "
+        "rejected. The tool does not overwrite an existing backup."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+def backup_local_to_caspar(
+    source_path: str,
+    backup_name: str | None = None,
+    timeout_seconds: int = 1800,
+) -> dict[str, object]:
+    """Back up one repository path into a unique Caspar directory."""
+    return caspar_tools.backup_local_to_caspar(
+        source_path, backup_name, timeout_seconds
+    )
+
+
+@mcp.tool(
+    title="Back up a Brandeis HPCC path to Caspar",
+    description=(
+        "Copy one file or directory under /work/yingyouma on HPCC through this "
+        "computer into a new timestamped directory under "
+        "../../current2/yingyou/backups on Caspar. The whole HPCC work root and "
+        "paths outside it are rejected. The tool does not overwrite an existing backup."
+    ),
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        destructiveHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    ),
+)
+def backup_hpcc_to_caspar(
+    source_path: str,
+    backup_name: str | None = None,
+    timeout_seconds: int = 1800,
+) -> dict[str, object]:
+    """Back up one HPCC path into a unique Caspar directory via local SCP."""
+    return caspar_tools.backup_hpcc_to_caspar(source_path, backup_name, timeout_seconds)
 
 
 def main() -> None:

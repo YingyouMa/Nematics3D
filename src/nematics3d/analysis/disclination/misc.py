@@ -2,7 +2,7 @@ from typing import Sequence, Union
 
 import numpy as np
 
-from ...analysis.q_diagonalization import q_diagonalize
+from ...q_field.diagonalization import q_diagonalize
 from ...datatypes import (
     BoxSizePeriodic,
     DefectIndex,

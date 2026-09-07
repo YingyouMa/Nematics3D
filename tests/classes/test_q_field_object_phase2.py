@@ -16,7 +16,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.q_field_object import InputQ, QFieldObject
+from nematics3d.q_field.q_field_object import InputQ, QFieldObject
 from nematics3d.classes.grid_field import (
     GridFieldDataset,
     GridInterpolator,
@@ -57,7 +57,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         detected = np.array(((0.0, 0.5, 0.5), (2.0, 0.5, 0.5)))
 
         with patch(
-            "nematics3d.classes.q_field_object.defect_detect",
+            "nematics3d.q_field.q_field_object.defect_detect",
             return_value=detected,
         ):
             q = QFieldObject(

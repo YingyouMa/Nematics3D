@@ -30,7 +30,7 @@ component's importance and risk. Reviewers should apply the items that are
 material to the component under review.
 
 When deciding what "complete" means in practice, use the confirmed
-[`q_diagonalize()` review](BETA_RELEASE_REVIEWED_COMPONENTS.md#nematics3danalysisq_diagonalizationq_diagonalize)
+[`q_diagonalize()` review](BETA_RELEASE_REVIEWED_COMPONENTS.md#nematics3dq_fielddiagonalizationq_diagonalize)
 as the repository's reference for depth, evidence, and reasonable restraint.
 A simpler or lower-risk function may require less work; a more consequential
 component may require more. A review does not need to exceed that example
@@ -580,8 +580,8 @@ use without a dedicated tutorial.
 ## First application: `q_diagonalize`
 
 The first planned use of this workflow is
-`nematics3d.analysis.q_diagonalization.q_diagonalize` in
-`src/nematics3d/analysis/q_diagonalization/`.
+`nematics3d.q_field.diagonalization.q_diagonalize` in
+`src/nematics3d/q_field/diagonalization/`.
 
 Its focused review should include:
 

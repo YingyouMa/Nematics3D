@@ -123,8 +123,8 @@ from ..datatypes import (
     Unset,
     as_bool,
 )
-from ..field import _get_q_from_validated
-from ..analysis.q_diagonalization import q_diagonalize
+from .get_q import _get_q_from_validated
+from .diagonalization import q_diagonalize
 from ..analysis.sampling import sample_van_der_corput
 from ..grid import (
     GRID_TRANSFORM_IDENTITY,
@@ -138,22 +138,27 @@ from ..analysis.disclination import (
     defect_classify_into_lines,
     defect_validity_from_mask,
 )
-from .visual.plot_tube import OptsTube
-from .visual.plot_rod import OptsRod
-from .visual.plot_sphere import OptsSphere
-from .visual.plot_delaunay import OptsDelaunay
-from .visual.plot_figure import PlotFigure, OptsFigure
-from .visual.color import blue_red_in_white_bg
-from .q_plane import QPlane, QPlanePolar
-from .visual.figure_manager import FigureManager
-from .plane_grid import OptsPlaneGrid
-from .plane_grid_polar import OptsPlaneGridPolar
-from .bounds import as_bounds
-from .grid_field import FieldData, GridFieldDataset, GridInterpolator, InputGridField
+from ..classes.visual.plot_tube import OptsTube
+from ..classes.visual.plot_rod import OptsRod
+from ..classes.visual.plot_sphere import OptsSphere
+from ..classes.visual.plot_delaunay import OptsDelaunay
+from ..classes.visual.plot_figure import PlotFigure, OptsFigure
+from ..classes.visual.color import blue_red_in_white_bg
+from ..classes.q_plane import QPlane, QPlanePolar
+from ..classes.visual.figure_manager import FigureManager
+from ..classes.plane_grid import OptsPlaneGrid
+from ..classes.plane_grid_polar import OptsPlaneGridPolar
+from ..classes.bounds import as_bounds
+from ..classes.grid_field import (
+    FieldData,
+    GridFieldDataset,
+    GridInterpolator,
+    InputGridField,
+)
 from ..core.opts import merge_opts_all, cover_value
-from .smoothed_line import OptsSmoothedLine
+from ..classes.smoothed_line import OptsSmoothedLine
 from ..core.registry_base import RegistryBase
-from .disclination_line import DisclinationLine
+from ..classes.disclination_line import DisclinationLine
 from ..core.class_base import AttrDef, ClassBase
 
 

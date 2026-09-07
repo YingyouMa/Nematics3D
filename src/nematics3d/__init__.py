@@ -1,5 +1,5 @@
 from .field import *
-from .analysis.q_diagonalization import *
+from .q_field import *
 from .analysis.sampling import *
 from .grid import *
 from .principal_plane import *
@@ -11,7 +11,6 @@ from .core import *
 # from .coarse import *
 from .classes.smoothed_line import *
 from .classes.disclination_line import DisclinationLine
-from .classes.q_field_object import QFieldObject
 from .classes.contour_surface import *
 from .sample import *
 from .classes.visual.plot_tube import *

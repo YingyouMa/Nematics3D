@@ -286,6 +286,7 @@ class PlotSphere(PlotGlyph):
     """
 
     # fmt: off
+    _use_instanced_glyph_mapper = True
     __attr_defs__ = {
         "calc_keep_index": AttrDef(
             doc="Indices of raw points kept after center-based point filtering.",
@@ -421,3 +422,11 @@ class PlotSphere(PlotGlyph):
         mesh = poly.glyph(geom=unit_sphere, scale="radius", orient=False)
 
         return mesh
+
+    def _helper_build_glyph_source(self):
+        """Return one unit sphere for vtkGlyph3DMapper instancing."""
+        return pv.Sphere(
+            theta_resolution=self.opts.sides,
+            phi_resolution=self.opts.sides,
+            radius=1.0,
+        )

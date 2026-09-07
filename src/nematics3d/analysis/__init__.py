@@ -14,7 +14,7 @@ from .fourier import (
     act_mean_subtracted_values,
     act_radial_spectrum,
 )
-from .q_diagonalization import QDiagonalizationResult, q_diagonalize
+from ..q_field.diagonalization import QDiagonalizationResult, q_diagonalize
 from .relaxation import (
     FitRelaxationResult,
     RelaxationLengthResult,

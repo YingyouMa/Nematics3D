@@ -22,6 +22,7 @@ from nematics3d.datatypes import (
     as_str,
 )
 from nematics3d.logging_decorator import logging_and_warning_decorator
+from nematics3d.visual.camera import camera_pose_from_vectors, camera_vectors_from_pose
 
 from ...core.class_base import AttrDef
 from ...core.host_base import HostBase, OptsBase
@@ -95,7 +96,7 @@ class OptsFigure(OptsBase):
         "azimuth":          lambda v, d: as_number(v, name=d, value_range=(0, 360)),
         "elevation":        lambda v, d: as_number(v, name=d, value_range=(-90, 90)),
         "roll":             lambda v, d: as_number(v, name=d, value_range=(-180, 180)),
-        "distance":         lambda v, d: as_number(v, name=d, value_range=(0, np.inf)),
+        "distance":         lambda v, d: _as_positive_camera_distance(v, name=d),
         "focal_point":      lambda v, d: as_vector(v, name=d, d=3),
         "size":             lambda v, d: as_vector(v, name=d, d=2),
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
@@ -110,6 +111,14 @@ class OptsFigure(OptsBase):
         }
     )
     # fmt: on
+
+
+def _as_positive_camera_distance(value, *, name):
+    """Return one finite camera distance and reject the degenerate zero pose."""
+    distance = as_number(value, name=name)
+    if distance <= 0:
+        raise ValueError(f"{name!r} must be strictly positive. Got {distance}.")
+    return distance
 
 
 # Subclassing rules:
@@ -1003,16 +1012,16 @@ class PlotFigure(HostBase):
     ):
 
         camera = self.pl.camera
-        temp = self._helper_convert_pos_to_spherical(
+        azimuth, elevation, roll, distance = camera_pose_from_vectors(
             camera.position, camera.focal_point, camera.up
         )
 
         alter = {
             "focal_point": camera.focal_point,
-            "azimuth": temp[0],
-            "elevation": temp[1],
-            "roll": temp[2],
-            "distance": temp[3],
+            "azimuth": azimuth,
+            "elevation": elevation,
+            "roll": roll,
+            "distance": distance,
         }
 
         if not is_only_camera:
@@ -1032,7 +1041,7 @@ class PlotFigure(HostBase):
     def _helper_sync_from_opts(self):
 
         camera = self.pl.camera
-        pos, focal, up = self._helper_convert_spherical_to_pos(
+        pos, focal, up = camera_vectors_from_pose(
             self.opts.azimuth,
             self.opts.elevation,
             self.opts.roll,
@@ -1046,65 +1055,6 @@ class PlotFigure(HostBase):
 
         self.pl.set_background(self.opts.bg_color)
         self.pl.window_size = tuple(int(x) for x in self.opts.size)
-
-    @staticmethod
-    def _helper_convert_pos_to_spherical(position, focal_point, view_up):
-
-        pos = np.array(position)
-        foc = np.array(focal_point)
-        up = np.array(view_up)
-        vec = pos - foc
-
-        dist = np.linalg.norm(vec)
-
-        if dist < 1e-9:
-            return 0.0, 0.0, 0.0, 0.0, foc
-
-        elevation = np.degrees(np.arcsin(vec[2] / dist))
-
-        az_rad = np.arctan2(vec[1], vec[0])
-        azimuth = np.degrees(az_rad) % 360
-
-        view_dir = -vec / dist
-        right = np.cross(view_dir, [0, 0, 1])
-        if np.linalg.norm(right) < 1e-6:
-            right = np.cross(view_dir, [0, 1, 0])
-        right /= np.linalg.norm(right)
-        up_ref = np.cross(right, view_dir)
-        roll = np.degrees(np.arctan2(np.dot(up, right), np.dot(up, up_ref)))
-
-        return azimuth, elevation, roll, dist, foc
-
-    @staticmethod
-    def _helper_convert_spherical_to_pos(
-        azimuth, elevation, roll, distance, focal_point
-    ):
-
-        az = np.radians(azimuth)
-        el = np.radians(elevation)
-        r = np.radians(roll)
-        focal = np.asarray(focal_point, dtype=float)
-
-        x = distance * np.cos(el) * np.cos(az)
-        y = distance * np.cos(el) * np.sin(az)
-        z = distance * np.sin(el)
-        pos = focal + np.array([x, y, z])
-
-        view_dir = focal - pos
-        view_dir = view_dir / np.linalg.norm(view_dir)
-        up_candidate = np.array([0, 0, 1])
-        up_proj = up_candidate - np.dot(up_candidate, view_dir) * view_dir
-        if np.linalg.norm(up_proj) != 0:
-            up = up_proj / np.linalg.norm(up_proj)
-        else:
-            up = np.array([0, 1, 0])
-
-        if abs(r) > 1e-8:
-            k = view_dir
-            cos_r, sin_r = np.cos(r), np.sin(r)
-            up = up * cos_r + np.cross(k, up) * sin_r + k * np.dot(k, up) * (1 - cos_r)
-
-        return pos, focal, up
 
     # -------------------------------
     # Camera view actions

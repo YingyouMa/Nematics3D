@@ -39,7 +39,7 @@ jobs:
         run: >-
           black --check
           setup.py
-          src/nematics3d/analysis/q_diagonalization
+          src/nematics3d/q_field/diagonalization
           src/nematics3d/classes/result_base.py
           tests/core
 
@@ -47,7 +47,7 @@ jobs:
         run: >-
           ruff check --select E,F,W,N,I
           setup.py
-          src/nematics3d/analysis/q_diagonalization
+          src/nematics3d/q_field/diagonalization
           src/nematics3d/classes/result_base.py
           tests/core
 

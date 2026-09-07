@@ -2,8 +2,7 @@ import numpy as np
 import pytest
 
 import nematics3d as n3d
-from nematics3d.analysis.q_diagonalization import q_diagonalize
-from nematics3d.field import get_q
+from nematics3d.q_field import get_q, q_diagonalize
 
 
 def test_get_q_constructs_uniaxial_tensor_and_broadcasts_fields():

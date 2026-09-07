@@ -17,6 +17,18 @@ Nematics3D checkout is rejected. Project commands run without a shell.
 - `get_git_changes`
 - `commit_changes`
 - `run_project_task`
+- `run_hpcc_command`
+- `list_caspar_files`
+- `read_caspar_file`
+- `backup_local_to_caspar`
+- `backup_hpcc_to_caspar`
+
+Caspar access is fixed to the working root reached by
+`cd ../../current2/yingyou`. Inspection paths cannot escape that root. Backups
+are placed in unique timestamped directories below `backups/`. Local backup
+sources are restricted to one selected file or subdirectory in this Nematics3D
+checkout; HPCC backup sources are restricted to one selected path below
+`/work/yingyouma`. HPCC-to-Caspar copies use this computer as an `scp -3` relay.
 
 ## Local development
 
@@ -51,8 +63,14 @@ data and protects the key with Windows DPAPI. The encrypted value can only be
 decrypted by the same Windows user on the same computer.
 
 After setup, double-click `start-nematics3d-mcp.cmd`. Keep its terminal window
-open while ChatGPT uses the MCP server. Press Ctrl+C to stop the tunnel, then
-enter `R` to restart it in the same window or `Q` to quit.
+open while ChatGPT uses the MCP server. Press Ctrl+C to stop the current tunnel.
+Whether the tunnel stops manually or unexpectedly, the launcher retries after
+30 seconds. During that delay, press `R` to retry immediately or `C` to stop the
+reconnect loop. While the process is running, the launcher checks the tunnel's
+control-plane poll health after a 45-second startup grace period and then every
+10 seconds. Three consecutive unhealthy checks, including a last successful poll
+older than 90 seconds, force a restart. Closing the terminal window stops the
+launcher and tunnel.
 `commit_changes` commits only the explicitly selected paths and never pushes.
 
 

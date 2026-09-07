@@ -10,8 +10,6 @@ from typing import Any, Callable, ClassVar, List, Literal, Mapping, Sequence, Ty
 
 import numpy as np
 import pyvista as pv
-import vtk
-from vtk.util.numpy_support import numpy_to_vtk
 
 from nematics3d.datatypes import (
     UNSET,
@@ -314,10 +312,6 @@ class PlotGlyph(HostBase):
     )
 
     _pending_resolution_attrs: List[str] = ["radius", "opacity", "color", "scalars"]
-    # Subclasses that render repeated copies of one source geometry can opt in
-    # to vtkGlyph3DMapper.  Surface-like PlotGlyph subclasses keep the legacy
-    # materialized-mesh path until they receive a suitable backend of their own.
-    _use_instanced_glyph_mapper: ClassVar[bool] = False
     _resolver_source_override_attr_names: Mapping[str, str] = MappingProxyType({
         "color": "resolver_source_color",
         "opacity": "resolver_source_opacity",
@@ -655,72 +649,6 @@ class PlotGlyph(HostBase):
     def _helper_build_mesh(self):
         raise NotImplementedError(...)
 
-    def _helper_build_glyph_source(self):
-        """Return the unit source geometry used by the instanced glyph mapper."""
-        raise NotImplementedError(
-            f"{type(self).__name__} does not provide an instanced glyph source."
-        )
-
-    def _helper_build_instanced_mapper(self):
-        """Build a vtkGlyph3DMapper from the current pointwise glyph data."""
-        poly = self.calc_poly
-        source = self._helper_build_glyph_source()
-        mapper = vtk.vtkGlyph3DMapper()
-        mapper.SetInputData(poly)
-        mapper.SetSourceData(source)
-        mapper.SetScaleArray("radius")
-        mapper.SetScaleModeToScaleByMagnitude()
-        mapper.ScalingOn()
-        self._helper_configure_instanced_mapper_paint(mapper)
-        return mapper
-
-    def _helper_configure_instanced_mapper_paint(self, mapper):
-        """Configure direct-RGBA or scalar coloring on an instanced mapper."""
-        poly = self.calc_poly
-        if self.opts.paint_by == "scalars":
-            mapper.SetScalarModeToUsePointFieldData()
-            mapper.SelectColorArray("scalars")
-            mapper.SetColorModeToMapScalars()
-            if self.opts.scalars_clim is None:
-                scalars = np.asarray(poly.point_data["scalars"], dtype=float)
-                if scalars.size:
-                    mapper.SetScalarRange(
-                        float(np.min(scalars)), float(np.max(scalars))
-                    )
-            else:
-                mapper.SetScalarRange(*map(float, self.opts.scalars_clim))
-            lut = pv.LookupTable(cmap=self.opts.scalars_cmap)
-            mapper.SetLookupTable(lut)
-            mapper.ScalarVisibilityOn()
-            return
-
-        rgba = np.asarray(poly.point_data["rgba"], dtype=float)
-        rgba_uint8 = np.ascontiguousarray(
-            np.clip(np.rint(rgba * 255.0), 0, 255), dtype=np.uint8
-        )
-        vtk_rgba = numpy_to_vtk(
-            rgba_uint8,
-            deep=True,
-            array_type=vtk.VTK_UNSIGNED_CHAR,
-        )
-        vtk_rgba.SetName("rgba_vtk")
-        vtk_rgba.SetNumberOfComponents(4)
-        poly.GetPointData().AddArray(vtk_rgba)
-        mapper.SetScalarModeToUsePointFieldData()
-        mapper.SelectColorArray("rgba_vtk")
-        mapper.SetColorModeToDirectScalars()
-        mapper.ScalarVisibilityOn()
-
-    def _helper_make_instanced_actor(self, mapper):
-        actor = pv.Actor(mapper=mapper)
-        self.fig.pl.add_actor(
-            actor,
-            name=self.impl_name_pv,
-            reset_camera=self.opts.is_reset_camera,
-            render=False,
-        )
-        return actor
-
     def _helper_is_empty_mesh(self, mesh):
         if mesh is None:
             return True
@@ -787,35 +715,17 @@ class PlotGlyph(HostBase):
             # ScalarBar registry. Suppress PyVista's automatic duplicate.
             input_dir["show_scalar_bar"] = False
 
-        if self._use_instanced_glyph_mapper and self.state_clip_mode != "center":
-            # Exact mesh clipping needs the fully materialized glyph surface,
-            # while vtkGlyph3DMapper intentionally keeps only instance data.
-            # Supporting it later is straightforward: route this branch through
-            # the legacy _helper_build_mesh() + _helper_apply_bounds_mesh()
-            # pipeline.  We deliberately leave that compatibility fallback
-            # undeveloped for now so the new backend stays small and explicit.
-            raise NotImplementedError(
-                "mesh clip_mode is temporarily unsupported by the instanced "
-                "glyph backend; use clip_mode='center'."
-            )
-
         if self.state_clip_mode == "center":
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())
             self._helper_build_poly()
-            mesh = (
-                None if self._use_instanced_glyph_mapper else self._helper_build_mesh()
-            )
+            mesh = self._helper_build_mesh()
         else:
             object.__setattr__(self, "calc_coords", self.raw_coords.copy())
             self._helper_build_poly()
             mesh = self._helper_build_mesh()
             mesh = self._helper_apply_bounds_mesh(mesh)
 
-        if self._use_instanced_glyph_mapper:
-            is_empty = self.calc_poly.n_points == 0
-        else:
-            is_empty = self._helper_is_empty_mesh(mesh)
-        if is_empty:
+        if self._helper_is_empty_mesh(mesh):
             object.__setattr__(self, "calc_is_empty", True)
             self._helper_remove_scalar_bars()
             self._helper_clear_live_actor()
@@ -824,11 +734,7 @@ class PlotGlyph(HostBase):
 
         object.__setattr__(self, "calc_is_empty", False)
         self._helper_clear_live_actor()
-        if self._use_instanced_glyph_mapper:
-            mapper = self._helper_build_instanced_mapper()
-            actor = self._helper_make_instanced_actor(mapper)
-        else:
-            actor = self.fig.pl.add_mesh(mesh, **input_dir)
+        actor = self.fig.pl.add_mesh(mesh, **input_dir)
 
         prop = actor.prop
         shading = self.opts.shading_type.lower()
@@ -866,28 +772,6 @@ class PlotGlyph(HostBase):
     def _helper_add_silhouette(self):
         plotter = self.fig.pl
         self._helper_clear_silhouette()
-        if self._use_instanced_glyph_mapper:
-            # vtkGlyph3DMapper has no materialized final surface to pass to
-            # add_silhouette().  Reuse the same instance table/source in a
-            # dedicated wireframe actor instead.  This keeps highlighting lazy
-            # and avoids expanding every glyph into CPU-side polygon geometry.
-            mapper = vtk.vtkGlyph3DMapper()
-            mapper.SetInputData(self.calc_poly)
-            mapper.SetSourceData(self._helper_build_glyph_source())
-            mapper.SetScaleArray("radius")
-            mapper.SetScaleModeToScaleByMagnitude()
-            mapper.ScalingOn()
-            mapper.ScalarVisibilityOff()
-            actor_silhouette = pv.Actor(mapper=mapper)
-            plotter.add_actor(actor_silhouette, render=False)
-            actor_silhouette.prop.style = "wireframe"
-            actor_silhouette.prop.color = (0, 0, 0)
-            actor_silhouette.prop.line_width = 6
-            actor_silhouette.prop.opacity = 0.8
-            actor_silhouette.visibility = False
-            actor_silhouette.pickable = False
-            object.__setattr__(self, "entity_silhouette", actor_silhouette)
-            return
         mesh = self.entity_actor.mapper.dataset
         surf = mesh.extract_surface().triangulate().clean()
         actor_silhouette = plotter.add_silhouette(
@@ -972,10 +856,6 @@ class PlotGlyph(HostBase):
         return bar
 
     def _helper_update_rgba(self):
-        if self._use_instanced_glyph_mapper:
-            self._helper_configure_instanced_mapper_paint(self.entity_actor.mapper)
-            self._helper_remove_scalar_bars()
-            return
         mapper = self.entity_actor.mapper
         mapper.scalar_visibility = True
         mapper.color_mode = "direct"
@@ -985,10 +865,6 @@ class PlotGlyph(HostBase):
         self._helper_remove_scalar_bars()
 
     def _helper_update_scalars(self):
-        if self._use_instanced_glyph_mapper:
-            self._helper_configure_instanced_mapper_paint(self.entity_actor.mapper)
-            self._helper_sync_scalar_bar()
-            return
         mapper = self.entity_actor.mapper
         mesh_data = mapper.dataset.point_data
         if "__custom_rgba" in mesh_data.keys():
@@ -1104,42 +980,23 @@ class PlotGlyph(HostBase):
             is_needs_remesh = True
 
         if is_needs_remesh:
-            if self._use_instanced_glyph_mapper and self.state_clip_mode != "center":
-                # See _helper_make_figure(): exact mesh clipping can later be
-                # restored by falling back to the legacy materialized pipeline.
-                raise NotImplementedError(
-                    "mesh clip_mode is temporarily unsupported by the instanced "
-                    "glyph backend; use clip_mode='center'."
-                )
             if self.state_clip_mode == "center":
                 object.__setattr__(self, "calc_coords", self._helper_bound_coords())
                 self._helper_build_poly()
-                mesh = (
-                    None
-                    if self._use_instanced_glyph_mapper
-                    else self._helper_build_mesh()
-                )
+                mesh = self._helper_build_mesh()
             else:
                 object.__setattr__(self, "calc_coords", self.raw_coords.copy())
                 self._helper_build_poly()
                 mesh = self._helper_build_mesh()
                 mesh = self._helper_apply_bounds_mesh(mesh)
 
-            if self._use_instanced_glyph_mapper:
-                is_empty = self.calc_poly.n_points == 0
-            else:
-                is_empty = self._helper_is_empty_mesh(mesh)
-            if is_empty:
+            if self._helper_is_empty_mesh(mesh):
                 object.__setattr__(self, "calc_is_empty", True)
                 self._helper_clear_live_actor()
             else:
                 object.__setattr__(self, "calc_is_empty", False)
                 if getattr(self, "entity_actor", None) is None:
                     self._helper_make_figure()
-                elif self._use_instanced_glyph_mapper:
-                    mapper = self._helper_build_instanced_mapper()
-                    self.entity_actor.mapper = mapper
-                    self._helper_refresh_silhouette_after_remesh()
                 else:
                     self.entity_actor.mapper.SetInputData(mesh)
                     self.entity_actor.mapper.Update()

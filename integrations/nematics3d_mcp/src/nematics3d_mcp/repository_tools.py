@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import os
 import shlex
 import subprocess
 from pathlib import Path, PurePosixPath, PureWindowsPath
@@ -10,8 +11,9 @@ from typing import Literal
 
 
 REPO_ROOT = Path(r"D:\Document\GitHub\Nematics3D").resolve()
-CONDA_EXECUTABLE = Path(r"C:\Users\myy23\anaconda3\Scripts\conda.exe")
-CONDA_ENVIRONMENT = "Nematics3D"
+CONDA_ENVIRONMENT_PYTHON = Path(
+    r"C:\Users\myy23\anaconda3\envs\Nematics3D\python.exe"
+)
 
 MAX_FILE_BYTES = 1_000_000
 MAX_LIST_RESULTS = 1_000
@@ -61,6 +63,7 @@ def list_files(path: str = "", pattern: str = "*") -> dict[str, object]:
         raise FileNotFoundError(f"Path does not exist: {path}")
 
     candidates = [base] if base.is_file() else base.rglob(pattern)
+    base_relative = base.relative_to(REPO_ROOT)
     files: list[str] = []
     is_truncated = False
 
@@ -68,7 +71,8 @@ def list_files(path: str = "", pattern: str = "*") -> dict[str, object]:
         if not candidate.is_file():
             continue
         relative = candidate.relative_to(REPO_ROOT)
-        if any(part in IGNORED_DIRECTORY_NAMES for part in relative.parts):
+        descendant_parts = relative.parts[len(base_relative.parts) :]
+        if any(part in IGNORED_DIRECTORY_NAMES for part in descendant_parts):
             continue
         files.append(relative.as_posix())
         if len(files) >= MAX_LIST_RESULTS:
@@ -367,15 +371,22 @@ def _run_process(
     timeout: int = 300,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command without a shell from the repository root."""
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+
     if input_text is None:
         return subprocess.run(
             command,
             cwd=REPO_ROOT,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             capture_output=True,
             timeout=timeout,
             check=False,
             stdin=subprocess.DEVNULL,
+            env=env,
         )
 
     result = subprocess.run(
@@ -385,6 +396,7 @@ def _run_process(
         capture_output=True,
         timeout=timeout,
         check=False,
+        env=env,
     )
     return subprocess.CompletedProcess(
         result.args,
@@ -526,8 +538,11 @@ def run_project_task(
 ) -> dict[str, object]:
     """Run one allowlisted Nematics3D development task."""
     validated_paths = _validate_task_paths(paths)
-    if not CONDA_EXECUTABLE.is_file():
-        raise FileNotFoundError(f"Conda executable not found: {CONDA_EXECUTABLE}")
+    if not CONDA_ENVIRONMENT_PYTHON.is_file():
+        raise FileNotFoundError(
+            "Nematics3D environment Python not found: "
+            f"{CONDA_ENVIRONMENT_PYTHON}"
+        )
 
     task_arguments: dict[ProjectTask, list[str]] = {
         "pytest": ["python", "-m", "pytest"],
@@ -541,11 +556,8 @@ def run_project_task(
         raise ValueError("The build task does not accept paths.")
 
     command = [
-        str(CONDA_EXECUTABLE),
-        "run",
-        "-n",
-        CONDA_ENVIRONMENT,
-        *task_arguments[task],
+        str(CONDA_ENVIRONMENT_PYTHON),
+        *task_arguments[task][1:],
         *validated_paths,
     ]
     result = _run_process(command)
