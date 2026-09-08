@@ -244,6 +244,10 @@ class PlotFigure(HostBase):
             doc="Monotonic counter used to assign interact panel ids for this figure.",
             kind="impl",
         ),
+        "impl_interaction_observer_ids": AttrDef(
+            doc="Observer ids owned by this figure for camera-interaction callbacks.",
+            kind="impl",
+        ),
         # -----------------
         # VTK overlay layer
         # -----------------
@@ -327,6 +331,7 @@ class PlotFigure(HostBase):
         "entity_interacts",
         "entity_glyphs",
         "impl_interact_count",
+        "impl_interaction_observer_ids",
         "entity_overlay",
         "entity_axes_actor",
         "entity_axes_widget",
@@ -380,6 +385,7 @@ class PlotFigure(HostBase):
 
         object.__setattr__(self, "entity_plotter", plotter)
         object.__setattr__(self, "impl_interact_count", 0)
+        object.__setattr__(self, "impl_interaction_observer_ids", [])
 
         if name is None:
             name = self._DEFAULT_NAME
@@ -433,8 +439,13 @@ class PlotFigure(HostBase):
                     pm._helper_show_marker_label_after_interaction()
                 self.pl.render()
 
-            self.pl.iren.add_observer("StartInteractionEvent", _on_interaction_start)
-            self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end)
+            observer_ids = [
+                self.pl.iren.add_observer(
+                    "StartInteractionEvent", _on_interaction_start
+                ),
+                self.pl.iren.add_observer("EndInteractionEvent", _on_interaction_end),
+            ]
+            object.__setattr__(self, "impl_interaction_observer_ids", observer_ids)
 
             pm = PickManager(self)
             object.__setattr__(self, "entity_pick_manager", pm)
@@ -579,6 +590,22 @@ class PlotFigure(HostBase):
         except (AttributeError, RuntimeError, ReferenceError):
             pass
 
+    def _helper_close_picking_services(self):
+        """Disable PyVista picking and remove figure-owned interaction observers."""
+        plotter = self.pl
+        try:
+            plotter.disable_picking()
+        except (AttributeError, RuntimeError, ReferenceError):
+            pass
+
+        observer_ids = list(getattr(self, "impl_interaction_observer_ids", ()))
+        for observer_id in observer_ids:
+            try:
+                plotter.iren.remove_observer(observer_id)
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+        object.__setattr__(self, "impl_interaction_observer_ids", [])
+
     def act_close(self, *, is_remove_glyphs: bool = True):
         """Close figure-owned services and the wrapped plotter backend.
 
@@ -593,6 +620,7 @@ class PlotFigure(HostBase):
         )
 
         self._helper_close_interacts()
+        self._helper_close_picking_services()
         self.act_remove_axes_widget()
 
         if is_remove_glyphs:

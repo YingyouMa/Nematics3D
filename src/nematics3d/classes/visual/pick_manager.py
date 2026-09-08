@@ -2,7 +2,7 @@ import weakref
 import time
 import vtk
 import numpy as np
-from qtpy import QtCore, QtWidgets
+from qtpy import QtCore
 from dataclasses import dataclass, field
 
 from nematics3d.datatypes import (
@@ -12,6 +12,7 @@ from nematics3d.datatypes import (
 )
 from ...core.opts import merge_opts_all
 from nematics3d.visual.qt.figure_options_dialog import FigureOptionsDialog
+from nematics3d.visual.qt.pick_settings_dialog import PickSettingsDialog
 
 
 @dataclass(slots=True)
@@ -93,15 +94,15 @@ class OptsPickManager:
 
             if key == "marker_size":
                 for pack in markers:
-                    pack["actor"].GetProperty().SetPointSize(value)
+                    pack.actor.GetProperty().SetPointSize(value)
 
             elif key == "marker_color":
                 for pack in owner._entity_markers:
-                    pack["actor"].GetProperty().SetColor(*value)
+                    pack.actor.GetProperty().SetColor(*value)
 
             elif key == "marker_font_size":
                 for pack in markers:
-                    pack["text_actor"].GetTextProperty().SetFontSize(value)
+                    pack.text_actor.GetTextProperty().SetFontSize(value)
 
             elif key == "slider_throttle_ms":
                 owner._helper_apply_panel_throttle(int(value))
@@ -158,26 +159,6 @@ class _Marker:
     world_xyz: np.ndarray | None = None
     marker_id: int | None = None
 
-    _LEGACY_KEYS = {
-        "overlay": "overlay",
-        "pts": "pts",
-        "poly": "poly",
-        "actor": "actor",
-        "text_actor": "text_actor",
-        "world_xyz": "world_xyz",
-        "id": "marker_id",
-    }
-
-    def __getitem__(self, key):
-        return getattr(self, self._LEGACY_KEYS[key])
-
-    def __setitem__(self, key, value):
-        setattr(self, self._LEGACY_KEYS[key], value)
-
-    def get(self, key, default=None):
-        attr = self._LEGACY_KEYS.get(key)
-        return default if attr is None else getattr(self, attr)
-
 
 class PickManager:
     """
@@ -210,6 +191,9 @@ class PickManager:
         "_entity_figure_opts_action": "Menu action showing this PlotFigure opts snapshot.",
         "_entity_settings_dialog": "Live non-modal interaction settings dialog, if open.",
         "_entity_figure_opts_dialog": "Live non-modal figure-options dialog, if open.",
+        "_impl_right_button_observer_id": (
+            "VTK observer tag for the manager-owned right-button callback."
+        ),
     }
 
     __slots__ = tuple(__descriptions__.keys()) + ("__weakref__",)
@@ -227,6 +211,7 @@ class PickManager:
         object.__setattr__(self, "_entity_figure_opts_action", None)
         object.__setattr__(self, "_entity_settings_dialog", None)
         object.__setattr__(self, "_entity_figure_opts_dialog", None)
+        object.__setattr__(self, "_impl_right_button_observer_id", None)
 
         if opts is None:
             opts = OptsPickManager()
@@ -237,7 +222,10 @@ class PickManager:
         fig = self.owner
         if fig is not None:
             iren = fig.pl.iren.interactor
-            iren.AddObserver("RightButtonPressEvent", self._vtk_on_right_button_press)
+            observer_id = iren.AddObserver(
+                "RightButtonPressEvent", self._vtk_on_right_button_press
+            )
+            object.__setattr__(self, "_impl_right_button_observer_id", observer_id)
             self._helper_init_settings_menu()
 
     @property
@@ -282,6 +270,38 @@ class PickManager:
             except (AttributeError, RuntimeError, ReferenceError):
                 pass
 
+    def _helper_remove_right_button_observer(self):
+        """Detach the VTK callback installed directly by this manager."""
+        observer_id = self._impl_right_button_observer_id
+        if observer_id is None:
+            return
+        fig = self.owner
+        if fig is not None:
+            try:
+                fig.pl.iren.interactor.RemoveObserver(observer_id)
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+        object.__setattr__(self, "_impl_right_button_observer_id", None)
+
+    def _helper_remove_settings_actions(self):
+        """Remove Qt menu actions created by this manager."""
+        settings_menu = self._helper_get_or_create_settings_menu()
+        for attr_name in (
+            "_entity_settings_action",
+            "_entity_figure_opts_action",
+        ):
+            action = getattr(self, attr_name, None)
+            if action is None:
+                continue
+            try:
+                if settings_menu is not None:
+                    settings_menu.removeAction(action)
+                action.deleteLater()
+            except (AttributeError, RuntimeError, ReferenceError):
+                pass
+            finally:
+                object.__setattr__(self, attr_name, None)
+
     def _helper_open_settings_dialog(self):
         dialog_existing = self._entity_settings_dialog
         if dialog_existing is not None:
@@ -296,135 +316,7 @@ class PickManager:
             if (fig is not None and hasattr(fig.pl, "app_window"))
             else None
         )
-        dialog = QtWidgets.QDialog(parent)
-        dialog.setWindowTitle("Interaction Settings")
-        layout = QtWidgets.QVBoxLayout(dialog)
-
-        group_panel = QtWidgets.QGroupBox("Panel", dialog)
-        form_panel = QtWidgets.QFormLayout(group_panel)
-        layout.addWidget(group_panel)
-
-        spin_throttle = QtWidgets.QSpinBox(dialog)
-        spin_throttle.setRange(1, 1000)
-        spin_throttle.setSingleStep(5)
-        spin_throttle.setValue(int(self.opts.slider_throttle_ms))
-        form_panel.addRow("Slider throttle (ms)", spin_throttle)
-
-        spin_double_click = QtWidgets.QDoubleSpinBox(dialog)
-        spin_double_click.setRange(0.01, 10.0)
-        spin_double_click.setSingleStep(0.05)
-        spin_double_click.setDecimals(3)
-        spin_double_click.setValue(float(self.opts.double_click_threshold))
-        form_panel.addRow("Double click threshold", spin_double_click)
-
-        group_marker = QtWidgets.QGroupBox("Marker", dialog)
-        form_marker = QtWidgets.QFormLayout(group_marker)
-        layout.addWidget(group_marker)
-
-        spin_marker_proximity = QtWidgets.QDoubleSpinBox(dialog)
-        spin_marker_proximity.setRange(0.0, 1000.0)
-        spin_marker_proximity.setSingleStep(0.05)
-        spin_marker_proximity.setDecimals(3)
-        spin_marker_proximity.setValue(float(self.opts.marker_proximity_threshold))
-        form_marker.addRow("Proximity threshold", spin_marker_proximity)
-
-        spin_marker_size = QtWidgets.QSpinBox(dialog)
-        spin_marker_size.setRange(1, 200)
-        spin_marker_size.setSingleStep(1)
-        spin_marker_size.setValue(int(self.opts.marker_size))
-        form_marker.addRow("Size", spin_marker_size)
-
-        spin_marker_font_size = QtWidgets.QSpinBox(dialog)
-        spin_marker_font_size.setRange(1, 200)
-        spin_marker_font_size.setSingleStep(1)
-        spin_marker_font_size.setValue(int(self.opts.marker_font_size))
-        form_marker.addRow("Font size", spin_marker_font_size)
-
-        marker_color_widget = QtWidgets.QWidget(dialog)
-        marker_color_layout = QtWidgets.QHBoxLayout(marker_color_widget)
-        marker_color_layout.setContentsMargins(0, 0, 0, 0)
-        marker_color_layout.setSpacing(6)
-        spin_marker_color_r = QtWidgets.QDoubleSpinBox(marker_color_widget)
-        spin_marker_color_g = QtWidgets.QDoubleSpinBox(marker_color_widget)
-        spin_marker_color_b = QtWidgets.QDoubleSpinBox(marker_color_widget)
-        for spin, value in zip(
-            (spin_marker_color_r, spin_marker_color_g, spin_marker_color_b),
-            self.opts.marker_color,
-        ):
-            spin.setRange(0.0, 1.0)
-            spin.setSingleStep(0.05)
-            spin.setDecimals(3)
-            spin.setMinimumWidth(80)
-            spin.setValue(float(value))
-            marker_color_layout.addWidget(spin)
-        form_marker.addRow("Color (r g b)", marker_color_widget)
-
-        group_silhouette = QtWidgets.QGroupBox("Silhouette", dialog)
-        form_silhouette = QtWidgets.QFormLayout(group_silhouette)
-        layout.addWidget(group_silhouette)
-
-        spin_sil_opacity = QtWidgets.QDoubleSpinBox(dialog)
-        spin_sil_opacity.setRange(0.0, 1.0)
-        spin_sil_opacity.setSingleStep(0.05)
-        spin_sil_opacity.setDecimals(3)
-        spin_sil_opacity.setValue(float(self.opts.sil_opacity))
-        form_silhouette.addRow("Opacity", spin_sil_opacity)
-
-        spin_sil_width = QtWidgets.QDoubleSpinBox(dialog)
-        spin_sil_width.setRange(0.0, 1000.0)
-        spin_sil_width.setSingleStep(0.5)
-        spin_sil_width.setDecimals(3)
-        spin_sil_width.setValue(float(self.opts.sil_width))
-        form_silhouette.addRow("Width", spin_sil_width)
-
-        sil_color_widget = QtWidgets.QWidget(dialog)
-        sil_color_layout = QtWidgets.QHBoxLayout(sil_color_widget)
-        sil_color_layout.setContentsMargins(0, 0, 0, 0)
-        sil_color_layout.setSpacing(6)
-        spin_sil_color_r = QtWidgets.QDoubleSpinBox(sil_color_widget)
-        spin_sil_color_g = QtWidgets.QDoubleSpinBox(sil_color_widget)
-        spin_sil_color_b = QtWidgets.QDoubleSpinBox(sil_color_widget)
-        for spin, value in zip(
-            (spin_sil_color_r, spin_sil_color_g, spin_sil_color_b),
-            self.opts.sil_color,
-        ):
-            spin.setRange(0.0, 1.0)
-            spin.setSingleStep(0.05)
-            spin.setDecimals(3)
-            spin.setMinimumWidth(80)
-            spin.setValue(float(value))
-            sil_color_layout.addWidget(spin)
-        form_silhouette.addRow("Color (r g b)", sil_color_widget)
-
-        def _apply_settings():
-            self.opts.slider_throttle_ms = int(spin_throttle.value())
-            self.opts.double_click_threshold = float(spin_double_click.value())
-            self.opts.marker_proximity_threshold = float(spin_marker_proximity.value())
-            self.opts.marker_size = int(spin_marker_size.value())
-            self.opts.marker_font_size = int(spin_marker_font_size.value())
-            self.opts.marker_color = (
-                float(spin_marker_color_r.value()),
-                float(spin_marker_color_g.value()),
-                float(spin_marker_color_b.value()),
-            )
-            self.opts.sil_opacity = float(spin_sil_opacity.value())
-            self.opts.sil_width = float(spin_sil_width.value())
-            self.opts.sil_color = (
-                float(spin_sil_color_r.value()),
-                float(spin_sil_color_g.value()),
-                float(spin_sil_color_b.value()),
-            )
-
-        buttons = QtWidgets.QDialogButtonBox(parent=dialog)
-        btn_ok = buttons.addButton(QtWidgets.QDialogButtonBox.Ok)
-        btn_apply = buttons.addButton(QtWidgets.QDialogButtonBox.Apply)
-        btn_cancel = buttons.addButton(QtWidgets.QDialogButtonBox.Cancel)
-        btn_ok.clicked.connect(lambda: (_apply_settings(), dialog.accept()))
-        btn_apply.clicked.connect(_apply_settings)
-        btn_cancel.clicked.connect(dialog.reject)
-        layout.addWidget(buttons)
-
-        dialog.setModal(False)
+        dialog = PickSettingsDialog(self, parent=parent)
         dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         dialog.destroyed.connect(
             lambda *_args: object.__setattr__(self, "_entity_settings_dialog", None)
@@ -617,24 +509,24 @@ class PickManager:
         xyz = np.asarray(xyz, dtype=float).reshape(
             3,
         )
-        pack["world_xyz"] = xyz
+        pack.world_xyz = xyz
 
         x, y, z = float(xyz[0]), float(xyz[1]), float(xyz[2])
 
-        pack["pts"].SetPoint(0, x, y, z)
-        pack["pts"].Modified()
-        pack["poly"].Modified()
-        pack["actor"].SetVisibility(True)
+        pack.pts.SetPoint(0, x, y, z)
+        pack.pts.Modified()
+        pack.poly.Modified()
+        pack.actor.SetVisibility(True)
 
         if marker_id is None:
             object.__setattr__(self, "_state_pick_count", self._state_pick_count + 1)
             k = self._state_pick_count
-            pack["id"] = k
+            pack.marker_id = k
         else:
-            pack["id"] = marker_id
-        k = pack["id"]
+            pack.marker_id = marker_id
+        k = pack.marker_id
 
-        text = pack["text_actor"]
+        text = pack.text_actor
         text.SetInput(str(k))
 
         self._helper_update_one_marker_label_position(pack)
@@ -650,9 +542,9 @@ class PickManager:
         if fig is None:
             return
 
-        overlay = pack["overlay"]
-        overlay.RemoveActor(pack["actor"])
-        overlay.RemoveActor2D(pack["text_actor"])
+        overlay = pack.overlay
+        overlay.RemoveActor(pack.actor)
+        overlay.RemoveActor2D(pack.text_actor)
         if pack in self._entity_markers:
             self._entity_markers.remove(pack)
 
@@ -681,17 +573,17 @@ class PickManager:
             if pack is None:
                 return
             self._entity_helper_markers[key] = pack
-        pack["world_xyz"] = xyz
-        pack["id"] = int(marker_id)
+        pack.world_xyz = xyz
+        pack.marker_id = int(marker_id)
         x, y, z = float(xyz[0]), float(xyz[1]), float(xyz[2])
-        pack["pts"].SetPoint(0, x, y, z)
-        pack["pts"].Modified()
-        pack["poly"].Modified()
-        pack["actor"].GetProperty().SetColor(*self.HELPER_MARKER_COLOR)
-        pack["actor"].SetVisibility(True)
-        text = pack["text_actor"]
+        pack.pts.SetPoint(0, x, y, z)
+        pack.pts.Modified()
+        pack.poly.Modified()
+        pack.actor.GetProperty().SetColor(*self.HELPER_MARKER_COLOR)
+        pack.actor.SetVisibility(True)
+        text = pack.text_actor
         text.GetTextProperty().SetColor(0.0, 0.0, 0.0)
-        text.SetInput(str(pack["id"]))
+        text.SetInput(str(pack.marker_id))
         self._helper_update_one_marker_label_position(pack)
         text.SetVisibility(True)
         fig.pl.render()
@@ -704,20 +596,20 @@ class PickManager:
         fig = self.owner
         if fig is None:
             return
-        overlay = pack["overlay"]
-        overlay.RemoveActor(pack["actor"])
-        overlay.RemoveActor2D(pack["text_actor"])
+        overlay = pack.overlay
+        overlay.RemoveActor(pack.actor)
+        overlay.RemoveActor2D(pack.text_actor)
         fig.pl.render()
 
     def act_clear_markers(self):
         """Remove all normal/helper markers and reset click-tracking state."""
         fig = self.owner
         for pack in list(self._entity_markers):
-            pack["overlay"].RemoveActor(pack["actor"])
-            pack["overlay"].RemoveActor2D(pack["text_actor"])
+            pack.overlay.RemoveActor(pack.actor)
+            pack.overlay.RemoveActor2D(pack.text_actor)
         for pack in list(self._entity_helper_markers.values()):
-            pack["overlay"].RemoveActor(pack["actor"])
-            pack["overlay"].RemoveActor2D(pack["text_actor"])
+            pack.overlay.RemoveActor(pack.actor)
+            pack.overlay.RemoveActor2D(pack.text_actor)
         self._entity_markers.clear()
         self._entity_helper_markers.clear()
         self._state_left_click.reset()
@@ -728,6 +620,8 @@ class PickManager:
     def act_close(self):
         """Release dialogs and marker resources owned by this manager."""
         self._helper_close_dialogs()
+        self._helper_remove_settings_actions()
+        self._helper_remove_right_button_observer()
         self.act_clear_markers()
 
     def _helper_find_nearest_marker_pack(self, p):
@@ -739,7 +633,7 @@ class PickManager:
         nearest_d2 = None
 
         for pack in self._entity_markers:
-            xyz0 = pack.get("world_xyz", None)
+            xyz0 = pack.world_xyz
             if xyz0 is None:
                 continue
             d = p - xyz0
@@ -754,20 +648,18 @@ class PickManager:
     # ---------------------------------------------------------------------
     def _helper_update_one_marker_label_position(self, pack):
 
-        xyz = pack.get("world_xyz", None)
+        xyz = pack.world_xyz
         if xyz is None:
             return
 
         x, y, z = float(xyz[0]), float(xyz[1]), float(xyz[2])
 
-        overlay = pack["overlay"]
+        overlay = pack.overlay
         overlay.SetWorldPoint(x, y, z, 1.0)
         overlay.WorldToDisplay()
         dx, dy, _ = overlay.GetDisplayPoint()
 
-        text = pack.get("text_actor", None)
-        if text is None:
-            return
+        text = pack.text_actor
 
         text.SetDisplayPosition(int(dx), int(dy))
 
@@ -779,8 +671,8 @@ class PickManager:
     def _helper_hide_marker_label_during_interaction(self):
 
         for pack in self._helper_iter_all_marker_packs():
-            text = pack.get("text_actor", None)
-            if text is not None and text.GetVisibility():
+            text = pack.text_actor
+            if text.GetVisibility():
                 text.SetVisibility(False)
 
     def _helper_show_marker_label_after_interaction(self):
@@ -788,9 +680,7 @@ class PickManager:
         self._helper_update_all_marker_labels_position()
 
         for pack in self._helper_iter_all_marker_packs():
-            text = pack.get("text_actor", None)
-            if text is not None:
-                text.SetVisibility(True)
+            pack.text_actor.SetVisibility(True)
 
     def _vtk_on_right_button_press(self, vtk_iren, _evt):
 

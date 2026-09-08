@@ -119,3 +119,67 @@ def test_clear_markers_releases_all_overlay_resources_and_click_state():
     assert manager._entity_helper_markers == {}
     assert manager._state_left_click.last_time is None
     assert manager._state_right_click.last_time is None
+
+
+def test_remove_right_button_observer_is_idempotent():
+    removed = []
+    interactor = SimpleNamespace(
+        RemoveObserver=lambda observer_id: removed.append(observer_id)
+    )
+    figure = SimpleNamespace(
+        pl=SimpleNamespace(iren=SimpleNamespace(interactor=interactor))
+    )
+    manager = _manager_without_qt_init()
+    object.__setattr__(manager, "_impl_owner_ref", lambda: figure)
+    object.__setattr__(manager, "_impl_right_button_observer_id", 17)
+
+    manager._helper_remove_right_button_observer()
+    manager._helper_remove_right_button_observer()
+
+    assert removed == [17]
+    assert manager._impl_right_button_observer_id is None
+
+
+def test_remove_settings_actions_removes_only_owned_actions_and_is_idempotent():
+    removed = []
+    deleted = []
+
+    class Action:
+        def __init__(self, name):
+            self.name = name
+
+        def deleteLater(self):
+            deleted.append(self.name)
+
+    class Menu:
+        def removeAction(self, action):
+            removed.append(action.name)
+
+    class MenuBar:
+        def __init__(self, settings_menu):
+            self._settings_menu = settings_menu
+
+        def actions(self):
+            return [
+                SimpleNamespace(
+                    text=lambda: "Settings",
+                    menu=lambda: self._settings_menu,
+                )
+            ]
+
+    manager = _manager_without_qt_init()
+    action_settings = Action("settings")
+    action_figure = Action("figure")
+    menu = Menu()
+    figure = SimpleNamespace(pl=SimpleNamespace(main_menu=MenuBar(menu)))
+    object.__setattr__(manager, "_impl_owner_ref", lambda: figure)
+    object.__setattr__(manager, "_entity_settings_action", action_settings)
+    object.__setattr__(manager, "_entity_figure_opts_action", action_figure)
+
+    manager._helper_remove_settings_actions()
+    manager._helper_remove_settings_actions()
+
+    assert removed == ["settings", "figure"]
+    assert deleted == ["settings", "figure"]
+    assert manager._entity_settings_action is None
+    assert manager._entity_figure_opts_action is None

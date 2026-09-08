@@ -71,3 +71,31 @@ def test_close_can_preserve_glyph_registry_when_requested():
     assert sphere in figure.glyphs
     assert sphere.fig is figure
     assert sphere.registry is figure.glyphs
+
+
+def test_close_picking_services_removes_owned_observers_and_is_idempotent():
+    removed = []
+
+    class Iren:
+        def remove_observer(self, observer_id):
+            removed.append(observer_id)
+
+    class Plotter:
+        def __init__(self):
+            self.iren = Iren()
+            self.disable_count = 0
+
+        def disable_picking(self):
+            self.disable_count += 1
+
+    figure = object.__new__(PlotFigure)
+    plotter = Plotter()
+    object.__setattr__(figure, "entity_plotter", plotter)
+    object.__setattr__(figure, "impl_interaction_observer_ids", [11, 12])
+
+    figure._helper_close_picking_services()
+    figure._helper_close_picking_services()
+
+    assert removed == [11, 12]
+    assert plotter.disable_count == 2
+    assert figure.impl_interaction_observer_ids == []
