@@ -6,14 +6,13 @@ import numpy as np
 from qtpy import QtCore, QtGui, QtWidgets
 from dataclasses import dataclass, field
 
-from nematics3d.logging_decorator import logging_and_warning_decorator
-from nematics3d.geometry import closest_point_on_polyline, find_nearest_point
 from nematics3d.datatypes import (
     as_number,
     ColorRGB,
     as_ColorRGB,
 )
 from ...core.opts import merge_opts_all
+from nematics3d.visual.qt.figure_options_dialog import FigureOptionsDialog
 from .qt.panel_base import make_labeled_slider_row, make_RGB_slider
 
 
@@ -51,8 +50,12 @@ class OptsPickManager:
     }
 
     _validators = {
-        "double_click_threshold": lambda v, d: as_number(v, name=d, replace=0.3),
-        "marker_proximity_threshold": lambda v, d: as_number(v, name=d, replace=0.5),
+        "double_click_threshold": lambda v, d: as_number(
+            v, name=d, value_range=(0, np.inf), replace=0.3
+        ),
+        "marker_proximity_threshold": lambda v, d: as_number(
+            v, name=d, value_range=(0, np.inf), replace=0.5
+        ),
         "marker_size": lambda v, d: as_number(
             v,
             name=d,
@@ -118,6 +121,64 @@ class OptsPickManager:
                             silhouette.prop.line_width = value
 
             owner.owner.pl.render()
+
+
+@dataclass(slots=True)
+class _ClickTracker:
+    """Recognize same-actor double clicks for one mouse button."""
+
+    last_time: float | None = None
+    last_actor: object | None = None
+
+    def consume(self, actor, now: float, threshold: float) -> bool:
+        is_double = (
+            self.last_time is not None
+            and actor is self.last_actor
+            and (now - self.last_time) <= threshold
+        )
+        if is_double:
+            self.reset()
+        else:
+            self.last_time = now
+            self.last_actor = actor
+        return is_double
+
+    def reset(self):
+        self.last_time = None
+        self.last_actor = None
+
+
+@dataclass(slots=True)
+class _Marker:
+    """VTK resources and state for one visible marker."""
+
+    overlay: object
+    pts: object
+    poly: object
+    actor: object
+    text_actor: object
+    world_xyz: np.ndarray | None = None
+    marker_id: int | None = None
+
+    _LEGACY_KEYS = {
+        "overlay": "overlay",
+        "pts": "pts",
+        "poly": "poly",
+        "actor": "actor",
+        "text_actor": "text_actor",
+        "world_xyz": "world_xyz",
+        "id": "marker_id",
+    }
+
+    def __getitem__(self, key):
+        return getattr(self, self._LEGACY_KEYS[key])
+
+    def __setitem__(self, key, value):
+        setattr(self, self._LEGACY_KEYS[key], value)
+
+    def get(self, key, default=None):
+        attr = self._LEGACY_KEYS.get(key)
+        return default if attr is None else getattr(self, attr)
 
 
 class _FigureOptionsDialog(QtWidgets.QDialog):
@@ -595,10 +656,8 @@ class PickManager:
         ),
         "_impl_registry": "A registry dict: actor -> visual object",
         "_state_pick_count": "Monotonic counter for marker numbering (never decreases).",
-        "_state_last_click_time": "Last click timestamp (monotonic time) for double-click detection.",
-        "_state_last_click_actor": "Last clicked actor for double-click detection.",
-        "_state_last_rclick_time": "Last RIGHT click timestamp for right-double-click detection.",
-        "_state_last_rclick_actor": "Last RIGHT clicked actor for right-double-click detection.",
+        "_state_left_click": "Double-click tracker for left-button picking.",
+        "_state_right_click": "Double-click tracker for right-button picking.",
         "_entity_markers": (
             "A list of marker packs; each pack holds VTK actors for one overlay point marker."
         ),
@@ -616,10 +675,8 @@ class PickManager:
         object.__setattr__(self, "_impl_owner_ref", weakref.ref(figure))
         object.__setattr__(self, "_impl_registry", {})
         object.__setattr__(self, "_state_pick_count", 0)
-        object.__setattr__(self, "_state_last_click_time", None)
-        object.__setattr__(self, "_state_last_click_actor", None)
-        object.__setattr__(self, "_state_last_rclick_time", None)
-        object.__setattr__(self, "_state_last_rclick_actor", None)
+        object.__setattr__(self, "_state_left_click", _ClickTracker())
+        object.__setattr__(self, "_state_right_click", _ClickTracker())
         object.__setattr__(self, "_entity_markers", [])
         object.__setattr__(self, "_entity_helper_markers", {})
         object.__setattr__(self, "_entity_settings_action", None)
@@ -847,7 +904,7 @@ class PickManager:
             if (fig is not None and hasattr(fig.pl, "app_window"))
             else None
         )
-        dialog = _FigureOptionsDialog(fig, parent=parent)
+        dialog = FigureOptionsDialog(fig, parent=parent)
         dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         dialog.destroyed.connect(
             lambda *_args: object.__setattr__(self, "_entity_figure_opts_dialog", None)
@@ -885,6 +942,22 @@ class PickManager:
         if actor in self._impl_registry:
             del self._impl_registry[actor]
 
+    def _helper_toggle_highlight(self, owner):
+        """Apply the explicit right-click highlight/dehighlight contract."""
+        silhouette = getattr(owner, "entity_silhouette", None)
+        if silhouette is not None and silhouette.visibility:
+            owner.act_dehighlight()
+            return
+        if not hasattr(owner, "act_highlight"):
+            return
+        if hasattr(owner, "state_is_silhouette"):
+            object.__setattr__(owner, "state_is_silhouette", True)
+        owner.act_highlight(
+            color=self.opts.sil_color,
+            opacity=self.opts.sil_opacity,
+            width=self.opts.sil_width,
+        )
+
     # ---------------------------------------------------------------------
     # Picking callback
     # ---------------------------------------------------------------------
@@ -896,20 +969,9 @@ class PickManager:
 
         owner = self._impl_registry[actor]
 
-        now = time.monotonic()
-        last_t = self._state_last_click_time
-        last_a = self._state_last_click_actor
-
-        # Detect double-click: same actor within a short time window.
-        is_double = (
-            last_t is not None
-            and (actor is last_a)
-            and ((now - last_t) <= self.opts.double_click_threshold)
+        is_double = self._state_left_click.consume(
+            actor, time.monotonic(), self.opts.double_click_threshold
         )
-
-        # Always update last-click state after printing.
-        object.__setattr__(self, "_state_last_click_time", now)
-        object.__setattr__(self, "_state_last_click_actor", actor)
 
         # Single click: do nothing.
         if not is_double:
@@ -928,15 +990,13 @@ class PickManager:
             and nearest_d2 <= (thr * thr)
         ):
             self._helper_remove_marker_pack(nearest_pack)
-            pos = nearest_pack["world_xyz"]
+            pos = nearest_pack.world_xyz
             self.owner.console.println(
-                f"remove point #{nearest_pack['id']}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}) "
+                f"remove point #{nearest_pack.marker_id}: ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}) "
                 f"on {str(owner)}"
             )
             self.owner.console.println(msg)
 
-            object.__setattr__(self, "_state_last_click_time", None)
-            object.__setattr__(self, "_state_last_click_actor", None)
             return
 
         # No nearby marker -> add a new marker at resolved position.
@@ -946,9 +1006,6 @@ class PickManager:
             f"on {owner.name!r}"
         )
         self.owner.console.println(msg)
-
-        object.__setattr__(self, "_state_last_click_time", None)
-        object.__setattr__(self, "_state_last_click_actor", None)
 
     # ---------------------------------------------------------------------
     # Marker creation / removal
@@ -1001,16 +1058,7 @@ class PickManager:
         text.SetVisibility(False)
         overlay.AddActor2D(text)
 
-        pack = {
-            "overlay": overlay,
-            "pts": pts,
-            "poly": poly,
-            "actor": actor,
-            "text_actor": text,
-            "world_xyz": None,
-            "id": None,
-        }
-        return pack
+        return _Marker(overlay, pts, poly, actor, text)
 
     def _helper_add_marker(self, xyz, marker_id=None):
 
@@ -1117,6 +1165,27 @@ class PickManager:
         overlay.RemoveActor2D(pack["text_actor"])
         fig.pl.render()
 
+    def act_clear_markers(self):
+        """Remove all normal/helper markers and reset click-tracking state."""
+        fig = self.owner
+        for pack in list(self._entity_markers):
+            pack["overlay"].RemoveActor(pack["actor"])
+            pack["overlay"].RemoveActor2D(pack["text_actor"])
+        for pack in list(self._entity_helper_markers.values()):
+            pack["overlay"].RemoveActor(pack["actor"])
+            pack["overlay"].RemoveActor2D(pack["text_actor"])
+        self._entity_markers.clear()
+        self._entity_helper_markers.clear()
+        self._state_left_click.reset()
+        self._state_right_click.reset()
+        if fig is not None:
+            fig.pl.render()
+
+    def act_close(self):
+        """Release dialogs and marker resources owned by this manager."""
+        self._helper_close_dialogs()
+        self.act_clear_markers()
+
     def _helper_find_nearest_marker_pack(self, p):
 
         if not self._entity_markers:
@@ -1202,38 +1271,14 @@ class PickManager:
         owner = self._impl_registry[actor]
 
         # 2) right-double-click detect (time + same actor)
-        now = time.monotonic()
-        last_t = self._state_last_rclick_time
-        last_a = self._state_last_rclick_actor
-
-        is_double = (
-            last_t is not None
-            and (actor is last_a)
-            and ((now - last_t) <= self.opts.double_click_threshold)
+        is_double = self._state_right_click.consume(
+            actor, time.monotonic(), self.opts.double_click_threshold
         )
-
-        object.__setattr__(self, "_state_last_rclick_time", now)
-        object.__setattr__(self, "_state_last_rclick_actor", actor)
 
         # Once clicked, switch the highlight status.  Silhouettes are created
         # lazily, so the first right-click must call act_highlight() even when
         # entity_silhouette does not exist yet.
-        silhouette = getattr(owner, "entity_silhouette", None)
-        if silhouette is not None and silhouette.visibility:
-            owner.act_dehighlight()
-        elif hasattr(owner, "act_highlight"):
-            # A right-click is an explicit user request to highlight this
-            # visual.  Interaction controllers may temporarily suppress
-            # silhouettes while dragging by setting state_is_silhouette=False;
-            # if an end/release event is missed, that temporary state must not
-            # silently disable all future right-click highlighting.
-            if hasattr(owner, "state_is_silhouette"):
-                object.__setattr__(owner, "state_is_silhouette", True)
-            owner.act_highlight(
-                color=self.opts.sil_color,
-                opacity=self.opts.sil_opacity,
-                width=self.opts.sil_width,
-            )
+        self._helper_toggle_highlight(owner)
 
         # Single click: print only.
         if not is_double:
@@ -1244,7 +1289,3 @@ class PickManager:
 
         if getattr(owner, "state_is_interactable", False):
             owner.act_interact()
-
-        # reset to avoid triple-trigger
-        object.__setattr__(self, "_state_last_rclick_time", None)
-        object.__setattr__(self, "_state_last_rclick_actor", None)

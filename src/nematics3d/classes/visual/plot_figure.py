@@ -563,8 +563,12 @@ class PlotFigure(HostBase):
             finally:
                 interacts.act_unregister(panel, is_missing_ok=True)
         pm = getattr(self, "entity_pick_manager", None)
-        if pm is not None and hasattr(pm, "_helper_close_dialogs"):
-            pm._helper_close_dialogs()
+        if pm is not None:
+            close = getattr(pm, "act_close", None)
+            if callable(close):
+                close()
+            elif hasattr(pm, "_helper_close_dialogs"):
+                pm._helper_close_dialogs()
 
     def _helper_close_scalar_bars(self):
         scalar_bars = self.scalar_bars
