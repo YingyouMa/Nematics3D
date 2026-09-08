@@ -1,5 +1,20 @@
 # Beta Release Reviewed Components
 
+### `PickManager` / `OptsPickManager`
+
+- Source: `src/nematics3d/classes/visual/pick_manager.py`.
+- Qt settings UI: `src/nematics3d/visual/qt/pick_settings_dialog.py`; whole-figure options remain in `src/nematics3d/visual/qt/figure_options_dialog.py`.
+- Scope reviewed: actor-to-owner registration, left/right double-click tracking, marker creation/removal and helper markers, right-click highlight/dehighlight dispatch, runtime opts propagation, settings/figure-options dialogs, and close lifecycle.
+- Structure cleanup: click timing is centralized in `_ClickTracker`; marker state is represented by the `_Marker` dataclass with attribute access rather than legacy dict-style compatibility; the interaction-settings widget implementation is separated from the picking controller.
+- Lifecycle: `act_close()` closes owned dialogs, removes only the Qt menu actions created by PickManager, removes the manager-owned `RightButtonPressEvent` VTK observer by its saved tag, clears normal/helper marker actors, and resets click tracking. These teardown paths are idempotent.
+- PlotFigure integration reviewed with this component: PlotFigure now saves/removes its `StartInteractionEvent` and `EndInteractionEvent` observer ids and explicitly calls PyVista `disable_picking()` before closing the backend. PlotFigure adopts wrapped plotters, so backend-owned console/orientation-menu/overlay resources intentionally die with the plotter rather than being detached for reuse.
+- Compatibility/correctness note: explicit right-click highlight restores temporary `state_is_silhouette=False` suppression before calling `act_highlight`, preserving the existing silhouette-recovery behavior.
+- Tests: `tests/visual/test_pick_manager_opts.py`, `tests/visual/test_pick_manager_contract.py`, `tests/visual/test_plot_figure_lifecycle.py`, plus related PlotGlyph/PlotFigure/as_plotfigure/camera-sync/axes-widget regression tests.
+- Validation: final visual focused regression run passed 60 tests; earlier PickManager-focused run passed 42 tests. Black and Ruff passed on the touched PickManager/PlotFigure lifecycle files.
+- Reviewed commit: `af7aa29ca372f35f738fbd99f9890a3ef29722a6` (`Finalize PickManager interaction lifecycle`).
+- Review date: 2026-09-07.
+- Status: formally reviewed for the public-beta preparation baseline. Any later source change to the reviewed PickManager or its PlotFigure interaction-lifecycle integration makes this entry stale until re-reviewed.
+
 This file records functions, classes, modules, and other Python components that
 have been fully reviewed and verified during the current public-beta cleanup.
 It is an evidence log, not a list of planned work.
