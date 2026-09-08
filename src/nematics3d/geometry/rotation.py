@@ -12,7 +12,10 @@ from ..datatypes import as_points, as_vector
 __all__ = [
     "RotationAxisResult",
     "find_rotation_axis",
+    "frame_from_spherical_roll",
+    "roll_angle_from_frame",
     "rotation_matrix_from_vectors",
+    "rotate_vector_about_axis",
 ]
 
 
@@ -187,3 +190,51 @@ def rotation_matrix_from_vectors(source_vector, target_vector) -> np.ndarray:
         ]
     )
     return np.eye(3) + sine * skew + (1.0 - cosine) * (skew @ skew)
+
+
+def rotate_vector_about_axis(vector, axis, angle_rad: float) -> np.ndarray:
+    """Rotate one 3D vector about a 3D axis by ``angle_rad`` radians."""
+    vector = as_vector(vector, d=3, name="vector")
+    axis = as_vector(axis, d=3, name="axis", is_normalized=True)
+    angle_rad = float(angle_rad)
+    return (
+        vector * np.cos(angle_rad)
+        + np.cross(axis, vector) * np.sin(angle_rad)
+        + axis * (axis @ vector) * (1.0 - np.cos(angle_rad))
+    )
+
+
+def _reference_axis2(axis1: np.ndarray) -> np.ndarray:
+    rotation = rotation_matrix_from_vectors((1.0, 0.0, 0.0), axis1)
+    axis2 = rotation @ np.array([0.0, 1.0, 0.0])
+    return axis2 / np.linalg.norm(axis2)
+
+
+def frame_from_spherical_roll(azimuth_rad: float, polar_rad: float, roll_rad: float):
+    """Build a right-handed orthonormal frame from axis1 spherical angles and roll."""
+    azimuth_rad = float(azimuth_rad)
+    polar_rad = float(polar_rad)
+    axis1 = np.array(
+        [
+            np.sin(polar_rad) * np.cos(azimuth_rad),
+            np.sin(polar_rad) * np.sin(azimuth_rad),
+            np.cos(polar_rad),
+        ],
+        dtype=float,
+    )
+    axis2_ref = _reference_axis2(axis1)
+    axis2 = rotate_vector_about_axis(axis2_ref, axis1, float(roll_rad))
+    axis2 /= np.linalg.norm(axis2)
+    axis3 = np.cross(axis1, axis2)
+    axis3 /= np.linalg.norm(axis3)
+    return axis1, axis2, axis3
+
+
+def roll_angle_from_frame(axis1, axis2) -> float:
+    """Return axis2 roll about axis1 relative to the repository reference frame."""
+    axis1 = as_vector(axis1, d=3, name="axis1", is_normalized=True)
+    axis2 = as_vector(axis2, d=3, name="axis2", is_normalized=True)
+    axis2_ref = _reference_axis2(axis1)
+    sine = float(axis1 @ np.cross(axis2_ref, axis2))
+    cosine = float(axis2_ref @ axis2)
+    return float(np.arctan2(sine, cosine) % (2.0 * np.pi))

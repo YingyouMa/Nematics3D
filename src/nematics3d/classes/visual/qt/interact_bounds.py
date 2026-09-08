@@ -3,8 +3,8 @@ from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
 from nematics3d.geometry import (
-    rotation_matrix_from_vectors,
-    vector_from_spherical_angles,
+    frame_from_spherical_roll,
+    roll_angle_from_frame,
 )
 from ..plot_sphere import PlotSphere, OptsSphere
 from ..plot_tube import PlotTube, OptsTube
@@ -20,8 +20,6 @@ from .panel_base import (
 class InteractBounds(PanelBase):
 
     def __init__(self, host, figure):
-        self._is_continuous_interacting = False
-        self._impl_silhouette_state_backup = {}
         self._helper_origin_visual = None
         self._helper_axis1_visual = None
         self._helper_axis2_visual = None
@@ -46,19 +44,7 @@ class InteractBounds(PanelBase):
                 base_radius = None
 
         if base_radius is None or base_radius <= 0:
-            lengths = [
-                float(self.host.opts.length1),
-                float(
-                    self.host.opts.length2
-                    if self.host.opts.length2 is not None
-                    else self.host.opts.length1
-                ),
-                float(
-                    self.host.opts.length3
-                    if self.host.opts.length3 is not None
-                    else self.host.opts.length1
-                ),
-            ]
+            lengths = self.host.lengths
             base_radius = max(lengths) / 100.0
 
         self._helper_axis1_radius = float(base_radius) * 2.6
@@ -69,12 +55,7 @@ class InteractBounds(PanelBase):
         origin = np.asarray(self.host.opts.origin, dtype=float)
         axis1 = np.asarray(self.host.opts.axis1, dtype=float)
         axis2 = np.asarray(self.host.calc_axis2, dtype=float)
-        length1 = float(self.host.opts.length1)
-        length2 = float(
-            self.host.opts.length2
-            if self.host.opts.length2 is not None
-            else self.host.opts.length1
-        )
+        length1, length2, _length3 = self.host.lengths
         axis1_coords = np.vstack([origin, origin + axis1 * length1])
         axis2_coords = np.vstack([origin, origin + axis2 * length2])
         return origin.reshape(1, 3), axis1_coords, axis2_coords
@@ -180,13 +161,7 @@ class InteractBounds(PanelBase):
     def build_ui(self):
         axis1 = np.asarray(self.host.opts.axis1, dtype=float)
         axis2 = np.asarray(self.host.calc_axis2, dtype=float)
-        length1 = float(self.host.opts.length1)
-        length2 = float(
-            self.host.opts.length2 if self.host.opts.length2 is not None else length1
-        )
-        length3 = float(
-            self.host.opts.length3 if self.host.opts.length3 is not None else length1
-        )
+        length1, length2, length3 = self.host.lengths
 
         self.state = {
             "origin": np.asarray(self.host.opts.origin, dtype=float).copy(),
@@ -220,8 +195,6 @@ class InteractBounds(PanelBase):
             step_fmt="{:.2f}",
             center_fmt="{:.2f}",
             on_move=self._commit_origin,
-            on_press=lambda *_args: self._helper_begin_continuous_interaction(),
-            on_release=lambda *_args: self._helper_end_continuous_interaction(),
         )
         self.layout.addWidget(self.point_console.group)
         self.sliders["origin_move_step"] = self.point_console.slider_step
@@ -319,59 +292,6 @@ class InteractBounds(PanelBase):
         self.on_changed(0, is_commit=False)
         self._update_helper_visuals(is_visible=self.chk_is_show_helpers.isChecked())
 
-    def _iter_silhouette_targets(self):
-        targets = []
-
-        for entry in self.host.entity_visuals:
-            figure = entry.figure
-            tube = entry.tube
-            if figure is self.fig and tube is not None:
-                targets.append(tube)
-
-        for glyph in self.host.glyph_subscribers:
-            if getattr(glyph, "fig", None) is self.fig:
-                targets.append(glyph)
-
-        seen = set()
-        for visual in targets:
-            ident = id(visual)
-            if ident in seen:
-                continue
-            seen.add(ident)
-            yield visual
-
-    def _helper_begin_continuous_interaction(self, *_args):
-        if self._is_continuous_interacting:
-            return
-        self._is_continuous_interacting = True
-        backups = {}
-        for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "state_is_silhouette"):
-                continue
-            backups[id(visual)] = bool(getattr(visual, "state_is_silhouette", True))
-            object.__setattr__(visual, "state_is_silhouette", False)
-            if hasattr(visual, "_helper_clear_silhouette"):
-                visual._helper_clear_silhouette()
-        self._impl_silhouette_state_backup = backups
-
-    def _helper_end_continuous_interaction(self, *_args):
-        if not self._is_continuous_interacting:
-            return
-        self._is_continuous_interacting = False
-        backups = getattr(self, "_impl_silhouette_state_backup", {})
-        for visual in self._iter_silhouette_targets():
-            if not hasattr(visual, "state_is_silhouette"):
-                continue
-            is_enabled = backups.get(id(visual), True)
-            object.__setattr__(visual, "state_is_silhouette", bool(is_enabled))
-            if (
-                is_enabled
-                and getattr(visual, "entity_actor", None) is not None
-                and hasattr(visual, "_helper_add_silhouette")
-            ):
-                visual._helper_add_silhouette()
-        self._impl_silhouette_state_backup = {}
-
     def _commit_origin(self, center):
         self._is_gui_updating = True
         try:
@@ -379,54 +299,18 @@ class InteractBounds(PanelBase):
         finally:
             self._is_gui_updating = False
 
-    def _helper_calc_axis2_reference(self, axis1):
-        rotation = rotation_matrix_from_vectors((1, 0, 0), axis1)
-        axis2_reference = rotation @ np.array([0.0, 1.0, 0.0])
-        axis2_reference /= np.linalg.norm(axis2_reference)
-        return axis2_reference
-
-    def _helper_rotate_about_axis(self, vec, axis, angle_rad):
-        vec = np.asarray(vec, dtype=float)
-        axis = np.asarray(axis, dtype=float)
-        axis = axis / np.linalg.norm(axis)
-        cos_a = np.cos(angle_rad)
-        sin_a = np.sin(angle_rad)
-        return (
-            vec * cos_a
-            + np.cross(axis, vec) * sin_a
-            + axis * (axis @ vec) * (1.0 - cos_a)
-        )
-
     def _helper_get_axis2_roll(self, axis1, axis2):
-        axis1 = np.asarray(axis1, dtype=float)
-        axis2 = np.asarray(axis2, dtype=float)
-        axis2_reference = self._helper_calc_axis2_reference(axis1)
-
-        cross = np.cross(axis2_reference, axis2)
-        sin_angle = float(axis1 @ cross)
-        cos_angle = float(axis2_reference @ axis2)
-        angle = np.rad2deg(np.arctan2(sin_angle, cos_angle))
-        return angle % 360.0
+        return float(np.degrees(roll_angle_from_frame(axis1, axis2)))
 
     def _helper_build_orientation(self):
         axis1_azimuth = np.deg2rad(self.state["axis1_azimuth"])
         axis1_polar = np.deg2rad(self.state["axis1_polar_angle"])
-        axis1_now = np.asarray(
-            vector_from_spherical_angles(axis1_azimuth, axis1_polar),
-            dtype=float,
-        )
-
-        axis2_reference = self._helper_calc_axis2_reference(axis1_now)
         axis2_roll = np.deg2rad(self.state["axis2_roll"])
-        axis2_now = self._helper_rotate_about_axis(
-            axis2_reference,
-            axis1_now,
+        return frame_from_spherical_roll(
+            axis1_azimuth,
+            axis1_polar,
             axis2_roll,
         )
-        axis2_now /= np.linalg.norm(axis2_now)
-        axis3_now = np.cross(axis1_now, axis2_now)
-        axis3_now /= np.linalg.norm(axis3_now)
-        return axis1_now, axis2_now, axis3_now
 
     def commit(self):
         axis1_now, axis2_now, _axis3_now = self._helper_build_orientation()
@@ -498,11 +382,13 @@ class InteractBounds(PanelBase):
             self._update_helper_visuals(is_visible=True)
 
     def on_close(self):
-        self._helper_end_continuous_interaction()
         super().on_close()
-        if self._helper_origin_visual is not None:
-            self._helper_origin_visual.act_remove()
-        if self._helper_axis1_visual is not None:
-            self._helper_axis1_visual.act_remove()
-        if self._helper_axis2_visual is not None:
-            self._helper_axis2_visual.act_remove()
+        for attr_name in (
+            "_helper_origin_visual",
+            "_helper_axis1_visual",
+            "_helper_axis2_visual",
+        ):
+            visual = getattr(self, attr_name, None)
+            if visual is not None:
+                visual.act_remove()
+                setattr(self, attr_name, None)

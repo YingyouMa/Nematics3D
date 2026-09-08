@@ -19,7 +19,10 @@ from .polydata import (
 from .rotation import (
     RotationAxisResult,
     find_rotation_axis,
+    frame_from_spherical_roll,
+    roll_angle_from_frame,
     rotation_matrix_from_vectors,
+    rotate_vector_about_axis,
 )
 from .smoothing import *
 from .triangulation import *

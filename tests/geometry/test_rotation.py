@@ -5,7 +5,10 @@ from nematics3d.core.result_base import ResultBase
 from nematics3d.geometry import (
     RotationAxisResult,
     find_rotation_axis,
+    frame_from_spherical_roll,
+    roll_angle_from_frame,
     rotation_matrix_from_vectors,
+    rotate_vector_about_axis,
 )
 
 
@@ -120,3 +123,24 @@ def test_rotation_matrix_rejects_wrong_shape():
 def test_rotation_matrix_rejects_nonfinite_vectors():
     with pytest.raises(ValueError):
         rotation_matrix_from_vectors([1.0, 0.0, 0.0], [0.0, np.nan, 1.0])
+
+
+def test_rotate_vector_about_axis_quarter_turn():
+    result = rotate_vector_about_axis([1.0, 0.0, 0.0], [0.0, 0.0, 1.0], np.pi / 2)
+    assert np.allclose(result, [0.0, 1.0, 0.0])
+
+
+def test_spherical_roll_frame_round_trip():
+    azimuth = np.deg2rad(35.0)
+    polar = np.deg2rad(70.0)
+    roll = np.deg2rad(123.0)
+
+    axis1, axis2, axis3 = frame_from_spherical_roll(azimuth, polar, roll)
+
+    assert np.allclose(
+        np.column_stack([axis1, axis2, axis3]).T
+        @ np.column_stack([axis1, axis2, axis3]),
+        np.eye(3),
+    )
+    assert np.linalg.det(np.column_stack([axis1, axis2, axis3])) == pytest.approx(1.0)
+    assert roll_angle_from_frame(axis1, axis2) == pytest.approx(roll)
