@@ -123,9 +123,10 @@ class PlotSphere(PlotGlyph):
     Render one sphere at each input point.
 
     `PlotSphere` is the sphere-based concrete glyph class. It takes point
-    coordinates as sphere centers and builds a sphere mesh for each point.
-    This makes it useful whenever your geometry is naturally point-like but
-    should still be shown with finite size rather than as abstract markers.
+    coordinates as sphere centers and renders repeated spheres from one shared
+    source geometry using the instanced glyph backend. This makes it useful
+    whenever your geometry is naturally point-like but should still be shown
+    with finite size rather than as abstract markers.
 
     Visual appearance is controlled through `opts`, explicit keyword
     arguments, or later updates with `act_commit(...)`. Most pointwise
@@ -183,9 +184,10 @@ class PlotSphere(PlotGlyph):
         Controls how bounds clipping is applied.
         - `"center"`: decide whether to keep a sphere from its center point.
           This is the default setting.
-        - `"mesh"`: build the sphere geometry first, then clip the resulting
-          mesh against the bounds. Use this when you want the clipped sphere
-          surface itself, for example to show a hemisphere or a 3/4 sphere.
+        - `"mesh"`: reserved for explicit materialized-geometry clipping and
+          currently unsupported by the instanced sphere backend. The legacy
+          materialization path is retained internally so this compatibility
+          mode can be restored later without changing the public model.
     is_clip_inside
         Controls whether clipping keeps the region inside the active bounds
         (`True`) or outside it (`False`). This is a glyph/host setting, not
@@ -340,42 +342,13 @@ class PlotSphere(PlotGlyph):
         self.act_set_interact_func(lambda: InteractSphere.show_once(self, self.fig))
 
     # ==================== OVERRIDE ====================
-    # PlotSphere overrides PlotGlyph._helper_bound_coords because
-    # sphere glyphs can center-clip by filtering raw points directly.
+    # PlotSphere overrides PlotGlyph._helper_bound_coords to persist the common
+    # center-clipping keep indices needed by pointwise visual arrays.
     # ==================================================
     def _helper_bound_coords(self):
-        bounds = self._helper_get_bounds_effective()
-        if bounds is None:
-            keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "calc_keep_index", keep_index)
-            return self.raw_coords.copy()
-
-        axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
-        length1 = float(bounds.opts.length1)
-        length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
-        length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
-        origin = np.asarray(bounds.opts.origin, dtype=float)
-
-        if bounds.opts.alignment == "min_corner":
-            origin_min_corner = origin
-        else:
-            origin_min_corner = origin - 0.5 * (
-                length1 * axis1 + length2 * axis2 + length3 * axis3
-            )
-
-        basis = np.column_stack([axis1, axis2, axis3])
-        coords_local = (self.raw_coords - origin_min_corner) @ basis
-        tol = 1e-10
-        upper = np.array([length1, length2, length3], dtype=float)
-        mask_inside = np.all(
-            (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
-        )
-        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
-        keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
+        coords, keep_index = self._helper_filter_centers_by_bounds()
         object.__setattr__(self, "calc_keep_index", keep_index)
-        return self.raw_coords[keep_index]
+        return coords
 
     # ==================== OVERRIDE ====================
     # PlotSphere overrides PlotGlyph._helper_set_poly so center-based clipping
@@ -406,11 +379,11 @@ class PlotSphere(PlotGlyph):
         poly.point_data["rgba"] = rgba_values
 
     # ==================== OVERRIDE ====================
-    # PlotSphere overrides PlotGlyph._helper_build_mesh to generate sphere
-    # geometry for each input point using the resolved radius values.
+    # PlotSphere materializes explicit sphere geometry only for compatibility
+    # paths that need a real surface mesh; normal rendering uses instancing.
     # ==================================================
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
 
         poly = self.calc_poly
         if poly.n_points == 0 or "radius" not in poly.point_data:

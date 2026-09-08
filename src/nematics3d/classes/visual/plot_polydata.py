@@ -221,7 +221,7 @@ class PlotPolyData(PlotGlyph):
     def _helper_bound_coords(self):
         return self.raw_coords.copy()
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
         mesh = self.raw_poly.copy(deep=True)
         mesh.points = np.asarray(self.calc_coords, dtype=float)
         mesh.point_data["opacity"] = np.asarray(self.calc_opacity, dtype=np.float32)

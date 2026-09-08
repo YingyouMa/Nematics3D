@@ -3,6 +3,7 @@ import pytest
 
 from nematics3d.classes.bounds import Bounds, OptsBounds
 from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.classes.visual.plot_rod import PlotRod
 from nematics3d.classes.visual.plot_sphere import PlotSphere
 
 
@@ -38,9 +39,35 @@ def test_opts_assignment_updates_resolved_radius_and_live_instance_data(figure):
     assert sphere.opts.radius == pytest.approx(0.4)
     mapper_after = sphere.entity_actor.mapper
     poly_after = mapper_after.GetInput()
+    assert mapper_after is mapper_before
     assert poly_after.GetNumberOfPoints() == 3
     assert poly_after is not poly_before
     np.testing.assert_allclose(poly_after.point_data["radius"], 0.4)
+
+
+def test_instanced_sphere_reuses_mapper_until_actor_is_recreated(figure):
+    sphere = PlotSphere(_coords(), figure=figure, sides=8)
+    mapper = sphere.entity_actor.mapper
+
+    sphere.act_commit(
+        radius=np.array([0.1, 0.2, 0.3]),
+        opacity=np.array([0.4, 0.6, 0.8]),
+        color=(0.2, 0.4, 0.8),
+    )
+
+    assert sphere.entity_actor.mapper is mapper
+    np.testing.assert_allclose(mapper.GetInput().point_data["radius"], [0.1, 0.2, 0.3])
+
+
+def test_instanced_sphere_sides_update_reuses_mapper_and_replaces_source(figure):
+    sphere = PlotSphere(_coords(), figure=figure, sides=8)
+    mapper = sphere.entity_actor.mapper
+    source_before = mapper.GetSource(0)
+
+    sphere.opts.sides = 14
+
+    assert sphere.entity_actor.mapper is mapper
+    assert mapper.GetSource(0) is not source_before
 
 
 def test_batch_commit_updates_multiple_visual_inputs(figure):
@@ -255,22 +282,154 @@ def test_lazy_silhouette_is_not_built_until_first_highlight(figure):
     assert sphere.entity_silhouette.visibility
 
 
-def test_existing_silhouette_is_rebuilt_on_remesh_and_keeps_visibility(figure):
+def test_existing_instanced_silhouette_is_updated_in_place_and_keeps_visibility(figure):
     sphere = PlotSphere(_coords(), figure=figure, radius=0.2, sides=8)
     sphere.act_highlight()
     silhouette_before = sphere.entity_silhouette
+    mapper_before = silhouette_before.mapper
+    poly_before = mapper_before.GetInput()
 
     sphere.opts.radius = 0.4
 
-    assert sphere.entity_silhouette is not None
-    assert sphere.entity_silhouette is not silhouette_before
+    assert sphere.entity_silhouette is silhouette_before
+    assert sphere.entity_silhouette.mapper is mapper_before
+    assert mapper_before.GetInput() is not poly_before
     assert sphere.entity_silhouette.visibility
 
     sphere.act_dehighlight()
     silhouette_hidden = sphere.entity_silhouette
     sphere.opts.radius = 0.3
-    assert sphere.entity_silhouette is not silhouette_hidden
+    assert sphere.entity_silhouette is silhouette_hidden
+    assert sphere.entity_silhouette.mapper is mapper_before
     assert not sphere.entity_silhouette.visibility
+
+
+def test_instanced_rod_uses_one_center_per_instance_and_component_scaling(figure):
+    orient = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, -3.0]], dtype=float)
+    rod = PlotRod(
+        _coords(),
+        orient,
+        figure=figure,
+        length=np.array([1.0, 2.0, 3.0]),
+        radius=np.array([0.1, 0.2, 0.3]),
+        sides=8,
+    )
+
+    mapper = rod.entity_actor.mapper
+    poly = mapper.GetInput()
+
+    assert poly.GetNumberOfPoints() == 3
+    np.testing.assert_allclose(poly.points, _coords())
+    np.testing.assert_allclose(
+        poly.point_data["orient"],
+        [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]],
+    )
+    np.testing.assert_allclose(
+        poly.point_data["scale"],
+        [[1.0, 0.1, 0.1], [2.0, 0.2, 0.2], [3.0, 0.3, 0.3]],
+    )
+    assert mapper.GetOrient()
+    assert mapper.GetScaleMode() == mapper.SCALE_BY_COMPONENTS
+
+
+def test_instanced_rod_reuses_mapper_for_geometry_and_color_updates(figure):
+    orient = np.eye(3, dtype=float)
+    rod = PlotRod(_coords(), orient, figure=figure, sides=8)
+    mapper = rod.entity_actor.mapper
+
+    rod.act_commit(
+        length=np.array([2.0, 3.0, 4.0]),
+        radius=np.array([0.2, 0.3, 0.4]),
+        color=(0.2, 0.4, 0.8),
+    )
+
+    assert rod.entity_actor.mapper is mapper
+    np.testing.assert_allclose(
+        mapper.GetInput().point_data["scale"],
+        [[2.0, 0.2, 0.2], [3.0, 0.3, 0.3], [4.0, 0.4, 0.4]],
+    )
+
+
+def test_instanced_rod_sides_update_reuses_mapper_and_replaces_source(figure):
+    rod = PlotRod(_coords(), np.eye(3), figure=figure, sides=8)
+    mapper = rod.entity_actor.mapper
+    source_before = mapper.GetSource(0)
+
+    rod.opts.sides = 14
+
+    assert rod.entity_actor.mapper is mapper
+    assert mapper.GetSource(0) is not source_before
+
+
+def test_instanced_rod_center_clipping_keeps_instance_arrays_aligned(figure):
+    bounds = Bounds(
+        opts=OptsBounds(
+            origin=(-0.25, -0.5, -0.5),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=1.5,
+            length2=1.0,
+            length3=1.0,
+            alignment="min_corner",
+        )
+    )
+    orient = np.array([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 3.0]])
+    rod = PlotRod(
+        _coords(),
+        orient,
+        figure=figure,
+        bounds=bounds,
+        length=np.array([1.0, 2.0, 3.0]),
+        radius=np.array([0.1, 0.2, 0.3]),
+        sides=8,
+    )
+
+    np.testing.assert_array_equal(rod.calc_keep_index, [0, 1])
+    poly = rod.entity_actor.mapper.GetInput()
+    np.testing.assert_allclose(poly.points[:, 0], [0.0, 1.0])
+    np.testing.assert_allclose(poly.point_data["orient"], [[1, 0, 0], [0, 1, 0]])
+    np.testing.assert_allclose(poly.point_data["scale"], [[1, 0.1, 0.1], [2, 0.2, 0.2]])
+
+
+def test_instanced_rod_scalar_coloring_and_scalar_bar(figure):
+    rod = PlotRod(
+        _coords(),
+        np.eye(3),
+        figure=figure,
+        paint_by="scalars",
+        scalars=np.array([0.0, 1.0, 2.0]),
+        is_scalar_bar=True,
+        sides=8,
+    )
+
+    mapper = rod.entity_actor.mapper
+    np.testing.assert_allclose(mapper.GetInput().point_data["scalars"], [0.0, 1.0, 2.0])
+    assert mapper.GetScalarVisibility()
+    assert len(figure.scalar_bars) == 1
+
+
+def test_instanced_rod_silhouette_uses_same_instance_geometry_configuration(figure):
+    rod = PlotRod(_coords(), np.eye(3), figure=figure, sides=8)
+    rod.act_highlight()
+
+    mapper = rod.entity_silhouette.mapper
+    assert mapper.GetOrient()
+    assert mapper.GetScaleMode() == mapper.SCALE_BY_COMPONENTS
+    np.testing.assert_allclose(
+        mapper.GetInput().point_data["scale"],
+        rod.entity_actor.mapper.GetInput().point_data["scale"],
+    )
+
+
+def test_instanced_rod_near_zero_orientation_remains_finite(figure):
+    orient = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1e-8, 0.0]])
+    rod = PlotRod(_coords(), orient, figure=figure, sides=8)
+
+    resolved = rod.entity_actor.mapper.GetInput().point_data["orient"]
+    assert np.all(np.isfinite(resolved))
+    np.testing.assert_allclose(resolved[0], [1.0, 0.0, 0.0])
+    np.testing.assert_allclose(resolved[1], [0.0, 0.0, 0.0])
+    np.testing.assert_allclose(resolved[2], [0.0, 1e-8, 0.0])
 
 
 def test_pick_reports_nearest_point_visual_values(figure):

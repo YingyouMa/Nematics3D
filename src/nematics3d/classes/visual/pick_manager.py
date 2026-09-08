@@ -1188,8 +1188,12 @@ class PickManager:
         # 1) pick (actor + world point)
         x, y = vtk_iren.GetEventPosition()
 
-        picker = vtk.vtkCellPicker()
-        picker.SetTolerance(0.0005)
+        # Right-click only needs actor-level picking.  Use the hardware prop
+        # picker here rather than vtkCellPicker: instanced glyphs rendered by
+        # vtkGlyph3DMapper do not expose a materialized polygonal output for a
+        # geometric cell picker to interrogate, while vtkPropPicker is designed
+        # to identify the rendered prop directly.
+        picker = vtk.vtkPropPicker()
         picker.Pick(x, y, 0.0, fig.pl.renderer)
 
         actor = picker.GetActor() if picker is not None else None
@@ -1217,7 +1221,14 @@ class PickManager:
         silhouette = getattr(owner, "entity_silhouette", None)
         if silhouette is not None and silhouette.visibility:
             owner.act_dehighlight()
-        elif getattr(owner, "state_is_silhouette", False):
+        elif hasattr(owner, "act_highlight"):
+            # A right-click is an explicit user request to highlight this
+            # visual.  Interaction controllers may temporarily suppress
+            # silhouettes while dragging by setting state_is_silhouette=False;
+            # if an end/release event is missed, that temporary state must not
+            # silently disable all future right-click highlighting.
+            if hasattr(owner, "state_is_silhouette"):
+                object.__setattr__(owner, "state_is_silhouette", True)
             owner.act_highlight(
                 color=self.opts.sil_color,
                 opacity=self.opts.sil_opacity,

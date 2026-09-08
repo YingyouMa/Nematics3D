@@ -647,7 +647,7 @@ class PlotTube(PlotGlyph):
     # Mesh generation and commit hooks
     # -------------------------------
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
         """
         Internal: generate tube geometry from the prepared polyline dataset.
         """

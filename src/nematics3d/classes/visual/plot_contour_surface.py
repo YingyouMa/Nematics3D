@@ -7,7 +7,6 @@ from types import MappingProxyType
 from typing import Any, ClassVar, Mapping
 
 import numpy as np
-import pyvista as pv
 
 from ...datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, as_str
 from ..bounds import BoundsData
@@ -165,7 +164,7 @@ class PlotContourSurface(PlotGlyph):
         """Contour mesh visuals use mesh clipping instead of center-point clipping."""
         return self.raw_coords.copy()
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
         """Return the current contour mesh with resolved display arrays attached."""
         surface = self.owner
         if surface is None:

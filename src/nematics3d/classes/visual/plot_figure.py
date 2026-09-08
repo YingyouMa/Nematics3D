@@ -98,7 +98,7 @@ class OptsFigure(OptsBase):
         "roll":             lambda v, d: as_number(v, name=d, value_range=(-180, 180)),
         "distance":         lambda v, d: _as_positive_camera_distance(v, name=d),
         "focal_point":      lambda v, d: as_vector(v, name=d, d=3),
-        "size":             lambda v, d: as_vector(v, name=d, d=2),
+        "size":             lambda v, d: _as_window_size(v, name=d),
         "bg_color":         lambda v, d: as_ColorRGB(v, name=d),
     }
 
@@ -119,6 +119,18 @@ def _as_positive_camera_distance(value, *, name):
     if distance <= 0:
         raise ValueError(f"{name!r} must be strictly positive. Got {distance}.")
     return distance
+
+
+def _as_window_size(value, *, name):
+    """Return a two-component positive integer window size."""
+    size = as_vector(value, name=name, d=2)
+    if np.any(size <= 0):
+        raise ValueError(f"{name!r} must contain two positive values. Got {value!r}.")
+    if not np.all(size == np.floor(size)):
+        raise ValueError(
+            f"{name!r} must contain integer-valued pixel dimensions. Got {value!r}."
+        )
+    return size.astype(int)
 
 
 # Subclassing rules:
@@ -358,7 +370,7 @@ class PlotFigure(HostBase):
                         "but is_off_screen=True was requested. "
                         "The existing plotter's display mode will take precedence."
                     )
-                    is_off_screen = False
+                is_off_screen = bool(plotter.off_screen)
 
         if is_new_plotter:
             if is_off_screen:
@@ -381,7 +393,7 @@ class PlotFigure(HostBase):
             **kwargs,
         )
         self.opts.act_finalize(is_allow_unset=True)
-        plotter.window_size = tuple(int(x) for x in self.opts.size)
+        plotter.window_size = tuple(self.opts.size)
 
         self._helper_sync_from_plotter(
             is_allow_cover_target_set=False, is_only_camera=True
@@ -1052,7 +1064,7 @@ class PlotFigure(HostBase):
         camera.focal_point = focal
         camera.up = up
         self.pl.set_background(self.opts.bg_color)
-        self.pl.window_size = tuple(int(x) for x in self.opts.size)
+        self.pl.window_size = tuple(self.opts.size)
         self.pl.render()
 
     # -------------------------------
@@ -1096,13 +1108,14 @@ class PlotFigure(HostBase):
 
     def act_register(self, term, is_contain_ok=False, is_bind_registry_relation=True):
         """Register a drawable term and refresh camera state if it resets camera."""
-        self.glyphs.act_register(
+        registered = self.glyphs.act_register(
             term,
             is_contain_ok=is_contain_ok,
             is_bind_registry_relation=is_bind_registry_relation,
         )
         if term.opts.is_reset_camera:
             self._helper_sync_from_plotter()
+        return registered
 
     def act_clear_category(self, category, is_missing_ok=True):
         """Remove all registered glyph terms whose category matches the given name."""
@@ -1171,7 +1184,7 @@ class PlotFigure(HostBase):
         is_window_size_given = window_size is not None
         if window_size is None:
             window_size = self.opts.size
-        window_size = tuple(int(x) for x in window_size)
+        window_size = tuple(_as_window_size(window_size, name="savefig window_size"))
         current_window_size = tuple(int(x) for x in self.pl.window_size)
 
         if (
@@ -1186,7 +1199,7 @@ class PlotFigure(HostBase):
             )
             window_size = current_window_size
 
-        self.pl.screenshot(
+        return self.pl.screenshot(
             filename,
             scale=scale,
             transparent_background=is_transparent_background,
@@ -1237,31 +1250,31 @@ def as_plotfigure(figure, opts_figure=None, logger=None):
             logger.recovery("Ignore this options in the following.")
         opts_figure = None
 
+    if figure is None:
+        return PlotFigure(opts=opts_figure)
+
+    if isinstance(figure, PlotFigure):
+        if not figure.is_alive:
+            logger.error("The provided PlotFigure is no longer alive.")
+            logger.recovery("Create a new figure instead.")
+            return PlotFigure(opts=opts_figure)
+        figure.act_commit(opts_figure)
+        return figure
+
+    if isinstance(figure, (BackgroundPlotter, pv.Plotter)):
+        return PlotFigure(plotter=figure, opts=opts_figure)
+
     try:
-        if figure is None:
-            figure = PlotFigure(opts=opts_figure)
-        elif isinstance(figure, PlotFigure):
-            if not figure.is_alive:
-                logger.error("The provided PlotFigure is no longer alive.")
-                logger.recovery("Create a new figure instead.")
-                figure = PlotFigure(opts=opts_figure)
-            else:
-                figure.act_commit(opts_figure)
-        elif isinstance(figure, (BackgroundPlotter, pv.Plotter)):
-            figure = PlotFigure(plotter=figure, opts=opts_figure)
-        else:
-            raise ValueError(
-                "`figure` input must be a valid PlotFigure object, "
-                "or a valid pyvista plotter object (including BackgroundPlotter) "
-                "or None (creating a new figure) "
-                f"Got type {type(figure)!r} instead."
-            )
-    except (AttributeError, RuntimeError, TypeError, ValueError):
+        raise ValueError(
+            "`figure` input must be a valid PlotFigure object, "
+            "or a valid pyvista plotter object (including BackgroundPlotter) "
+            "or None (creating a new figure) "
+            f"Got type {type(figure)!r} instead."
+        )
+    except ValueError:
         logger.exception("Invalid figure input")
         logger.recovery("Create a new figure instead.")
-        figure = PlotFigure(opts=opts_figure)
-
-    return figure
+    return PlotFigure(opts=opts_figure)
 
 
 # Backward-compatible alias; prefer `as_plotfigure`.

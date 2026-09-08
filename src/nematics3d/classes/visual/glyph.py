@@ -536,6 +536,43 @@ class PlotGlyph(HostBase):
             f"{type(self).__name__} does not implement center-based bounds clipping yet."
         )
 
+    def _helper_filter_centers_by_bounds(self, coords=None):
+        """Return center-filtered coordinates and the kept raw indices."""
+        if coords is None:
+            coords = self.raw_coords
+        coords = np.asarray(coords)
+
+        bounds = self._helper_get_bounds_effective()
+        if bounds is None:
+            keep_index = np.arange(len(coords), dtype=int)
+            return coords.copy(), keep_index
+
+        axis1 = np.asarray(bounds.opts.axis1, dtype=float)
+        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
+        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
+        length1 = float(bounds.opts.length1)
+        length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
+        length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
+        origin = np.asarray(bounds.opts.origin, dtype=float)
+
+        if bounds.opts.alignment == "min_corner":
+            origin_min_corner = origin
+        else:
+            origin_min_corner = origin - 0.5 * (
+                length1 * axis1 + length2 * axis2 + length3 * axis3
+            )
+
+        basis = np.column_stack([axis1, axis2, axis3])
+        coords_local = (coords - origin_min_corner) @ basis
+        tol = 1e-10
+        upper = np.array([length1, length2, length3], dtype=float)
+        mask_inside = np.all(
+            (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
+        )
+        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
+        keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
+        return coords[keep_index], keep_index
+
     def _helper_get_resolver_source_name(self, attr_name=None):
         source_name = None
         if attr_name is not None:
@@ -652,7 +689,8 @@ class PlotGlyph(HostBase):
         rgba_values = np.hstack([self.calc_color, self.calc_opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
+        """Materialize explicit polygonal geometry when a backend needs it."""
         raise NotImplementedError(...)
 
     def _helper_build_glyph_source(self):
@@ -668,11 +706,25 @@ class PlotGlyph(HostBase):
         mapper = vtk.vtkGlyph3DMapper()
         mapper.SetInputData(poly)
         mapper.SetSourceData(source)
+        self._helper_configure_instanced_mapper_geometry(mapper)
+        self._helper_configure_instanced_mapper_paint(mapper)
+        return mapper
+
+    def _helper_configure_instanced_mapper_geometry(self, mapper):
+        """Configure source-instance transforms for the default isotropic glyph."""
         mapper.SetScaleArray("radius")
         mapper.SetScaleModeToScaleByMagnitude()
         mapper.ScalingOn()
+        mapper.OrientOff()
+
+    def _helper_update_instanced_mapper(self, mapper, *, is_update_source=False):
+        """Update an existing instanced mapper without replacing the mapper."""
+        mapper.SetInputData(self.calc_poly)
+        if is_update_source:
+            mapper.SetSourceData(self._helper_build_glyph_source())
+        self._helper_configure_instanced_mapper_geometry(mapper)
         self._helper_configure_instanced_mapper_paint(mapper)
-        return mapper
+        mapper.Modified()
 
     def _helper_configure_instanced_mapper_paint(self, mapper):
         """Configure direct-RGBA or scalar coloring on an instanced mapper."""
@@ -791,7 +843,7 @@ class PlotGlyph(HostBase):
             # Exact mesh clipping needs the fully materialized glyph surface,
             # while vtkGlyph3DMapper intentionally keeps only instance data.
             # Supporting it later is straightforward: route this branch through
-            # the legacy _helper_build_mesh() + _helper_apply_bounds_mesh()
+            # the legacy _helper_materialize_mesh() + _helper_apply_bounds_mesh()
             # pipeline.  We deliberately leave that compatibility fallback
             # undeveloped for now so the new backend stays small and explicit.
             raise NotImplementedError(
@@ -803,12 +855,14 @@ class PlotGlyph(HostBase):
             object.__setattr__(self, "calc_coords", self._helper_bound_coords())
             self._helper_build_poly()
             mesh = (
-                None if self._use_instanced_glyph_mapper else self._helper_build_mesh()
+                None
+                if self._use_instanced_glyph_mapper
+                else self._helper_materialize_mesh()
             )
         else:
             object.__setattr__(self, "calc_coords", self.raw_coords.copy())
             self._helper_build_poly()
-            mesh = self._helper_build_mesh()
+            mesh = self._helper_materialize_mesh()
             mesh = self._helper_apply_bounds_mesh(mesh)
 
         if self._use_instanced_glyph_mapper:
@@ -874,9 +928,7 @@ class PlotGlyph(HostBase):
             mapper = vtk.vtkGlyph3DMapper()
             mapper.SetInputData(self.calc_poly)
             mapper.SetSourceData(self._helper_build_glyph_source())
-            mapper.SetScaleArray("radius")
-            mapper.SetScaleModeToScaleByMagnitude()
-            mapper.ScalingOn()
+            self._helper_configure_instanced_mapper_geometry(mapper)
             mapper.ScalarVisibilityOff()
             actor_silhouette = pv.Actor(mapper=mapper)
             plotter.add_actor(actor_silhouette, render=False)
@@ -909,12 +961,20 @@ class PlotGlyph(HostBase):
         fig.pl.remove_actor(actor_silhouette)
         object.__setattr__(self, "entity_silhouette", None)
 
-    def _helper_refresh_silhouette_after_remesh(self):
+    def _helper_refresh_silhouette_after_remesh(self, *, is_update_source=False):
         silhouette = getattr(self, "entity_silhouette", None)
         if not self.state_is_silhouette:
             self._helper_clear_silhouette()
             return
         if silhouette is None:
+            return
+        if self._use_instanced_glyph_mapper:
+            mapper = silhouette.mapper
+            mapper.SetInputData(self.calc_poly)
+            if is_update_source:
+                mapper.SetSourceData(self._helper_build_glyph_source())
+            self._helper_configure_instanced_mapper_geometry(mapper)
+            mapper.Modified()
             return
         was_visible = bool(silhouette.visibility)
         self._helper_add_silhouette()
@@ -1099,9 +1159,11 @@ class PlotGlyph(HostBase):
                 self._helper_resolver_spec(attr, attr_value=kwargs.pop(attr))
                 is_needs_remesh = True
 
+        is_instanced_source_update = False
         if "sides" in kwargs:
             object.__setattr__(self.opts, "sides", kwargs["sides"])
             is_needs_remesh = True
+            is_instanced_source_update = self._use_instanced_glyph_mapper
 
         if is_needs_remesh:
             if self._use_instanced_glyph_mapper and self.state_clip_mode != "center":
@@ -1117,12 +1179,12 @@ class PlotGlyph(HostBase):
                 mesh = (
                     None
                     if self._use_instanced_glyph_mapper
-                    else self._helper_build_mesh()
+                    else self._helper_materialize_mesh()
                 )
             else:
                 object.__setattr__(self, "calc_coords", self.raw_coords.copy())
                 self._helper_build_poly()
-                mesh = self._helper_build_mesh()
+                mesh = self._helper_materialize_mesh()
                 mesh = self._helper_apply_bounds_mesh(mesh)
 
             if self._use_instanced_glyph_mapper:
@@ -1137,9 +1199,13 @@ class PlotGlyph(HostBase):
                 if getattr(self, "entity_actor", None) is None:
                     self._helper_make_figure()
                 elif self._use_instanced_glyph_mapper:
-                    mapper = self._helper_build_instanced_mapper()
-                    self.entity_actor.mapper = mapper
-                    self._helper_refresh_silhouette_after_remesh()
+                    self._helper_update_instanced_mapper(
+                        self.entity_actor.mapper,
+                        is_update_source=is_instanced_source_update,
+                    )
+                    self._helper_refresh_silhouette_after_remesh(
+                        is_update_source=is_instanced_source_update
+                    )
                 else:
                     self.entity_actor.mapper.SetInputData(mesh)
                     self.entity_actor.mapper.Update()

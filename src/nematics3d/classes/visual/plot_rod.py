@@ -9,7 +9,7 @@ from typing import Any, Callable, ClassVar, Mapping, Sequence
 import numpy as np
 import pyvista as pv
 
-from nematics3d.datatypes import UNSET, Unset, as_number, as_points, as_str
+from nematics3d.datatypes import UNSET, Unset, as_points, as_str
 from nematics3d.format import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
@@ -41,7 +41,7 @@ class OptsRod(OptsGlyph):
       visual controls.
     - `paint_by`: chooses direct RGBA painting or scalar-colormap rendering.
     - `resolver_source`: selects the input used by callable visual resolvers.
-    - `sides`: the main rod-meshing control.
+    - `sides`: cross-section resolution of the shared rod source geometry.
 
     Common user actions:
 
@@ -90,8 +90,8 @@ class OptsRod(OptsGlyph):
     - `scalars` are numeric data, not RGB colors
     - `resolver_source` matters only when a visual field is provided as a
       callable
-    - `length` and `orient` together determine the rod endpoints before the
-      rod is meshed
+    - `length` and `orient` determine the per-instance transform applied to
+      the shared rod source geometry
     - lighting fields such as `ambient`, `diffuse`, `specular`, `metallic`,
       and `roughness` change appearance but not geometry
 
@@ -149,7 +149,6 @@ class OptsRod(OptsGlyph):
 
     impl_validators: ClassVar[Mapping[str, Callable[[Any, str], Any]]] = {
         **dict(OptsGlyph.impl_validators),
-        "length": lambda v, d: as_number(v, name=d, value_range=(1e-12, np.inf)),
         "resolver_source": lambda v, d: as_str(
             v,
             name=d,
@@ -181,6 +180,8 @@ class OptsRod(OptsGlyph):
 
 class PlotRod(PlotGlyph):
     """Render one oriented rod at each input point."""
+
+    _use_instanced_glyph_mapper = True
 
     __attr_defs__ = {
         "raw_orient": AttrDef(
@@ -287,57 +288,35 @@ class PlotRod(PlotGlyph):
         return np.repeat(values, 2, axis=0)
 
     def _helper_bound_coords(self):
-        bounds = self._helper_get_bounds_effective()
-        if bounds is None:
-            keep_index = np.arange(len(self.raw_coords), dtype=int)
-            object.__setattr__(self, "calc_keep_index", keep_index)
-            return self.raw_coords.copy()
-
-        axis1 = np.asarray(bounds.opts.axis1, dtype=float)
-        axis2 = np.asarray(bounds.calc_axis2, dtype=float)
-        axis3 = np.asarray(bounds.calc_axis3, dtype=float)
-        length1 = float(bounds.opts.length1)
-        length2 = length1 if bounds.opts.length2 is None else float(bounds.opts.length2)
-        length3 = length1 if bounds.opts.length3 is None else float(bounds.opts.length3)
-        origin = np.asarray(bounds.opts.origin, dtype=float)
-
-        if bounds.opts.alignment == "min_corner":
-            origin_min_corner = origin
-        else:
-            origin_min_corner = origin - 0.5 * (
-                length1 * axis1 + length2 * axis2 + length3 * axis3
-            )
-
-        basis = np.column_stack([axis1, axis2, axis3])
-        coords_local = (self.raw_coords - origin_min_corner) @ basis
-        tol = 1e-10
-        upper = np.array([length1, length2, length3], dtype=float)
-        mask_inside = np.all(
-            (coords_local >= -tol) & (coords_local <= upper + tol), axis=1
-        )
-        mask_keep = mask_inside if self.state_is_clip_inside else ~mask_inside
-        keep_index = np.nonzero(mask_keep)[0].astype(int, copy=False)
+        coords, keep_index = self._helper_filter_centers_by_bounds()
         object.__setattr__(self, "calc_keep_index", keep_index)
-        return self.raw_coords[keep_index]
+        return coords
 
-    @logging_and_warning_decorator(start_finish_level=5)
-    def _helper_build_poly(self, logger=None):
+    def _helper_prepare_rod_geometry(self):
+        """Resolve kept centers, normalized directions, lengths, and radii."""
         keep_index = getattr(self, "calc_keep_index", None)
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
         points = self.calc_coords
+        orient = self.raw_orient[keep_index].copy()
+        orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
+        mask = orient_norm.squeeze() > 1e-5
+        orient[mask] /= orient_norm[mask]
+        length = self.calc_length[keep_index]
+        radius = self.calc_radius[keep_index]
+        return keep_index, points, orient, orient_norm, mask, length, radius
+
+    @logging_and_warning_decorator(start_finish_level=5)
+    def _helper_build_poly(self, logger=None):
+        keep_index, points, orient, orient_norm, mask, length, radius = (
+            self._helper_prepare_rod_geometry()
+        )
         if len(points) == 0:
             poly = pv.PolyData(np.empty((0, 3), dtype=float))
             object.__setattr__(self, "calc_poly", poly)
             self._helper_set_poly(poly)
             return
-
-        length = self.calc_length[keep_index].reshape(-1, 1)
-        orient = self.raw_orient[keep_index].copy()
-
-        orient_norm = np.linalg.norm(orient, axis=1, keepdims=True)
-        mask = orient_norm.squeeze() > 1e-5
         if not np.all(mask):
             n_bad = np.count_nonzero(~mask)
             logger.warning(
@@ -345,24 +324,16 @@ class PlotRod(PlotGlyph):
                 "Their directions are left unnormalized, which may lead to "
                 "degenerate or invisible rods."
             )
-        orient[mask] /= orient_norm[mask]
-
-        n_rods = points.shape[0]
-        half = 0.5 * length
-        p_minus = points - half * orient
-        p_plus = points + half * orient
-        endpoints = np.empty((2 * n_rods, 3), dtype=p_minus.dtype)
-        endpoints[0::2] = p_minus
-        endpoints[1::2] = p_plus
-
-        lines = np.empty((n_rods, 3), dtype=np.int64)
-        lines[:, 0] = 2
-        lines[:, 1] = 2 * np.arange(n_rods)
-        lines[:, 2] = 2 * np.arange(n_rods) + 1
-
-        poly = pv.PolyData(endpoints, lines=lines.ravel())
+        poly = pv.PolyData(points)
         object.__setattr__(self, "calc_poly", poly)
         self._helper_set_poly(poly)
+        poly.point_data["orient"] = orient
+
+        scale = np.empty((len(points), 3), dtype=float)
+        scale[:, 0] = length
+        scale[:, 1] = radius
+        scale[:, 2] = radius
+        poly.point_data["scale"] = scale
 
     def _helper_set_poly(self, poly):
         if poly.n_points == 0:
@@ -372,10 +343,10 @@ class PlotRod(PlotGlyph):
         if keep_index is None:
             keep_index = np.arange(len(self.raw_coords), dtype=int)
 
-        color = self._helper_expand_endpoint_values(self.calc_color, keep_index)
-        opacity = self._helper_expand_endpoint_values(self.calc_opacity, keep_index)
-        radius = self._helper_expand_endpoint_values(self.calc_radius, keep_index)
-        scalars = self._helper_expand_endpoint_values(self.calc_scalars, keep_index)
+        color = self.calc_color[keep_index]
+        opacity = self.calc_opacity[keep_index]
+        radius = self.calc_radius[keep_index]
+        scalars = self.calc_scalars[keep_index]
 
         poly.point_data["radius"] = radius
         poly.point_data["opacity"] = opacity
@@ -383,10 +354,25 @@ class PlotRod(PlotGlyph):
         rgba_values = np.hstack([color, opacity.reshape(-1, 1)])
         poly.point_data["rgba"] = rgba_values
 
-    def _helper_build_mesh(self):
-        poly = self.calc_poly
-        if poly.n_points < 2 or "radius" not in poly.point_data:
+    def _helper_materialize_mesh(self):
+        """Materialize tube geometry for compatibility-only mesh operations."""
+        keep_index, points, orient, _orient_norm, _mask, length, radius = (
+            self._helper_prepare_rod_geometry()
+        )
+        if len(points) == 0:
             return pv.PolyData()
+        half = 0.5 * length.reshape(-1, 1)
+        p_minus = points - half * orient
+        p_plus = points + half * orient
+        endpoints = np.empty((2 * len(points), 3), dtype=float)
+        endpoints[0::2] = p_minus
+        endpoints[1::2] = p_plus
+        lines = np.empty((len(points), 3), dtype=np.int64)
+        lines[:, 0] = 2
+        lines[:, 1] = 2 * np.arange(len(points))
+        lines[:, 2] = 2 * np.arange(len(points)) + 1
+        poly = pv.PolyData(endpoints, lines=lines.ravel())
+        poly.point_data["radius"] = np.repeat(radius, 2)
 
         mesh = poly.tube(
             scalars="radius",
@@ -396,6 +382,26 @@ class PlotRod(PlotGlyph):
 
         object.__setattr__(self, "calc_poly", poly)
         return mesh
+
+    def _helper_build_glyph_source(self):
+        """Return one unit rod aligned with +x for GPU instancing."""
+        return pv.Cylinder(
+            center=(0.0, 0.0, 0.0),
+            direction=(1.0, 0.0, 0.0),
+            radius=1.0,
+            height=1.0,
+            resolution=self.opts.sides,
+            capping=True,
+        )
+
+    def _helper_configure_instanced_mapper_geometry(self, mapper):
+        """Apply per-rod orientation, length, and radius without meshing tubes."""
+        mapper.SetOrientationArray("orient")
+        mapper.SetOrientationModeToDirection()
+        mapper.OrientOn()
+        mapper.SetScaleArray("scale")
+        mapper.SetScaleModeToScaleByVectorComponents()
+        mapper.ScalingOn()
 
     def _helper_resolve_pick(self, picked_point):
         pos, msg, idx = super()._helper_resolve_pick(picked_point)

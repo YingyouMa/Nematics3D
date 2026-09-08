@@ -91,11 +91,47 @@ def test_sync_from_plotter_imports_window_state_by_default():
     figure = PlotFigure(is_off_screen=True)
     figure.pl.window_size = (640, 480)
     figure.pl.set_background((0.2, 0.3, 0.4))
+    actual_background = figure.pl.background_color.float_rgb
 
     figure._helper_sync_from_plotter()
 
     np.testing.assert_array_equal(figure.opts.size, (640, 480))
-    np.testing.assert_allclose(figure.opts.bg_color, (0.2, 0.3, 0.4))
+    np.testing.assert_allclose(figure.opts.bg_color, actual_background)
+
+
+def test_figure_size_is_stored_as_positive_integer_pixels():
+    figure = PlotFigure(is_off_screen=True, size=(640.0, 480.0))
+
+    np.testing.assert_array_equal(figure.opts.size, (640, 480))
+    assert np.issubdtype(figure.opts.size.dtype, np.integer)
+    assert tuple(figure.pl.window_size) == (640, 480)
+
+
+def test_invalid_figure_size_is_rejected_without_truncating_pixels():
+    figure = PlotFigure(is_off_screen=True)
+    original_size = np.asarray(figure.opts.size).copy()
+
+    figure.opts.size = (640.5, 480)
+    np.testing.assert_array_equal(figure.opts.size, original_size)
+
+    figure.opts.size = (0, 480)
+    np.testing.assert_array_equal(figure.opts.size, original_size)
+
+    figure.opts.size = (-640, 480)
+    np.testing.assert_array_equal(figure.opts.size, original_size)
+
+
+def test_committing_window_state_updates_plotter():
+    figure = PlotFigure(is_off_screen=True)
+
+    figure.act_commit(size=(720, 540), bg_color=(0.1, 0.2, 0.3))
+
+    assert tuple(figure.pl.window_size) == (720, 540)
+    np.testing.assert_allclose(
+        figure.pl.background_color.float_rgb,
+        figure.opts.bg_color,
+        atol=1.0 / 255.0,
+    )
 
 
 def test_standard_view_action_syncs_camera_back_to_opts():
@@ -104,6 +140,88 @@ def test_standard_view_action_syncs_camera_back_to_opts():
     figure.act_view_xy()
 
     camera = figure.pl.camera
+    np.testing.assert_allclose(figure.opts.focal_point, camera.focal_point)
+    np.testing.assert_allclose(
+        figure.opts.distance,
+        np.linalg.norm(np.asarray(camera.position) - np.asarray(camera.focal_point)),
+    )
+
+
+def test_standard_views_follow_pyvista_axis_convention():
+    figure = PlotFigure(is_off_screen=True)
+
+    cases = [
+        (figure.act_view_xy, np.array([0.0, 0.0, 1.0])),
+        (figure.act_view_xz, np.array([0.0, -1.0, 0.0])),
+        (figure.act_view_yz, np.array([1.0, 0.0, 0.0])),
+    ]
+
+    for action, expected_position_direction in cases:
+        action()
+        camera = figure.pl.camera
+        position_direction = np.asarray(camera.position) - np.asarray(
+            camera.focal_point
+        )
+        position_direction /= np.linalg.norm(position_direction)
+        np.testing.assert_allclose(
+            position_direction,
+            expected_position_direction,
+            atol=1e-12,
+        )
+
+
+def test_standard_view_actions_are_idempotent_in_camera_pose():
+    figure = PlotFigure(is_off_screen=True)
+
+    for action in (
+        figure.act_view_xy,
+        figure.act_view_xz,
+        figure.act_view_yz,
+        figure.act_view_isometric,
+    ):
+        action()
+        first_camera = (
+            np.asarray(figure.pl.camera.position).copy(),
+            np.asarray(figure.pl.camera.focal_point).copy(),
+            np.asarray(figure.pl.camera.up).copy(),
+        )
+        first_opts = (
+            figure.opts.azimuth,
+            figure.opts.elevation,
+            figure.opts.roll,
+            figure.opts.distance,
+            np.asarray(figure.opts.focal_point).copy(),
+        )
+
+        action()
+        second_camera = (
+            np.asarray(figure.pl.camera.position),
+            np.asarray(figure.pl.camera.focal_point),
+            np.asarray(figure.pl.camera.up),
+        )
+        second_opts = (
+            figure.opts.azimuth,
+            figure.opts.elevation,
+            figure.opts.roll,
+            figure.opts.distance,
+            np.asarray(figure.opts.focal_point),
+        )
+
+        for lhs, rhs in zip(first_camera, second_camera):
+            np.testing.assert_allclose(lhs, rhs, atol=1e-12)
+        for lhs, rhs in zip(first_opts[:4], second_opts[:4]):
+            np.testing.assert_allclose(lhs, rhs, atol=1e-12)
+        np.testing.assert_allclose(first_opts[4], second_opts[4], atol=1e-12)
+
+
+def test_reset_camera_preserves_valid_synced_pose():
+    figure = PlotFigure(is_off_screen=True)
+    figure.pl.add_mesh(pv.Sphere(radius=2.0, center=(3.0, -1.0, 4.0)))
+
+    figure.act_reset_camera()
+
+    camera = figure.pl.camera
+    assert figure.opts.distance > 0
     np.testing.assert_allclose(figure.opts.focal_point, camera.focal_point)
     np.testing.assert_allclose(
         figure.opts.distance,

@@ -500,7 +500,7 @@ class PlotVector(PlotGlyph):
         poly.point_data["rgba"] = np.hstack([color, opacity.reshape(-1, 1)])
 
     # ==================== OVERRIDE ====================
-    # PlotVector overrides PlotGlyph._helper_build_mesh because vectors combine
+    # PlotVector overrides PlotGlyph._helper_materialize_mesh because vectors combine
     # a tube shaft with a manually generated cone tip.
     # ==================================================
     def _helper_build_shaft_mesh(self):
@@ -667,7 +667,7 @@ class PlotVector(PlotGlyph):
             )
         return mesh
 
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
         shaft_mesh = self._helper_build_shaft_mesh()
         tip_mesh = self._helper_build_tip_mesh()
 

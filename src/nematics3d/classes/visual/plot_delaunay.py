@@ -466,11 +466,11 @@ class PlotDelaunay(PlotGlyph):
     # -------------------------------
 
     # ==================== OVERRIDE ====================
-    # PlotDelaunay overrides PlotGlyph._helper_build_mesh because surfaces are
+    # PlotDelaunay overrides PlotGlyph._helper_materialize_mesh because surfaces are
     # reconstructed from the prepared point cloud with a 2D Delaunay stage
     # instead of glyph or tube extrusion logic.
     # ==================================================
-    def _helper_build_mesh(self):
+    def _helper_materialize_mesh(self):
         poly = self.calc_poly
         if poly.n_points < 3:
             return pv.PolyData()
