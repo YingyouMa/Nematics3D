@@ -9,9 +9,15 @@ from typing import Any, ClassVar, Literal, Mapping, TypeAlias
 import numpy as np
 import pyvista as pv
 
-from nematics3d.geometry import OBBFit, get_box_corners, rotation_matrix_from_vectors
+from nematics3d.geometry import (
+    OBBFit,
+    get_box_corners,
+    rotation_matrix_from_vectors,
+    select_points_in_box,
+)
 from nematics3d.datatypes import (
     Number,
+    Tensor,
     UNSET,
     Unset,
     Vect,
@@ -174,7 +180,11 @@ class Bounds(HostBase):
             kind="property",
         ),
         "clip_geometry": AttrDef(
-            doc="Read-only: Alias of `entity_clip_geometry`.",
+            doc="Read-only: Lazily materialized PyVista clipping surface.",
+            kind="property",
+        ),
+        "lengths": AttrDef(
+            doc="Read-only: Resolved box lengths along axis1, axis2 and axis3.",
             kind="property",
         ),
         "subscribers": AttrDef(
@@ -285,7 +295,13 @@ class Bounds(HostBase):
             if not np.isclose(dot_product, 0, atol=1e-8):
                 old_axis2 = axis2.copy()
                 axis2 = axis2 - dot_product * axis1
-                axis2 /= np.linalg.norm(axis2)
+                axis2_norm = float(np.linalg.norm(axis2))
+                if axis2_norm <= _DEF_TOL:
+                    raise ValueError(
+                        "Invalid geometry: axis2 is parallel or nearly parallel to "
+                        "axis1 and cannot define an orthogonal bounds frame."
+                    )
+                axis2 /= axis2_norm
                 logger.warning(
                     f"Invalid geometry: axis2 is not perpendicular to axis1 "
                     f"(dot product: {dot_product:.4e}). Projecting original "
@@ -319,33 +335,10 @@ class Bounds(HostBase):
             + corners_local[:, [2]] * axis3
         )
 
-        faces = np.hstack(
-            [
-                [4, 0, 2, 4, 1],
-                [4, 3, 5, 7, 6],
-                [4, 0, 1, 5, 3],
-                [4, 2, 6, 7, 4],
-                [4, 0, 3, 6, 2],
-                [4, 1, 4, 7, 5],
-            ]
-        )
-        clip_geometry = (
-            pv.PolyData(corners, faces)
-            .triangulate()
-            .clean()
-            .compute_normals(
-                cell_normals=True,
-                point_normals=True,
-                consistent_normals=True,
-                auto_orient_normals=True,
-                inplace=False,
-            )
-        )
-
         object.__setattr__(self, "calc_axis2", axis2)
         object.__setattr__(self, "calc_axis3", axis3)
         object.__setattr__(self, "entity_corners", corners)
-        object.__setattr__(self, "entity_clip_geometry", clip_geometry)
+        object.__setattr__(self, "entity_clip_geometry", None)
 
     @property
     def corners(self):
@@ -354,8 +347,51 @@ class Bounds(HostBase):
 
     @property
     def clip_geometry(self):
-        """Return the current clipping ``PolyData`` for this bounds."""
-        return self.entity_clip_geometry
+        """Return the clipping ``PolyData``, materializing it on first access."""
+        clip_geometry = self.entity_clip_geometry
+        if clip_geometry is None:
+            faces = np.hstack(
+                [
+                    [4, 0, 2, 4, 1],
+                    [4, 3, 5, 7, 6],
+                    [4, 0, 1, 5, 3],
+                    [4, 2, 6, 7, 4],
+                    [4, 0, 3, 6, 2],
+                    [4, 1, 4, 7, 5],
+                ]
+            )
+            clip_geometry = (
+                pv.PolyData(self.corners, faces)
+                .triangulate()
+                .clean()
+                .compute_normals(
+                    cell_normals=True,
+                    point_normals=True,
+                    consistent_normals=True,
+                    auto_orient_normals=True,
+                    inplace=False,
+                )
+            )
+            object.__setattr__(self, "entity_clip_geometry", clip_geometry)
+        return clip_geometry
+
+    @property
+    def lengths(self):
+        """Return resolved side lengths as ``[length1, length2, length3]``."""
+        length1 = float(self.opts.length1)
+        length2 = length1 if self.opts.length2 is None else float(self.opts.length2)
+        length3 = length1 if self.opts.length3 is None else float(self.opts.length3)
+        return np.asarray([length1, length2, length3], dtype=float)
+
+    def act_contains_points(self, points, *, atol=1e-9):
+        """Return a boolean mask selecting points inside or on this bounds."""
+        _selected, mask = select_points_in_box(
+            points,
+            self.corners,
+            is_return_mask=True,
+            atol=atol,
+        )
+        return mask
 
     def act_copy(self, name: str | None = None):
         """
@@ -375,20 +411,43 @@ class Bounds(HostBase):
     def _helper_is_subscriber_alive(self, entry: _BoundsSubscriberEntry) -> bool:
         return entry.host is not None
 
-    def _helper_prune_subscribers(self):
-        subscribers_alive = []
+    def _helper_prune_registry(self, attr_name: str, is_alive):
+        entries = getattr(self, attr_name)
+        entries_alive = []
         sync_to_detach = []
-        for entry in self.entity_subscribers:
-            if self._helper_is_subscriber_alive(entry):
-                subscribers_alive.append(entry)
+        for entry in entries:
+            if is_alive(entry):
+                entries_alive.append(entry)
             else:
                 sync_to_detach.append(entry.sync_name)
 
         for sync_name in sync_to_detach:
             self.act_detach_sync_task(sync_name)
 
-        if len(subscribers_alive) != len(self.entity_subscribers):
-            object.__setattr__(self, "entity_subscribers", subscribers_alive)
+        if len(entries_alive) != len(entries):
+            object.__setattr__(self, attr_name, entries_alive)
+
+    def _helper_unregister_registry(self, attr_name: str, is_match):
+        entries = getattr(self, attr_name)
+        entries_alive = []
+        sync_to_detach = []
+        for entry in entries:
+            if is_match(entry):
+                sync_to_detach.append(entry.sync_name)
+            else:
+                entries_alive.append(entry)
+
+        for sync_name in sync_to_detach:
+            self.act_detach_sync_task(sync_name)
+
+        if sync_to_detach:
+            object.__setattr__(self, attr_name, entries_alive)
+
+    def _helper_prune_subscribers(self):
+        self._helper_prune_registry(
+            "entity_subscribers",
+            self._helper_is_subscriber_alive,
+        )
 
     def _helper_find_subscriber(self, *, host=None, sync_name: str | None = None):
         for entry in self.entity_subscribers:
@@ -415,22 +474,11 @@ class Bounds(HostBase):
 
     def act_unregister_subscriber(self, *, host=None, sync_name: str | None = None):
         """Unregister one subscriber by host object or sync-task name."""
-        subscribers_alive = []
-        sync_to_detach = []
-        for entry in self.entity_subscribers:
-            is_match = (sync_name is not None and entry.sync_name == sync_name) or (
-                host is not None and entry.host is host
-            )
-            if is_match:
-                sync_to_detach.append(entry.sync_name)
-            else:
-                subscribers_alive.append(entry)
-
-        for name in sync_to_detach:
-            self.act_detach_sync_task(name)
-
-        if sync_to_detach:
-            object.__setattr__(self, "entity_subscribers", subscribers_alive)
+        self._helper_unregister_registry(
+            "entity_subscribers",
+            lambda entry: (sync_name is not None and entry.sync_name == sync_name)
+            or (host is not None and entry.host is host),
+        )
 
     @property
     def subscribers(self):
@@ -498,39 +546,19 @@ class Bounds(HostBase):
         return None
 
     def _helper_prune_visuals(self):
-        visuals_alive = []
-        sync_to_detach = []
-        for entry in self.entity_visuals:
-            if self._helper_is_visual_entry_alive(entry):
-                visuals_alive.append(entry)
-            else:
-                sync_to_detach.append(entry.sync_name)
-
-        for sync_name in sync_to_detach:
-            self.act_detach_sync_task(sync_name)
-
-        if len(visuals_alive) != len(self.entity_visuals):
-            object.__setattr__(self, "entity_visuals", visuals_alive)
+        self._helper_prune_registry(
+            "entity_visuals",
+            self._helper_is_visual_entry_alive,
+        )
 
     def _helper_unregister_visual_sync(
         self, sync_name: str | None = None, *, tube=None
     ):
-        visuals_alive = []
-        sync_to_detach = []
-        for entry in self.entity_visuals:
-            is_match = (sync_name is not None and entry.sync_name == sync_name) or (
-                tube is not None and entry.tube is tube
-            )
-            if is_match:
-                sync_to_detach.append(entry.sync_name)
-            else:
-                visuals_alive.append(entry)
-
-        for name in sync_to_detach:
-            self.act_detach_sync_task(name)
-
-        if sync_to_detach:
-            object.__setattr__(self, "entity_visuals", visuals_alive)
+        self._helper_unregister_registry(
+            "entity_visuals",
+            lambda entry: (sync_name is not None and entry.sync_name == sync_name)
+            or (tube is not None and entry.tube is tube),
+        )
 
     def _helper_refresh_visual(self, sync_name: str):
         entry = self._helper_find_visual_entry(sync_name=sync_name)
@@ -899,10 +927,7 @@ def bounds_expanded(
         if np.any(min_lengths < 0):
             raise ValueError("`min_lengths` cannot contain negative values.")
 
-    base_lengths = np.array(
-        [bounds.opts.length1, bounds.opts.length2, bounds.opts.length3],
-        dtype=float,
-    )
+    base_lengths = bounds.lengths
     expanded_lengths = np.maximum(base_lengths * expand_factors, min_lengths)
 
     return Bounds(
@@ -938,10 +963,8 @@ def bounds_sample_points(
     axis3 = bounds.calc_axis3
     axes = np.column_stack([axis1, axis2, axis3])
 
-    length1 = bounds.opts.length1
-    length2 = length1 if bounds.opts.length2 is None else bounds.opts.length2
-    length3 = length1 if bounds.opts.length3 is None else bounds.opts.length3
-    lengths = np.asarray([length1, length2, length3], dtype=float)
+    lengths = bounds.lengths
+    length1, length2, length3 = lengths
 
     if bounds.opts.alignment == "center":
         center = bounds.opts.origin

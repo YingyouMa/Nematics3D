@@ -261,6 +261,86 @@ def test_bounds_expanded_applies_min_lengths():
     )
 
 
+def test_bounds_resolved_lengths_expand_none_as_length1():
+    base = Bounds(
+        opts=OptsBounds(
+            origin=(0.0, 0.0, 0.0),
+            axis1=(1.0, 0.0, 0.0),
+            length1=2.0,
+            length2=None,
+            length3=None,
+            alignment="center",
+        ),
+    )
+
+    np.testing.assert_allclose(base.lengths, [2.0, 2.0, 2.0])
+
+    expanded = bounds_expanded(base, expand_factors=(1.0, 2.0, 3.0))
+    np.testing.assert_allclose(
+        [expanded.opts.length1, expanded.opts.length2, expanded.opts.length3],
+        [2.0, 4.0, 6.0],
+    )
+
+
+def test_bounds_rejects_parallel_axis2():
+    with pytest.raises(ValueError, match="parallel or nearly parallel"):
+        Bounds(
+            opts=OptsBounds(
+                origin=(0.0, 0.0, 0.0),
+                axis1=(1.0, 0.0, 0.0),
+                axis2=(1.0, 0.0, 0.0),
+                length1=1.0,
+            )
+        )
+
+
+def test_bounds_clip_geometry_is_materialized_lazily_and_invalidated():
+    bounds = Bounds(
+        opts=OptsBounds(
+            origin=(0.0, 0.0, 0.0),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=2.0,
+        ),
+    )
+
+    assert bounds.entity_clip_geometry is None
+    clip1 = bounds.clip_geometry
+    assert clip1 is bounds.entity_clip_geometry
+    assert bounds.clip_geometry is clip1
+
+    bounds.act_commit(length1=3.0)
+    assert bounds.entity_clip_geometry is None
+    clip2 = bounds.clip_geometry
+    assert clip2 is bounds.entity_clip_geometry
+    assert clip2 is not clip1
+
+
+def test_bounds_contains_points_wraps_box_selection():
+    bounds = Bounds(
+        opts=OptsBounds(
+            origin=(1.0, 2.0, 3.0),
+            axis1=(1.0, 0.0, 0.0),
+            axis2=(0.0, 1.0, 0.0),
+            length1=2.0,
+            alignment="min_corner",
+        ),
+    )
+
+    points = np.array(
+        [
+            [1.0, 2.0, 3.0],
+            [2.0, 3.0, 4.0],
+            [3.0, 4.0, 5.0],
+            [3.1, 3.0, 4.0],
+        ]
+    )
+    np.testing.assert_array_equal(
+        bounds.act_contains_points(points),
+        [True, True, True, False],
+    )
+
+
 def test_bounds_expanded_validates_inputs():
     base = Bounds(
         opts=OptsBounds(
