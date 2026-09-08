@@ -1,3 +1,5 @@
+"""Surface detection, mask validity, and vicinity helpers for disclinations."""
+
 import numpy as np
 
 from ...q_field.diagonalization import q_diagonalize
