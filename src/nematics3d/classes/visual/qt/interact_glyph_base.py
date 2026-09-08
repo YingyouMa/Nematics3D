@@ -175,7 +175,9 @@ class InteractGlyphBase(PanelBase):
 
             make_RGB_slider(group_RGB, gl_RGB, self.sliders, "color", init_rgb)
 
-            self.chk_use_color = QtWidgets.QCheckBox("Use controlled color", group_RGB)
+            self.chk_use_color = QtWidgets.QCheckBox(
+                "Override with uniform color", group_RGB
+            )
             self.chk_use_color.setChecked(False)
             gl_RGB.addWidget(self.chk_use_color)
             self.chk_use_color.stateChanged.connect(self._on_toggle_use_color)
@@ -204,7 +206,7 @@ class InteractGlyphBase(PanelBase):
                 value_to_tick=lambda v: int(v * 100),
             )
             self.chk_use_opacity = QtWidgets.QCheckBox(
-                "Use controlled opacity", group_opacity
+                "Override with uniform opacity", group_opacity
             )
             self.chk_use_opacity.setChecked(False)
             gl_opacity.addWidget(self.chk_use_opacity)
@@ -251,9 +253,6 @@ class InteractGlyphBase(PanelBase):
                 return None, None
             source_index = int(keep_index[0])
             radius_index = source_index
-            raw_coords = getattr(self.host, "raw_coords", None)
-            if raw_coords is not None and len(radius_all) == 2 * len(raw_coords):
-                radius_index = 2 * source_index
             return float(radius_all[radius_index]), source_index
 
         return float(radius_all[0]), 0
@@ -277,20 +276,6 @@ class InteractGlyphBase(PanelBase):
 
         self.lbl_radius.setText(f"Radius at the red helper marker: {radius:.2f}")
 
-    def _set_host_silhouette_enabled(self, is_enabled):
-        if hasattr(self.host, "state_is_silhouette"):
-            object.__setattr__(self.host, "state_is_silhouette", bool(is_enabled))
-
-    def _on_slider_pressed(self):
-        self._set_host_silhouette_enabled(False)
-        if hasattr(self.host, "_helper_clear_silhouette"):
-            self.host._helper_clear_silhouette()
-
-    def _on_slider_released(self):
-        self._set_host_silhouette_enabled(True)
-        if hasattr(self.host, "_helper_add_silhouette"):
-            self.host._helper_add_silhouette()
-
     # -------------------------------
     # Commit pipeline
     # -------------------------------
@@ -307,7 +292,7 @@ class InteractGlyphBase(PanelBase):
             else:
                 params["radius"] = scale * np.asarray(radius_base, dtype=float)
         if self.config["is_color"]:
-            if self.state.get("is_use_control_color"):
+            if self.state.get("is_uniform_color_override"):
                 params["color"] = (
                     float(self.state["color_r"]),
                     float(self.state["color_g"]),
@@ -320,7 +305,7 @@ class InteractGlyphBase(PanelBase):
         if self.config["is_opacity"]:
             params["opacity"] = (
                 self.state["opacity"]
-                if self.state.get("is_use_control_opacity")
+                if self.state.get("is_uniform_opacity_override")
                 else self.host.opts.opacity
             )
         if self.config["is_sides"]:
@@ -352,7 +337,7 @@ class InteractGlyphBase(PanelBase):
 
     def _on_toggle_use_color(self, _):
         is_color = self.chk_use_color.isChecked()
-        self.state["is_use_control_color"] = is_color
+        self.state["is_uniform_color_override"] = is_color
         for k in ("color_r", "color_g", "color_b"):
             self.sliders[k].set_enabled(is_color)
         if not self._is_block_chk_commit:
@@ -360,7 +345,7 @@ class InteractGlyphBase(PanelBase):
 
     def _on_toggle_use_opacity(self, _):
         is_opacity = self.chk_use_opacity.isChecked()
-        self.state["is_use_control_opacity"] = is_opacity
+        self.state["is_uniform_opacity_override"] = is_opacity
         self.sliders["opacity"].set_enabled(is_opacity)
         if not self._is_block_chk_commit:
             self.commit()
