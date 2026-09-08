@@ -6,6 +6,17 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 
 ## Pending archive
 
+### `ContourSurface` / `ContourSurfaceSet` / `PlotContourSurface` / `InteractContourSurface`
+
+- Canonical domain source: `src/nematics3d/surface/contour.py`, exported through `nematics3d.surface`. `src/nematics3d/classes/contour_surface.py` is now a compatibility shim so the future removal of `classes/` will not remove the implementation.
+- Canonical visualization sources: `src/nematics3d/visual/plot_contour_surface.py` and `src/nematics3d/visual/qt/interact_contour_surface.py`; the former `classes.visual` paths are compatibility shims preserving exact class identity.
+- Responsibility boundary: `ContourSurfaceSet` owns the scalar field, contour levels, extraction, grid-space→physical-space transform, child registry, and mesh caches; `ContourSurface` represents one level and its cached mesh; `PlotContourSurface` only renders/refreshed the extracted mesh; `InteractContourSurface` edits the owning domain surface level rather than pretending level is a visual option.
+- Extraction pipeline is now periodic-aware: `field.add_periodic_boundary(...)` appends the low-side periodic image slice on each selected axis before the scalar field is packed into point-centered `pyvista.ImageData`; `grid.contour(...)` then sees the seam cell explicitly, and `grid_transform` plus `grid_offset` map the extracted points into physical space. Focused tests check an ordinary planar isosurface, x-periodic seam extraction, and per-axis periodic selection.
+- Cleanup: the repeated plot-default/bounds/opts-default merging in `act_plot_surface`, `act_plot_surface_by_name`, `act_plot_surface_by_level`, and `act_plot_all` is centralized in `_helper_plot_surface()` while preserving explicit public method signatures. Redundant visual-unbind branching in surface removal was also collapsed.
+- Package cleanup: root `nematics3d` exports contour domain objects from `nematics3d.surface.contour` and contour visuals from `nematics3d.visual.plot_contour_surface`; canonical `nematics3d.visual` and `nematics3d.visual.qt` lazy exports include the contour visual and interaction panel. Production code contains no direct `nematics3d.classes.contour_surface` or `nematics3d.classes.visual.plot_contour_surface` imports.
+- Validation: focused contour-domain tests pass 15 tests. Combined contour-domain + full visual regression passes 186 tests with the single pre-existing `test_plot_vector_debug_figure` return-value warning. Black and Ruff pass for the touched contour files; Windows VTK `wglMakeCurrent` cleanup stderr remains environmental noise.
+- Remaining review before archive refresh: commit this contour migration/cleanup batch and record its exact commit in the formal reviewed-components ledger.
+
 ### Processed Plot interaction consoles
 
 - Canonical Qt panels for the already-migrated ordinary Plot classes now live under `src/nematics3d/visual/qt/`: `InteractSphere`, `InteractRod`, `InteractTube`, `InteractVector`, `InteractDelaunay`, and `InteractPolyData`. `PlotExtent` continues to reuse the Tube interaction path, so it needs no separate panel. Their former `classes.visual.qt` modules are compatibility shims.

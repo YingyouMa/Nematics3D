@@ -10,6 +10,7 @@ from importlib import import_module
 _LAZY_EXPORTS = {
     "camera_pose_from_vectors": (".camera", "camera_pose_from_vectors"),
     "camera_vectors_from_pose": (".camera", "camera_vectors_from_pose"),
+    "n_color_immerse": (".color", "n_color_immerse"),
     "FigureManager": (".figure_manager", "FigureManager"),
     "OptsGlyph": (".glyph", "OptsGlyph"),
     "PlotGlyph": (".glyph", "PlotGlyph"),
@@ -22,6 +23,8 @@ _LAZY_EXPORTS = {
     "as_plotfigure": (".plot_figure", "as_plotfigure"),
     "OptsDelaunay": (".plot_delaunay", "OptsDelaunay"),
     "PlotDelaunay": (".plot_delaunay", "PlotDelaunay"),
+    "OptsContourSurface": (".plot_contour_surface", "OptsContourSurface"),
+    "PlotContourSurface": (".plot_contour_surface", "PlotContourSurface"),
     "PlotExtent": (".plot_extent", "PlotExtent"),
     "OptsPolyData": (".plot_polydata", "OptsPolyData"),
     "PlotPolyData": (".plot_polydata", "PlotPolyData"),

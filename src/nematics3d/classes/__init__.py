@@ -13,13 +13,13 @@ __all__ = [
 
 
 if TYPE_CHECKING:
-    from .contour_surface import ContourSurface, ContourSurfaceSet
+    from nematics3d.surface.contour import ContourSurface, ContourSurfaceSet
     from .surface_sampling import OptsSurfaceSampling, SurfaceSampling
 
 
 def __getattr__(name: str):
     if name in {"ContourSurface", "ContourSurfaceSet"}:
-        from .contour_surface import ContourSurface, ContourSurfaceSet
+        from nematics3d.surface.contour import ContourSurface, ContourSurfaceSet
 
         exports = {
             "ContourSurface": ContourSurface,
