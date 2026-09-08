@@ -817,7 +817,7 @@ class PlotFigure(HostBase):
     @staticmethod
     def _helper_get_director_axes_colors():
         """Return the default director colormap evaluated on the x/y/z axes."""
-        from nematics3d.field import n_color_immerse
+        from nematics3d.visual.color import n_color_immerse
 
         return tuple(n_color_immerse(np.eye(3)))
 
@@ -878,7 +878,7 @@ class PlotFigure(HostBase):
     ) -> vtk.vtkActor:
         """Build a director-colored sphere actor for use as an orientation widget."""
         import pyvista as pv
-        from nematics3d.field import n_color_immerse
+        from nematics3d.visual.color import n_color_immerse
 
         sphere = pv.Sphere(
             radius=1.0,

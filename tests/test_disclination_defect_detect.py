@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from nematics3d.analysis.disclination import defect_detect
-from nematics3d.field import add_periodic_boundary, align_stack
+from nematics3d.field import add_periodic_boundary, align_director_stack
 
 
 def _legacy_xy_detector(n, threshold):
@@ -13,7 +13,7 @@ def _legacy_xy_detector(n, threshold):
     b = n[1:, :-1]
     c = n[1:, 1:]
     d = n[:-1, 1:]
-    aligned = align_stack(np.stack((a, b, c, d), axis=0))
+    aligned = align_director_stack(np.stack((a, b, c, d), axis=0))
     closure = np.einsum("...i,...i->...", aligned[0], aligned[-1])
     coordinates = np.argwhere(closure < threshold).astype(float)
     coordinates[:, :2] += 0.5

@@ -16,7 +16,7 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.field import n_color_immerse
+from nematics3d.visual.color import n_color_immerse
 
 
 class FakeOrientationWidget:
@@ -47,9 +47,15 @@ class TestPlotFigureAxesWidget(unittest.TestCase):
         actor = PlotFigure._helper_build_axes_widget_actor()
         expected = n_color_immerse(np.eye(3))
 
-        np.testing.assert_allclose(actor.GetXAxisShaftProperty().GetColor(), expected[0])
-        np.testing.assert_allclose(actor.GetYAxisShaftProperty().GetColor(), expected[1])
-        np.testing.assert_allclose(actor.GetZAxisShaftProperty().GetColor(), expected[2])
+        np.testing.assert_allclose(
+            actor.GetXAxisShaftProperty().GetColor(), expected[0]
+        )
+        np.testing.assert_allclose(
+            actor.GetYAxisShaftProperty().GetColor(), expected[1]
+        )
+        np.testing.assert_allclose(
+            actor.GetZAxisShaftProperty().GetColor(), expected[2]
+        )
         np.testing.assert_allclose(actor.GetXAxisTipProperty().GetColor(), expected[0])
         np.testing.assert_allclose(actor.GetYAxisTipProperty().GetColor(), expected[1])
         np.testing.assert_allclose(actor.GetZAxisTipProperty().GetColor(), expected[2])

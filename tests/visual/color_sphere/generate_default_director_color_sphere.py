@@ -19,7 +19,7 @@ if "nematics3d" not in sys.modules:
 from nematics3d.classes.visual.plot_figure import PlotFigure
 from nematics3d.classes.visual.plot_polydata import PlotPolyData
 from nematics3d.classes.visual.plot_vector import PlotVector
-from nematics3d.field import n_color_immerse
+from nematics3d.visual.color import n_color_immerse
 
 OUTPUT_DIR = Path(__file__).resolve().parent
 PATH_IMAGE = OUTPUT_DIR / "default_director_color_sphere.png"

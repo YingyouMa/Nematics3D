@@ -1,33 +1,19 @@
-from typing import Sequence, Union
-
 import numpy as np
 
 from ...q_field.diagonalization import q_diagonalize
 from ...datatypes import (
-    BoxSizePeriodic,
     DefectIndex,
     DimensionInfo,
     MaskField,
-    as_box_size_periodic,
+    as_bool,
     as_defect_index,
     as_dimension_info,
+    as_director_field,
     as_lattice_mask,
 )
-from ...field import align_stack
+from ...field import align_director_stack
 from ...logging_decorator import logging_and_warning_decorator
 from .line import get_square
-
-DEFECT_NEIGHBOR = np.zeros((10, 3))
-DEFECT_NEIGHBOR[0] = (1, 0, 0)
-DEFECT_NEIGHBOR[1] = (-1, 0, 0)
-DEFECT_NEIGHBOR[2] = (0.5, 0.5, 0)
-DEFECT_NEIGHBOR[3] = (0.5, -0.5, 0)
-DEFECT_NEIGHBOR[4] = (0.5, 0, 0.5)
-DEFECT_NEIGHBOR[5] = (0.5, 0, -0.5)
-DEFECT_NEIGHBOR[6] = (-0.5, 0.5, 0)
-DEFECT_NEIGHBOR[7] = (-0.5, -0.5, 0)
-DEFECT_NEIGHBOR[8] = (-0.5, 0, 0.5)
-DEFECT_NEIGHBOR[9] = (-0.5, 0, -0.5)
 
 
 def defect_validity_from_mask(
@@ -182,6 +168,11 @@ def defect_detect_surface(
         Only returned when ``is_return_mask=True``.  ``True`` for each surface
         vertex that belongs to a defect quad or defect triangle.
     """
+    is_simplify = as_bool(is_simplify, name="is_simplify")
+    is_return_mask = as_bool(is_return_mask, name="is_return_mask")
+    if not np.isscalar(threshold) or not np.isfinite(threshold):
+        raise ValueError("`threshold` must be a finite scalar.")
+
     # ------------------------------------------------------------------ #
     # 1. Evaluate director field at surface vertices                       #
     # ------------------------------------------------------------------ #
@@ -191,7 +182,9 @@ def defect_detect_surface(
         # .clean() avoids vertex reordering that would break the mapping.
         surface = surface.triangulate()
         vertices = np.asarray(surface.points, dtype=float)  # (V, 3)
-        n = np.asarray(ndata, dtype=float)
+        n = as_director_field(
+            ndata, name="ndata", is_normalized=True, is_zero_allowed=False
+        )
         if n.shape != (len(vertices), 3):
             raise ValueError(
                 f"`ndata` array has shape {n.shape} but surface has "
@@ -227,43 +220,22 @@ def defect_detect_surface(
     # ------------------------------------------------------------------ #
     # 3. Collect quads from internal edges                                 #
     # ------------------------------------------------------------------ #
-    # For each internal edge (i, j) with opposing vertices k and l,
-    # sort the four points by polar angle in the local tangent plane so
-    # they form a proper (non-self-intersecting) loop.
+    # For each internal edge (i, j) with opposing vertices k and l, the
+    # quadrilateral boundary is k -> i -> l -> j. This follows directly from
+    # triangle connectivity and avoids fragile geometric angle sorting.
     quad_list = []
     quad_tri_pairs = []  # (tri_idx_0, tri_idx_1) per quad
     for (vi, vj), entries in edge_map.items():
-        if len(entries) != 2:
+        if len(entries) == 1:
             continue  # boundary edge
+        if len(entries) != 2:
+            raise ValueError(
+                "`surface` must be edge-manifold; an edge is shared by "
+                f"{len(entries)} triangles."
+            )
         tri_idx_0, vk = entries[0]
         tri_idx_1, vl = entries[1]
-        four = np.array([vi, vj, vk, vl], dtype=int)
-
-        # Project to local tangent plane centred at the quad centroid.
-        pts4 = vertices[four]  # (4, 3)
-        centroid = pts4.mean(axis=0)
-        rel = pts4 - centroid  # (4, 3)
-
-        # Build an orthonormal 2-D frame from the first relative vector.
-        u = rel[0]
-        u_norm = np.linalg.norm(u)
-        if u_norm < 1e-14:
-            continue
-        u = u / u_norm
-
-        # Normal from cross product of two independent edge vectors.
-        normal = np.cross(rel[0], rel[1])
-        n_norm = np.linalg.norm(normal)
-        if n_norm < 1e-14:
-            continue
-        normal = normal / n_norm
-        v = np.cross(normal, u)
-
-        # Polar angles and sort.
-        px = rel @ u
-        py = rel @ v
-        order = np.argsort(np.arctan2(py, px))
-        quad_list.append(four[order])
+        quad_list.append(np.array([vk, vi, vl, vj], dtype=int))
         quad_tri_pairs.append((tri_idx_0, tri_idx_1))
 
     if not quad_list:
@@ -281,7 +253,7 @@ def defect_detect_surface(
     # ------------------------------------------------------------------ #
     # stack shape: (4, Q, 3)
     directors = np.stack([n[quads[:, k]] for k in range(4)], axis=0).copy()
-    aligned = align_stack(directors)
+    aligned = align_director_stack(directors)
 
     dot_first_last = np.einsum("qi,qi->q", aligned[0], aligned[3])
     defect_mask = dot_first_last < threshold
@@ -358,102 +330,6 @@ def defect_detect_surface(
     return defect_coords, near_defect_mask
 
 
-def defect_neighbor_possible_get(
-    defect_index: Union[Sequence[float], np.ndarray],
-    box_size_periodic: BoxSizePeriodic = np.inf,
-) -> np.ndarray:
-    """
-    Compute all possible neighboring defect indices of a given defect in a 3D grid,
-    and apply periodic boundary conditions by generating mirror points if necessary.
-
-    Each defect index is represented as a tuple of three floats. One of them is an integer (the "layer" dimension),
-    and the other two are half-integers (the pixel centers on that layer).
-
-    The 10 possible neighbors include:
-    - 2 direct neighbors along the layer axis
-    - 4 diagonal neighbors shifting one half along one pixel axis
-    - 4 diagonal neighbors shifting one half along the other pixel axis
-
-    If the defect lies near a periodic boundary, the mirror images of neighbors are also included.
-
-    Parameters
-    ----------
-    defect_index : array-like of 3 floats
-        Defect position, where exactly one coordinate is integer (the layer),
-        and the other two are half-integers.
-
-    box_size_periodic : float or array-like of 3 floats, optional
-        Size of the periodic domain in each direction. Use `np.inf` for non-periodic boundaries.
-        If a single float is provided, it is broadcasted to all three dimensions.
-        For example:
-            [X+1, Y+1, np.inf] means periodic in x and y, open in z.
-        Default is [np.inf, np.inf, np.inf], i.e., no periodicity.
-
-    Returns
-    -------
-    result : np.ndarray of shape (10, 3) or more
-        Neighboring defect positions, with additional mirrored points if periodic and near boundary.
-
-    Raises
-    ------
-    ValueError
-        If input shape is not (3,) or if the "layer" dimension cannot be identified.
-    """
-
-    from ...grid import generate_mirror_point_periodic_boundary
-
-    defect_index = np.asarray(defect_index, dtype=np.float64)
-    if defect_index.shape != (3,):
-        raise ValueError(
-            f"defect_index must be a 3-element vector, got shape {defect_index.shape}"
-        )
-
-    # Standardize box_size format
-    box_size_periodic = as_box_size_periodic(
-        box_size_periodic,
-        name="box_size_periodic",
-    )
-
-    # Copy neighbor offset vectors: shape (10, 3)
-    neighbor = DEFECT_NEIGHBOR.copy()
-
-    # Identify the integer-valued index (i.e., the layer direction)
-    layer_index = np.where(defect_index % 1 == 0)[0]
-    if len(layer_index) != 1:
-        raise ValueError(
-            f"Exactly one coordinate must be integer (the layer). Got {defect_index}"
-        )
-    layer_index = layer_index[0]
-
-    # If layer is not axis 0, swap axes to make math easier
-    if layer_index != 0:
-        neighbor[:, (0, layer_index)] = neighbor[:, (layer_index, 0)]
-
-    # Shift base defect by all 10 neighbor directions
-    result = np.tile(defect_index, (10, 1)) + neighbor
-
-    # Determine if periodic mirror points are needed
-    periodic_mask = box_size_periodic != np.inf
-    if np.any(periodic_mask):
-        coord_in_periodic = defect_index[periodic_mask]
-        box_size_in_periodic = box_size_periodic[periodic_mask]
-
-        # Near boundary condition check: if defect is close to periodic edge
-        near_boundary = np.min(coord_in_periodic) <= 1 or np.any(
-            coord_in_periodic >= box_size_in_periodic - 2
-        )
-        if near_boundary:
-            result = [
-                generate_mirror_point_periodic_boundary(
-                    point, box_size_periodic=box_size_periodic
-                )
-                for point in result
-            ]
-            result = np.vstack(result)
-
-    return result
-
-
 def defect_vicinity_grid(defect_indices, num_shell=2):
     """
     Generate square-shell neighborhoods around lattice-aligned defect points.
@@ -495,9 +371,13 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     (2, 16, 3)
     """
 
-    defect_indices = np.asarray(defect_indices)
+    defect_indices = as_defect_index(defect_indices)
+    if isinstance(num_shell, bool) or not isinstance(num_shell, (int, np.integer)):
+        raise TypeError("`num_shell` must be a positive integer.")
+    if num_shell <= 0:
+        raise ValueError("`num_shell` must be a positive integer.")
     if defect_indices.size == 0:
-        return np.empty((0, 3), dtype=int)
+        return np.empty((0, 4 * num_shell**2, 3), dtype=int)
 
     square_size_list = np.arange(1, 2 * num_shell + 1, 2)
     square_num_list = square_size_list + 1
@@ -508,7 +388,7 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
 
     length = 4 * num_shell**2
 
-    result = np.zeros((np.shape(defect_indices)[0], length, 3))
+    result = np.empty((len(defect_indices), length, 3), dtype=int)
 
     indexx = np.isclose(defect_indices[:, 0], np.round(defect_indices[:, 0]))
     indexy = np.isclose(defect_indices[:, 1], np.round(defect_indices[:, 1]))
@@ -541,10 +421,8 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     defecty = defecty + np.broadcast_to(squarey, (np.shape(defecty)[0], length, 3))
     defectz = defectz + np.broadcast_to(squarez, (np.shape(defectz)[0], length, 3))
 
-    result[indexx] = defectx
-    result[indexy] = defecty
-    result[indexz] = defectz
-
-    result = result.astype(int)
+    result[indexx] = defectx.astype(int)
+    result[indexy] = defecty.astype(int)
+    result[indexz] = defectz.astype(int)
 
     return result

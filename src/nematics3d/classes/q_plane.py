@@ -9,10 +9,8 @@ from pyvistaqt import BackgroundPlotter
 
 from nematics3d.datatypes import as_bool
 from nematics3d.analysis.disclination import defect_detect, defect_vicinity_grid
-from nematics3d.field import (
-    align_directors,
-    n_color_immerse,
-)
+from nematics3d.field import align_directors
+from nematics3d.visual.color import n_color_immerse
 from nematics3d.q_field.diagonalization import q_diagonalize
 from nematics3d.geometry import (
     find_rotation_axis,

@@ -5,6 +5,8 @@ from typing import Any
 
 import numpy as np
 
+from nematics3d.datatypes import as_director_field
+
 
 def blue_red_in_white_bg() -> np.ndarray:
     """Return L2-normalized RGB colors from blue to red for a white background."""
@@ -112,6 +114,19 @@ def director_color_pareto_oklab_055(n: np.ndarray) -> np.ndarray:
     return _apply_boy_affine(n, A, b)
 
 
+def n_color_immerse(n) -> list[tuple[float, float, float]]:
+    """Map normalized nematic directors to the selected vivid RGB colormap.
+
+    This is the canonical Nematics3D director colormap used for visualization.
+    It applies the Boy-surface immersion followed by the selected OKLab-optimized
+    affine map at ``J_loc = 0.55``. Because the input is a nematic director,
+    ``n`` and ``-n`` map to the same color.
+    """
+    n = as_director_field(n, name="n", is_normalized=True)
+    colors = director_color_pareto_oklab_055(n)
+    return [tuple(color) for color in colors]
+
+
 def plot_director_color_sphere(
     color_func: Callable[[np.ndarray], Any],
     *,
@@ -209,5 +224,6 @@ __all__ = [
     "director_color_pareto_034",
     "director_color_pareto_oklab_043",
     "director_color_pareto_oklab_055",
+    "n_color_immerse",
     "plot_director_color_sphere",
 ]

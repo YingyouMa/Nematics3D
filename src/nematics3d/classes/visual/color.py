@@ -5,6 +5,7 @@ from nematics3d.visual.color import (
     director_color_pareto_034,
     director_color_pareto_oklab_043,
     director_color_pareto_oklab_055,
+    n_color_immerse,
     plot_director_color_sphere,
 )
 
@@ -13,5 +14,6 @@ __all__ = [
     "director_color_pareto_034",
     "director_color_pareto_oklab_043",
     "director_color_pareto_oklab_055",
+    "n_color_immerse",
     "plot_director_color_sphere",
 ]

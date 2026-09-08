@@ -1,7 +1,6 @@
 import numpy as np
 
-from nematics3d.visual.color import director_color_pareto_oklab_055
-from nematics3d.field import n_color_immerse
+from nematics3d.visual.color import director_color_pareto_oklab_055, n_color_immerse
 
 
 def test_n_color_immerse_uses_selected_oklab_mapping():

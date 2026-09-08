@@ -13,7 +13,14 @@ def get_square_each(size, num, dim=2):
     without duplicating corner points. In 3D mode, the square lies in the
     yz-plane with x = 0.
     """
-    corners = np.array([[0, 0], [size, 0], [size, size], [0, size]])
+    if not np.isscalar(size) or not np.isfinite(size) or size <= 0:
+        raise ValueError("`size` must be a positive finite scalar.")
+    if isinstance(num, bool) or not isinstance(num, (int, np.integer)) or num < 2:
+        raise ValueError("`num` must be an integer greater than or equal to 2.")
+    if dim not in (2, 3):
+        raise ValueError("`dim` must be either 2 or 3.")
+
+    corners = np.array([[0, 0], [size, 0], [size, size], [0, size]], dtype=float)
 
     edges = []
     for i in range(4):
@@ -34,12 +41,18 @@ def get_square(size_list, num_list, origin_list=((0, 0, 0),), dim=3):
     corresponding origin. ``size_list``, ``num_list``, and ``origin_list`` must
     describe the same number of squares.
     """
-    if np.isscalar(size_list):
-        size_list = np.asarray([size_list])
-    if np.isscalar(num_list):
-        num_list = np.asarray([num_list])
+    if dim not in (2, 3):
+        raise ValueError("`dim` must be either 2 or 3.")
 
-    if not len(size_list) == len(num_list) == np.shape(origin_list)[0]:
+    size_list = np.atleast_1d(size_list)
+    num_list = np.atleast_1d(num_list)
+    origin_list = np.asarray(origin_list, dtype=float)
+    if origin_list.ndim == 1:
+        origin_list = origin_list[np.newaxis, :]
+    if origin_list.ndim != 2 or origin_list.shape[1] != dim:
+        raise ValueError(f"`origin_list` must have shape (N, {dim}).")
+
+    if not len(size_list) == len(num_list) == len(origin_list):
         raise ValueError(
             "size_list, num_list, and origin_list must describe the same number "
             "of squares."

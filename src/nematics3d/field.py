@@ -1,8 +1,4 @@
-"""
-Field-level utilities for structured Q-tensor and director data.
-"""
-
-from typing import List, Tuple
+"""Field-level utilities for structured Q-tensor and director data."""
 
 import numpy as np
 
@@ -18,13 +14,15 @@ from .datatypes import (
 def add_periodic_boundary(
     data: GeneralField, is_boundary_periodic: DimensionInfo = 0
 ) -> GeneralField:
-    #! loop
-    """
-    Extend a physical field with periodic boundary slices in specified dimensions.
+    """Append one periodic image slice along selected spatial axes.
 
-    This function appends one extra grid slice along each of the periodic dimensions.
-    The added slice is a copy of the first slice along that axis, ensuring periodic continuity.
-    If a dimension is non-periodic, the dimension is unchanged.
+    The first three axes are interpreted as spatial dimensions. For every
+    periodic axis, one extra slice is appended to the high-index side and is
+    copied from the first slice on that axis. Any trailing component axes are
+    preserved unchanged.
+
+    The returned array is always independent of the input, including when no
+    periodic axis is selected.
 
     Parameters
     ----------
@@ -40,120 +38,91 @@ def add_periodic_boundary(
 
     Returns
     -------
-    output : GeneralField
-        Extended field with one additional slice along each periodic dimension.
-        Shape becomes:
-            (Nx + is_periodic[0], Ny + is_periodic[1], Nz + is_periodic[2], ...)
+    output : numpy.ndarray
+        Independent extended copy. Its first three dimensions are
+        ``(Nx + px, Ny + py, Nz + pz)`` where ``px``, ``py``, and ``pz`` are
+        the periodic-axis flags.
     """
+    data = np.asarray(data)
+    if data.ndim < 3:
+        raise ValueError(
+            "`data` must have at least three spatial dimensions; "
+            f"got shape {data.shape}."
+        )
+
     is_boundary_periodic = as_dimension_info(
         is_boundary_periodic,
         name="is_boundary_periodic",
         is_bool=True,
     )
 
-    if np.any(is_boundary_periodic):
-        Nx, Ny, Nz, *rest_shape = data.shape  # Extract the first three dimensions
-        output = np.empty(
-            (
-                Nx + is_boundary_periodic[0],
-                Ny + is_boundary_periodic[1],
-                Nz + is_boundary_periodic[2],
-                *rest_shape,
-            ),
-            dtype=data.dtype,
-        )
-        output[:Nx, :Ny, :Nz] = data  # Copy original data into the new array
-
-        # Copy first slices to last.
-        if is_boundary_periodic[0]:
-            output[Nx] = output[0]
-        if is_boundary_periodic[1]:
-            output[:, Ny] = output[:, 0]
-        if is_boundary_periodic[2]:
-            output[:, :, Nz] = output[:, :, 0]
-    else:
-        output = data
-
+    output = data.copy()
+    for axis, is_periodic in enumerate(is_boundary_periodic):
+        if is_periodic:
+            output = np.concatenate(
+                (output, np.take(output, [0], axis=axis)), axis=axis
+            )
     return output
 
 
 def align_directors(n_reference: nField, n_target: nField) -> nField:
-    """
-    Align target director to have similar orientation as reference.
-    This is used to handle the nematic symmetry of directors.
-    """
-    n_reference = as_director_field(n_reference, name="n_reference")
-    n_target = as_director_field(n_target, name="n_target")
-    dots = np.einsum("...i,...i->...", n_reference, n_target)
-    signs = np.where(dots < 0, -1, 1)
-    return np.einsum("...,...i->...i", signs, n_target)
+    """Flip target directors to the nematic branch nearest a reference field.
 
-
-def align_stack(stack):
-
-    dots = np.einsum("...i,...i->...", stack[:-1], stack[1:])
-
-    flips = np.ones(stack.shape[:-1], dtype=np.int8)
-    flips[1:] = np.where(dots < 0, -1, 1).astype(np.int8, copy=False)
-
-    acc_flips = np.cumprod(flips, axis=0)
-
-    stack *= acc_flips[..., np.newaxis].astype(stack.dtype, copy=False)
-    return stack
-
-
-def n_color_immerse(n: nField) -> List[Tuple]:
-    """
-    Map a nematic director field to RGB colors for visualization.
-
-    The mapping combines a Boy-surface polynomial immersion of RP^2 with a
-    vividness-optimized affine transform. The selected map maximizes mean
-    OKLab chroma subject to ``J_loc <= 0.55``, calibrated red/green/blue axis
-    tolerances, and the sRGB gamut constraint.
+    ``n`` and ``-n`` represent the same nematic director.  This helper chooses,
+    point by point, the sign of ``n_target`` whose dot product with
+    ``n_reference`` is non-negative.  Inputs are validated as director fields
+    and are never modified in place.
 
     Parameters
     ----------
-    n : array_like, shape (..., 3)
-        Nematic director field.
+    n_reference, n_target : array_like, shape (..., 3)
+        Director fields with matching shapes.
 
     Returns
     -------
-    colors : list of tuple
-        RGB colors in [0, 1], suitable for plotting.
+    numpy.ndarray
+        A new array with the same shape as ``n_target``.
     """
-    n = as_director_field(n, name="n", is_normalized=True)
-    boy = np.empty(n.shape, dtype=float)
-    x = n[..., 0]
-    y = n[..., 1]
-    z = n[..., 2]
-    x2 = x**2
-    y2 = y**2
-    z2 = z**2
+    n_reference = as_director_field(n_reference, name="n_reference")
+    n_target = as_director_field(n_target, name="n_target")
+    if n_reference.shape != n_target.shape:
+        raise ValueError(
+            "`n_reference` and `n_target` must have the same shape; "
+            f"got {n_reference.shape} and {n_target.shape}."
+        )
 
-    boy[..., 0] = 0.5 * (
-        (2.0 * x2 - y2 - z2)
-        + 2.0 * y * z * (y2 - z2)
-        + z * x * (x2 - z2)
-        + x * y * (y2 - x2)
-    )
-    boy[..., 1] = (7.0 / 8.0) * ((y2 - z2) + z * x * (z2 - x2) + x * y * (y2 - x2))
-    boy[..., 2] = (
-        (1.0 / 8.0)
-        * (x + y + z)
-        * ((x + y + z) ** 3 + 4.0 * (y - x) * (z - y) * (x - z))
-    )
+    dots = np.einsum("...i,...i->...", n_reference, n_target)
+    signs = np.where(dots < 0.0, -1.0, 1.0)
+    return n_target * signs[..., np.newaxis]
 
-    transform = np.array(
-        [
-            [0.5022508927293965, 0.0814191819777772, 0.4278817282953531],
-            [-0.2622468169155294, 0.4198664552518698, 0.2843783905850694],
-            [-0.2603273418569074, -0.3829942092529955, 0.3705024138608909],
-        ],
-        dtype=float,
-    )
-    offset = np.array(
-        [0.3810134662659256, 0.4051244318995519, 0.4114207201942865],
-        dtype=float,
-    )
-    result = np.einsum("...i,ji->...j", boy, transform) + offset
-    return [tuple(color) for color in np.clip(result, 0.0, 1.0)]
+
+def align_director_stack(stack: nField) -> nField:
+    """Align an ordered stack of directors by propagating nematic signs.
+
+    The first director slice is kept fixed.  Each subsequent slice is compared
+    with the previous *original* slice, and cumulative sign flips are then
+    applied so neighboring aligned slices lie on a consistent nematic branch.
+    The input is not modified.
+
+    Parameters
+    ----------
+    stack : array_like, shape (N, ..., 3)
+        Ordered director stack. ``N`` must be at least one.
+
+    Returns
+    -------
+    numpy.ndarray
+        A new aligned array with the same shape as ``stack``.
+    """
+    stack = as_director_field(stack, name="stack")
+    if stack.shape[0] == 0:
+        raise ValueError("`stack` must contain at least one director slice.")
+
+    if stack.shape[0] == 1:
+        return stack.copy()
+
+    dots = np.einsum("...i,...i->...", stack[:-1], stack[1:])
+    flips = np.ones(stack.shape[:-1], dtype=np.int8)
+    flips[1:] = np.where(dots < 0.0, -1, 1).astype(np.int8, copy=False)
+    accumulated_flips = np.cumprod(flips, axis=0)
+    return stack * accumulated_flips[..., np.newaxis]
