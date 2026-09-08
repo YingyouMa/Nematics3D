@@ -45,6 +45,37 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.classes.visual.PlotFigure`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Figure/scene façade owning a PyVista or PyVistaQt plotting backend |
+| Source | [`src/nematics3d/classes/visual/plot_figure.py`](../../src/nematics3d/classes/visual/plot_figure.py), with pure camera-pose helpers in [`src/nematics3d/visual/camera.py`](../../src/nematics3d/visual/camera.py) |
+| Tests | [`tests/visual/test_as_plotfigure.py`](../../tests/visual/test_as_plotfigure.py), [`tests/visual/test_plot_figure_camera_sync.py`](../../tests/visual/test_plot_figure_camera_sync.py), [`tests/visual/test_plot_figure_registry.py`](../../tests/visual/test_plot_figure_registry.py), [`tests/visual/test_plot_figure_savefig.py`](../../tests/visual/test_plot_figure_savefig.py), [`tests/visual/test_plot_figure_lifecycle.py`](../../tests/visual/test_plot_figure_lifecycle.py), [`tests/visual/test_plot_figure_axes_widget.py`](../../tests/visual/test_plot_figure_axes_widget.py), plus `tests/visual/test_glyph_scalar_bar.py`, `tests/visual/test_glyph_empty_coords.py`, and `tests/visual/test_plot_glyph_contract.py` as downstream interface checks |
+| Review scope | Plotter construction/wrapping and backend ownership; off-screen mode inheritance from wrapped plotters; figure opts for camera pose, window size, and background; camera synchronization in both directions; standard XY/XZ/YZ/isometric views and reset-camera behavior; glyph registry forwarding and collection protocol; scalar-bar/interact registry integration at the PlotFigure boundary; screenshot/savefig behavior; orientation/axes widget attachment; liveness checks; close lifecycle, registry cleanup, glyph-removal policy, and idempotent close; `as_plotfigure()` normalization and failure boundaries. |
+| Validation | `python -m pytest tests/visual/test_as_plotfigure.py tests/visual/test_plot_figure_camera_sync.py tests/visual/test_plot_figure_registry.py tests/visual/test_plot_figure_savefig.py tests/visual/test_plot_figure_lifecycle.py tests/visual/test_plot_figure_axes_widget.py tests/visual/test_glyph_scalar_bar.py tests/visual/test_glyph_empty_coords.py tests/visual/test_plot_glyph_contract.py` passed with 64 tests; broader focused regression including camera helpers and RegistryBase passed with 87 tests; Black passed on `src/nematics3d/classes/visual/plot_figure.py` and the newly added focused PlotFigure tests; Ruff passed on the same modified Python files |
+| Reviewed commit | `8c16b377d75d479a8fc6ecbda2f045097f3fb62c` |
+| Reviewed date | 2026-09-07 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | PlotFigure is intentionally reviewed as the scene/backend façade, not as proof of the internal correctness of attached subsystems. `PickManager`, Qt console/panel internals, and scalar-bar implementation remain separate review components. A plotter supplied through `PlotFigure(plotter=...)` is adopted: closing the PlotFigure also closes that backend. `act_close(is_remove_glyphs=False)` intentionally preserves glyph registry/relation state even though the rendering backend is closed. Interactive PyVistaQt behavior cannot be exhaustively validated by off-screen tests and remains partly integration-level behavior. |
+
+Summary of changes and evidence:
+
+- Moved camera pose mathematics into pure `nematics3d.visual.camera` helpers and
+  added ordinary-view and pole round-trip coverage.
+- Tightened figure size and savefig window-size validation so pixel dimensions
+  are positive integers rather than silently truncated values.
+- Standardized figure-level registry forwarding against the reviewed
+  `RegistryBase` contract, including `act_register()` return semantics.
+- Narrowed `as_plotfigure()` recovery so internal wrapping/commit bugs are no
+  longer swallowed as invalid-input recovery; this exposed and fixed wrapped
+  off-screen PyVista plotter mode handling.
+- Verified standard camera-view conventions and idempotence, savefig state
+  preservation, backend ownership, liveness, repeated close, and relation
+  cleanup.
+- Ensured interact panels are unregistered during figure shutdown even when a
+  panel's own `close()` implementation does not perform registry cleanup.
+
 ### `nematics3d.core.RegistryBase`
 
 | Field | Evidence |
