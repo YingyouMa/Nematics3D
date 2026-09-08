@@ -1123,6 +1123,38 @@ No stale review records currently exist.
 
 ## Review history
 
+### `defect_detect_surface()`, `defect_vicinity_grid()`, `get_square()`, and `get_square_each()`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public surface/vicinity disclination analysis plus private square-shell geometry helpers |
+| Source | [`src/nematics3d/analysis/disclination/misc.py`](../../src/nematics3d/analysis/disclination/misc.py) and [`src/nematics3d/analysis/disclination/line.py`](../../src/nematics3d/analysis/disclination/line.py) |
+| Tests | [`tests/test_disclination_surface.py`](../../tests/test_disclination_surface.py), [`tests/test_disclination_vicinity.py`](../../tests/test_disclination_vicinity.py), plus detection/classification/validity regressions |
+| Tutorial | None; focused docstrings and tests define the surface-loop and lattice-shell contracts |
+| Review scope | Surface triangulation and manifold-edge handling, topological quad-loop ordering, direct and interpolated director inputs, normalization/zero handling, finite threshold and boolean controls, simplified and unsimplified outputs, near-defect masks, square-shell geometry in 2D/3D, `DefectIndex` validation, positive shell counts, empty-output shape, API exports, active callers, and removal of obsolete neighbor-generation code superseded by the reviewed doubled-integer classifier |
+| Validation | Focused surface/vicinity run (7 passed); combined disclination/field/color regression run (57 passed); Black on reviewed implementation paths; Ruff on reviewed source/test paths; caller/export audit confirming `defect_neighbor_possible_get()` and `DEFECT_NEIGHBOR` were used only by the archived legacy classifier |
+| Reviewed commit | `a4798fc25075e9f0c50e4ba64acaa2041d062863` |
+| Reviewed date | 2026-09-08 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | `defect_detect_surface()` assumes an edge-manifold triangulated surface and intentionally rejects edges shared by more than two triangles. Surface simplification remains a local triangle-centroid consolidation rather than a global clustering algorithm. `get_square()` and `get_square_each()` remain internal implementation helpers and are no longer exported from the public disclination package. |
+
+Summary of changes and evidence:
+
+- Replaced the fragile local-tangent polar-angle ordering in surface detection
+  with the connectivity-defined quadrilateral boundary `k -> i -> l -> j` for
+  the two triangles sharing an internal edge.
+- Added explicit validation for surface director data, zero directors,
+  threshold, simplification flags, and non-manifold edges.
+- Tightened `defect_vicinity_grid()` around canonical `DefectIndex` inputs,
+  positive integer shell counts, deterministic integer output, and a consistent
+  empty shape `(0, 4*num_shell**2, 3)`.
+- Tightened the square-shell helpers around finite positive size, integer point
+  count, supported dimensions, and origin-array shape; removed them from the
+  public package exports because they are implementation details.
+- Removed `defect_neighbor_possible_get()` and `DEFECT_NEIGHBOR`; repository
+  search showed no production caller, and line classification now owns the
+  reviewed doubled-integer neighbor graph implementation.
+
 Use this table as a compact chronological index after adding a detailed record
 above.
 
@@ -1159,3 +1191,4 @@ above.
 | 2026-08-28 | `defect_validity_from_mask()` | `src/nematics3d/analysis/disclination/misc.py` | `tests/test_disclination_defect_validity.py` and Q-field initialization integration | `7e03526ffe198d1970543661f698770942dc6e9e` | Confirmed |
 | 2026-08-28 | `MaskField` and `as_lattice_mask()` | `src/nematics3d/datatypes/lattice_field.py` | `tests/test_datatypes_lattice_field.py` and downstream mask integration | `d28dfc2529c64fbd26bf56ba86adc1b84cb00400` | Confirmed |
 | 2026-08-28 | `GeneralField` and `as_real_lattice_field()` | `src/nematics3d/datatypes/lattice_field.py` | `tests/test_datatypes_lattice_field.py` and downstream physical-field callers | `63cb2c3b47ae847480a89f921b93da7eb1b41879` | Confirmed |
+| 2026-09-08 | `defect_detect_surface()`, `defect_vicinity_grid()`, `get_square()`, `get_square_each()` | `src/nematics3d/analysis/disclination/misc.py`; `src/nematics3d/analysis/disclination/line.py` | `tests/test_disclination_surface.py`, `tests/test_disclination_vicinity.py` and disclination regressions | `a4798fc25075e9f0c50e4ba64acaa2041d062863` | Confirmed |
