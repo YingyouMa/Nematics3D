@@ -138,14 +138,14 @@ from ..analysis.disclination import (
     defect_classify_into_lines,
     defect_validity_from_mask,
 )
-from ..classes.visual.plot_tube import OptsTube
-from ..classes.visual.plot_rod import OptsRod
-from ..classes.visual.plot_sphere import OptsSphere
-from ..classes.visual.plot_delaunay import OptsDelaunay
-from ..classes.visual.plot_figure import PlotFigure, OptsFigure
-from ..classes.visual.color import blue_red_in_white_bg
+from ..visual.plot_tube import OptsTube
+from ..visual.plot_rod import OptsRod
+from ..visual.plot_sphere import OptsSphere
+from ..visual.plot_delaunay import OptsDelaunay
+from ..visual.plot_figure import PlotFigure, OptsFigure
+from ..visual.color import blue_red_in_white_bg
 from ..classes.q_plane import QPlane, QPlanePolar
-from ..classes.visual.figure_manager import FigureManager
+from ..visual.figure_manager import FigureManager
 from ..classes.plane_grid import OptsPlaneGrid
 from ..classes.plane_grid_polar import OptsPlaneGridPolar
 from ..classes.bounds import as_bounds

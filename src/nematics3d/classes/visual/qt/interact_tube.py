@@ -1,6 +1,5 @@
-from .interact_glyph_base import InteractGlyphBase
+"""Compatibility import for the migrated tube interaction panel."""
 
+from nematics3d.visual.qt.interact_tube import InteractTube
 
-class InteractTube(InteractGlyphBase):
-    def __init__(self, host, figure):
-        super().__init__(host, figure)
+__all__ = ["InteractTube"]

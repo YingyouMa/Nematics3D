@@ -34,7 +34,7 @@ from ..grid import (
     wrap_points_to_box,
 )
 from .visual.plot_figure import PlotFigure
-from .visual.plot_tube import PlotTube, OptsTube
+from nematics3d.visual.plot_tube import OptsTube, PlotTube
 from ..core.opts import merge_opts_all, cover_value
 from .smoothed_line import OptsSmoothedLine, SmoothedLine
 from ..format import is_given_str

@@ -3,7 +3,7 @@ from qtpy import QtWidgets
 from qtpy.QtCore import QSignalBlocker
 
 from nematics3d.grid import is_grid_transform_identity
-from .panel_base import (
+from nematics3d.visual.qt.panel_base import (
     PanelBase,
     make_labeled_slider_row,
     LogTickMapper,
@@ -16,8 +16,8 @@ from nematics3d.geometry import (
     rotation_matrix_from_vectors,
     vector_from_spherical_angles,
 )
-from ..plot_rod import PlotRod
-from ..plot_sphere import PlotSphere
+from nematics3d.visual.plot_rod import PlotRod
+from nematics3d.visual.plot_sphere import PlotSphere
 
 
 class InteractPlane(PanelBase):

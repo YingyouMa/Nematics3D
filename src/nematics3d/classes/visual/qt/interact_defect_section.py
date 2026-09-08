@@ -1,7 +1,11 @@
 import numpy as np
 from qtpy import QtWidgets
 
-from .panel_base import PanelBase, make_labeled_slider_row, LogTickMapper
+from nematics3d.visual.qt.panel_base import (
+    PanelBase,
+    make_labeled_slider_row,
+    LogTickMapper,
+)
 from .interact_plane import InteractPlane
 from ..plot_rod import PlotRod
 from nematics3d.format import is_equal, is_given_str

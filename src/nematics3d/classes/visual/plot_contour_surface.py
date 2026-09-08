@@ -13,8 +13,8 @@ from ..bounds import BoundsData
 from ...core.class_base import AttrDef
 from ..contour_surface import ContourSurface
 from ...core.host_base import HostBase
-from .glyph import OptsGlyph, PlotGlyph
-from .plot_figure import FigureData
+from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
+from nematics3d.visual.plot_figure import FigureData
 from .qt.interact_contour_surface import InteractContourSurface
 
 

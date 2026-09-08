@@ -4,6 +4,7 @@ from .color import (
     blue_red_in_white_bg,
     director_color_pareto_034,
     director_color_pareto_oklab_043,
+    director_color_pareto_oklab_055,
     plot_director_color_sphere,
 )
 from .plot_contour_surface import OptsContourSurface, PlotContourSurface
@@ -21,6 +22,7 @@ __all__ = [
     "blue_red_in_white_bg",
     "director_color_pareto_034",
     "director_color_pareto_oklab_043",
+    "director_color_pareto_oklab_055",
     "plot_director_color_sphere",
     "OptsContourSurface",
     "PlotContourSurface",

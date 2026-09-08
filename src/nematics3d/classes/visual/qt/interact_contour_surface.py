@@ -2,7 +2,7 @@ import numpy as np
 from qtpy import QtWidgets
 
 from .interact_glyph_base import InteractGlyphBase
-from .panel_base import make_labeled_slider_row
+from nematics3d.visual.qt.panel_base import make_labeled_slider_row
 
 
 class InteractContourSurface(InteractGlyphBase):

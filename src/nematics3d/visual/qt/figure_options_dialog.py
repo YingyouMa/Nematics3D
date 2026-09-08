@@ -5,7 +5,7 @@ import datetime
 import numpy as np
 from qtpy import QtCore, QtGui, QtWidgets
 
-from nematics3d.classes.visual.qt.panel_base import (
+from nematics3d.visual.qt.panel_base import (
     make_RGB_slider,
     make_labeled_slider_row,
 )

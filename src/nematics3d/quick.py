@@ -13,16 +13,16 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(_REPO_ROOT / "src"))
 
     from nematics3d.q_field.q_field_object import QFieldObject
-    from nematics3d.classes.visual.plot_figure import PlotFigure
-    from nematics3d.classes.visual.plot_sphere import OptsSphere, PlotSphere
-    from nematics3d.classes.visual.plot_tube import OptsTube
+    from nematics3d.visual.plot_figure import PlotFigure
+    from nematics3d.visual.plot_sphere import OptsSphere, PlotSphere
+    from nematics3d.visual.plot_tube import OptsTube
     from nematics3d.datatypes import UNSET
     from nematics3d.logging_decorator import logging_and_warning_decorator
 else:
     from .q_field.q_field_object import QFieldObject
-    from .classes.visual.plot_figure import PlotFigure
-    from .classes.visual.plot_sphere import OptsSphere, PlotSphere
-    from .classes.visual.plot_tube import OptsTube
+    from .visual.plot_figure import PlotFigure
+    from .visual.plot_sphere import OptsSphere, PlotSphere
+    from .visual.plot_tube import OptsTube
     from .datatypes import UNSET
     from .logging_decorator import logging_and_warning_decorator
 

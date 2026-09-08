@@ -15,7 +15,14 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.visual.glyph import OptsGlyph, PlotGlyph
+from nematics3d.classes.visual.glyph import OptsGlyph as LegacyOptsGlyph  # noqa: E402
+from nematics3d.classes.visual.glyph import PlotGlyph as LegacyPlotGlyph  # noqa: E402
+from nematics3d.visual.glyph import OptsGlyph, PlotGlyph  # noqa: E402
+
+
+def test_glyph_legacy_imports_alias_canonical_classes():
+    assert LegacyOptsGlyph is OptsGlyph
+    assert LegacyPlotGlyph is PlotGlyph
 
 
 class MinimalGlyph(PlotGlyph):

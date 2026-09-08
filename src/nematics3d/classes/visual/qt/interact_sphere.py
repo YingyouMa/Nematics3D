@@ -1,6 +1,5 @@
-from .interact_glyph_base import InteractGlyphBase
+"""Compatibility import for the migrated sphere interaction console."""
 
+from nematics3d.visual.qt.interact_sphere import InteractSphere
 
-class InteractSphere(InteractGlyphBase):
-    def __init__(self, host, figure):
-        super().__init__(host, figure)
+__all__ = ["InteractSphere"]

@@ -1,20 +1,7 @@
-import sys
-from pathlib import Path
-import types
 import unittest
 
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-PKG_DIR = SRC_DIR / "nematics3d"
-
-sys.path.insert(0, str(SRC_DIR))
-
-if "nematics3d" not in sys.modules:
-    pkg = types.ModuleType("nematics3d")
-    pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["nematics3d"] = pkg
-
 from nematics3d.core.class_base import ClassBase
-from nematics3d.classes.visual.figure_manager import FigureManager
+from nematics3d.visual.figure_manager import FigureManager
 
 
 class FakePlotter:
@@ -65,6 +52,76 @@ class FakeFigure(ClassBase):
 
 
 class TestFigureManager(unittest.TestCase):
+    def test_single_registered_figure_becomes_active_on_access(self):
+        manager = FigureManager()
+        figure = FakeFigure("figure")
+        manager.act_register(figure)
+
+        self.assertIs(manager.active_fig, figure)
+        self.assertEqual(manager.active_name, "figure")
+
+    def test_multiple_figures_require_explicit_active_selection(self):
+        manager = FigureManager()
+        manager.act_register(FakeFigure("first"))
+        manager.act_register(FakeFigure("second"))
+
+        self.assertIsNone(manager.active_name)
+        with self.assertRaises(KeyError):
+            _ = manager.active_fig
+
+    def test_act_set_active_accepts_name_index_and_registered_object(self):
+        manager = FigureManager()
+        first = FakeFigure("first")
+        second = FakeFigure("second")
+        manager.act_register(first)
+        manager.act_register(second)
+
+        self.assertIs(manager.act_set_active("second"), second)
+        self.assertIs(manager.active_fig, second)
+        self.assertIs(manager.act_set_active(0), first)
+        self.assertIs(manager.active_fig, first)
+        self.assertIs(manager.act_set_active(second), second)
+        self.assertIs(manager.active_fig, second)
+
+    def test_active_identity_survives_rename(self):
+        manager = FigureManager()
+        first = FakeFigure("first")
+        second = FakeFigure("second")
+        manager.act_register(first)
+        manager.act_register(second)
+        manager.act_set_active(first)
+
+        first.act_set_name("renamed")
+
+        self.assertIs(manager.active_fig, first)
+        self.assertEqual(manager.active_name, "renamed")
+
+    def test_unregister_active_figure_falls_back_to_only_remaining_figure(self):
+        manager = FigureManager()
+        first = FakeFigure("first")
+        second = FakeFigure("second")
+        manager.act_register(first)
+        manager.act_register(second)
+        manager.act_set_active(first)
+
+        manager.act_unregister(first)
+
+        self.assertIs(manager.active_fig, second)
+        self.assertEqual(manager.active_name, "second")
+
+    def test_dead_active_figure_is_not_returned(self):
+        manager = FigureManager()
+        first = FakeFigure("first")
+        second = FakeFigure("second")
+        manager.act_register(first)
+        manager.act_register(second)
+        manager.act_set_active(first)
+        object.__setattr__(first, "state_is_alive", False)
+
+        self.assertIsNone(manager.active_name)
+        with self.assertRaises(KeyError):
+            _ = manager.active_fig
+
     def test_act_clear_resets_active_name_without_closing_by_default(self):
         manager = FigureManager()
         first = FakeFigure("first")

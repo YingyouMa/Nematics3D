@@ -13,7 +13,7 @@ from ..core.opts import merge_opts_all
 from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
-from .visual.plot_vector import OptsVector, PlotVector
+from nematics3d.visual.plot_vector import OptsVector, PlotVector
 
 
 # VectorPlane extends InterpolatePlane with vector-field-specific validation and

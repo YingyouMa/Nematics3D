@@ -20,9 +20,11 @@ if "nematics3d" not in sys.modules:
 
 from nematics3d.classes.visual import OptsPolyData as ExportedOptsPolyData
 from nematics3d.classes.visual import PlotPolyData as ExportedPlotPolyData
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_polydata import OptsPolyData, PlotPolyData
-from nematics3d.classes.visual.qt.interact_polydata import InteractPolyData
+from nematics3d.classes.visual.plot_polydata import OptsPolyData as LegacyOptsPolyData
+from nematics3d.classes.visual.plot_polydata import PlotPolyData as LegacyPlotPolyData
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_polydata import OptsPolyData, PlotPolyData
+from nematics3d.visual.qt.interact_polydata import InteractPolyData
 
 
 class TestPlotPolyData(unittest.TestCase):
@@ -32,6 +34,8 @@ class TestPlotPolyData(unittest.TestCase):
     def test_visual_subpackage_exports_polydata_classes(self):
         self.assertIs(ExportedOptsPolyData, OptsPolyData)
         self.assertIs(ExportedPlotPolyData, PlotPolyData)
+        self.assertIs(LegacyOptsPolyData, OptsPolyData)
+        self.assertIs(LegacyPlotPolyData, PlotPolyData)
 
     def test_plot_polydata_accepts_pyvista_polydata(self):
         fig = self._make_figure()
@@ -68,6 +72,21 @@ class TestPlotPolyData(unittest.TestCase):
             self.assertEqual(len(mesh.raw_poly.point_data), 0)
             self.assertEqual(len(mesh.raw_poly.cell_data), 0)
             self.assertEqual(len(mesh.raw_poly.field_data), 0)
+        finally:
+            fig.act_close()
+
+    def test_plot_polydata_owns_independent_geometry_template(self):
+        fig = self._make_figure()
+        try:
+            poly = pv.Plane(i_resolution=1, j_resolution=1).triangulate().clean()
+            points_original = np.asarray(poly.points).copy()
+            faces_original = np.asarray(poly.faces).copy()
+
+            mesh = PlotPolyData(poly, figure=fig)
+            poly.points[:] += 100.0
+
+            np.testing.assert_allclose(mesh.raw_poly.points, points_original)
+            np.testing.assert_array_equal(mesh.raw_poly.faces, faces_original)
         finally:
             fig.act_close()
 

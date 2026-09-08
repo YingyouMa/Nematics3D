@@ -6,7 +6,7 @@ from ....sample import (
     SurfaceSampling,
     _helper_resolve_spacing_for_target_count,
 )
-from .panel_base import PanelBase, make_labeled_slider_row
+from nematics3d.visual.qt.panel_base import PanelBase, make_labeled_slider_row
 
 
 class InteractSurfaceSampling(PanelBase):

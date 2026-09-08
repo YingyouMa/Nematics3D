@@ -30,9 +30,9 @@ from .plane_grid import OptsPlaneGrid, PlaneGrid
 from .plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
 from ..core.result_base import ResultBase
 from .visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure
-from .visual.plot_rod import OptsRod, PlotRod
-from .visual.plot_sphere import OptsSphere, PlotSphere
-from .visual.plot_delaunay import OptsDelaunay, PlotDelaunay
+from nematics3d.visual.plot_rod import OptsRod, PlotRod
+from nematics3d.visual.plot_sphere import OptsSphere, PlotSphere
+from nematics3d.visual.plot_delaunay import OptsDelaunay, PlotDelaunay
 
 
 @dataclass(slots=True, frozen=True, repr=False)

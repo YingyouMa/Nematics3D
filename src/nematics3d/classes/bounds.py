@@ -52,25 +52,6 @@ class _BoundsSubscriberEntry:
         return self.host_ref()
 
 
-@dataclass(slots=True)
-class _BoundsVisualEntry:
-    """Weak-reference record for one bounds visualization frame inside a figure."""
-
-    figure_ref: weakref.ReferenceType
-    tube_ref: weakref.ReferenceType
-    sync_name: str
-
-    @property
-    def figure(self):
-        """Return the live figure object, or ``None`` if it was garbage-collected."""
-        return self.figure_ref()
-
-    @property
-    def tube(self):
-        """Return the live tube visual, or ``None`` if it was garbage-collected."""
-        return self.tube_ref()
-
-
 @dataclass(slots=True, repr=False)
 class OptsBounds(OptsBase):
     """Opts object controlling bounds geometry and origin/axis interpretation."""
@@ -201,28 +182,6 @@ class Bounds(HostBase):
         ),
     }
     # fmt: on
-
-    _VISUAL_EDGES = (
-        (0, 1),
-        (0, 2),
-        (0, 3),
-        (1, 4),
-        (1, 5),
-        (2, 4),
-        (2, 6),
-        (4, 7),
-        (3, 5),
-        (3, 6),
-        (5, 7),
-        (6, 7),
-    )
-    _VISUAL_DEFAULTS = MappingProxyType(
-        {
-            "color": (0.0, 0.0, 0.0),
-            "radius": 0.35,
-            "is_pickable": True,
-        }
-    )
 
     __slots__ = (
         "entity_corners",
@@ -508,76 +467,6 @@ class Bounds(HostBase):
             if entry.kind == "plane_grid" and entry.host is not None
         )
 
-    def _helper_build_visual_edges(self) -> tuple[np.ndarray, np.ndarray]:
-        coords = []
-
-        line_index = []
-        for i, (a, b) in enumerate(self._VISUAL_EDGES):
-            coords.append(self.corners[a])
-            coords.append(self.corners[b])
-            line_index.extend([i, i])
-
-        return np.asarray(coords, dtype=float), np.asarray(line_index, dtype=int)
-
-    def _helper_is_visual_entry_alive(self, entry: _BoundsVisualEntry) -> bool:
-        figure = entry.figure
-        tube = entry.tube
-        return (
-            figure is not None
-            and tube is not None
-            and figure.is_alive
-            and tube in figure.glyphs
-        )
-
-    def _helper_find_visual_entry(
-        self,
-        *,
-        figure=None,
-        tube=None,
-        sync_name: str | None = None,
-    ) -> _BoundsVisualEntry | None:
-        for entry in self.entity_visuals:
-            if sync_name is not None and entry.sync_name == sync_name:
-                return entry
-            if figure is not None and entry.figure is figure:
-                return entry
-            if tube is not None and entry.tube is tube:
-                return entry
-        return None
-
-    def _helper_prune_visuals(self):
-        self._helper_prune_registry(
-            "entity_visuals",
-            self._helper_is_visual_entry_alive,
-        )
-
-    def _helper_unregister_visual_sync(
-        self, sync_name: str | None = None, *, tube=None
-    ):
-        self._helper_unregister_registry(
-            "entity_visuals",
-            lambda entry: (sync_name is not None and entry.sync_name == sync_name)
-            or (tube is not None and entry.tube is tube),
-        )
-
-    def _helper_refresh_visual(self, sync_name: str):
-        entry = self._helper_find_visual_entry(sync_name=sync_name)
-        if entry is None or not self._helper_is_visual_entry_alive(entry):
-            self._helper_unregister_visual_sync(sync_name)
-            return
-
-        coords, line_index = self._helper_build_visual_edges()
-        entry.tube.act_commit(
-            coords=coords, line_index=line_index, is_reapply_opts=True
-        )
-
-    def _helper_open_interact_panels(self, tube, figure):
-        from .visual.qt.interact_bounds import InteractBounds
-        from .visual.qt.interact_tube import InteractTube
-
-        InteractTube.show_once(tube, figure)
-        InteractBounds.show_once(self, figure)
-
     def act_visualize(
         self,
         figure=None,
@@ -590,73 +479,19 @@ class Bounds(HostBase):
         **kwargs,
     ):
         """Visualize this bounds as a tube frame inside one figure."""
-        from .visual.plot_figure import PlotFigure
-        from .visual.plot_tube import PlotTube
+        from nematics3d.visual.bounds import visualize_bounds
 
-        self._helper_prune_visuals()
-        if figure is None:
-            figure = PlotFigure()
-        elif not isinstance(figure, PlotFigure):
-            try:
-                figure = PlotFigure(plotter=figure)
-            except (AttributeError, RuntimeError, TypeError, ValueError):
-                figure = PlotFigure()
-
-        entry_old = self._helper_find_visual_entry(figure=figure)
-        if entry_old is not None:
-            tube_old = entry_old.tube
-            if tube_old is not None and self._helper_is_visual_entry_alive(entry_old):
-                if not is_replace:
-                    if opts is not None:
-                        tube_old.act_commit(opts=opts, **kwargs)
-                    elif kwargs:
-                        tube_old.act_commit(**kwargs)
-                    return tube_old
-                tube_old.act_remove()
-
-        coords, line_index = self._helper_build_visual_edges()
-        if opts_defaults_override is None:
-            opts_defaults_override = dict(self._VISUAL_DEFAULTS)
-        else:
-            opts_defaults_override = dict(self._VISUAL_DEFAULTS) | dict(
-                opts_defaults_override
-            )
-
-        tube = PlotTube(
-            coords=coords,
-            line_index=line_index,
+        return visualize_bounds(
+            self,
             figure=figure,
             opts=opts,
             opts_defaults_override=opts_defaults_override,
-            name=self.name if name is None else name,
+            name=name,
             category=category,
             is_reset_camera=is_reset_camera,
+            is_replace=is_replace,
             **kwargs,
         )
-
-        sync_name = f"{tube.impl_name_pv}__bounds_sync"
-        tube.act_bind_relation_base(
-            "bounds_visual_source",
-            self,
-            doc="Bounds source driving this visualized frame.",
-            is_weak=True,
-        )
-        tube.act_set_interact_func(
-            lambda: self._helper_open_interact_panels(tube=tube, figure=figure)
-        )
-
-        self.act_attach_sync_task(
-            sync_name,
-            lambda **kwargs_sync: self._helper_refresh_visual(sync_name),
-        )
-        self.entity_visuals.append(
-            _BoundsVisualEntry(
-                figure_ref=weakref.ref(figure),
-                tube_ref=weakref.ref(tube),
-                sync_name=sync_name,
-            )
-        )
-        return tube
 
 
 _DEF_TOL = 1e-8
