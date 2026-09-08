@@ -560,6 +560,8 @@ class PlotFigure(HostBase):
                 panel.close()
             except (AttributeError, RuntimeError, ReferenceError):
                 pass
+            finally:
+                interacts.act_unregister(panel, is_missing_ok=True)
         pm = getattr(self, "entity_pick_manager", None)
         if pm is not None and hasattr(pm, "_helper_close_dialogs"):
             pm._helper_close_dialogs()
@@ -574,7 +576,13 @@ class PlotFigure(HostBase):
             pass
 
     def act_close(self, *, is_remove_glyphs: bool = True):
-        """Close interact panels, optional glyphs, and the plotter backend."""
+        """Close figure-owned services and the wrapped plotter backend.
+
+        A plotter passed into ``PlotFigure(plotter=...)`` is adopted by the
+        figure, so closing the figure also closes that external plotter.
+        Repeated calls are safe.  When ``is_remove_glyphs`` is false, glyph
+        objects are left registered even though the rendering backend closes.
+        """
         is_remove_glyphs = as_bool(
             is_remove_glyphs,
             name="Whether to remove registered glyphs before closing the figure",
