@@ -5,6 +5,8 @@ from nematics3d.visual.qt.panel_base import make_labeled_slider_row, make_RGB_sl
 
 
 class InteractPolyData(InteractGlyphBase):
+    _edge_width_attr = "edge_width"
+
     def __init__(self, host, figure):
         super().__init__(
             host,
@@ -18,13 +20,17 @@ class InteractPolyData(InteractGlyphBase):
         )
 
     def _build_extra_group(self):
+        self._build_edges_group()
+
+    def _build_edges_group(self):
         opts = self.host.opts
+        edge_width_attr = self._edge_width_attr
         self.state["is_show_edges"] = bool(opts.is_show_edges)
         init_edge_color = tuple(opts.edge_color)
         self.state["edge_color_r"] = init_edge_color[0]
         self.state["edge_color_g"] = init_edge_color[1]
         self.state["edge_color_b"] = init_edge_color[2]
-        self.state["edge_width"] = float(opts.edge_width)
+        self.state[edge_width_attr] = float(getattr(opts, edge_width_attr))
 
         group_edges = QtWidgets.QGroupBox("Edges", self)
         gl_edges = QtWidgets.QVBoxLayout(group_edges)
@@ -37,14 +43,14 @@ class InteractPolyData(InteractGlyphBase):
         make_RGB_slider(
             group_edges, gl_edges, self.sliders, "edge_color", init_edge_color
         )
-        self.sliders["edge_width"] = make_labeled_slider_row(
+        self.sliders[edge_width_attr] = make_labeled_slider_row(
             parent=group_edges,
             layout=gl_edges,
-            name="edge_width",
-            state_key="edge_width",
+            name=edge_width_attr,
+            state_key=edge_width_attr,
             value_min=0.5,
             value_max=10.0,
-            value_init=self.state["edge_width"],
+            value_init=self.state[edge_width_attr],
             tick_to_value=lambda t: t / 10.0,
             value_to_tick=lambda v: int(v * 10),
         )
@@ -53,7 +59,12 @@ class InteractPolyData(InteractGlyphBase):
         self.chk_is_show_edges.stateChanged.connect(self._on_toggle_show_edges)
 
     def _set_edge_controls_enabled(self, enabled: bool):
-        for key in ("edge_color_r", "edge_color_g", "edge_color_b", "edge_width"):
+        for key in (
+            "edge_color_r",
+            "edge_color_g",
+            "edge_color_b",
+            self._edge_width_attr,
+        ):
             self.sliders[key].set_enabled(enabled)
 
     def _on_toggle_show_edges(self, _):
@@ -64,6 +75,7 @@ class InteractPolyData(InteractGlyphBase):
             self.commit()
 
     def _extra_commit(self, params):
+        edge_width_attr = self._edge_width_attr
         params["is_show_edges"] = self.state["is_show_edges"]
         if self.state["is_show_edges"]:
             params["edge_color"] = (
@@ -71,10 +83,11 @@ class InteractPolyData(InteractGlyphBase):
                 float(self.state["edge_color_g"]),
                 float(self.state["edge_color_b"]),
             )
-            params["edge_width"] = float(self.state["edge_width"])
+            params[edge_width_attr] = float(self.state[edge_width_attr])
 
     def _sync_func(self, **kwargs):
         super()._sync_func(**kwargs)
+        edge_width_attr = self._edge_width_attr
 
         if "is_show_edges" in kwargs and hasattr(self, "chk_is_show_edges"):
             is_on = bool(kwargs["is_show_edges"])
@@ -86,8 +99,8 @@ class InteractPolyData(InteractGlyphBase):
             self.state["is_show_edges"] = is_on
             self._set_edge_controls_enabled(is_on)
 
-        if "edge_width" in kwargs and "edge_width" in self.sliders:
-            self._sync_from_host_slider("edge_width", kwargs["edge_width"])
+        if edge_width_attr in kwargs and edge_width_attr in self.sliders:
+            self._sync_from_host_slider(edge_width_attr, kwargs[edge_width_attr])
 
         if "edge_color" in kwargs:
             for channel, value in zip(("r", "g", "b"), tuple(kwargs["edge_color"])):

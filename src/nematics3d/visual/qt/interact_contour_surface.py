@@ -3,12 +3,14 @@
 import numpy as np
 from qtpy import QtWidgets
 
-from nematics3d.visual.qt.interact_glyph_base import InteractGlyphBase
+from nematics3d.visual.qt.interact_polydata import InteractPolyData
 from nematics3d.visual.qt.panel_base import make_labeled_slider_row
 
 
-class InteractContourSurface(InteractGlyphBase):
-    """Glyph controls plus a contour-level slider owned by the domain surface."""
+class InteractContourSurface(InteractPolyData):
+    """PolyData-style mesh controls plus a domain-owned contour-level slider."""
+
+    _edge_width_attr = "line_width"
 
     def __init__(self, host, figure):
         self.surface = getattr(host, "owner", None)
@@ -25,18 +27,12 @@ class InteractContourSurface(InteractGlyphBase):
         self._level_original = float(host.calc_level)
         self._snapshot_levels: dict[str, float] = {}
 
-        super().__init__(
-            host,
-            figure,
-            title=f"Contour Controls of {host.name!r}",
-            is_radius=False,
-            is_sides=False,
-            is_geometry=False,
-            is_color=True,
-            is_opacity=True,
-        )
+        super().__init__(host, figure)
+        self.setWindowTitle(f"Contour Controls of {host.name!r}")
 
     def _build_extra_group(self):
+        self._build_edges_group()
+
         self.state["level"] = float(self.host.calc_level)
         group_level = QtWidgets.QGroupBox("Level", self)
         layout_level = QtWidgets.QVBoxLayout(group_level)

@@ -3,6 +3,9 @@ import numpy as np
 from nematics3d.classes.visual.qt.interact_delaunay import (
     InteractDelaunay as LegacyInteractDelaunay,
 )
+from nematics3d.classes.visual.qt.interact_contour_surface import (
+    InteractContourSurface as LegacyInteractContourSurface,
+)
 from nematics3d.classes.visual.qt.interact_polydata import (
     InteractPolyData as LegacyInteractPolyData,
 )
@@ -17,6 +20,7 @@ from nematics3d.classes.visual.qt.interact_vector import (
     InteractVector as LegacyInteractVector,
 )
 from nematics3d.visual.qt.interact_delaunay import InteractDelaunay
+from nematics3d.visual.qt.interact_contour_surface import InteractContourSurface
 from nematics3d.visual.qt.interact_glyph_base import InteractGlyphBase
 from nematics3d.visual.qt.interact_polydata import InteractPolyData
 from nematics3d.visual.qt.interact_rod import InteractRod
@@ -26,12 +30,19 @@ from nematics3d.visual.qt.interact_vector import InteractVector
 
 
 def test_processed_plot_interaction_panels_use_canonical_classes():
+    assert LegacyInteractContourSurface is InteractContourSurface
     assert LegacyInteractDelaunay is InteractDelaunay
     assert LegacyInteractPolyData is InteractPolyData
     assert LegacyInteractRod is InteractRod
     assert LegacyInteractSphere is InteractSphere
     assert LegacyInteractTube is InteractTube
     assert LegacyInteractVector is InteractVector
+
+
+def test_contour_panel_reuses_polydata_edges_with_legacy_line_width_name():
+    assert issubclass(InteractContourSurface, InteractPolyData)
+    assert InteractPolyData._edge_width_attr == "edge_width"
+    assert InteractContourSurface._edge_width_attr == "line_width"
 
 
 def test_scale_resolver_value_preserves_resolver_forms():

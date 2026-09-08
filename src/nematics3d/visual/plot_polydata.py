@@ -18,6 +18,29 @@ from nematics3d.visual.plot_figure import FigureData
 from nematics3d.visual.qt.interact_polydata import InteractPolyData
 
 
+def _materialize_polydata_with_display_data(
+    mesh_source,
+    *,
+    coords,
+    color,
+    opacity,
+    scalars,
+):
+    """Copy one mesh template and attach Nematics3D-managed point display data."""
+    mesh = mesh_source.copy(deep=True)
+    mesh.points = np.asarray(coords, dtype=float)
+    opacity_values = np.asarray(opacity, dtype=np.float32)
+    mesh.point_data["opacity"] = opacity_values
+    mesh.point_data["scalars"] = np.asarray(scalars, dtype=np.float32)
+    mesh.point_data["rgba"] = np.hstack(
+        [
+            np.asarray(color, dtype=np.float32),
+            opacity_values.reshape(-1, 1),
+        ]
+    )
+    return mesh
+
+
 @dataclass(slots=True, repr=False)
 class OptsPolyData(OptsGlyph):
     """Visual configuration object for ``PlotPolyData``."""
@@ -137,17 +160,13 @@ class PlotPolyData(PlotGlyph):
         self._helper_init_end()
 
     def _helper_materialize_mesh(self):
-        mesh = self.raw_poly.copy(deep=True)
-        mesh.points = np.asarray(self.calc_coords, dtype=float)
-        mesh.point_data["opacity"] = np.asarray(self.calc_opacity, dtype=np.float32)
-        mesh.point_data["scalars"] = np.asarray(self.calc_scalars, dtype=np.float32)
-        mesh.point_data["rgba"] = np.hstack(
-            [
-                np.asarray(self.calc_color, dtype=np.float32),
-                np.asarray(self.calc_opacity, dtype=np.float32).reshape(-1, 1),
-            ]
+        return _materialize_polydata_with_display_data(
+            self.raw_poly,
+            coords=self.calc_coords,
+            color=self.calc_color,
+            opacity=self.calc_opacity,
+            scalars=self.calc_scalars,
         )
-        return mesh
 
 
 __all__ = ["OptsPolyData", "PlotPolyData"]

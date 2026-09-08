@@ -15,6 +15,7 @@ from nematics3d.datatypes import UNSET, Unset, as_ColorRGB, as_bool, as_number, 
 from nematics3d.surface.contour import ContourSurface
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
+from nematics3d.visual.plot_polydata import _materialize_polydata_with_display_data
 from nematics3d.visual.qt.interact_contour_surface import InteractContourSurface
 
 
@@ -163,17 +164,13 @@ class PlotContourSurface(PlotGlyph):
         mesh_source = surface.mesh
         if mesh_source is None:
             mesh_source = surface.act_extract()
-        mesh = mesh_source.copy(deep=True)
-        mesh.points = np.asarray(self.calc_coords, dtype=float)
-        mesh.point_data["opacity"] = np.asarray(self.calc_opacity, dtype=np.float32)
-        mesh.point_data["scalars"] = np.asarray(self.calc_scalars, dtype=np.float32)
-        mesh.point_data["rgba"] = np.hstack(
-            [
-                np.asarray(self.calc_color, dtype=np.float32),
-                np.asarray(self.calc_opacity, dtype=np.float32).reshape(-1, 1),
-            ]
+        return _materialize_polydata_with_display_data(
+            mesh_source,
+            coords=self.calc_coords,
+            color=self.calc_color,
+            opacity=self.calc_opacity,
+            scalars=self.calc_scalars,
         )
-        return mesh
 
     def act_refresh_mesh(self, *, is_extract: bool = True):
         surface = self.owner
