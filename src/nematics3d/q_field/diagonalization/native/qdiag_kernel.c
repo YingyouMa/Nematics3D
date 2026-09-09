@@ -105,17 +105,8 @@ void qdiag_solve_q3(
         return;
     }
 
-    /*
-     * For trace(Q)=0:
-     *   p^2 = tr(Q^2)/6
-     *       = (a^2 + d^2 + a*d + b^2 + c^2 + e^2)/3.
-     */
     const double p2 = (a*a + d*d + a*d + b*b + c*c + e*e) / 3.0;
     const double p = sqrt(p2);
-
-    /*
-     * det(Q) with qzz eliminated using qzz = -a-d.
-     */
     const double detq =
         -a*d*(a + d)
         + 2.0*b*c*e
@@ -123,9 +114,6 @@ void qdiag_solve_q3(
         - d*c*c
         + (a + d)*b*b;
 
-    /*
-     * Trigonometric cubic, but evaluate only the most-distinct root.
-     */
     double r = 0.5 * detq / (p*p*p);
     if (r > 1.0) {
         r = 1.0;
@@ -139,9 +127,6 @@ void qdiag_solve_q3(
         ? 2.0*p*cos(phi)
         : 2.0*p*cos(phi + 2.0*QDIAG_PI/3.0);
 
-    /*
-     * R = Q - lambda_distinct I.
-     */
     double vx;
     double vy;
     double vz;
@@ -149,10 +134,6 @@ void qdiag_solve_q3(
         a, d, b, c, e, lambda_distinct, &vx, &vy, &vz
     );
 
-    /*
-     * Stable orthonormal basis {u,w} for v^perp.  Choose the Cartesian axis
-     * least aligned with v, then project it into the perpendicular plane.
-     */
     const double avx = fabs(vx);
     const double avy = fabs(vy);
     const double avz = fabs(vz);
@@ -187,12 +168,6 @@ void qdiag_solve_q3(
     const double wy = vz*ux - vx*uz;
     const double wz = vx*uy - vy*ux;
 
-    /*
-     * Restrict Q to span(u,w).  Exact tracelessness lets us avoid a full
-     * second projected diagonal entry:
-     *
-     *   C2 = -lambda_distinct - A2.
-     */
     const double A2 =
         a*ux*ux
         + d*uy*uy
@@ -205,26 +180,15 @@ void qdiag_solve_q3(
         + wz*(c*ux + e*uy - (a + d)*uz);
 
     const double diff2 = 2.0*A2 + lambda_distinct;
-    /* Physical Q components are bounded, so direct squaring cannot overflow. */
     const double disc2 = sqrt(diff2*diff2 + 4.0*B2*B2);
-
-    /*
-     * Stable remaining eigenvalues.  The sign of r identifies whether the
-     * isolated root is the largest or smallest one.
-     */
     const double far = upper
         ? 0.5*(-lambda_distinct - disc2)
         : 0.5*(-lambda_distinct + disc2);
 
     const double near = detq / (lambda_distinct * far);
-
     const double lambda_lo = upper ? far : near;
     const double lambda_hi = upper ? near : far;
 
-    /*
-     * Stable algebraic Jacobi rotation for the larger eigenvalue of the
-     * deflated 2x2 block.  No atan2/sin/cos are needed here.
-     */
     double ct;
     double st;
 

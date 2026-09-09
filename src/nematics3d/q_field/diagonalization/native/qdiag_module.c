@@ -10,38 +10,28 @@ static int qdiag_same_shape(PyArrayObject *a, PyArrayObject *b)
 {
     const int ndim = PyArray_NDIM(a);
     int axis;
-
     if (ndim != PyArray_NDIM(b)) {
         return 0;
     }
-
     for (axis = 0; axis < ndim; ++axis) {
         if (PyArray_DIM(a, axis) != PyArray_DIM(b, axis)) {
             return 0;
         }
     }
-
     return 1;
 }
 
-static int qdiag_shape_append(
-    PyArrayObject *source,
-    npy_intp *dims,
-    int extra_dims
-)
+static int qdiag_shape_append(PyArrayObject *source, npy_intp *dims, int extra_dims)
 {
     const int ndim = PyArray_NDIM(source);
     int axis;
-
     if (ndim + extra_dims > NPY_MAXDIMS) {
         PyErr_SetString(PyExc_ValueError, "input has too many dimensions");
         return 0;
     }
-
     for (axis = 0; axis < ndim; ++axis) {
         dims[axis] = PyArray_DIM(source, axis);
     }
-
     return 1;
 }
 
@@ -52,7 +42,6 @@ static PyObject *qdiag_py_eigh_q(PyObject *self, PyObject *args)
     PyObject *obj_qxy;
     PyObject *obj_qxz;
     PyObject *obj_qyz;
-
     PyArrayObject *arr_qxx = NULL;
     PyArrayObject *arr_qyy = NULL;
     PyArrayObject *arr_qxy = NULL;
@@ -60,52 +49,27 @@ static PyObject *qdiag_py_eigh_q(PyObject *self, PyObject *args)
     PyArrayObject *arr_qyz = NULL;
     PyArrayObject *out_w = NULL;
     PyArrayObject *out_v = NULL;
-
     npy_intp dims_w[NPY_MAXDIMS];
     npy_intp dims_v[NPY_MAXDIMS];
 
     if (!PyArg_ParseTuple(
-        args,
-        "OOOOO:eigh_q",
-        &obj_qxx,
-        &obj_qyy,
-        &obj_qxy,
-        &obj_qxz,
-        &obj_qyz
+        args, "OOOOO:eigh_q",
+        &obj_qxx, &obj_qyy, &obj_qxy, &obj_qxz, &obj_qyz
     )) {
         return NULL;
     }
 
-    /*
-     * Convert to aligned, C-contiguous float64 arrays.  If the caller already
-     * supplies that format these are zero-copy views/references.
-     */
-    arr_qxx = (PyArrayObject *)PyArray_FROM_OTF(
-        obj_qxx, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-    arr_qyy = (PyArrayObject *)PyArray_FROM_OTF(
-        obj_qyy, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-    arr_qxy = (PyArrayObject *)PyArray_FROM_OTF(
-        obj_qxy, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-    arr_qxz = (PyArrayObject *)PyArray_FROM_OTF(
-        obj_qxz, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-    arr_qyz = (PyArrayObject *)PyArray_FROM_OTF(
-        obj_qyz, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY
-    );
-
+    arr_qxx = (PyArrayObject *)PyArray_FROM_OTF(obj_qxx, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    arr_qyy = (PyArrayObject *)PyArray_FROM_OTF(obj_qyy, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    arr_qxy = (PyArrayObject *)PyArray_FROM_OTF(obj_qxy, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    arr_qxz = (PyArrayObject *)PyArray_FROM_OTF(obj_qxz, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    arr_qyz = (PyArrayObject *)PyArray_FROM_OTF(obj_qyz, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
     if (
-        arr_qxx == NULL ||
-        arr_qyy == NULL ||
-        arr_qxy == NULL ||
-        arr_qxz == NULL ||
-        arr_qyz == NULL
+        arr_qxx == NULL || arr_qyy == NULL || arr_qxy == NULL ||
+        arr_qxz == NULL || arr_qyz == NULL
     ) {
         goto fail;
     }
-
     if (
         !qdiag_same_shape(arr_qxx, arr_qyy) ||
         !qdiag_same_shape(arr_qxx, arr_qxy) ||
@@ -120,58 +84,35 @@ static PyObject *qdiag_py_eigh_q(PyObject *self, PyObject *args)
     }
 
     const int ndim = PyArray_NDIM(arr_qxx);
-
-    if (!qdiag_shape_append(arr_qxx, dims_w, 1)) {
+    if (!qdiag_shape_append(arr_qxx, dims_w, 1) ||
+        !qdiag_shape_append(arr_qxx, dims_v, 2)) {
         goto fail;
     }
-    if (!qdiag_shape_append(arr_qxx, dims_v, 2)) {
-        goto fail;
-    }
-
     dims_w[ndim] = 3;
     dims_v[ndim] = 3;
     dims_v[ndim + 1] = 3;
-
-    out_w = (PyArrayObject *)PyArray_SimpleNew(
-        ndim + 1, dims_w, NPY_DOUBLE
-    );
-    out_v = (PyArrayObject *)PyArray_SimpleNew(
-        ndim + 2, dims_v, NPY_DOUBLE
-    );
-
+    out_w = (PyArrayObject *)PyArray_SimpleNew(ndim + 1, dims_w, NPY_DOUBLE);
+    out_v = (PyArrayObject *)PyArray_SimpleNew(ndim + 2, dims_v, NPY_DOUBLE);
     if (out_w == NULL || out_v == NULL) {
         goto fail;
     }
 
     const npy_intp count = PyArray_SIZE(arr_qxx);
-
     const double *qxx = (const double *)PyArray_DATA(arr_qxx);
     const double *qyy = (const double *)PyArray_DATA(arr_qyy);
     const double *qxy = (const double *)PyArray_DATA(arr_qxy);
     const double *qxz = (const double *)PyArray_DATA(arr_qxz);
     const double *qyz = (const double *)PyArray_DATA(arr_qyz);
-
     double *w = (double *)PyArray_DATA(out_w);
     double *v = (double *)PyArray_DATA(out_v);
 
-    /*
-     * Release the GIL while the pure-C batch loop runs.  The kernel is
-     * single-threaded in v1 by design.
-     */
     Py_BEGIN_ALLOW_THREADS
-
     for (npy_intp index = 0; index < count; ++index) {
         qdiag_solve_q3(
-            qxx[index],
-            qyy[index],
-            qxy[index],
-            qxz[index],
-            qyz[index],
-            w + 3*index,
-            v + 9*index
+            qxx[index], qyy[index], qxy[index], qxz[index], qyz[index],
+            w + 3*index, v + 9*index
         );
     }
-
     Py_END_ALLOW_THREADS
 
     Py_DECREF(arr_qxx);
@@ -179,7 +120,6 @@ static PyObject *qdiag_py_eigh_q(PyObject *self, PyObject *args)
     Py_DECREF(arr_qxy);
     Py_DECREF(arr_qxz);
     Py_DECREF(arr_qyz);
-
     return Py_BuildValue("NN", (PyObject *)out_w, (PyObject *)out_v);
 
 fail:
@@ -205,10 +145,7 @@ static PyObject *qdiag_py_qfield5(PyObject *self, PyObject *args, int dominant)
     if (!PyArg_ParseTuple(args, "O", &input)) {
         return NULL;
     }
-
-    qfield = (PyArrayObject *)PyArray_FROM_OTF(
-        input, NPY_NOTYPE, NPY_ARRAY_IN_ARRAY
-    );
+    qfield = (PyArrayObject *)PyArray_FROM_OTF(input, NPY_NOTYPE, NPY_ARRAY_IN_ARRAY);
     if (qfield == NULL) {
         return NULL;
     }
@@ -303,9 +240,7 @@ static PyObject *qdiag_py_qfield5_into(PyObject *self, PyObject *args, int domin
     if (!PyArg_ParseTuple(args, "OOO", &input, &output_w, &output_v)) {
         return NULL;
     }
-    qfield = (PyArrayObject *)PyArray_FROM_OTF(
-        input, NPY_NOTYPE, NPY_ARRAY_IN_ARRAY
-    );
+    qfield = (PyArrayObject *)PyArray_FROM_OTF(input, NPY_NOTYPE, NPY_ARRAY_IN_ARRAY);
     if (qfield == NULL) {
         return NULL;
     }
@@ -331,12 +266,9 @@ static PyObject *qdiag_py_qfield5_into(PyObject *self, PyObject *args, int domin
     const npy_intp expected_w = dominant ? count : 3*count;
     const npy_intp expected_v = dominant ? 3*count : 9*count;
     if (
-        PyArray_TYPE(out_w) != NPY_DOUBLE ||
-        PyArray_TYPE(out_v) != NPY_DOUBLE ||
-        !PyArray_ISCARRAY(out_w) ||
-        !PyArray_ISCARRAY(out_v) ||
-        PyArray_SIZE(out_w) != expected_w ||
-        PyArray_SIZE(out_v) != expected_v
+        PyArray_TYPE(out_w) != NPY_DOUBLE || PyArray_TYPE(out_v) != NPY_DOUBLE ||
+        !PyArray_ISCARRAY(out_w) || !PyArray_ISCARRAY(out_v) ||
+        PyArray_SIZE(out_w) != expected_w || PyArray_SIZE(out_v) != expected_v
     ) {
         PyErr_SetString(
             PyExc_ValueError,
@@ -389,38 +321,27 @@ static PyObject *qdiag_py_dominant_qfield5_into(PyObject *self, PyObject *args)
 
 static PyMethodDef qdiag_methods[] = {
     {
-        "eigh_q",
-        qdiag_py_eigh_q,
-        METH_VARARGS,
+        "eigh_q", qdiag_py_eigh_q, METH_VARARGS,
         PyDoc_STR(
             "eigh_q(qxx, qyy, qxy, qxz, qyz) -> (eigenvalues, eigenvectors)\n"
-            "\n"
-            "Diagonalize batches of real symmetric traceless 3x3 Q tensors.\n"
+            "\nDiagonalize batches of real symmetric traceless 3x3 Q tensors.\n"
             "Eigenvalues are ascending; eigenvectors are stored in columns.\n"
         )
     },
     {
-        "eigh_qfield5",
-        qdiag_py_eigh_qfield5,
-        METH_VARARGS,
+        "eigh_qfield5", qdiag_py_eigh_qfield5, METH_VARARGS,
         PyDoc_STR("eigh_qfield5(q) -> (eigenvalues, eigenvectors)\n")
     },
     {
-        "dominant_qfield5",
-        qdiag_py_dominant_qfield5,
-        METH_VARARGS,
+        "dominant_qfield5", qdiag_py_dominant_qfield5, METH_VARARGS,
         PyDoc_STR("dominant_qfield5(q) -> (largest_eigenvalue, eigenvector)\n")
     },
     {
-        "eigh_qfield5_into",
-        qdiag_py_eigh_qfield5_into,
-        METH_VARARGS,
+        "eigh_qfield5_into", qdiag_py_eigh_qfield5_into, METH_VARARGS,
         PyDoc_STR("eigh_qfield5_into(q, eigenvalues, eigenvectors) -> None\n")
     },
     {
-        "dominant_qfield5_into",
-        qdiag_py_dominant_qfield5_into,
-        METH_VARARGS,
+        "dominant_qfield5_into", qdiag_py_dominant_qfield5_into, METH_VARARGS,
         PyDoc_STR("dominant_qfield5_into(q, eigenvalue, eigenvector) -> None\n")
     },
     {NULL, NULL, 0, NULL}

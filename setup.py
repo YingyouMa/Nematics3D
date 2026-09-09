@@ -29,6 +29,7 @@ setup(
                     "nematics3d",
                     "q_field",
                     "diagonalization",
+                    "native",
                     "qdiag_module.c",
                 ),
                 os.path.join(
@@ -36,6 +37,7 @@ setup(
                     "nematics3d",
                     "q_field",
                     "diagonalization",
+                    "native",
                     "qdiag_kernel.c",
                 ),
             ],
@@ -45,12 +47,19 @@ setup(
                     "nematics3d",
                     "q_field",
                     "diagonalization",
+                    "native",
                     "qdiag_kernel.h",
                 )
             ],
             include_dirs=[
                 np.get_include(),
-                os.path.join("src", "nematics3d", "q_field", "diagonalization"),
+                os.path.join(
+                    "src",
+                    "nematics3d",
+                    "q_field",
+                    "diagonalization",
+                    "native",
+                ),
             ],
             libraries=_qdiag_libraries(),
             extra_compile_args=_qdiag_compile_args(),
