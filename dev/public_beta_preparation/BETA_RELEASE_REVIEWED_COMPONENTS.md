@@ -65,14 +65,14 @@ Similarly, formatting-only work is not enough to add a component to this file.
 | Field | Evidence |
 | --- | --- |
 | Kind | Public orthogonal-bounds host, conversion, sampling, and OBB-bridge utilities |
-| Source | [`src/nematics3d/analysis/bounds.py`](../../src/nematics3d/analysis/bounds.py); compatibility shim at [`src/nematics3d/bounds.py`](../../src/nematics3d/bounds.py) |
+| Source | [`src/nematics3d/analysis/bounds.py`](../../src/nematics3d/analysis/bounds.py) |
 | Tests | [`tests/classes/test_bounds_obb.py`](../../tests/classes/test_bounds_obb.py), with GridFieldDataset/PlaneGrid/QPlane downstream migration tests run during relocation |
 | Review scope | `Bounds`, `OptsBounds`, `BoundsData`, supported `as_bounds()` conversions, subscriber/visual lifecycle boundary, point containment, copying, minimal wrapping bounds, expansion, sampling, and `OBBFit` conversion; canonical relocation from top-level `nematics3d.bounds` into `nematics3d.analysis.bounds`; compatibility identity through the old top-level and `classes` paths. |
 | Validation | `python -m pytest tests/classes/test_bounds_obb.py tests/test_analysis_fourier.py tests/test_analysis_relaxation.py` (55 passed); earlier downstream relocation regression `python -m pytest tests/classes/test_bounds_obb.py tests/classes/test_grid_field_dataset.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/visual/test_q_plane_migration.py tests/test_analysis_fourier.py tests/test_analysis_relaxation.py` (193 passed, 1 unrelated PyVista warning); Ruff passed on canonical Bounds, compatibility shim, focused tests, Fourier, and Relaxation. |
 | Reviewed commit | `346746ed8e79e594823bbbad34e8b84253f043f6` |
 | Reviewed date | 2026-09-08 |
 | Reviewer | Yingyou Ma and ChatGPT |
-| Remaining limitations | `Bounds` intentionally represents only non-degenerate orthogonal 3D boxes; degenerate grid extents are represented by `None` at the GridFieldDataset layer rather than weakening the Bounds contract. The old `nematics3d.bounds` and `nematics3d.classes.bounds` modules remain compatibility shims only. |
+| Remaining limitations | `Bounds` intentionally represents only non-degenerate orthogonal 3D boxes; degenerate grid extents are represented by `None` at the GridFieldDataset layer rather than weakening the Bounds contract. The obsolete `nematics3d.bounds` and `nematics3d.classes.bounds` compatibility modules were removed after all repository callers were migrated to `nematics3d.analysis.bounds`. |
 
 ### `nematics3d.analysis.fourier`
 

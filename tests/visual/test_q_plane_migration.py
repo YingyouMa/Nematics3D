@@ -2,7 +2,7 @@ import numpy as np
 from unittest.mock import patch
 
 from nematics3d.analysis.disclination.plane import PlaneDefectResult
-from nematics3d.bounds import Bounds, OptsBounds
+from nematics3d.analysis.bounds import Bounds, OptsBounds
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
 from nematics3d.classes.q_plane import QPlane as LegacyQPlane
 from nematics3d.q_field import get_q

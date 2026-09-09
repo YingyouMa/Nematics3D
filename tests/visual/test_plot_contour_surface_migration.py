@@ -1,6 +1,6 @@
 import numpy as np
 
-from nematics3d.classes.bounds import Bounds
+from nematics3d.analysis.bounds import Bounds
 from nematics3d.classes.visual.plot_contour_surface import (
     OptsContourSurface as LegacyOptsContourSurface,
 )

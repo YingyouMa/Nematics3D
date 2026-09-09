@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.classes.bounds import Bounds, OptsBounds
+from nematics3d.analysis.bounds import Bounds, OptsBounds
 from nematics3d.classes.visual.plot_figure import PlotFigure
 from nematics3d.classes.visual.plot_rod import PlotRod
 from nematics3d.classes.visual.plot_sphere import PlotSphere

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.classes.bounds import (
+from nematics3d.analysis.bounds import (
     Bounds,
     OptsBounds,
     bounds_expanded,
