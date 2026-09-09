@@ -14,6 +14,22 @@ from nematics3d.datatypes import as_number
 from nematics3d.datatypes import as_real_lattice_field
 
 
+__all__ = [
+    "CorrelationResult",
+    "DistanceCorrelationResult",
+    "FourierResult",
+    "RadialSpectrumResult",
+    "act_correlation",
+    "act_correlation_values",
+    "act_distance",
+    "act_filter",
+    "act_fourier",
+    "act_inverse",
+    "act_mean_subtracted_values",
+    "act_radial_spectrum",
+]
+
+
 @dataclass(slots=True, frozen=True, repr=False)
 class FourierResult(ResultBase):
     """Container returned by :func:`act_fourier`."""

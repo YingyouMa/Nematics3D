@@ -12,6 +12,14 @@ from nematics3d.core.result_base import ResultBase
 from nematics3d.datatypes import as_number
 
 
+__all__ = [
+    "FitRelaxationResult",
+    "RelaxationLengthResult",
+    "ThresholdRelaxationResult",
+    "act_relaxation_length",
+]
+
+
 @dataclass(slots=True, frozen=True, repr=False)
 class ThresholdRelaxationResult(ResultBase):
     """Relaxation length measured by threshold crossing."""
