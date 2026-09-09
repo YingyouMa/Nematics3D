@@ -60,6 +60,48 @@ Similarly, formatting-only work is not enough to add a component to this file.
 
 ## Confirmed reviewed components
 
+### `nematics3d.analysis.bounds`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Public orthogonal-bounds host, conversion, sampling, and OBB-bridge utilities |
+| Source | [`src/nematics3d/analysis/bounds.py`](../../src/nematics3d/analysis/bounds.py); compatibility shim at [`src/nematics3d/bounds.py`](../../src/nematics3d/bounds.py) |
+| Tests | [`tests/classes/test_bounds_obb.py`](../../tests/classes/test_bounds_obb.py), with GridFieldDataset/PlaneGrid/QPlane downstream migration tests run during relocation |
+| Review scope | `Bounds`, `OptsBounds`, `BoundsData`, supported `as_bounds()` conversions, subscriber/visual lifecycle boundary, point containment, copying, minimal wrapping bounds, expansion, sampling, and `OBBFit` conversion; canonical relocation from top-level `nematics3d.bounds` into `nematics3d.analysis.bounds`; compatibility identity through the old top-level and `classes` paths. |
+| Validation | `python -m pytest tests/classes/test_bounds_obb.py tests/test_analysis_fourier.py tests/test_analysis_relaxation.py` (55 passed); earlier downstream relocation regression `python -m pytest tests/classes/test_bounds_obb.py tests/classes/test_grid_field_dataset.py tests/classes/test_plane_grid.py tests/classes/test_plane_grid_polar.py tests/visual/test_q_plane_migration.py tests/test_analysis_fourier.py tests/test_analysis_relaxation.py` (193 passed, 1 unrelated PyVista warning); Ruff passed on canonical Bounds, compatibility shim, focused tests, Fourier, and Relaxation. |
+| Reviewed commit | `346746ed8e79e594823bbbad34e8b84253f043f6` |
+| Reviewed date | 2026-09-08 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | `Bounds` intentionally represents only non-degenerate orthogonal 3D boxes; degenerate grid extents are represented by `None` at the GridFieldDataset layer rather than weakening the Bounds contract. The old `nematics3d.bounds` and `nematics3d.classes.bounds` modules remain compatibility shims only. |
+
+### `nematics3d.analysis.fourier`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | Real-lattice Fourier transform, filtering, inversion, spectrum, and correlation analysis |
+| Source | [`src/nematics3d/analysis/fourier.py`](../../src/nematics3d/analysis/fourier.py) |
+| Tests | [`tests/test_analysis_fourier.py`](../../tests/test_analysis_fourier.py) |
+| Review scope | Structured Fourier/correlation result objects; selected-axis real FFT and inverse; padding semantics; k-band filtering; normalized and unnormalized spectra; radial spectrum; periodic autocorrelation; radial distance correlation; mean subtraction; public result convenience methods; validation and exported API. |
+| Validation | `python -m pytest tests/test_analysis_fourier.py` passed as part of the 55-test final analysis regression; Black left the source unchanged; Ruff passed; the public surface is now explicit through module `__all__`. |
+| Reviewed commit | `346746ed8e79e594823bbbad34e8b84253f043f6` |
+| Reviewed date | 2026-09-08 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | The module uses NumPy FFT conventions and periodic correlation semantics. Relaxation-length fitting reached through `FourierResult.act_relaxation_length()` is reviewed separately below. |
+
+### `nematics3d.analysis.relaxation`
+
+| Field | Evidence |
+| --- | --- |
+| Kind | One-dimensional correlation relaxation-length estimators |
+| Source | [`src/nematics3d/analysis/relaxation.py`](../../src/nematics3d/analysis/relaxation.py) |
+| Tests | [`tests/test_analysis_relaxation.py`](../../tests/test_analysis_relaxation.py) |
+| Review scope | Correlation/coordinate validation and normalization; threshold-crossing interpolation; iterative exponential and Gaussian single-parameter fitting; adaptive fit windows; convergence, insufficient-point, and fitting-failure results; parameter validation; structured result objects and exported API. |
+| Validation | 11 dedicated relaxation tests pass, including exact exponential/Gaussian recovery, threshold interpolation/no-crossing, invalid dimensions, non-finite data, non-increasing coordinates, zero normalization value, and insufficient fit points; included in `python -m pytest tests/classes/test_bounds_obb.py tests/test_analysis_fourier.py tests/test_analysis_relaxation.py` (55 passed); Black and Ruff passed; the public surface is now explicit through module `__all__`. |
+| Reviewed commit | `346746ed8e79e594823bbbad34e8b84253f043f6` |
+| Reviewed date | 2026-09-08 |
+| Reviewer | Yingyou Ma and ChatGPT |
+| Remaining limitations | Fits intentionally use simple one-parameter zero-offset exponential and Gaussian models. No claim is made that either model is physically appropriate for every correlation curve; callers should inspect convergence and RMSE rather than treating a returned fit as model selection. |
+
 ### `nematics3d.classes.visual.PlotFigure`
 
 | Field | Evidence |
