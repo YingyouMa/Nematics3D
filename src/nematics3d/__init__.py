@@ -10,6 +10,7 @@ from .core import *
 # from .elastic import *
 # from .coarse import *
 from .classes.smoothed_line import *
+from .geometry.smoothing.line import *
 from .surface.contour import *
 from .sample import *
 from .visual.plot_tube import *

@@ -156,7 +156,7 @@ from ..grid.field import (
     InputGridField,
 )
 from ..core.opts import merge_opts_all, cover_value
-from ..classes.smoothed_line import OptsSmoothedLine
+from ..geometry.smoothing.line import OptsSmoothedLine
 from ..core.registry_base import RegistryBase
 from ..analysis.disclination.line import DisclinationLine
 from ..core.class_base import AttrDef, ClassBase

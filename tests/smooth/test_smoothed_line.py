@@ -1,6 +1,6 @@
 import numpy as np
-import nematics3d.classes.smoothed_line as smoothed_line_module
-from nematics3d.classes.smoothed_line import SmoothedLine
+import nematics3d.geometry.smoothing.line as smoothed_line_module
+from nematics3d.geometry.smoothing.line import SmoothedLine
 from scipy.interpolate import splev
 
 

@@ -8,10 +8,10 @@ from typing import Any, Mapping
 import numpy as np
 from scipy.interpolate import splprep
 
-from ...classes.smoothed_line import OptsSmoothedLine, SmoothedLine
 from ...core.class_base import AttrDef
 from ...core.opts import merge_opts_all
 from ...core.registry_base import RegistryBase
+from ...geometry.smoothing.line import OptsSmoothedLine, SmoothedLine
 from ...grid import apply_linear_transform, unwrap_trajectory
 from ...logging_decorator import logging_and_warning_decorator
 from .line import DisclinationLine
