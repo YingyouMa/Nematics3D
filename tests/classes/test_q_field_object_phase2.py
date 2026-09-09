@@ -22,12 +22,12 @@ from nematics3d.classes.grid_field import (
     GridInterpolator,
     InputGridField,
 )
-from nematics3d.classes.plane_grid_polar import OptsPlaneGridPolar
-from nematics3d.classes.disclination_line import (
+from nematics3d.sample.plane_grid_polar import OptsPlaneGridPolar
+from nematics3d.analysis.disclination.section import (
     DefectSectionOmegaResult,
-    _helper_sample_beta_from_smooth,
+    OmegaResult,
+    sample_beta_from_smooth,
 )
-from nematics3d.classes.q_plane import OmegaResult
 from nematics3d.grid import apply_linear_transform
 
 
@@ -151,7 +151,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
             grid_arc_dist=0.5,
         )
 
-        self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
+        self.assertIs(beta_func.raw_func, sample_beta_from_smooth)
         self.assertIsInstance(
             beta_func.raw_func_kwargs["opts_grid"], OptsPlaneGridPolar
         )
@@ -199,7 +199,7 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         )
 
         self.assertIs(beta_func.owner, smooth)
-        self.assertIs(beta_func.raw_func, _helper_sample_beta_from_smooth)
+        self.assertIs(beta_func.raw_func, sample_beta_from_smooth)
         self.assertEqual(beta_func.name, "beta_smooth_0")
         self.assertEqual(beta_func.raw_func_kwargs["opts_grid"].arc_dist, 0.5)
 

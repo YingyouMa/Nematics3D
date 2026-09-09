@@ -8,7 +8,7 @@ from typing import Any, ClassVar, Mapping
 
 import numpy as np
 
-from nematics3d.classes.bounds import BoundsData
+from nematics3d.analysis.bounds import BoundsData
 from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.datatypes import UNSET, Unset, as_bool, as_ColorRGB, as_number, as_str

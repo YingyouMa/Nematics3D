@@ -15,8 +15,13 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.plane_grid_polar import OptsPlaneGridPolar, PlaneGridPolar
-from nematics3d.classes.q_plane import QPlanePolar
+from nematics3d.classes.plane_grid_polar import (  # noqa: E402
+    OptsPlaneGridPolar,
+    PlaneGridPolar,
+)
+from nematics3d.analysis.disclination.section import (  # noqa: E402
+    project_defect_radii_on_polar_plane,
+)
 
 
 class TestPlaneGridPolar(unittest.TestCase):
@@ -67,16 +72,16 @@ class TestPlaneGridPolar(unittest.TestCase):
                 arc_dist=10.0,
             )
         )
-        dummy_plane = types.SimpleNamespace(grid=grid)
-
-        radii = QPlanePolar._helper_project_defect_radii(
-            dummy_plane,
-            np.array(
+        radii = project_defect_radii_on_polar_plane(
+            defect_positions=np.array(
                 [
                     [10.0, 20.0, 30.0],
                     [13.0, 24.0, 30.0],
                 ]
             ),
+            origin=grid.opts.origin,
+            normal=grid.opts.normal,
+            axis1=grid.opts.theta0_axis,
         )
 
         self.assertTrue(np.allclose(radii, np.array([0.0, 5.0])))

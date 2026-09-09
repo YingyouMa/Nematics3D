@@ -16,6 +16,11 @@ _LAZY_EXPORTS = {
     "PlotGlyph": (".glyph", "PlotGlyph"),
     "OptsPickManager": (".pick_manager", "OptsPickManager"),
     "PickManager": (".pick_manager", "PickManager"),
+    "OptsDefectLinePlot": (".disclination_line", "OptsDefectLinePlot"),
+    "DisclinationLineSmoothPlot": (
+        ".disclination_line",
+        "DisclinationLineSmoothPlot",
+    ),
     "FigureData": (".plot_figure", "FigureData"),
     "OptsFigure": (".plot_figure", "OptsFigure"),
     "PlotFigure": (".plot_figure", "PlotFigure"),

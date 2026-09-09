@@ -15,7 +15,6 @@ from ...datatypes import (
 )
 from ...field import align_director_stack
 from ...logging_decorator import logging_and_warning_decorator
-from .line import get_square
 
 
 def defect_validity_from_mask(
@@ -400,7 +399,7 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     defecty = defect_indices[indexy]
     defectz = defect_indices[indexz]
 
-    squarex = get_square(
+    squarex = _get_square(
         square_size_list, square_num_list, origin_list=square_origin_list, dim=3
     )
     squarey = squarex.copy()
@@ -428,3 +427,47 @@ def defect_vicinity_grid(defect_indices, num_shell=2):
     result[indexz] = defectz.astype(int)
 
     return result
+
+
+def _get_square_each(size, num, dim=2):
+    if not np.isscalar(size) or not np.isfinite(size) or size <= 0:
+        raise ValueError("`size` must be a positive finite scalar.")
+    if isinstance(num, bool) or not isinstance(num, (int, np.integer)) or num < 2:
+        raise ValueError("`num` must be an integer greater than or equal to 2.")
+    if dim not in (2, 3):
+        raise ValueError("`dim` must be either 2 or 3.")
+
+    corners = np.array([[0, 0], [size, 0], [size, size], [0, size]], dtype=float)
+    edges = [
+        np.linspace(corners[i], corners[(i + 1) % 4], num - 1, endpoint=False)
+        for i in range(4)
+    ]
+    coords = np.vstack(edges)
+    if dim == 3:
+        coords = np.hstack([np.zeros((len(coords), 1)), coords])
+    return coords
+
+
+def _get_square(size_list, num_list, origin_list=((0, 0, 0),), dim=3):
+    if dim not in (2, 3):
+        raise ValueError("`dim` must be either 2 or 3.")
+
+    size_list = np.atleast_1d(size_list)
+    num_list = np.atleast_1d(num_list)
+    origin_list = np.asarray(origin_list, dtype=float)
+    if origin_list.ndim == 1:
+        origin_list = origin_list[np.newaxis, :]
+    if origin_list.ndim != 2 or origin_list.shape[1] != dim:
+        raise ValueError(f"`origin_list` must have shape (N, {dim}).")
+    if not len(size_list) == len(num_list) == len(origin_list):
+        raise ValueError(
+            "size_list, num_list, and origin_list must describe the same number "
+            "of squares."
+        )
+
+    return np.vstack(
+        [
+            _get_square_each(size, num, dim) + origin
+            for size, num, origin in zip(size_list, num_list, origin_list)
+        ]
+    )

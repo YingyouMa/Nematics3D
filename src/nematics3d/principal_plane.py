@@ -12,7 +12,7 @@ from typing import ClassVar
 
 import numpy as np
 
-from .classes.bounds import (
+from .analysis.bounds import (
     Bounds,
     bounds_expanded,
     bounds_minimal_wrapping_points,

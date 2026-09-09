@@ -15,12 +15,42 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.classes.plane_grid import OptsPlaneGrid
-from nematics3d.classes.vector_plane import VectorPlane
+from nematics3d.classes.grid_field import GridFieldDataset, InputGridField  # noqa: E402
+from nematics3d.sample.plane_grid import OptsPlaneGrid  # noqa: E402
+from nematics3d.sample.plane_grid_base import PlaneGridBase  # noqa: E402
+from nematics3d.sample.plane_grid_polar import (  # noqa: E402
+    OptsPlaneGridPolar,
+    PlaneGridPolar,
+)
+from nematics3d.sample.vector_plane import VectorPlane  # noqa: E402
 
 
 class TestVectorPlane(unittest.TestCase):
+    def test_plane_grid_polar_uses_shared_plane_grid_base(self):
+        self.assertTrue(issubclass(PlaneGridPolar, PlaneGridBase))
+
+    def test_vector_plane_builds_polar_grid_from_polar_opts(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(5, 5, 5)))
+        values = dataset.act_generate_grid()
+        field = dataset.act_add_field("v", values)
+
+        plane = VectorPlane(
+            interpolator=field.act_add_interpolator(),
+            opts=OptsPlaneGridPolar(
+                origin=(2.0, 2.0, 2.0),
+                normal=(0.0, 0.0, 1.0),
+                theta0_axis=(1.0, 0.0, 0.0),
+                r_min=0.0,
+                layers=2,
+                dr=1.0,
+                arc_dist=1.0,
+            ),
+        )
+
+        self.assertIsInstance(plane.grid, PlaneGridPolar)
+        expected = field.act_interpolate(plane.grid.entity_grid)
+        self.assertTrue(np.allclose(plane.result, expected))
+
     def test_vector_plane_samples_vector_field_and_caches_magnitude(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(3, 3, 3)))
         values = dataset.act_generate_grid()
@@ -45,6 +75,12 @@ class TestVectorPlane(unittest.TestCase):
         self.assertTrue(np.allclose(plane.result, expected))
         self.assertTrue(
             np.allclose(plane.calc_magnitude, np.linalg.norm(plane.result, axis=1))
+        )
+        self.assertTrue(
+            np.allclose(
+                plane.calc_magnitude_all,
+                np.linalg.norm(plane.calc_result_all, axis=1),
+            )
         )
 
     def test_vector_plane_refresh_tracks_grid_changes(self):

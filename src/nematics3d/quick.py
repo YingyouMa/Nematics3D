@@ -1,68 +1,52 @@
-"""Quick convenience workflows for common Nematics3D visualizations."""
-
-from __future__ import annotations
+"""High-level convenience workflows for common Nematics3D visualizations."""
 
 from pathlib import Path
 
 import numpy as np
 
-if __package__ in {None, ""}:
-    import sys
+from .datatypes import UNSET, as_bool
+from .logging_decorator import logging_and_warning_decorator
+from .q_field.q_field_object import QFieldObject
+from .visual.plot_figure import PlotFigure
+from .visual.plot_sphere import OptsSphere, PlotSphere
+from .visual.plot_tube import OptsTube
 
-    _REPO_ROOT = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(_REPO_ROOT / "src"))
+__all__ = ["quick_visualize_q"]
 
-    from nematics3d.q_field.q_field_object import QFieldObject
-    from nematics3d.visual.plot_figure import PlotFigure
-    from nematics3d.visual.plot_sphere import OptsSphere, PlotSphere
-    from nematics3d.visual.plot_tube import OptsTube
-    from nematics3d.datatypes import UNSET
-    from nematics3d.logging_decorator import logging_and_warning_decorator
-else:
-    from .q_field.q_field_object import QFieldObject
-    from .visual.plot_figure import PlotFigure
-    from .visual.plot_sphere import OptsSphere, PlotSphere
-    from .visual.plot_tube import OptsTube
-    from .datatypes import UNSET
-    from .logging_decorator import logging_and_warning_decorator
+
+_DIRECTOR_SPACING_CONFIG = {
+    "dense": {
+        "grid_spacing_scale": 1.0,
+        "n_length_scale": 1.0,
+        "n_radius_scale": 1.0,
+    },
+    "medium": {
+        "grid_spacing_scale": 1.75,
+        "n_length_scale": 1.2,
+        "n_radius_scale": 1.1,
+    },
+    "sparse": {
+        "grid_spacing_scale": 2.5,
+        "n_length_scale": 1.45,
+        "n_radius_scale": 1.2,
+    },
+}
 
 
 def _resolve_director_spacing_level(level):
-    spacing_config_by_level = {
-        "dense": {
-            "grid_spacing_scale": 1.0,
-            "n_length_scale": 1.0,
-            "n_radius_scale": 1.0,
-        },
-        "medium": {
-            "grid_spacing_scale": 1.75,
-            "n_length_scale": 1.2,
-            "n_radius_scale": 1.1,
-        },
-        "sparse": {
-            "grid_spacing_scale": 2.5,
-            "n_length_scale": 1.45,
-            "n_radius_scale": 1.2,
-        },
-    }
-
     try:
-        return spacing_config_by_level[level]
-    except KeyError as exc:
-        valid_levels = ", ".join(repr(key) for key in spacing_config_by_level)
+        return _DIRECTOR_SPACING_CONFIG[level]
+    except (KeyError, TypeError) as exc:
+        valid_levels = ", ".join(repr(key) for key in _DIRECTOR_SPACING_CONFIG)
         raise ValueError(
             f"`director_spacing` must be one of {valid_levels}, got {level!r}."
         ) from exc
 
 
-def _auto_quick_Q_visual_params(field, grid_normal):
-    shape = np.asarray(field.shape[:3], dtype=float)
-    if shape.shape != (3,):
-        raise ValueError("Input field must provide a 3D grid shape in its first axes.")
-
-    grid_normal = np.asarray(grid_normal, dtype=float)
-    if grid_normal.shape != (3,) or np.linalg.norm(grid_normal) == 0:
-        raise ValueError("`grid_normal` must be a nonzero 3D vector.")
+def _auto_quick_q_visual_params(field):
+    shape = np.asarray(np.shape(field)[:3], dtype=float)
+    if shape.shape != (3,) or np.any(shape <= 0):
+        raise ValueError("Input field must have three non-empty spatial axes.")
 
     base_size = 128.0
     scale = np.prod(shape / base_size) ** (1.0 / 3.0)
@@ -86,6 +70,15 @@ def _auto_quick_Q_visual_params(field, grid_normal):
     }
 
 
+def _validate_grid_normal(grid_normal):
+    grid_normal = np.asarray(grid_normal, dtype=float)
+    if grid_normal.shape != (3,) or not np.all(np.isfinite(grid_normal)):
+        raise ValueError("`grid_normal` must be a finite 3D vector.")
+    if np.linalg.norm(grid_normal) == 0.0:
+        raise ValueError("`grid_normal` must be nonzero.")
+    return grid_normal
+
+
 @logging_and_warning_decorator(start_finish_level=5)
 def quick_visualize_q(
     S=UNSET,
@@ -100,6 +93,51 @@ def quick_visualize_q(
     is_off_screen=False,
     logger=None,
 ):
+    """Create a standard Q-field visualization with minimal configuration.
+
+    Supply either a full Q-tensor field through ``Q`` or a director field
+    through ``n``. ``S`` may accompany ``n``. The function constructs a
+    :class:`QFieldObject`, detects its defects, draws either smoothed
+    disclination lines or defect points, overlays the field bounds, and adds
+    one director plane using automatically scaled visual parameters.
+
+    Parameters
+    ----------
+    S, n, Q : array_like or UNSET, optional
+        Field data used to construct the :class:`QFieldObject`. ``Q`` is
+        mutually exclusive with ``n`` and ``S``. When ``Q`` is omitted, ``n``
+        is required and ``S`` is optional.
+    box_periodic_flag : bool or length-3 bool-like, optional
+        Periodic-boundary specification passed to :class:`QFieldObject`.
+    name : str, optional
+        Name of the created Q-field object.
+    grid_normal : array_like, shape (3,), optional
+        Nonzero normal vector of the displayed director plane.
+    director_spacing : {"dense", "medium", "sparse"}, optional
+        Preset controlling director-plane sampling density and glyph size.
+    is_visualize_lines : bool, optional
+        Draw smoothed disclination lines when ``True``; otherwise draw raw
+        detected defect points.
+    save_path : path-like or None, optional
+        Save the rendered figure when provided. Parent directories are created
+        automatically.
+    is_off_screen : bool, optional
+        Create the figure in off-screen mode. When ``True`` and ``save_path``
+        is omitted, the call produces no useful output and returns
+        ``(None, None)`` after logging a warning.
+
+    Returns
+    -------
+    q_obj : QFieldObject or None
+        The constructed field object, or ``None`` for the ignored off-screen
+        call described above.
+    figure : PlotFigure or None
+        The created figure, or ``None`` for the ignored off-screen call.
+    """
+    is_visualize_lines = as_bool(is_visualize_lines, name="is_visualize_lines")
+    is_off_screen = as_bool(is_off_screen, name="is_off_screen")
+    grid_normal = _validate_grid_normal(grid_normal)
+
     if is_off_screen and save_path is None:
         logger.warning(
             "quick_visualize_q was called with is_off_screen=True but "
@@ -112,11 +150,15 @@ def quick_visualize_q(
     is_S_provided = S is not None and S is not UNSET
     is_n_provided = n is not None and n is not UNSET
 
+    if is_Q_provided and (is_n_provided or is_S_provided):
+        raise ValueError("Provide either `Q` or (`n`, optional `S`), not both.")
+    if is_S_provided and not is_n_provided:
+        raise ValueError("`S` may only be provided together with `n`.")
     if not is_Q_provided and not is_n_provided:
-        raise ValueError("Provide `Q` or `n`.")
+        raise ValueError("Provide either `Q` or `n`.")
 
     field_for_shape = Q if is_Q_provided else n
-    params = _auto_quick_Q_visual_params(field_for_shape, grid_normal)
+    params = _auto_quick_q_visual_params(field_for_shape)
     director_spacing_config = _resolve_director_spacing_level(director_spacing)
 
     q_obj = QFieldObject(
@@ -163,7 +205,7 @@ def quick_visualize_q(
 
     q_obj.act_visualize_n_plane(
         is_extent=False,
-        grid_normal=grid_normal,
+        grid_normal=tuple(grid_normal),
         grid_spacing=(
             params["grid_spacing"] * director_spacing_config["grid_spacing_scale"]
         ),
@@ -180,42 +222,3 @@ def quick_visualize_q(
         figure.act_savefig(save_path)
 
     return q_obj, figure
-
-
-def _find_repo_root_for_quick_demo():
-    for candidate in Path(__file__).resolve().parents:
-        if (candidate / "example" / "data" / "Q_example_workflow.npy").exists():
-            return candidate
-
-    raise FileNotFoundError(
-        "Could not locate the repository root for the quick_visualize_q demo."
-    )
-
-
-def _run_quick_visualize_q_tutorial_demo():
-    repo_root = _find_repo_root_for_quick_demo()
-    data_path = repo_root / "example" / "data" / "Q_example_workflow.npy"
-    output_dir = repo_root / "tutorials" / "output" / "quick_visualize_q"
-    save_path = output_dir / "quick_py_main_preview.png"
-
-    Q_data = np.load(data_path)
-
-    # Edit these values directly when using this file as a quick local driver.
-    demo_kwargs = {
-        "Q": Q_data,
-        "name": "quick_py_main_demo",
-        "grid_normal": (0, 0, 1),
-        "director_spacing": "sparse",
-        "is_visualize_lines": True,
-        "save_path": save_path,
-        "is_off_screen": False,
-    }
-
-    q_obj, figure = quick_visualize_q(**demo_kwargs)
-    print(f"Loaded tutorial data from: {data_path}")
-    print(f"Saved preview image to: {save_path}")
-    return q_obj, figure
-
-
-if __name__ == "__main__":
-    _run_quick_visualize_q_tutorial_demo()

@@ -32,7 +32,7 @@ from ...grid import (
 from ...logging_decorator import logging_and_warning_decorator
 
 if TYPE_CHECKING:
-    from ...classes.disclination_line import DisclinationLine
+    from .line import DisclinationLine
 
 # Neighbor offsets for a defect whose integer coordinate is the x coordinate.
 # Such a node represents a yz plaquette center. In doubled coordinates, its
@@ -300,7 +300,7 @@ def defect_classify_into_lines(
     """
     # Local import avoids the module cycle: DisclinationLine depends on helpers
     # defined in this module through higher-level line operations.
-    from ...classes.disclination_line import DisclinationLine
+    from .line import DisclinationLine
 
     box_size_periodic = as_box_size_periodic(
         box_size_periodic,

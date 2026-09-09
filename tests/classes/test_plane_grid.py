@@ -15,10 +15,14 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.plane_grid import OptsPlaneGrid, PlaneGrid
+from nematics3d.classes.plane_grid import OptsPlaneGrid, PlaneGrid  # noqa: E402
+from nematics3d.classes.plane_grid_base import PlaneGridBase  # noqa: E402
 
 
 class TestPlaneGrid(unittest.TestCase):
+    def test_plane_grid_uses_shared_plane_grid_base(self):
+        self.assertTrue(issubclass(PlaneGrid, PlaneGridBase))
+
     def test_plane_grid_builds_physical_points_directly_from_basis(self):
         grid = PlaneGrid(
             opts=OptsPlaneGrid(

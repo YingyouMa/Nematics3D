@@ -16,10 +16,10 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.classes.plane_grid import OptsPlaneGrid
-from nematics3d.classes.q_plane import OmegaResult, QPlane, QPlanePolar
-from nematics3d.q_field import get_q
+from nematics3d.classes.grid_field import GridFieldDataset, InputGridField  # noqa: E402
+from nematics3d.sample.plane_grid import OptsPlaneGrid  # noqa: E402
+from nematics3d.sample.q_plane import OmegaResult, QPlane, QPlanePolar  # noqa: E402
+from nematics3d.q_field import get_q  # noqa: E402
 
 
 class TestQPlane(unittest.TestCase):
@@ -42,11 +42,11 @@ class TestQPlane(unittest.TestCase):
 
         with (
             patch(
-                "nematics3d.classes.q_plane.defect_detect",
+                "nematics3d.analysis.disclination.plane.defect_detect",
                 return_value=np.array([[1, 1, 0]], dtype=int),
             ),
             patch(
-                "nematics3d.classes.q_plane.defect_vicinity_grid",
+                "nematics3d.analysis.disclination.plane.defect_vicinity_grid",
                 return_value=np.array([[[1, 1, 0]]], dtype=int),
             ),
         ):
@@ -63,7 +63,11 @@ class TestQPlane(unittest.TestCase):
         directors = np.column_stack(
             (np.cos(angles), np.sin(angles), np.zeros_like(angles))
         )
-        grid_opts = {"source": "bridge regression"}
+        grid_opts = types.SimpleNamespace(
+            origin=np.zeros(3),
+            normal=np.array([0.0, 0.0, 1.0]),
+            theta0_axis=np.array([1.0, 0.0, 0.0]),
+        )
         grid = types.SimpleNamespace(
             calc_ring_offsets=np.array([0, len(directors)]),
             entity_polar=np.column_stack((np.full(len(directors), 2.5), angles)),
@@ -79,16 +83,12 @@ class TestQPlane(unittest.TestCase):
         plane = types.SimpleNamespace(
             grid=grid,
             interpolator=interpolator,
-            _helper_get_omega_metric_flags=lambda radius, out_points: {
-                "is_out_of_domain": False,
-                "is_defect_inside_R": False,
-                "is_defect_at_center": True,
-            },
+            calc_defect_pos_all=np.array([[0.0, 0.0, 0.0]]),
         )
         logger = types.SimpleNamespace(warning=lambda message: None)
 
         with patch(
-            "nematics3d.classes.q_plane.q_diagonalize",
+            "nematics3d.analysis.disclination.section.q_diagonalize",
             return_value=types.SimpleNamespace(n=directors),
         ):
             result = QPlanePolar.act_calc_omega.__wrapped__(
@@ -111,7 +111,7 @@ class TestQPlane(unittest.TestCase):
         self.assertFalse(result.metric["is_out_of_domain"])
         self.assertFalse(result.metric["is_defect_inside_R"])
         self.assertTrue(result.metric["is_defect_at_center"])
-        self.assertEqual(result.opts, grid_opts)
+        self.assertEqual(result.opts.origin.tolist(), [0.0, 0.0, 0.0])
         self.assertIsNot(result.opts, grid_opts)
 
 

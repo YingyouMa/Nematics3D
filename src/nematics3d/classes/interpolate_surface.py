@@ -72,7 +72,7 @@ class InterpolateSurface(ClassBase):
         if not isinstance(interpolator, GridInterpolator):
             raise TypeError(
                 "Interpolator for InterpolateSurface must be an instance of "
-                "nematics3d.classes.grid_field.GridInterpolator."
+                "nematics3d.grid.field.GridInterpolator."
             )
         self.act_bind_relation_base("interpolator", interpolator, is_weak=True)
 

@@ -18,7 +18,7 @@ if "nematics3d" not in sys.modules:
 
 from nematics3d.core.registry_base import RegistryBase
 from nematics3d.core.result_base import ResultBase
-from nematics3d.classes.disclination_line import DisclinationLine, InputLine
+from nematics3d.analysis.disclination.line import DisclinationLine, InputLine
 from nematics3d.classes.smoothed_line import SmoothedLine, SmoothedLineFunc
 
 
@@ -114,7 +114,6 @@ class TestSmoothedLineFuncRegistry(unittest.TestCase):
                 defect_indices=indices,
                 box_size_periodic_index=(10, 10, 10),
             ),
-            is_sorted=True,
         )
 
         smooth = line.act_smooth(window_length=5, min_line_length=2)

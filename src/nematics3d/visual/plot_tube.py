@@ -14,7 +14,7 @@ from nematics3d.format import fmt_value
 from nematics3d.geometry import closest_point_on_polyline
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
-from nematics3d.classes.bounds import BoundsData
+from nematics3d.analysis.bounds import BoundsData
 from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph

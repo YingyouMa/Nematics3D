@@ -21,7 +21,7 @@ from nematics3d.grid import (
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 if TYPE_CHECKING:
-    from nematics3d.classes.disclination_line import DisclinationLine
+    from nematics3d.analysis.disclination.line import DisclinationLine
 
 
 class Graph:
@@ -80,7 +80,7 @@ def defect_classify_into_lines(
     logger=None,
 ) -> List["DisclinationLine"]:
     """Legacy hash-table and adjacency-set line classifier."""
-    from nematics3d.classes.disclination_line import DisclinationLine
+    from nematics3d.analysis.disclination.line import DisclinationLine
 
     box_size_periodic = as_dimension_info(box_size_periodic)
     grid_transform = as_grid_transform(grid_transform)

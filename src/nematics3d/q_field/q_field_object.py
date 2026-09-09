@@ -144,12 +144,12 @@ from ..visual.plot_sphere import OptsSphere
 from ..visual.plot_delaunay import OptsDelaunay
 from ..visual.plot_figure import PlotFigure, OptsFigure
 from ..visual.color import blue_red_in_white_bg
-from ..classes.q_plane import QPlane, QPlanePolar
+from ..sample.q_plane import QPlane, QPlanePolar
 from ..visual.figure_manager import FigureManager
-from ..classes.plane_grid import OptsPlaneGrid
-from ..classes.plane_grid_polar import OptsPlaneGridPolar
-from ..classes.bounds import as_bounds
-from ..classes.grid_field import (
+from ..sample.plane_grid import OptsPlaneGrid
+from ..sample.plane_grid_polar import OptsPlaneGridPolar
+from ..analysis.bounds import as_bounds
+from ..grid.field import (
     FieldData,
     GridFieldDataset,
     GridInterpolator,
@@ -158,7 +158,7 @@ from ..classes.grid_field import (
 from ..core.opts import merge_opts_all, cover_value
 from ..classes.smoothed_line import OptsSmoothedLine
 from ..core.registry_base import RegistryBase
-from ..classes.disclination_line import DisclinationLine
+from ..analysis.disclination.line import DisclinationLine
 from ..core.class_base import AttrDef, ClassBase
 
 

@@ -18,6 +18,10 @@ _LAZY_EXPORTS = {
     "InteractTube": (".interact_tube", "InteractTube"),
     "InteractVector": (".interact_vector", "InteractVector"),
     "InteractDelaunay": (".interact_delaunay", "InteractDelaunay"),
+    "InteractDisclinationLine": (
+        ".interact_disclination_line",
+        "InteractDisclinationLine",
+    ),
     "InteractContourSurface": (
         ".interact_contour_surface",
         "InteractContourSurface",
@@ -34,6 +38,7 @@ __all__ = [
     "InteractTube",
     "InteractVector",
     "InteractDelaunay",
+    "InteractDisclinationLine",
     "InteractContourSurface",
 ]
 

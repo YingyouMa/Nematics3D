@@ -15,7 +15,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.disclination_line import DisclinationLine
+from nematics3d.analysis.disclination.line import DisclinationLine
 from nematics3d.classes.grid_field import InputGridField
 from nematics3d.q_field.q_field_object import InputQ
 from nematics3d.analysis.disclination import defect_classify_into_lines
@@ -38,7 +38,6 @@ class TestGridOffsetNone(unittest.TestCase):
         line = DisclinationLine(
             defect_indices=defect_indices,
             grid_offset=None,
-            is_sorted=True,
         )
 
         self.assertIsNone(line.raw_grid_offset)

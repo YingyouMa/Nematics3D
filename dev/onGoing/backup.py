@@ -674,7 +674,7 @@
 #             Each line is an instance of Disclination_line.
 #     '''
 
-#     from .classes.disclination_line import DisclinationLine
+#     from .analysis.disclination.line import DisclinationLine
 
 #     defect_sorted = defect_sorted[:, :4]
 

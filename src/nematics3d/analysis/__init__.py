@@ -1,5 +1,16 @@
 """Analysis helpers for lattice fields."""
 
+from .bounds import (
+    Bounds,
+    BoundsData,
+    OptsBounds,
+    as_bounds,
+    bounds_expanded,
+    bounds_minimal_wrapping_points,
+    bounds_sample_points,
+    obb_bounds_from_fit,
+)
+
 from .fourier import (
     CorrelationResult,
     DistanceCorrelationResult,
@@ -14,7 +25,6 @@ from .fourier import (
     act_mean_subtracted_values,
     act_radial_spectrum,
 )
-from ..q_field.diagonalization import QDiagonalizationResult, q_diagonalize
 from .relaxation import (
     FitRelaxationResult,
     RelaxationLengthResult,
@@ -24,14 +34,18 @@ from .relaxation import (
 from .sampling import sample_van_der_corput
 
 __all__ = [
+    "Bounds",
+    "BoundsData",
     "CorrelationResult",
     "DistanceCorrelationResult",
     "FitRelaxationResult",
     "FourierResult",
+    "OptsBounds",
     "RadialSpectrumResult",
     "QDiagonalizationResult",
     "RelaxationLengthResult",
     "ThresholdRelaxationResult",
+    "as_bounds",
     "act_correlation",
     "act_correlation_values",
     "act_distance",
@@ -41,6 +55,21 @@ __all__ = [
     "act_mean_subtracted_values",
     "act_radial_spectrum",
     "act_relaxation_length",
+    "bounds_expanded",
+    "bounds_minimal_wrapping_points",
+    "bounds_sample_points",
+    "obb_bounds_from_fit",
     "q_diagonalize",
     "sample_van_der_corput",
 ]
+
+
+def __getattr__(name: str):
+    if name in {"QDiagonalizationResult", "q_diagonalize"}:
+        from ..q_field.diagonalization import QDiagonalizationResult, q_diagonalize
+
+        return {
+            "QDiagonalizationResult": QDiagonalizationResult,
+            "q_diagonalize": q_diagonalize,
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

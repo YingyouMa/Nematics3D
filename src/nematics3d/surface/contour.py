@@ -7,8 +7,8 @@ from typing import Any, Callable, ClassVar, Mapping
 import numpy as np
 import pyvista as pv
 
-from nematics3d.classes.bounds import as_bounds
-from nematics3d.classes.grid_field.input_grid_field import InputGridField
+from nematics3d.analysis.bounds import as_bounds
+from nematics3d.grid.field import InputGridField
 from nematics3d.core.class_base import AttrDef, ClassBase
 from nematics3d.core.registry_base import RegistryBase
 from nematics3d.datatypes import (

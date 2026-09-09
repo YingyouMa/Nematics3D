@@ -22,6 +22,12 @@ from nematics3d.classes.grid_field import (
     InputGridField,
     SpatialDerivativeInfo,
 )
+from nematics3d.grid.field import (
+    GridFieldDataset as CanonicalGridFieldDataset,
+    GridInterpolator as CanonicalGridInterpolator,
+    InputGridField as CanonicalInputGridField,
+    SpatialDerivativeInfo as CanonicalSpatialDerivativeInfo,
+)
 from nematics3d.core.npy_array_payload import NpyArrayPayload
 from nematics3d.datatypes import (
     UNSET,
@@ -40,6 +46,12 @@ from nematics3d.geometry import get_box_corners
 
 
 class TestGridFieldDataset(unittest.TestCase):
+    def test_legacy_grid_field_imports_alias_canonical_classes(self):
+        self.assertIs(GridFieldDataset, CanonicalGridFieldDataset)
+        self.assertIs(GridInterpolator, CanonicalGridInterpolator)
+        self.assertIs(InputGridField, CanonicalInputGridField)
+        self.assertIs(SpatialDerivativeInfo, CanonicalSpatialDerivativeInfo)
+
     def test_as_value_range_normalizes_two_number_interval(self):
         lo, hi = as_value_range([0, 1])
 
@@ -202,6 +214,58 @@ class TestGridFieldDataset(unittest.TestCase):
         np.testing.assert_allclose(grid[1, 0, 0], transform[0])
         np.testing.assert_allclose(grid[0, 1, 0], transform[1])
         np.testing.assert_allclose(grid[0, 0, 1], transform[2])
+
+    def test_degenerate_grid_has_no_3d_bounds_but_keeps_geometry(self):
+        for shape in ((4, 3, 1), (4, 1, 1), (1, 1, 1)):
+            with self.subTest(shape=shape):
+                dataset = GridFieldDataset(inputValue=InputGridField(shape=shape))
+
+                expected_lengths = np.asarray(shape, dtype=float) - 1.0
+                expected_corners = get_box_corners(*expected_lengths)
+
+                self.assertIsNone(dataset.calc_bounds)
+                np.testing.assert_allclose(dataset.calc_corners_index, expected_corners)
+                np.testing.assert_allclose(dataset.calc_corners, expected_corners)
+                np.testing.assert_allclose(
+                    dataset.calc_center,
+                    0.5 * expected_lengths,
+                )
+
+    def test_unknown_shape_keeps_bounds_unset_until_inference(self):
+        dataset = GridFieldDataset()
+
+        self.assertIs(dataset.calc_bounds, UNSET)
+
+        dataset.act_add_field("scalar", np.zeros((4, 1, 1), dtype=float))
+
+        self.assertIsNone(dataset.calc_bounds)
+
+    def test_degenerate_grid_supports_derivative_interpolation_and_smoothing(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 1, 1),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.arange(4.0).reshape(4, 1, 1)
+        field = dataset.act_add_field("scalar", values)
+
+        derivative = dataset.act_derivative("scalar", direction="x", coord="index")
+        second = dataset.act_second_derivative("scalar", direction="x", coord="index")
+        sampled = field.act_interpolate(
+            np.array([[3.5, 0.0, 0.0], [-0.5, 0.0, 0.0]]),
+            is_index=True,
+        )
+        smoothed = dataset.act_gaussian_smooth(
+            "scalar",
+            sigma=(1.0, 0.0, 0.0),
+            coord="index",
+        )
+
+        np.testing.assert_allclose(derivative[:, 0, 0], [-1.0, 1.0, 1.0, -1.0])
+        np.testing.assert_allclose(second[:, 0, 0], [4.0, 0.0, 0.0, -4.0])
+        np.testing.assert_allclose(sampled, [1.5, 1.5])
+        self.assertEqual(smoothed.shape, values.shape)
 
     def test_dataset_converts_selected_points_without_full_grid(self):
         transform = np.array(
@@ -495,6 +559,46 @@ class TestGridFieldDataset(unittest.TestCase):
         )
 
         np.testing.assert_array_equal(validity, (False, True))
+
+    def test_interpolation_validity_tracks_periodic_seam_support(self):
+        mask = np.ones((4, 2, 2), dtype=bool)
+        mask[0, :, :] = False
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 2, 2),
+                box_periodic_flag=(True, False, False),
+                mask=mask,
+            )
+        )
+        field = dataset.act_add_field("scalar", np.zeros((4, 2, 2), dtype=float))
+
+        _, validity = field.act_interpolate(
+            np.array([[3.75, 0.5, 0.5], [2.5, 0.5, 0.5]]),
+            is_index=True,
+            is_return_validity=True,
+        )
+
+        np.testing.assert_array_equal(validity, (False, True))
+
+    def test_interpolation_is_linear_across_periodic_seam(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(4, 2, 2),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.broadcast_to(
+            np.array([0.0, 1.0, 2.0, 3.0]).reshape(4, 1, 1),
+            (4, 2, 2),
+        )
+        field = dataset.act_add_field("scalar", values)
+
+        sampled = field.act_interpolate(
+            np.array([[3.5, 0.0, 0.0], [-0.5, 0.0, 0.0]]),
+            is_index=True,
+        )
+
+        np.testing.assert_allclose(sampled, np.array([1.5, 1.5]))
 
     def test_canonical_mask_can_weight_smoothing(self):
         mask = np.ones((5, 5, 5), dtype=bool)
@@ -910,6 +1014,42 @@ class TestGridFieldDataset(unittest.TestCase):
         self.assertTrue(np.allclose(d2_dx2, 4.0))
         self.assertTrue(np.allclose(d2_dy2, 6.0))
         self.assertTrue(np.allclose(d2_dz2, 8.0))
+
+    def test_second_derivative_keeps_two_point_periodic_curvature(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 3, 3),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.broadcast_to(
+            np.array([0.0, 1.0], dtype=float).reshape(2, 1, 1),
+            (2, 3, 3),
+        )
+
+        result = dataset.act_second_derivative(
+            values,
+            direction="x",
+            coord="index",
+        )
+
+        np.testing.assert_allclose(result[:, 0, 0], np.array([2.0, -2.0]))
+
+    def test_laplacian_keeps_two_point_periodic_curvature(self):
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(2, 3, 3),
+                box_periodic_flag=(True, False, False),
+            )
+        )
+        values = np.broadcast_to(
+            np.array([0.0, 1.0], dtype=float).reshape(2, 1, 1),
+            (2, 3, 3),
+        )
+
+        result = dataset.act_laplacian(values, coord="index")
+
+        np.testing.assert_allclose(result[:, 0, 0], np.array([2.0, -2.0]))
 
     def test_second_derivative_can_return_result_metadata(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))
@@ -1536,6 +1676,36 @@ class TestGridFieldDataset(unittest.TestCase):
 
         self.assertTrue(np.allclose(smoothed_physical, smoothed_index))
 
+    def test_gaussian_smooth_physical_sigma_is_rotation_invariant(self):
+        grid_transform = np.array(
+            [
+                [0.0, -2.0, 0.0],
+                [3.0, 0.0, 0.0],
+                [0.0, 0.0, 4.0],
+            ]
+        )
+        dataset = GridFieldDataset(
+            inputValue=InputGridField(
+                shape=(7, 7, 7),
+                grid_transform=grid_transform,
+            )
+        )
+        values = np.zeros((7, 7, 7), dtype=float)
+        values[3, 3, 3] = 1.0
+
+        smoothed_physical = dataset.act_gaussian_smooth(
+            values,
+            sigma=6.0,
+            coord="physical",
+        )
+        smoothed_index = dataset.act_gaussian_smooth(
+            values,
+            sigma=(3.0, 2.0, 1.5),
+            coord="index",
+        )
+
+        np.testing.assert_allclose(smoothed_physical, smoothed_index)
+
     def test_gaussian_smooth_can_return_result_metadata(self):
         dataset = GridFieldDataset(
             inputValue=InputGridField(
@@ -1845,7 +2015,7 @@ class TestGridFieldDataset(unittest.TestCase):
 
         laplacian = dataset.act_laplacian(values)
 
-        self.assertTrue(np.allclose(laplacian[2:-2, 2:-2, 2:-2], 6.0))
+        self.assertTrue(np.allclose(laplacian, 6.0))
 
     def test_laplacian_accepts_temporary_scalar_arrays(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(7, 7, 7)))

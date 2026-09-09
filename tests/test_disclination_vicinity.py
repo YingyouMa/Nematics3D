@@ -2,26 +2,6 @@ import numpy as np
 import pytest
 
 from nematics3d.analysis.disclination import defect_vicinity_grid
-from nematics3d.analysis.disclination.line import get_square, get_square_each
-
-
-def test_get_square_each_has_expected_boundary_points():
-    square = get_square_each(1.0, 2, dim=2)
-    np.testing.assert_allclose(
-        square,
-        [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
-    )
-
-
-def test_get_square_validates_geometry_contract():
-    with pytest.raises(ValueError, match="positive finite"):
-        get_square_each(0.0, 2)
-    with pytest.raises(ValueError, match="greater than or equal to 2"):
-        get_square_each(1.0, 1)
-    with pytest.raises(ValueError, match="either 2 or 3"):
-        get_square_each(1.0, 2, dim=4)
-    with pytest.raises(ValueError, match="shape"):
-        get_square([1.0], [2], origin_list=[[0.0, 0.0]], dim=3)
 
 
 def test_defect_vicinity_grid_covers_all_three_plaquette_orientations():

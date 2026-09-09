@@ -1,15 +1,14 @@
 """Shared-grid field containers and helpers."""
 
-from nematics3d.datatypes import as_grid_shape
-
-from .grid_interpolator import GridInterpolator
-from .grid_field_dataset import (
+from nematics3d.grid.field import (
     FieldData,
     GaussianSmoothInfo,
     GridFieldDataset,
+    GridInterpolator,
+    InputGridField,
     SpatialDerivativeInfo,
+    as_grid_shape,
 )
-from .input_grid_field import InputGridField
 
 __all__ = [
     "FieldData",

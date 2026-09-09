@@ -10,7 +10,7 @@ import numpy as np
 import pyvista as pv
 
 from nematics3d.datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, as_str
-from nematics3d.classes.bounds import BoundsData
+from nematics3d.analysis.bounds import BoundsData
 from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
