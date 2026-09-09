@@ -31,6 +31,11 @@ from .relaxation import (
     ThresholdRelaxationResult,
     act_relaxation_length,
 )
+from .principal_plane import (
+    NMLIterationResult,
+    NMLPrincipalPlaneResult,
+    nml_principal_plane_analysis,
+)
 from .sampling import sample_van_der_corput
 
 __all__ = [
@@ -41,6 +46,8 @@ __all__ = [
     "FitRelaxationResult",
     "FourierResult",
     "OptsBounds",
+    "NMLIterationResult",
+    "NMLPrincipalPlaneResult",
     "RadialSpectrumResult",
     "QDiagonalizationResult",
     "RelaxationLengthResult",
@@ -59,6 +66,7 @@ __all__ = [
     "bounds_minimal_wrapping_points",
     "bounds_sample_points",
     "obb_bounds_from_fit",
+    "nml_principal_plane_analysis",
     "q_diagonalize",
     "sample_van_der_corput",
 ]
