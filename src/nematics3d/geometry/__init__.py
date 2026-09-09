@@ -8,8 +8,17 @@ from .angles import (
     wrap_angle_to_pi,
 )
 from .box import get_box_corners, select_points_in_box
-from .misc import *
+from .frame import align_axes_to_reference, axes_angle_changes_deg
 from .nearest import closest_point_on_polyline, find_nearest_point
+from .obb import (
+    OBBFit,
+    box_corners_from_center_axes_radii,
+    canonicalize_axes,
+    compute_convex_hull_points,
+    obb_fit_approx,
+    obb_fit_pca,
+    obb_refine_random_search,
+)
 from .plane import PlaneNormalResult, find_plane_normal
 from .points import points_membership_mask
 from .polydata import (
