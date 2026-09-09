@@ -5,7 +5,7 @@ from nematics3d.analysis import (
     nml_principal_plane_analysis,
 )
 from nematics3d.analysis.principal_plane import NMLIterationResult
-from nematics3d.principal_plane import (
+from nematics3d.analysis.principal_plane import (
     NMLPrincipalPlaneResult as LegacyNMLPrincipalPlaneResult,
 )
 from nematics3d.q_field import get_q

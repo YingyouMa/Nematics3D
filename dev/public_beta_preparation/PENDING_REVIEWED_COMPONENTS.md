@@ -6,6 +6,15 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 
 ## Pending archive
 
+### `logging_decorator` subsystem
+
+- Canonical source: `src/nematics3d/logging_decorator/` with `__init__.py`, `levels.py`, `context.py`, `formatting.py`, `logger.py`, and `decorator.py`; the former monolithic `src/nematics3d/logging_decorator.py` was preserved verbatim at `dev/backup/logging_decorator.py` before refactoring.
+- Status: cleaned up and structurally refactored without changing the user-facing or developer-facing API. Existing imports from `nematics3d.logging_decorator`, decorator arguments, injected `logger` usage, custom levels (`DETAIL`, `PROGRESS`, `RECOVERY`), global defaults, nested indentation/context behavior, warning/error caller reporting, exception logging/re-raise behavior, and screen/file/none modes are preserved.
+- Responsibility split: custom levels/defaults live in `levels.py`; `ContextVar` state and indentation live in `context.py`; display-name/frame/caller formatting lives in `formatting.py`; the lightweight `Logger` facade lives in `logger.py`; decorated-call lifecycle, inherited settings, file lifecycle, timing, and logger injection live in `decorator.py`.
+- Compatibility surface: `src/nematics3d/logging_decorator/__init__.py` re-exports the legacy visible names so existing repository code and external users do not need import changes.
+- Validation: dedicated logging contract coverage in `tests/test_logging_decorator.py` passes 6 tests; representative datatype/disclination/Q/quick regression passes 138 tests with 2 skips; `tests/classes` passes 270 tests; `tests/visual` passes 181 tests with two pre-existing warnings. Black and Ruff pass for the logging subsystem and its contract test. The subsequently identified stale `ClassBase` call to `as_list(..., name=...)` was fixed during the core cleanup, after which `tests/core` passes 53 tests with 2 skips.
+- Remaining review before archive: commit this refactor and record the exact reviewed commit in the formal reviewed-components ledger.
+
 ### `ContourSurface` / `ContourSurfaceSet` / `PlotContourSurface` / `InteractContourSurface`
 
 - Canonical domain source: `src/nematics3d/surface/contour.py`, exported through `nematics3d.surface`. `src/nematics3d/classes/contour_surface.py` is now a compatibility shim so the future removal of `classes/` will not remove the implementation.
@@ -120,12 +129,55 @@ It is intentionally less strict than the formal reviewed-components ledger. An i
 ### `HostBase` / `OptsBase`
 
 - Source: `src/nematics3d/core/host_base.py`.
-- Status: black-box behavior has been substantially reviewed and hardened without attempting an architectural refactor of the implementation.
+- Status: final core review completed. Black-box behavior had already been substantially reviewed and hardened without attempting a risky architectural refactor of the implementation; this pass found no additional concrete defect requiring code changes.
 - Covered contract: opts lifecycle and validation, host/opts commit routing, raw/state updates and opts reapplication, writable properties, extra attrs, protection/wrapping, wrapper forwarding, sync/enrichment callbacks, snapshots, JSON persistence, and HostBase inspection surfaces.
 - Focused tests: `tests/classes/test_host_base.py` (59 passed at the current review point).
 - Broader validation at the behavior-hardening commit covered representative smoothing, geometry, and visual HostBase descendants (95 passed), with Black and Ruff clean for the touched HostBase/test files.
 - Review commit: black-box coverage and the minimal writable-property commit fix `4126db2`; reference tutorial added in `0c48290` at `tutorials/reference/core/HostBase.ipynb`.
-- Remaining review before archive: exercise the reference tutorial itself, inspect representative real HostBase subclasses for integration-specific contracts, and record final archive validation/evidence. `PlotGlyph` is the next subclass being inspected.
+- Current validation: the focused ClassBase/HostBase/Registry/GridField regression passes independently, and `tests/core` passes 53 tests with 2 skips. Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: commit the current core cleanup batch and record the exact current commit/evidence in the formal ledger.
+
+### `ClassBase`
+
+- Canonical source: `src/nematics3d/core/class_base.py`.
+- Status: final core review completed. The static `AttrDef` schema, per-instance relation/assignment state, dynamic extra-attribute registry, direct relation binding, protection controls, naming, and inspection surfaces remain the canonical object-model foundation.
+- Cleanup/fix: repaired one stale call-site contract in `_helper_set_protected_attr()`: `as_list()` no longer accepts the removed `name=` keyword, so protected-attribute registration now uses the current normalization API. No behavioral redesign was introduced.
+- Validation: `tests/core` passes 53 tests with 2 skips after the fix. The ClassBase/HostBase/Registry/GridField-focused class regression passes independently; combining `tests/core/test_class_base.py` and `tests/classes/test_class_base.py` in one pytest process still triggers the repository's pre-existing duplicate-module-name collection conflict.
+- Formatting/lint: Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: commit the current core cleanup batch and record its exact commit.
+
+### `RegistryBase`
+
+- Canonical source: `src/nematics3d/core/registry_base.py`.
+- Status: final review completed. The class remains intentionally lightweight: ordered object registration, unique-name resolution, optional registry relation binding/unbinding, lookup/iteration, clearing, and compact/detailed representations. No HostBase-style commit machinery was added.
+- Review outcome: no functional defect or worthwhile structural refactor was found in the current implementation, so behavior was left unchanged.
+- Validation: `tests/classes/test_registry_base.py` passes as part of the focused core regression; Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: commit the current core cleanup batch and record its exact commit.
+
+### `ResultBase`
+
+- Canonical source: `src/nematics3d/core/result_base.py`.
+- Status: final review completed. The class remains a small dataclass-result inspection mixin providing stable `keys`/`values`/`items`/`asdict`, dict-like access, logging-backed display helpers, and aligned representation.
+- Review outcome: responsibilities are already narrow and the implementation is clean; no code change was warranted.
+- Validation: exercised indirectly across core, disclination, Q-field, and sampling result objects; Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: commit the current core cleanup batch and record its exact commit.
+
+### `NpyArrayPayload`
+
+- Canonical source: `src/nematics3d/core/npy_array_payload.py`.
+- Status: final review completed. The immutable dataclass remains responsible only for an in-memory NumPy payload plus optional `.npy` persistence, release/reload, shallow mapping-style inspection, and temporary value access through `act_with_values()`.
+- Review outcome: responsibilities and resource handling are already narrow and explicit; no code change was warranted.
+- Validation: exercised by `tests/classes/test_grid_field_dataset.py` and the core package export tests; the focused core/class regression passes. Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: commit the current core cleanup batch and record its exact commit.
+
+### `core/opts.py`
+
+- Canonical source: `src/nematics3d/core/opts.py`.
+- Status: reviewed under an explicit maintenance freeze. This module is highly coupled to existing option-routing behavior and was intentionally not structurally optimized.
+- Preserved surface: `merge_opts`, `merge_opts_all`, `build_dict_override`, `cover_value`, `diff_dict_values`, and `load_json_into_opts` remain unchanged. No helper splitting, logging redesign, routing rewrite, or API cleanup was attempted.
+- Review outcome: no obvious correctness defect requiring intervention was identified during this pass. Existing awkward historical patterns are intentionally retained because changing them would have broad coupling risk.
+- Validation: exercised by HostBase, ClassBase, Q-field, plotting, and datatype regressions; focused core/class suites pass. Black and Ruff pass for `src/nematics3d/core`.
+- Remaining review before archive: only fix future concrete bugs with reproducible failures; otherwise keep this module frozen. Record the exact current core cleanup commit when archived.
 
 ### `SmoothedLineFunc`
 

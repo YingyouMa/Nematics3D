@@ -1,15 +1,15 @@
-"""High-level convenience workflows for common Nematics3D visualizations."""
+"""Convenience workflows for Q-tensor fields."""
 
 from pathlib import Path
 
 import numpy as np
 
-from .datatypes import UNSET, as_bool
-from .logging_decorator import logging_and_warning_decorator
-from .q_field.q_field_object import QFieldObject
-from .visual.plot_figure import PlotFigure
-from .visual.plot_sphere import OptsSphere, PlotSphere
-from .visual.plot_tube import OptsTube
+from ..datatypes import UNSET, as_bool
+from ..logging_decorator import logging_and_warning_decorator
+from ..q_field.q_field_object import QFieldObject
+from ..visual.plot_figure import PlotFigure
+from ..visual.plot_sphere import OptsSphere, PlotSphere
+from ..visual.plot_tube import OptsTube
 
 __all__ = ["quick_visualize_q"]
 

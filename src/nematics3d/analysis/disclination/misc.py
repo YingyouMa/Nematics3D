@@ -13,7 +13,7 @@ from ...datatypes import (
     as_director_field,
     as_lattice_mask,
 )
-from ...field import align_director_stack
+from ...misc import align_director_stack
 from ...logging_decorator import logging_and_warning_decorator
 
 

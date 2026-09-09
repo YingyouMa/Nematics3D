@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import nematics3d.quick as quick
+from nematics3d.quick import q as quick_q
 
 
 def test_quick_public_surface_is_intentional():
@@ -9,7 +10,7 @@ def test_quick_public_surface_is_intentional():
 
 
 def test_auto_visual_params_scale_from_spatial_shape():
-    params = quick._auto_quick_q_visual_params(np.zeros((128, 128, 128, 5)))
+    params = quick_q._auto_quick_q_visual_params(np.zeros((128, 128, 128, 5)))
     assert params["smooth_min_line_length"] == 61
     assert params["smooth_window_length"] == 41
     assert params["visual_min_line_length"] == 75
@@ -20,18 +21,18 @@ def test_auto_visual_params_scale_from_spatial_shape():
 @pytest.mark.parametrize("field", [np.empty((3, 3)), np.empty((0, 3, 3, 3))])
 def test_auto_visual_params_reject_invalid_spatial_shape(field):
     with pytest.raises(ValueError):
-        quick._auto_quick_q_visual_params(field)
+        quick_q._auto_quick_q_visual_params(field)
 
 
 @pytest.mark.parametrize("normal", [(0, 0, 0), (1, 2), (1, np.nan, 0)])
 def test_grid_normal_validation_rejects_invalid_values(normal):
     with pytest.raises(ValueError):
-        quick._validate_grid_normal(normal)
+        quick_q._validate_grid_normal(normal)
 
 
 def test_director_spacing_rejects_invalid_level():
     with pytest.raises(ValueError, match="director_spacing"):
-        quick._resolve_director_spacing_level("very_sparse")
+        quick_q._resolve_director_spacing_level("very_sparse")
 
 
 def test_quick_rejects_ambiguous_field_inputs():
@@ -80,8 +81,8 @@ def test_quick_delegates_to_qfield_workflow(monkeypatch, tmp_path):
         def act_savefig(self, path):
             calls.append(("save", path))
 
-    monkeypatch.setattr(quick, "QFieldObject", FakeQObject)
-    monkeypatch.setattr(quick, "PlotFigure", FakeFigure)
+    monkeypatch.setattr(quick_q, "QFieldObject", FakeQObject)
+    monkeypatch.setattr(quick_q, "PlotFigure", FakeFigure)
 
     save_path = tmp_path / "nested" / "quick.png"
     n = np.zeros((8, 8, 8, 3))

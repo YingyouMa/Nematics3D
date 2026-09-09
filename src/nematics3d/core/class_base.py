@@ -561,7 +561,9 @@ class ClassBase:
 
         # Extra attrs must also stay clear of methods/properties and other
         # class-level public surfaces that are not represented in __attr_defs__.
-        class_conflicts = {candidate for candidate in readable_names if hasattr(type(self), candidate)}
+        class_conflicts = {
+            candidate for candidate in readable_names if hasattr(type(self), candidate)
+        }
         conflict_names |= class_conflicts
 
         if conflict_names:
@@ -646,7 +648,7 @@ class ClassBase:
 
     def _helper_set_protected_attr(self, attrs, is_protected: bool):
         """Set the protected flag for one or more registered attributes."""
-        for attr_name in as_list(attrs, name="attrs"):
+        for attr_name in as_list(attrs):
             target_key = attr_name
             if target_key not in self.impl_assign_state:
                 raw_key = f"raw_{attr_name}"

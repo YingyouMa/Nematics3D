@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.field import align_director_stack, align_directors
+from nematics3d.misc import align_director_stack, align_directors
 
 
 def test_align_directors_flips_target_without_modifying_inputs():

@@ -9,3 +9,5 @@ dist_test/
 example/data/record.txt
 # Private local ChatGPT MCP bridge and its credentials/configuration.
 integrations/nematics3d_mcp/
+.claude/
+AGENTS.md

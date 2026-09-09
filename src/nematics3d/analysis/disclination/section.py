@@ -9,7 +9,7 @@ from typing import Any, ClassVar
 import numpy as np
 
 from ...core.result_base import ResultBase
-from ...field import align_directors
+from ...misc import align_directors
 from ...geometry import find_rotation_axis
 from ...q_field.diagonalization import q_diagonalize
 

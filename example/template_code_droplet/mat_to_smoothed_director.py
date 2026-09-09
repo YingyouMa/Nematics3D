@@ -32,7 +32,7 @@ from scipy.ndimage import label as ndimage_label
 
 from nematics3d import q_diagonalize
 from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.field import align_directors
+from nematics3d.misc import align_directors
 
 # ── tuneable constants ────────────────────────────────────────────────────────
 _TRUNCATE = None  # Gaussian truncation radius (None = scipy default)

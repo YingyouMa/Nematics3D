@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from ...field import align_directors
+from ...misc import align_directors
 from ...geometry import points_membership_mask, wrap_angle_to_pi
 from .detection import defect_detect
 from .misc import defect_vicinity_grid

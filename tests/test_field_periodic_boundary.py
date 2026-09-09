@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.field import add_periodic_boundary
+from nematics3d.misc import add_periodic_boundary
 
 
 def test_add_periodic_boundary_appends_first_slice_on_selected_axes():

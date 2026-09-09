@@ -12,7 +12,7 @@ from ...datatypes import (
     as_director_field,
     nField,
 )
-from ...field import add_periodic_boundary
+from ...misc import add_periodic_boundary
 from ...logging_decorator import logging_and_warning_decorator
 
 _DEFECT_AXIS_PERMUTATIONS = (

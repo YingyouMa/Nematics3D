@@ -20,7 +20,7 @@ from nematics3d.datatypes import (
     as_readonly_array,
     as_real_lattice_field,
 )
-from nematics3d.field import add_periodic_boundary
+from nematics3d.misc import add_periodic_boundary
 from nematics3d.grid import (
     GRID_TRANSFORM_IDENTITY,
     GridTransform,
