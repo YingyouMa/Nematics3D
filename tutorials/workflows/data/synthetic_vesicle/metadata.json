@@ -1,0 +1,88 @@
+{
+  "description": "Synthetic vesicle-like 3-D nematic Q field for Nematics3D workflow tutorials.",
+  "provenance": "Fully synthetic; generated analytically and with seeded random noise. No experimental data are copied.",
+  "shape_xyz": [
+    72,
+    72,
+    72
+  ],
+  "coordinate_extent": [
+    [
+      -1.0,
+      1.0
+    ],
+    [
+      -1.0,
+      1.0
+    ],
+    [
+      -1.0,
+      1.0
+    ]
+  ],
+  "q_component_order": [
+    "Q_xx",
+    "Q_xy",
+    "Q_xz",
+    "Q_yy",
+    "Q_yz"
+  ],
+  "random_seed": 240517,
+  "vesicle": {
+    "ellipsoid_axis_scales": [
+      0.91,
+      0.84,
+      0.88
+    ],
+    "levelset_radius": 0.72,
+    "inner_tangential_anchoring_strength": 0.78,
+    "inner_anchoring_shell_width": 0.12,
+    "inside_outside_transition_width": 0.045
+  },
+  "defects": [
+    {
+      "name": "span_A",
+      "nematic_charge": 0.5,
+      "nominal_y0": -0.18,
+      "nominal_z0": -0.12,
+      "ground_truth_points": 244
+    },
+    {
+      "name": "span_B",
+      "nematic_charge": -0.5,
+      "nominal_y0": 0.2,
+      "nominal_z0": 0.13,
+      "ground_truth_points": 245
+    },
+    {
+      "name": "edge_C",
+      "nematic_charge": 0.5,
+      "nominal_y0": 0.55,
+      "nominal_z0": -0.36,
+      "ground_truth_points": 0
+    },
+    {
+      "name": "loop_D",
+      "nematic_charge": -0.5,
+      "nominal_y0": -0.08,
+      "nominal_z0": 0.22,
+      "ground_truth_points": 401
+    }
+  ],
+  "roughness": {
+    "medium_scale_q_amplitude": [
+      0.017999999225139618,
+      0.014999999664723873,
+      0.014999999664723873,
+      0.017999999225139618,
+      0.014999999664723873
+    ],
+    "voxel_noise_std_per_q_component": [
+      0.017999999225139618,
+      0.014999999664723873,
+      0.014999999664723873,
+      0.017999999225139618,
+      0.014999999664723873
+    ]
+  }
+}
