@@ -540,6 +540,33 @@ visualization, and interactive GUI dependencies.
   HPCC headless environment so its SciPy build is compatible with the cluster
   GLIBC without requiring the temporary overlay.
 
+### 2026-09-10 — Clean HPCC headless environment acceptance
+
+- Created a new isolated environment at
+  `/home/yingyouma/.conda/envs/Nematics3D_headless_clean` using only
+  `conda-forge` packages.  This avoids the ABI mixing present in the previous
+  headless environment, which combined `defaults` SciPy with conda-forge
+  NumPy/VTK packages.
+- The accepted stack is Python 3.12.14, NumPy 2.3.2, SciPy 1.16.0, NumExpr
+  2.14.2, PyVista 0.46.4, and VTK 9.3.1 OSMesa.
+- Installed the exact current `develop` commit
+  `ea8f4af24a5989caaf3d13e404bbd83a62db8d38` in editable mode with
+  `--no-build-isolation` so the build uses the environment's already-tested
+  NumPy instead of attempting an isolated source build on the cluster's old
+  system compiler.
+- Deep SciPy imports including `scipy.spatial.ConvexHull` and
+  `scipy.sparse.linalg.eigs` succeed, confirming the previous GLIBC problem is
+  eliminated in this environment.
+- The complete headless test suite passed with `999 passed, 1 skipped, 38
+  subtests passed` and no failures.
+- With `DISPLAY` unset, current Nematics3D successfully rendered
+  `PlotFigure(is_off_screen=True)` plus `PlotSphere` through
+  `vtkOSOpenGLRenderWindow`, without loading QtPy or PyVistaQt before or after
+  saving.  The resulting 1900x1000 RGB PNG was written successfully (77,549
+  bytes).
+- This environment is now the clean HPCC reference configuration for
+  Nematics3D headless testing and rendering.
+
 ### 2026-09-10 — HPCC OSMesa backend acceptance
 
 - Located the existing conda-forge headless environment at
