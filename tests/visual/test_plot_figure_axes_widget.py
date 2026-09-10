@@ -15,7 +15,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 from nematics3d.visual.color import n_color_immerse
 
 

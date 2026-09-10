@@ -16,8 +16,8 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.core.result_base import ResultBase
-from nematics3d.classes.smoothed_line import (
+from nematics3d.core.result_base import ResultBase  # noqa: E402
+from nematics3d.geometry.smoothing import (  # noqa: E402
     SmoothedLine,
     linefunc_kernel_weights,
     linefunc_smooth_values,
@@ -193,10 +193,85 @@ def test_linefunc_can_select_custom_result_value_attr():
     assert linefunc.calc_values.shape == (5,)
 
 
-def test_linefunc_rejects_non_resultbase_sample_return():
+def test_linefunc_accepts_direct_numeric_sample_return():
     line = _build_protocol_line()
-    with pytest.raises(TypeError, match="must return a ResultBase instance"):
-        line.act_create_linefunc(lambda u: u, [0.0, 50.0, 100.0])
+    linefunc = line.act_create_linefunc(lambda u: u, [0.0, 50.0, 100.0])
+
+    assert linefunc.calc_results == (0.0, 50.0, 100.0)
+    assert linefunc.calc_values.shape == (3,)
+    assert float(linefunc(50.0)) == pytest.approx(50.0)
+
+
+def test_linefunc_rejects_multidimensional_u_samples_instead_of_flattening():
+    line = _build_protocol_line()
+    with pytest.raises(ValueError, match="one-dimensional"):
+        line.act_create_linefunc(lambda u: u, [[0.0, 50.0], [75.0, 100.0]])
+
+
+def test_linefunc_rejects_duplicate_or_unsorted_u_samples():
+    line = _build_protocol_line()
+    with pytest.raises(ValueError, match="strictly increasing"):
+        line.act_create_linefunc(lambda u: u, [0.0, 50.0, 50.0, 100.0])
+    with pytest.raises(ValueError, match="strictly increasing"):
+        line.act_create_linefunc(lambda u: u, [0.0, 75.0, 50.0, 100.0])
+
+
+def test_linefunc_input_assignment_is_lazy_until_next_evaluation():
+    line = _build_protocol_line()
+    calls = []
+
+    def sample(u):
+        calls.append(u)
+        return u
+
+    linefunc = line.act_create_linefunc(sample, [0.0, 50.0, 100.0])
+    assert len(calls) == 3
+
+    linefunc.raw_u_samples = np.array([0.0, 25.0, 50.0, 75.0, 100.0])
+    assert linefunc.impl_is_stale is True
+    assert len(calls) == 3
+
+    linefunc(25.0)
+    assert linefunc.impl_is_stale is False
+    assert len(calls) == 8
+
+
+def test_linefunc_ignores_owner_changes_that_do_not_affect_line_function():
+    line = _build_protocol_line()
+    calls = []
+
+    def sample(u):
+        calls.append(u)
+        return u
+
+    linefunc = line.act_create_linefunc(sample, [0.0, 50.0, 100.0])
+    assert len(calls) == 3
+
+    line.act_commit(num_out_ratio=2)
+    linefunc(25.0)
+    assert len(calls) == 3
+
+
+def test_linefunc_refreshes_when_owner_geometry_is_rebuilt():
+    line = _build_protocol_line()
+    calls = []
+
+    def sample(u):
+        calls.append(u)
+        return float(line.act_calc_pos(u)[0])
+
+    linefunc = line.act_create_linefunc(sample, [0.0, 50.0, 100.0])
+    assert len(calls) == 3
+    old_tck_id = linefunc.impl_owner_opts_snapshot["entity_tck_id"]
+
+    x = np.linspace(0.0, 2.0, 60)
+    replacement = np.column_stack((x, np.zeros_like(x), np.zeros_like(x)))
+    line.act_commit(coords=replacement)
+    assert id(line.entity_tck) != old_tck_id
+
+    linefunc(50.0)
+    assert len(calls) == 6
+    assert linefunc.impl_owner_opts_snapshot["entity_tck_id"] == id(line.entity_tck)
 
 
 def test_linefunc_rejects_missing_configured_result_attribute():

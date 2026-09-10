@@ -1,6 +1,6 @@
 import pyvista as pv
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 class _Panel:
@@ -47,7 +47,7 @@ def test_close_interacts_closes_and_unregisters_panels():
 
 
 def test_close_removes_glyphs_by_default():
-    from nematics3d.classes.visual.plot_sphere import PlotSphere
+    from nematics3d.visual.plot_sphere import PlotSphere
 
     figure = PlotFigure(is_off_screen=True)
     sphere = PlotSphere([[0.0, 0.0, 0.0]], figure=figure)
@@ -60,7 +60,7 @@ def test_close_removes_glyphs_by_default():
 
 
 def test_close_can_preserve_glyph_registry_when_requested():
-    from nematics3d.classes.visual.plot_sphere import PlotSphere
+    from nematics3d.visual.plot_sphere import PlotSphere
 
     figure = PlotFigure(is_off_screen=True)
     sphere = PlotSphere([[0.0, 0.0, 0.0]], figure=figure)

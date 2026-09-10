@@ -16,20 +16,10 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.contour_surface import (  # noqa: E402
-    ContourSurface as LegacyContourSurface,
-)
-from nematics3d.classes.contour_surface import (  # noqa: E402
-    ContourSurfaceSet as LegacyContourSurfaceSet,
-)
 from nematics3d.surface.contour import ContourSurface, ContourSurfaceSet  # noqa: E402
 
 
 class TestContourSurface(unittest.TestCase):
-    def test_legacy_domain_imports_alias_canonical_classes(self):
-        self.assertIs(LegacyContourSurface, ContourSurface)
-        self.assertIs(LegacyContourSurfaceSet, ContourSurfaceSet)
-
     def test_act_add_surface_appends_unique_level(self):
         contour = ContourSurfaceSet(np.zeros((2, 2, 2), dtype=float), levels=(0.1, 0.2))
         surface = contour.act_add_surface(0.3)

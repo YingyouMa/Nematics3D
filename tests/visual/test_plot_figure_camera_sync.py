@@ -1,7 +1,7 @@
 import numpy as np
 import pyvista as pv
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 def test_plotter_camera_state_is_imported_when_wrapping_existing_plotter():

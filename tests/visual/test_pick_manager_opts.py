@@ -1,7 +1,7 @@
 import pytest
 import vtk
 
-from nematics3d.classes.visual.pick_manager import OptsPickManager
+from nematics3d.visual.pick_manager import OptsPickManager
 
 
 def test_pick_manager_integer_options_remain_integers():

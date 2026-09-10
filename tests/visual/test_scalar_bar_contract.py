@@ -2,24 +2,9 @@ import numpy as np
 import pytest
 
 from nematics3d.datatypes import UNSET
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_sphere import PlotSphere
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_sphere import PlotSphere
 from nematics3d.visual.scalar_bar import OptsScalarBar, ScalarBar
-from nematics3d.visual.scalar_bar_registry import ScalarBarRegistry
-
-
-def test_scalar_bar_legacy_imports_are_compatibility_aliases():
-    from nematics3d.classes.visual.scalar_bar import (
-        OptsScalarBar as LegacyOptsScalarBar,
-        ScalarBar as LegacyScalarBar,
-    )
-    from nematics3d.classes.visual.scalar_bar_registry import (
-        ScalarBarRegistry as LegacyScalarBarRegistry,
-    )
-
-    assert LegacyOptsScalarBar is OptsScalarBar
-    assert LegacyScalarBar is ScalarBar
-    assert LegacyScalarBarRegistry is ScalarBarRegistry
 
 
 def _make_scalar_sphere(figure):

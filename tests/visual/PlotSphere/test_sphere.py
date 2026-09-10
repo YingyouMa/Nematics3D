@@ -14,8 +14,8 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_sphere import OptsSphere, PlotSphere
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_sphere import OptsSphere, PlotSphere
 
 #!!! current version intentionally avoids scalar bar rendering while the scalar bar API is still being cleaned up
 

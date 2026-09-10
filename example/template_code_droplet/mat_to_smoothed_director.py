@@ -31,7 +31,7 @@ import numpy as np
 from scipy.ndimage import label as ndimage_label
 
 from nematics3d import q_diagonalize
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.grid.field import GridFieldDataset, InputGridField
 from nematics3d.misc import align_directors
 
 # ── tuneable constants ────────────────────────────────────────────────────────

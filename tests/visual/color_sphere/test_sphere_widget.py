@@ -1,6 +1,6 @@
 import sys
 sys.path.insert(0, 'D:/Document/GitHub/Nematics3D/src')
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 
 # Verify menu entries are added without error (off-screen skips menu)
 fig = PlotFigure(is_off_screen=True, size=(800, 800))

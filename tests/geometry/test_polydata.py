@@ -2,9 +2,6 @@ import numpy as np
 import pytest
 import pyvista as pv
 
-from nematics3d.classes.visual.plot_polydata import (
-    as_polydata_input as legacy_as_polydata_input,
-)
 from nematics3d.geometry.polydata import (
     as_polydata_input,
     copy_polydata_geometry,
@@ -12,7 +9,6 @@ from nematics3d.geometry.polydata import (
 
 
 def test_visual_polydata_converter_uses_canonical_geometry_implementation():
-    assert legacy_as_polydata_input is as_polydata_input
     assert as_polydata_input.__module__ == "nematics3d.geometry.polydata"
     assert copy_polydata_geometry.__module__ == "nematics3d.geometry.polydata"
 

@@ -14,10 +14,10 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.classes.plane_grid import OptsPlaneGrid
-from nematics3d.classes.vector_plane import VectorPlane
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.grid.field import GridFieldDataset, InputGridField
+from nematics3d.sample.plane_grid import OptsPlaneGrid
+from nematics3d.sample.vector_plane import VectorPlane
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 DATA_DIR = Path(__file__).resolve().parent

@@ -19,7 +19,7 @@ if "nematics3d" not in sys.modules:
 from nematics3d.core.registry_base import RegistryBase
 from nematics3d.core.result_base import ResultBase
 from nematics3d.analysis.disclination.line import DisclinationLine, InputLine
-from nematics3d.classes.smoothed_line import SmoothedLine, SmoothedLineFunc
+from nematics3d.geometry.smoothing import SmoothedLine, SmoothedLineFunc
 
 
 @dataclass(repr=False)

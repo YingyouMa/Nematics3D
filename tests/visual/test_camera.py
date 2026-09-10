@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from nematics3d.classes.visual.plot_figure import OptsFigure
+from nematics3d.visual.plot_figure import OptsFigure
 from nematics3d.datatypes import UNSET
 from nematics3d.visual.camera import (
     camera_pose_from_vectors,

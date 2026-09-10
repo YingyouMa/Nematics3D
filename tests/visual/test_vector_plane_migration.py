@@ -1,7 +1,7 @@
 import numpy as np
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.classes.vector_plane import VectorPlane as LegacyVectorPlane
+from nematics3d.grid.field import GridFieldDataset, InputGridField
+from nematics3d.sample.vector_plane import VectorPlane as LegacyVectorPlane
 from nematics3d.sample.plane_grid import OptsPlaneGrid
 from nematics3d.sample.vector_plane import VectorPlane
 from nematics3d.visual.plot_figure import PlotFigure

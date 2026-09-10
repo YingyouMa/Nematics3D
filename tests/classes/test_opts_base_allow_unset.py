@@ -1,5 +1,5 @@
 from nematics3d.datatypes import UNSET
-from nematics3d.classes.visual.plot_figure import OptsFigure
+from nematics3d.visual.plot_figure import OptsFigure
 
 
 def test_opts_finalize_allow_unset_skips_unset_validators():

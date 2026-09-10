@@ -3,9 +3,6 @@ from types import SimpleNamespace
 import pytest
 from qtpy import QtWidgets
 
-from nematics3d.classes.visual.qt.lighting_console import (
-    LightingConsole as LegacyLightingConsole,
-)
 from nematics3d.visual.qt.lighting_console import LightingConsole
 
 
@@ -51,10 +48,6 @@ class FakeParent(QtWidgets.QWidget):
         self.str_now = "panel_test"
         self.slider_throttle_ms = 20
         self._lighting_console = None
-
-
-def test_legacy_import_is_canonical_class():
-    assert LegacyLightingConsole is LightingConsole
 
 
 def test_requires_lighting_compatible_host():

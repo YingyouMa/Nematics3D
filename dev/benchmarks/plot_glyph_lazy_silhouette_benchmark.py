@@ -17,11 +17,11 @@ import time
 
 import numpy as np
 
-from nematics3d.classes.visual.glyph import PlotGlyph
-from nematics3d.classes.visual.plot_delaunay import PlotDelaunay
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_rod import PlotRod
-from nematics3d.classes.visual.plot_sphere import PlotSphere
+from nematics3d.visual.glyph import PlotGlyph
+from nematics3d.visual.plot_delaunay import PlotDelaunay
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_rod import PlotRod
+from nematics3d.visual.plot_sphere import PlotSphere
 
 
 RESULT_DIR = Path(__file__).resolve().parent / "results"

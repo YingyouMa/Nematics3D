@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 def test_savefig_returns_screenshot_result_and_writes_expected_size(tmp_path):

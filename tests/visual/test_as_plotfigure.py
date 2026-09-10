@@ -1,7 +1,7 @@
 import pyvista as pv
 import pytest
 
-from nematics3d.classes.visual.plot_figure import PlotFigure, as_plotfigure
+from nematics3d.visual.plot_figure import PlotFigure, as_plotfigure
 
 
 def test_none_creates_new_plotfigure():

@@ -8,7 +8,7 @@ PlotGlyph except the silhouette lifecycle, which is restored to the previous
 eager semantics here.
 """
 
-from nematics3d.classes.visual.glyph import PlotGlyph
+from nematics3d.visual.glyph import PlotGlyph
 
 
 class PlotGlyphBeforeLazySilhouette(PlotGlyph):

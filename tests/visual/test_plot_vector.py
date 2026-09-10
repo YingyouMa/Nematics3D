@@ -15,10 +15,8 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.visual import OptsVector as ExportedOptsVector
-from nematics3d.classes.visual import PlotVector as ExportedPlotVector
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_vector import OptsVector, PlotVector
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_vector import OptsVector, PlotVector
 
 
 def build_vector_debug_figure(*, is_off_screen=False):
@@ -54,10 +52,6 @@ class TestPlotVector(unittest.TestCase):
             figure.act_close()
         else:
             self.foreground_figures.append(figure)
-
-    def test_visual_subpackage_exports_vector_classes(self):
-        self.assertIs(ExportedOptsVector, OptsVector)
-        self.assertIs(ExportedPlotVector, PlotVector)
 
     def test_opts_vector_defaults_use_orient_length(self):
         opts = OptsVector()

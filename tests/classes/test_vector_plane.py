@@ -15,7 +15,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField  # noqa: E402
+from nematics3d.grid.field import GridFieldDataset, InputGridField  # noqa: E402
 from nematics3d.sample.plane_grid import OptsPlaneGrid  # noqa: E402
 from nematics3d.sample.plane_grid_base import PlaneGridBase  # noqa: E402
 from nematics3d.sample.plane_grid_polar import (  # noqa: E402

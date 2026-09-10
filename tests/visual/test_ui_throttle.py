@@ -1,7 +1,6 @@
 import pytest
 from qtpy.QtCore import QCoreApplication
 
-from nematics3d.classes.visual.qt.ui_throttle import UIThrottle as LegacyUIThrottle
 from nematics3d.visual.qt.ui_throttle import UIThrottle
 
 
@@ -11,10 +10,6 @@ def qcore_application():
     if app is None:
         app = QCoreApplication([])
     return app
-
-
-def test_legacy_import_is_canonical_class():
-    assert LegacyUIThrottle is UIThrottle
 
 
 def test_interval_must_be_positive_integer():

@@ -1,7 +1,7 @@
 import numpy as np
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_sphere import PlotSphere
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_sphere import PlotSphere
 
 
 def _sphere(figure, *, name="sphere"):

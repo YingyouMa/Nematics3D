@@ -1,15 +1,8 @@
 import numpy as np
 
 from nematics3d.analysis.bounds import Bounds
-from nematics3d.classes.visual.plot_tube import OptsTube as LegacyOptsTube
-from nematics3d.classes.visual.plot_tube import PlotTube as LegacyPlotTube
 from nematics3d.visual.plot_figure import PlotFigure
-from nematics3d.visual.plot_tube import OptsTube, PlotTube
-
-
-def test_tube_legacy_imports_alias_canonical_classes():
-    assert LegacyOptsTube is OptsTube
-    assert LegacyPlotTube is PlotTube
+from nematics3d.visual.plot_tube import PlotTube
 
 
 def _figure():

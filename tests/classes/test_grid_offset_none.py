@@ -16,7 +16,7 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.analysis.disclination.line import DisclinationLine
-from nematics3d.classes.grid_field import InputGridField
+from nematics3d.grid.field import InputGridField
 from nematics3d.q_field.q_field_object import InputQ
 from nematics3d.analysis.disclination import defect_classify_into_lines
 

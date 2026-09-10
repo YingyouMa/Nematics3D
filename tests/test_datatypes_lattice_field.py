@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from nematics3d.datatypes import as_lattice_mask, as_real_lattice_field
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.grid.field import GridFieldDataset, InputGridField
 
 
 def test_real_lattice_field_scalar_and_component_shapes():

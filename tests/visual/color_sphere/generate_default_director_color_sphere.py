@@ -16,9 +16,9 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_polydata import PlotPolyData
-from nematics3d.classes.visual.plot_vector import PlotVector
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_polydata import PlotPolyData
+from nematics3d.visual.plot_vector import PlotVector
 from nematics3d.visual.color import n_color_immerse
 
 OUTPUT_DIR = Path(__file__).resolve().parent

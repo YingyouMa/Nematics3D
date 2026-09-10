@@ -17,7 +17,7 @@ if "nematics3d" not in sys.modules:
     sys.modules["nematics3d"] = pkg
 
 from nematics3d.q_field.q_field_object import InputQ, QFieldObject
-from nematics3d.classes.grid_field import (
+from nematics3d.grid.field import (
     GridFieldDataset,
     GridInterpolator,
     InputGridField,
@@ -28,6 +28,7 @@ from nematics3d.analysis.disclination.section import (
     OmegaResult,
     sample_beta_from_smooth,
 )
+from nematics3d.analysis.disclination.line import DisclinationLine
 from nematics3d.grid import apply_linear_transform
 
 
@@ -76,6 +77,77 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIs(q.mask, q.dataset.fields["mask"].raw_values)
         self.assertEqual(q.mask.dtype, np.dtype(bool))
         self.assertFalse(q.mask.flags.writeable)
+
+    def test_redetect_invalidates_previously_classified_lines(self):
+        n = np.zeros((3, 3, 3, 3), dtype=float)
+        n[..., 0] = 1.0
+        detected = np.array(((0.0, 0.5, 0.5), (1.0, 0.5, 0.5)))
+
+        with (
+            patch(
+                "nematics3d.q_field.q_field_object.defect_detect",
+                return_value=detected,
+            ),
+            patch(
+                "nematics3d.q_field.q_field_object.defect_classify_into_lines",
+                return_value=[],
+            ),
+        ):
+            q = QFieldObject(n=n, name="redetect-test")
+
+        old_line = DisclinationLine(
+            defect_indices=np.array(((0.0, 0.5, 0.5), (1.0, 0.5, 0.5)))
+        )
+        q.objects.act_register(old_line)
+        self.assertIn(old_line, q.lines)
+
+        with patch(
+            "nematics3d.q_field.q_field_object.defect_detect",
+            return_value=np.empty((0, 3)),
+        ):
+            q.act_defect_detect()
+
+        self.assertNotIn(old_line, q.lines)
+        self.assertNotIn(old_line, q.objects)
+
+    def test_reclassification_replaces_old_registered_lines(self):
+        n = np.zeros((3, 3, 3, 3), dtype=float)
+        n[..., 0] = 1.0
+        q = QFieldObject(
+            n=n,
+            is_detect_defects=False,
+            is_classify_lines=False,
+            name="reclassify-test",
+        )
+        object.__setattr__(q, "calc_defect_indices", np.empty((0, 3)))
+
+        old_line = DisclinationLine(
+            defect_indices=np.array(((0.0, 0.5, 0.5), (1.0, 0.5, 0.5)))
+        )
+        q.objects.act_register(old_line)
+        self.assertIn(old_line, q.lines)
+
+        with patch(
+            "nematics3d.q_field.q_field_object.defect_classify_into_lines",
+            return_value=[],
+        ):
+            result = q.act_lines_classify()
+
+        self.assertNotIn(old_line, q.lines)
+        self.assertNotIn(old_line, q.objects)
+        self.assertEqual(result, [])
+
+    def test_classification_requires_detected_defects(self):
+        n = np.zeros((2, 2, 2, 3), dtype=float)
+        n[..., 0] = 1.0
+        q = QFieldObject(
+            n=n,
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "act_defect_detect"):
+            q.act_lines_classify()
 
     def test_act_get_beta_interpolator_new_smooth_matches_direct_beta(self):
         data_path = (
@@ -269,6 +341,12 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertIs(q.field, q.dataset["Q"])
         self.assertIs(q.field.owner, q.dataset)
         self.assertIs(q.raw_Q, q.field.raw_values)
+        self.assertIs(q.raw_box_periodic_flag, q.dataset.raw_box_periodic_flag)
+        self.assertIs(q.raw_grid_offset, q.dataset.raw_grid_offset)
+        self.assertIs(q.raw_grid_transform, q.dataset.raw_grid_transform)
+        self.assertFalse(q.raw_Q.flags.writeable)
+        self.assertFalse(q.raw_S.flags.writeable)
+        self.assertFalse(q.raw_n.flags.writeable)
         self.assertEqual(tuple(q.dataset.raw_shape), shape)
         self.assertTrue(
             np.allclose(
@@ -291,6 +369,8 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(tuple(q.raw_box_periodic_flag), (True, False, True))
         self.assertEqual(tuple(q.raw_grid_offset), grid_offset)
         self.assertTrue(np.allclose(q.raw_grid_transform, grid_transform))
+        self.assertIsNone(q.interpolator)
+        q.act_add_interpolator()
         self.assertIsInstance(q.interpolator, GridInterpolator)
         self.assertIs(q.interpolator, q.field.interpolator)
 
@@ -317,6 +397,20 @@ class TestQFieldObjectPhase2(unittest.TestCase):
             ),
         )
 
+    def test_interpolator_is_created_lazily_on_first_interpolation(self):
+        q_values = np.zeros((2, 2, 2, 5), dtype=float)
+        q = QFieldObject(
+            Q=q_values,
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+
+        self.assertIsNone(q.interpolator)
+        result = q.act_interpolate([[0.5, 0.5, 0.5]], is_index=True)
+        self.assertEqual(np.shape(result), (1, 5))
+        self.assertIsInstance(q.interpolator, GridInterpolator)
+        self.assertIs(q.interpolator, q.field.interpolator)
+
     def test_attached_analysis_init_reuses_existing_dataset_owned_q_field(self):
         shape = (2, 2, 2)
         q_values = np.zeros(shape + (5,), dtype=float)
@@ -340,13 +434,19 @@ class TestQFieldObjectPhase2(unittest.TestCase):
             name="attached-q",
             is_detect_defects=False,
             is_classify_lines=False,
-            default_miminum_line_length_smooth=101,
+            default_minimum_line_length_smooth=101,
             default_smooth_window_length=51,
         )
 
         self.assertIs(q.dataset, dataset)
         self.assertIs(q.field, field)
         self.assertIs(q.raw_Q, field.raw_values)
+        self.assertIs(q.raw_box_periodic_flag, dataset.raw_box_periodic_flag)
+        self.assertIs(q.raw_grid_offset, dataset.raw_grid_offset)
+        self.assertIs(q.raw_grid_transform, dataset.raw_grid_transform)
+        self.assertFalse(q.raw_Q.flags.writeable)
+        self.assertFalse(q.raw_S.flags.writeable)
+        self.assertFalse(q.raw_n.flags.writeable)
         self.assertEqual(len(dataset.fields), 1)
         self.assertIs(dataset["Q"], field)
         self.assertEqual(dataset.act_generate_grid().shape, shape + (3,))
@@ -355,31 +455,33 @@ class TestQFieldObjectPhase2(unittest.TestCase):
         self.assertEqual(tuple(q.raw_box_periodic_flag), (False, True, False))
         self.assertEqual(tuple(q.raw_grid_offset), (1.0, 2.0, 3.0))
         self.assertTrue(np.allclose(q.raw_grid_transform, np.diag((1.5, 2.5, 3.5))))
-        self.assertEqual(q.default_miminum_line_length_smooth, 101)
+        self.assertEqual(q.default_minimum_line_length_smooth, 101)
         self.assertEqual(q.default_smooth_window_length, 51)
-        self.assertEqual(q.default_miminum_line_length_visual, 75)
+        self.assertEqual(q.default_minimum_line_length_visual, 75)
 
-    def test_attached_analysis_init_ignores_extra_raw_grid_input(self):
+    def test_attached_analysis_init_rejects_conflicting_raw_input(self):
         dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
         field = dataset.act_add_field("Q", np.zeros((2, 2, 2, 5), dtype=float))
 
-        q = QFieldObject(
-            field=field,
-            inputValue=InputQ(
-                Q=np.ones((2, 2, 2, 5), dtype=float),
-                box_periodic_flag=(True, True, True),
-                grid_offset=(9.0, 9.0, 9.0),
-            ),
-            is_detect_defects=False,
-            is_classify_lines=False,
-        )
+        with self.assertRaisesRegex(ValueError, "does not accept `inputValue`"):
+            QFieldObject(
+                field=field,
+                inputValue=InputQ(Q=np.ones((2, 2, 2, 5), dtype=float)),
+                is_detect_defects=False,
+                is_classify_lines=False,
+            )
 
-        self.assertIs(q.field, field)
-        self.assertIs(q.dataset, dataset)
-        self.assertEqual(
-            tuple(q.raw_box_periodic_flag), tuple(dataset.raw_box_periodic_flag)
-        )
-        self.assertIs(q.raw_grid_offset, dataset.raw_grid_offset)
+    def test_attached_analysis_init_rejects_noncanonical_q9_field(self):
+        dataset = GridFieldDataset(inputValue=InputGridField(shape=(2, 2, 2)))
+        q9 = np.zeros((2, 2, 2, 3, 3), dtype=float)
+        field = dataset.act_add_field("Q", q9)
+
+        with self.assertRaisesRegex(ValueError, "canonical QField5"):
+            QFieldObject(
+                field=field,
+                is_detect_defects=False,
+                is_classify_lines=False,
+            )
 
     def test_legacy_init_keeps_default_grid_offset_as_none(self):
         shape = (2, 2, 2)

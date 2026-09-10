@@ -1,6 +1,3 @@
-import sys
-from pathlib import Path
-import types
 import unittest
 from unittest.mock import patch
 
@@ -8,34 +5,14 @@ import numpy as np
 import pyvista as pv
 import vtk
 
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-PKG_DIR = SRC_DIR / "nematics3d"
-
-sys.path.insert(0, str(SRC_DIR))
-
-if "nematics3d" not in sys.modules:
-    pkg = types.ModuleType("nematics3d")
-    pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["nematics3d"] = pkg
-
-from nematics3d.classes.visual import OptsPolyData as ExportedOptsPolyData
-from nematics3d.classes.visual import PlotPolyData as ExportedPlotPolyData
-from nematics3d.classes.visual.plot_polydata import OptsPolyData as LegacyOptsPolyData
-from nematics3d.classes.visual.plot_polydata import PlotPolyData as LegacyPlotPolyData
 from nematics3d.visual.plot_figure import PlotFigure
-from nematics3d.visual.plot_polydata import OptsPolyData, PlotPolyData
+from nematics3d.visual.plot_polydata import PlotPolyData
 from nematics3d.visual.qt.interact_polydata import InteractPolyData
 
 
 class TestPlotPolyData(unittest.TestCase):
     def _make_figure(self, *, is_off_screen=True):
         return PlotFigure(is_off_screen=is_off_screen)
-
-    def test_visual_subpackage_exports_polydata_classes(self):
-        self.assertIs(ExportedOptsPolyData, OptsPolyData)
-        self.assertIs(ExportedPlotPolyData, PlotPolyData)
-        self.assertIs(LegacyOptsPolyData, OptsPolyData)
-        self.assertIs(LegacyPlotPolyData, PlotPolyData)
 
     def test_plot_polydata_accepts_pyvista_polydata(self):
         fig = self._make_figure()

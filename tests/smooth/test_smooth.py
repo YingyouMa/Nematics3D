@@ -15,7 +15,7 @@ if "nematics3d" not in sys.modules:
     pkg.__path__ = [str(PKG_DIR)]
     sys.modules["nematics3d"] = pkg
 
-from nematics3d.classes.smoothed_line import SmoothedLine
+from nematics3d.geometry.smoothing import SmoothedLine
 
 
 def build_noisy_line(num_points=120, noise_scale=0.18, seed=7):

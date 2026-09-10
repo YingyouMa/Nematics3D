@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from nematics3d.classes.visual.pick_manager import (
+from nematics3d.visual.pick_manager import (
     OptsPickManager,
     PickManager,
     _ClickTracker,

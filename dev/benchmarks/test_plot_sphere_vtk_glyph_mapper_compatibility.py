@@ -12,7 +12,7 @@ import numpy as np
 import vtk
 from vtk.util.numpy_support import numpy_to_vtk
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 def _build_instanced_spheres(

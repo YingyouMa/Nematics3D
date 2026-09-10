@@ -3,14 +3,12 @@ from unittest.mock import patch
 
 from nematics3d.analysis.disclination.plane import PlaneDefectResult
 from nematics3d.analysis.bounds import Bounds, OptsBounds
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
-from nematics3d.classes.q_plane import QPlane as LegacyQPlane
+from nematics3d.grid.field import GridFieldDataset, InputGridField
+from nematics3d.sample.q_plane import QPlane as LegacyQPlane
 from nematics3d.q_field import get_q
 from nematics3d.sample.plane_grid import OptsPlaneGrid
 from nematics3d.sample.q_plane import QPlane
 from nematics3d.visual.plot_figure import PlotFigure
-from nematics3d.visual.qt.interact_defect_section import InteractDefectSection
-from nematics3d.visual.qt.interact_plane import InteractPlane
 
 
 def _q_plane():

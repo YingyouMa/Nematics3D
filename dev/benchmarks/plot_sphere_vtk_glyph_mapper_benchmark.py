@@ -17,8 +17,8 @@ import numpy as np
 import vtk
 from vtk.util.numpy_support import numpy_to_vtk
 
-from nematics3d.classes.visual.plot_figure import PlotFigure
-from nematics3d.classes.visual.plot_sphere import PlotSphere
+from nematics3d.visual.plot_figure import PlotFigure
+from nematics3d.visual.plot_sphere import PlotSphere
 
 
 RESULT_DIR = Path(__file__).resolve().parent / "results"

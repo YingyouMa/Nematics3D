@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from nematics3d.classes.grid_field import GridFieldDataset, InputGridField
+from nematics3d.grid.field import GridFieldDataset, InputGridField
 
 
 # This example shows how to smooth a shared-grid dataset field before taking
