@@ -510,6 +510,36 @@ visualization, and interactive GUI dependencies.
   performed with `DISPLAY` unset and should verify the expected OSMesa/EGL
   render-window backend rather than relying on test-suite success alone.
 
+### 2026-09-10 — HPCC end-to-end OSMesa acceptance
+
+- Updated `/home/yingyouma/nematics3d` on HPCC from exact Git commit
+  `835c1142a34be115f66228f05c75af3c1d8772e9`; the previous copy was backed up
+  before replacement.
+- A negative-control environment using ordinary pip VTK 9.6.2 failed with
+  `DISPLAY` unset: VTK attempted X11/EGL, reported that `libOSMesa` was absent,
+  and segfaulted.  This confirms that an ordinary pip VTK wheel is not a
+  sufficient HPC headless-rendering guarantee on this system.
+- The conda-forge headless environment contains VTK 9.3.1's OSMesa build and
+  `libOSMesa.so`.  A direct PyVista smoke test with `DISPLAY` unset produced a
+  `vtkOSOpenGLRenderWindow` and successfully saved a 640x480 PNG without
+  loading QtPy or PyVistaQt.
+- The current headless environment's SciPy 1.14.1 `_arpack` binary requires
+  `GLIBC_2.27`, which is newer than the HPCC system.  This is an independent
+  environment binary-compatibility issue, not a Qt/headless regression.  For
+  the final acceptance test, a temporary site-packages overlay supplied the
+  known-working SciPy 1.16.0 from the existing Nematics3D environment while
+  retaining VTK/PyVista from the OSMesa environment.
+- With that temporary SciPy overlay, the current Nematics3D source imported
+  from `/home/yingyouma/nematics3d` and executed an actual
+  `PlotFigure(is_off_screen=True)` plus `PlotSphere` render with `DISPLAY`
+  unset.  The render window was `vtkOSOpenGLRenderWindow`; QtPy and PyVistaQt
+  remained unloaded before and after saving; and the resulting PNG was
+  successfully written at 1900x1000 (81,890 bytes).
+- This completes the functional end-to-end headless rendering acceptance for
+  the current source.  The remaining deployment task is to repair/recreate the
+  HPCC headless environment so its SciPy build is compatible with the cluster
+  GLIBC without requiring the temporary overlay.
+
 ### 2026-09-10 — HPCC OSMesa backend acceptance
 
 - Located the existing conda-forge headless environment at
