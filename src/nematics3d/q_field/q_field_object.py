@@ -97,7 +97,7 @@
 # - Finally clean compatibility shims and public API wording.
 
 import time
-from dataclasses import replace, dataclass, fields
+from dataclasses import replace, dataclass
 from typing import Any, ClassVar, Mapping, Union
 
 import numpy as np
@@ -122,6 +122,7 @@ from ..datatypes import (
     UNSET,
     Unset,
     as_bool,
+    as_readonly_array,
 )
 from .get_q import _get_q_from_validated
 from .diagonalization import q_diagonalize
@@ -152,7 +153,6 @@ from ..analysis.bounds import as_bounds
 from ..grid.field import (
     FieldData,
     GridFieldDataset,
-    GridInterpolator,
     InputGridField,
 )
 from ..core.opts import merge_opts_all, cover_value
@@ -200,11 +200,11 @@ class InputQ:
     grid_transform
         3x3 linear transform that maps lattice indices to real-space
         coordinates.
-    default_miminum_line_length_smooth
+    default_minimum_line_length_smooth
         Default minimum disclination-line length required for smoothing.
     default_smooth_window_length
         Default smoothing window length used for line smoothing.
-    default_miminum_line_length_visual
+    default_minimum_line_length_visual
         Default minimum disclination-line length required for visualization.
     """
 
@@ -215,9 +215,9 @@ class InputQ:
     box_periodic_flag: DimensionInfo = False
     grid_offset: Vect(3) | None = None
     grid_transform: GridTransform = GRID_TRANSFORM_IDENTITY
-    default_miminum_line_length_smooth: Number = 61
+    default_minimum_line_length_smooth: Number = 61
     default_smooth_window_length: Number = 41
-    default_miminum_line_length_visual: Number = 75
+    default_minimum_line_length_visual: Number = 75
 
     __attrs__ = {
         "Q": "Q field (tensor order parameter)",
@@ -238,14 +238,14 @@ class InputQ:
             "grid transform matrix to map lattice indices to real-space "
             "coordinates (3x3)"
         ),
-        "default_miminum_line_length_smooth": (
+        "default_minimum_line_length_smooth": (
             "the minimum length (#points) of disclination lines to be smoothed"
         ),
         "default_smooth_window_length": (
             "the default window length (#points) of disclination lines to be "
             "smoothed"
         ),
-        "default_miminum_line_length_visual": (
+        "default_minimum_line_length_visual": (
             "the minimum length (#points) of disclination lines to be visualized"
         ),
     }
@@ -265,13 +265,13 @@ class InputQ:
         ),
         "grid_offset": lambda v, d: as_grid_offset(v, name=d),
         "grid_transform": lambda v, d: as_grid_transform(v, name=d),
-        "default_miminum_line_length_smooth": lambda v, d: as_number(
+        "default_minimum_line_length_smooth": lambda v, d: as_number(
             v, name=d, value_range=(1, np.inf)
         ),
         "default_smooth_window_length": lambda v, d: as_number(
             v, name=d, value_range=(2, np.inf)
         ),
-        "default_miminum_line_length_visual": lambda v, d: as_number(
+        "default_minimum_line_length_visual": lambda v, d: as_number(
             v, name=d, value_range=(2, np.inf)
         ),
     }
@@ -286,6 +286,43 @@ class InputQ:
                 desc = f"{key!r}: {self.__class__.__attrs__[key]}"
                 value = self._validators[key](value, desc)
         object.__setattr__(self, key, value)
+
+
+def _resolve_q_sn_input(Q, S, n, *, logger):
+    """Resolve standalone Q/S/n inputs into one consistent Q5/S/n triplet."""
+    if n is not UNSET:
+        if S is UNSET:
+            logger.warning("No S input. Set to 1 everywhere.")
+            S = np.broadcast_to(
+                np.asarray(1.0, dtype=n.dtype),
+                n.shape[:-1],
+            )
+        if Q is not UNSET:
+            logger.warning(
+                "Both Q and n are provided to initialize Q field. Q will be IGNORED."
+            )
+        try:
+            scalar_shape = np.broadcast_shapes(np.shape(S), np.shape(n)[:-1])
+        except ValueError as error:
+            raise ValueError(
+                "The director field `n` and scalar field `S` must have "
+                "broadcast-compatible spatial shapes. "
+                f"Got n.shape={n.shape} and S.shape={np.shape(S)}."
+            ) from error
+        if scalar_shape != n.shape[:-1]:
+            raise ValueError(
+                "Broadcasting `S` against `n` must resolve to the spatial "
+                f"shape {n.shape[:-1]}. Got {scalar_shape}."
+            )
+        S = np.broadcast_to(S, n.shape[:-1])
+        Q = _get_q_from_validated(n, S, output="q5")
+        return Q, S, n
+
+    if Q is UNSET:
+        raise NameError("No data is input to initialize Q field.")
+
+    diagonalization = q_diagonalize(Q)
+    return Q, diagonalization.S, diagonalization.n
 
 
 class QFieldObject(ClassBase):
@@ -341,8 +378,8 @@ class QFieldObject(ClassBase):
     __attr_defs__: ClassVar = {
         "raw_Q": AttrDef(
             doc=(
-                "Raw Q-tensor field on lattice. Typically QField5 or QField9 "
-                "(shape: (Nx, Ny, Nz, ...))."
+                "Compatibility mirror of the dataset-owned canonical Q field. "
+                "It references the same read-only array as field.raw_values."
             ),
             kind="raw",
         ),
@@ -355,24 +392,18 @@ class QFieldObject(ClassBase):
             kind="raw",
         ),
         "raw_box_periodic_flag": AttrDef(
-            doc="Per-dimension periodic boundary condition flags (bool array-like of length 3).",
+            doc="Compatibility mirror of the dataset periodic-boundary flags.",
             kind="raw",
         ),
         "raw_grid_offset": AttrDef(
-            doc=(
-                "A 3D vector, as the grid translation offset mapping lattice "
-                "indices -> real-space coordinates."
-            ),
+            doc="Compatibility mirror of the dataset grid translation offset.",
             kind="raw",
         ),
         "raw_grid_transform": AttrDef(
-            doc=(
-                "A 3x3 tensor, as the linear transform mapping lattice "
-                "indices -> real-space coordinates"
-            ),
+            doc="Compatibility mirror of the dataset index-to-real-space transform.",
             kind="raw",
         ),
-        "default_miminum_line_length_smooth": AttrDef(
+        "default_minimum_line_length_smooth": AttrDef(
             doc="Default minimum line length (#points) required to apply smoothing.",
             kind="default",
         ),
@@ -380,7 +411,7 @@ class QFieldObject(ClassBase):
             doc="Default smoothing window length (#points) used when not specified.",
             kind="default",
         ),
-        "default_miminum_line_length_visual": AttrDef(
+        "default_minimum_line_length_visual": AttrDef(
             doc="Default minimum line length (#points) required for visualization.",
             kind="default",
         ),
@@ -441,9 +472,8 @@ class QFieldObject(ClassBase):
             is_weak_by_default=False,
         ),
         "interpolator": AttrDef(
-            doc="The grid interpolator object associated with this Q field.",
-            kind="relation",
-            is_weak_by_default=False,
+            doc="Read-only view of the Q FieldData-owned grid interpolator.",
+            kind="property",
         ),
         "mask": AttrDef(
             doc=(
@@ -530,42 +560,28 @@ class QFieldObject(ClassBase):
                     f"{invalid_kwargs!r}."
                 )
 
+            if inputValue is not None:
+                raise ValueError(
+                    "Attached-analysis initialization via `field=...` does not "
+                    "accept `inputValue`. The attached field and dataset define "
+                    "all raw Q/grid/mask state; pass analysis `default_*` "
+                    "overrides directly as keyword arguments instead."
+                )
+
             # Attached initialization may still customize analysis defaults such
             # as smoothing/visual thresholds, but the raw Q data and grid model
             # must come entirely from the attached field + dataset pair.
-            attached_defaults = InputQ() if inputValue is None else inputValue
+            attached_defaults = InputQ()
             attached_defaults = merge_opts_all(
                 {"": attached_defaults},
                 kwargs,
                 type(self).__name__,
             )[""]
 
-            # Raw-Q and grid-related values always come from the attached
-            # field/dataset pair. If the caller also passes these values through
-            # InputQ, they are ignored here. To change them, create a new field
-            # or a new QFieldObject from raw inputs instead of mixing both
-            # initialization styles in one call.
-            ignored_attached_inputs = [
-                attr_name
-                for attr_name in ("Q", "S", "n", "mask")
-                if getattr(attached_defaults, attr_name) is not UNSET
-            ]
-            if ignored_attached_inputs:
-                logger.warning(
-                    "Attached-analysis initialization received extra raw field "
-                    f"input(s) {ignored_attached_inputs!r}. These values are "
-                    "ignored because the attached `field` and its dataset "
-                    "already define the Q/S/n/mask data used by this object. "
-                    "If you want to change the underlying field data, please "
-                    "create a new QFieldObject from raw inputs instead. To "
-                    "attach a validity mask, add it to the dataset as a field "
-                    "named 'mask' before initializing this object."
-                )
-
             for attr_name in (
-                "default_miminum_line_length_smooth",
+                "default_minimum_line_length_smooth",
                 "default_smooth_window_length",
-                "default_miminum_line_length_visual",
+                "default_minimum_line_length_visual",
             ):
                 object.__setattr__(
                     self,
@@ -592,18 +608,39 @@ class QFieldObject(ClassBase):
                 field.raw_values,
                 name="attached Q field values",
             )
+            if q_values is not field.raw_values:
+                raise ValueError(
+                    "Attached-analysis initialization requires `field.raw_values` "
+                    "to already use the canonical QField5 representation. "
+                    "Create the dataset Q field from Q5 values before attaching "
+                    "QFieldObject."
+                )
 
             # Reconstruct S and n from the provided Q values so the rest of the
             # class can keep using the same readable surfaces regardless of how
             # this object was initialized.
-            object.__setattr__(self, "raw_Q", q_values)
-            diagonalization = q_diagonalize(self.raw_Q)
-            object.__setattr__(self, "raw_S", diagonalization.S)
-            object.__setattr__(self, "raw_n", diagonalization.n)
+            diagonalization = q_diagonalize(q_values)
+            object.__setattr__(self, "raw_Q", field.raw_values)
             object.__setattr__(
                 self,
-                "raw_box_periodic_flag",
-                dataset.raw_box_periodic_flag,
+                "raw_S",
+                as_readonly_array(
+                    diagonalization.S,
+                    dtype=diagonalization.S.dtype,
+                    copy=False,
+                ),
+            )
+            object.__setattr__(
+                self,
+                "raw_n",
+                as_readonly_array(
+                    diagonalization.n,
+                    dtype=diagonalization.n.dtype,
+                    copy=False,
+                ),
+            )
+            object.__setattr__(
+                self, "raw_box_periodic_flag", dataset.raw_box_periodic_flag
             )
             object.__setattr__(self, "raw_grid_offset", dataset.raw_grid_offset)
             object.__setattr__(self, "raw_grid_transform", dataset.raw_grid_transform)
@@ -624,89 +661,54 @@ class QFieldObject(ClassBase):
             # the shared dataset at construction below. Capture it here and skip
             # it in the raw_* mirroring loop.
             mask_input = inputValue.mask
-            for f in fields(inputValue):
-                k = f.name
-                if k == "mask":
-                    continue
-                v = getattr(inputValue, k)
-                if k.startswith("default"):
-                    object.__setattr__(self, k, v)
-                else:
-                    object.__setattr__(self, f"raw_{k}", v)
+            for attr_name in (
+                "default_minimum_line_length_smooth",
+                "default_smooth_window_length",
+                "default_minimum_line_length_visual",
+            ):
+                object.__setattr__(self, attr_name, getattr(inputValue, attr_name))
 
-            # Standalone initialization accepts either n/S or raw Q:
-            # - if n is given, rebuild Q from n and S;
-            # - otherwise, diagonalize the provided Q to recover S and n.
-            # This keeps the three views synchronized before later analysis.
-            if self.raw_n is not UNSET:
-                logger.debug("Initialize Q field with S and n")
-                if self.raw_S is UNSET:
-                    logger.warning("No S input. Set to 1 everywhere.")
-                    object.__setattr__(
-                        self,
-                        "raw_S",
-                        np.broadcast_to(
-                            np.asarray(1.0, dtype=self.raw_n.dtype),
-                            self.raw_n.shape[:-1],
-                        ),
-                    )
-                if self.raw_Q is not UNSET:
-                    logger.warning(
-                        "Both Q and n are provided to initialize Q field. Q will be IGNORED."
-                    )
-                try:
-                    scalar_shape = np.broadcast_shapes(
-                        np.shape(self.raw_S),
-                        np.shape(self.raw_n)[:-1],
-                    )
-                except ValueError as error:
-                    raise ValueError(
-                        "The director field `n` and scalar field `S` must have "
-                        "broadcast-compatible spatial shapes. "
-                        f"Got n.shape={self.raw_n.shape} and "
-                        f"S.shape={np.shape(self.raw_S)}."
-                    ) from error
-                if scalar_shape != self.raw_n.shape[:-1]:
-                    raise ValueError(
-                        "Broadcasting `S` against `n` must resolve to the spatial "
-                        f"shape {self.raw_n.shape[:-1]}. Got {scalar_shape}."
-                    )
-                object.__setattr__(
-                    self,
-                    "raw_S",
-                    np.broadcast_to(self.raw_S, self.raw_n.shape[:-1]),
-                )
-                object.__setattr__(
-                    self,
-                    "raw_Q",
-                    _get_q_from_validated(
-                        self.raw_n,
-                        self.raw_S,
-                        output="q5",
-                    ),
-                )
-            else:
-                if self.raw_Q is not UNSET:
-                    diagonalization = q_diagonalize(self.raw_Q)
-                    object.__setattr__(self, "raw_S", diagonalization.S)
-                    object.__setattr__(self, "raw_n", diagonalization.n)
-                else:
-                    raise NameError("No data is input to initialize Q field.")
+            Q, S, n = _resolve_q_sn_input(
+                inputValue.Q,
+                inputValue.S,
+                inputValue.n,
+                logger=logger,
+            )
+            object.__setattr__(
+                self,
+                "raw_S",
+                as_readonly_array(
+                    S,
+                    dtype=S.dtype,
+                    copy=bool(S.flags.writeable),
+                ),
+            )
+            object.__setattr__(
+                self,
+                "raw_n",
+                as_readonly_array(n, dtype=n.dtype),
+            )
 
             # Build the shared grid container even for standalone construction,
             # so this Q field and any future sibling fields can live on the
             # same grid model.
             dataset = GridFieldDataset(
                 inputValue=InputGridField(
-                    shape=np.shape(self.raw_Q)[:3],
-                    box_periodic_flag=self.raw_box_periodic_flag,
-                    grid_offset=self.raw_grid_offset,
-                    grid_transform=self.raw_grid_transform,
+                    shape=np.shape(Q)[:3],
+                    box_periodic_flag=inputValue.box_periodic_flag,
+                    grid_offset=inputValue.grid_offset,
+                    grid_transform=inputValue.grid_transform,
                     mask=mask_input,
                 ),
                 name=f"{self.name} dataset",
             )
-            field = dataset.act_add_field("Q", self.raw_Q)
+            field = dataset.act_add_field("Q", Q)
+            object.__setattr__(self, "raw_Q", field.raw_values)
+            object.__setattr__(
+                self, "raw_box_periodic_flag", dataset.raw_box_periodic_flag
+            )
+            object.__setattr__(self, "raw_grid_offset", dataset.raw_grid_offset)
+            object.__setattr__(self, "raw_grid_transform", dataset.raw_grid_transform)
 
         self.act_bind_relation_base("dataset", dataset, is_weak=False)
         self.act_bind_relation_base("field", field, is_weak=False)
@@ -726,11 +728,6 @@ class QFieldObject(ClassBase):
                 "This is allowed for now, but QFieldObject will still treat it "
                 "as the canonical Q field."
             )
-
-        # From here on, `field.raw_values` is the Q data actually used by this
-        # object. We mirror it onto `raw_Q` so existing methods can keep reading
-        # `self.raw_Q` without caring how the field was supplied.
-        object.__setattr__(self, "raw_Q", field.raw_values)
 
         # The validity mask lives as a single dataset field bound at dataset
         # construction, so weighted smoothing (e.g. `act_gaussian_smooth(...,
@@ -755,10 +752,11 @@ class QFieldObject(ClassBase):
         )
 
         if (not is_detect_defects) and is_classify_lines:
+            requested_is_classify_lines = is_classify_lines
             is_classify_lines = False
             msg = (
                 f"Invalid combination: is_detect_defects={is_detect_defects} "
-                f"and is_classify_lines={is_classify_lines}.\n"
+                f"and is_classify_lines={requested_is_classify_lines}.\n"
                 "Line classification depends on defect detection. "
                 "Automatically disabling line classification."
             )
@@ -788,9 +786,6 @@ class QFieldObject(ClassBase):
             logger.progress(
                 f"Defect analysis is finished, with {time.time()-start:.2f} s"
             )
-        # Create the interpolator eagerly so later sampling/plane-visualization
-        # actions can assume `self.interpolator` already exists.
-        self.act_add_interpolator()
         # `figures` manages all PlotFigure windows created from this Q field and
         # tracks which one is currently active for later visualization calls.
         figures = FigureManager()
@@ -842,6 +837,19 @@ class QFieldObject(ClassBase):
                 f"{len(defect_indices)} valid defects remain."
             )
 
+        # Defect coordinates are the source state for every classified line.
+        # Invalidate the old line generation only after detection and mask
+        # filtering succeed, so a failed re-detection leaves the previous
+        # consistent analysis state intact.
+        old_lines = tuple(self.lines)
+        for line in old_lines:
+            self.objects.act_unregister(line, is_missing_ok=True)
+        if old_lines:
+            logger.info(
+                f"Invalidate {len(old_lines)} previously classified line(s) "
+                "before publishing newly detected defects."
+            )
+
         object.__setattr__(self, "calc_defect_indices", defect_indices)
         object.__setattr__(self, "calc_defect_indices_masked", defect_indices_masked)
 
@@ -863,6 +871,19 @@ class QFieldObject(ClassBase):
         The classified lines are sorted by defect count, renamed in display
         order, registered into `self.objects`, and returned as a list.
         """
+        if not hasattr(self, "calc_defect_indices"):
+            raise RuntimeError(
+                "Defects have not been detected yet. Call `act_defect_detect()` "
+                "before `act_lines_classify()`."
+            )
+
+        # Classification is a replacement operation, not an append operation.
+        # Otherwise repeated calls register duplicate/stale line objects while
+        # `self.lines` silently returns all generations together.
+        old_lines = tuple(self.lines)
+        for line in old_lines:
+            self.objects.act_unregister(line, is_missing_ok=True)
+
         lines = defect_classify_into_lines(
             self.calc_defect_indices,
             box_size_periodic=self.calc_box_size_periodic_index,
@@ -902,10 +923,16 @@ class QFieldObject(ClassBase):
             options such as `window_length`, `window_ratio`,
             `min_line_length`, and `order`.
 
+        Returns
+        -------
+        list
+            Newly created smoothed-line objects, in the same order as the
+            eligible entries in `self.lines`.
+
         Notes
         -----
         If `min_line_length` is not provided, the method uses
-        `self.default_miminum_line_length_smooth`.
+        `self.default_minimum_line_length_smooth`.
 
         If both `window_length` and `window_ratio` are omitted, the method
         uses `self.default_smooth_window_length` as the default window length.
@@ -938,12 +965,12 @@ class QFieldObject(ClassBase):
         opts = merge_opts_all({"": opts}, kwargs, "SmoothedLine")[""]
 
         if opts.min_line_length is UNSET:
-            opts.min_line_length = self.default_miminum_line_length_smooth
+            opts.min_line_length = self.default_minimum_line_length_smooth
             msg = "No input value provided for minimum smoothed line length. \n"
             msg += (
                 "Using the default value "
-                "self.default_miminum_line_length_smooth="
-                f"{self.default_miminum_line_length_smooth}."
+                "self.default_minimum_line_length_smooth="
+                f"{self.default_minimum_line_length_smooth}."
             )
             logger.info(msg)
 
@@ -976,13 +1003,13 @@ class QFieldObject(ClassBase):
         msg += f"minimum smoothed line length = {opts.min_line_length}"
         logger.debug(msg)
 
-        num_smooth = 0
+        smoothed_lines = []
         window_list = {}
         for line in self.lines:
             if line.calc_defect_num >= opts.min_line_length:
-                line.act_smooth(opts=opts, is_window_warning=False)
-                num_smooth += 1
-                window_list[line.name] = line.smooth.opts.window_length
+                smooth = line.act_smooth(opts=opts, is_window_warning=False)
+                smoothed_lines.append(smooth)
+                window_list[line.name] = smooth.opts.window_length
             else:
                 logger.debug(
                     f"Line `{line.name}` is not smoothed because it is too "
@@ -991,7 +1018,7 @@ class QFieldObject(ClassBase):
 
         msg = (
             f"There are {len(self.lines)} disclination lines in total, with "
-            f"{num_smooth} lines are smoothed.\n"
+            f"{len(smoothed_lines)} lines smoothed.\n"
         )
         msg += "The smoothing window length is: "
         if opts.window_length is not None:
@@ -1001,17 +1028,11 @@ class QFieldObject(ClassBase):
             for k, v in window_list.items():
                 msg += f"{k}: {v} \n"
         logger.info(msg)
+        return smoothed_lines
 
     def act_add_interpolator(self):
-        """Create and bind a `GridInterpolator` if one is not already present."""
-        interpolator_old = self.interpolator
-        if isinstance(interpolator_old, GridInterpolator):
-            return interpolator_old
-
-        interpolator = self.field.act_add_interpolator()
-        self.act_bind_relation_base("interpolator", interpolator, is_weak=False)
-
-        return self.interpolator
+        """Create the field-owned `GridInterpolator` if it does not yet exist."""
+        return self.field.act_add_interpolator()
 
     def act_interpolate(
         self,
@@ -1133,6 +1154,40 @@ class QFieldObject(ClassBase):
 
         return bounds_obj
 
+    def _helper_create_q_plane(
+        self,
+        *,
+        opts_grid: OptsPlaneGrid,
+        bounds,
+        plane_name: str,
+    ):
+        """Create and register a Cartesian QPlane for visualization helpers."""
+        interpolator = self.act_add_interpolator()
+        cover_value(
+            opts_grid,
+            is_allow_cover_target_set=False,
+            size=1.8 * np.max(self.S.shape),
+            spacing=1,
+        )
+        plane = QPlane(
+            interpolator,
+            name=plane_name,
+            opts=opts_grid,
+            bounds=bounds,
+        )
+        self.objs.act_register(plane)
+        return plane
+
+    @staticmethod
+    def _helper_visualize_extent(figure, bounds, opts_extent, *, is_extent: bool):
+        """Draw the optional bounds extent shared by visualization helpers."""
+        if is_extent:
+            bounds.act_visualize(
+                figure=figure,
+                opts=opts_extent,
+                is_reset_camera=False,
+            )
+
     @logging_and_warning_decorator()
     def act_visualize_disclination_lines(
         self,
@@ -1167,12 +1222,9 @@ class QFieldObject(ClassBase):
             Whether smoothed line geometry should be used when available.
         is_extent
             Whether to also draw the bounding extent.
-        is_wrap
-            Whether the selected cross-section origin should be wrapped into
-            the principal periodic box before the local polar grid is built.
         min_line_length
             Minimum defect count required for a line to be plotted. If not
-            provided, `self.default_miminum_line_length_visual` is used.
+            provided, `self.default_minimum_line_length_visual` is used.
         opts_figure
             Base `OptsFigure` configuration for the target figure.
         opts_line
@@ -1236,9 +1288,9 @@ class QFieldObject(ClassBase):
         if min_line_length is None:
             logger.info(
                 "No minimum line length has been provided for the plotted lines. "
-                f"Use the default value {self.default_miminum_line_length_visual}"
+                f"Use the default value {self.default_minimum_line_length_visual}"
             )
-            min_line_length = self.default_miminum_line_length_visual
+            min_line_length = self.default_minimum_line_length_visual
 
         logger.debug(f"min_line_length = {min_line_length}")
 
@@ -1275,6 +1327,8 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
+        return figure
 
     def act_visualize_n_plane(
         self,
@@ -1393,26 +1447,21 @@ class QFieldObject(ClassBase):
         opts_nd = merge["nd_"]
         opts_defect = merge["defect_"]
 
+        is_new = as_bool(is_new, name="is_new")
+        is_extent = as_bool(is_extent, name="is_extent")
+        is_defect = as_bool(is_defect, name="is_defect")
+
         cover_value(opts_nb, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
         cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
 
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
-        if self.interpolator is None:
-            self.act_add_interpolator()
-
-        n_plane = QPlane(
-            self.interpolator,
-            name=plane_name,
-            opts=opts_grid,
+        n_plane = self._helper_create_q_plane(
+            opts_grid=opts_grid,
             bounds=bounds,
-            opts_defaults_override={
-                "size": 1.8 * np.max(self.S.shape),
-                "spacing": 1,
-            },
+            plane_name=plane_name,
         )
-        self.objs.act_register(n_plane)
 
         n_plane.act_visualize_n(
             figure=figure,
@@ -1428,6 +1477,8 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
+        return n_plane
 
     def act_visualize_S_plane(
         self,
@@ -1521,23 +1572,17 @@ class QFieldObject(ClassBase):
         opts_extent = merge["extent_"]
         opts_S = merge["S_"]
 
+        is_new = as_bool(is_new, name="is_new")
+        is_extent = as_bool(is_extent, name="is_extent")
+
         figure = self._helper_set_figure(is_new, figure, opts_figure, title)
         bounds = self._helper_resolve_visual_bounds(bounds, label=title)
 
-        if self.interpolator is None:
-            self.act_add_interpolator()
-
-        S_plane = QPlane(
-            self.interpolator,
-            name=plane_name,
-            opts=opts_grid,
+        S_plane = self._helper_create_q_plane(
+            opts_grid=opts_grid,
             bounds=bounds,
-            opts_defaults_override={
-                "size": 1.8 * np.max(self.S.shape),
-                "spacing": 1,
-            },
+            plane_name=plane_name,
         )
-        self.objs.act_register(S_plane)
 
         S_plane.act_visualize_S(
             figure=figure,
@@ -1550,6 +1595,8 @@ class QFieldObject(ClassBase):
                 opts=opts_extent,
                 is_reset_camera=False,
             )
+
+        return S_plane
 
     def act_visualize_n_near_defect(
         self,
@@ -1611,7 +1658,8 @@ class QFieldObject(ClassBase):
         opts_extent
             Base `OptsTube` configuration for the optional bounding extent.
         opts_defect
-            Reserved `OptsSphere` configuration for defect-point markers.
+            Reserved compatibility option. Defect markers are not drawn by
+            this cross-section visualization.
         bounds
             Bounds used for cross-section construction and optional extent
             drawing. If omitted, the default Q-field bounds are used.
@@ -1678,6 +1726,10 @@ class QFieldObject(ClassBase):
         opts_nd = merge["nd_"]
         opts_defect = merge["defect_"]
 
+        is_new = as_bool(is_new, name="is_new")
+        is_extent = as_bool(is_extent, name="is_extent")
+        is_wrap = as_bool(is_wrap, name="is_wrap")
+
         cover_value(opts_nb, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
         cover_value(opts_nd, is_allow_cover_target_set=False, **(opts_n.act_asdict()))
 
@@ -1742,6 +1794,8 @@ class QFieldObject(ClassBase):
                 is_reset_camera=False,
             )
 
+        return n_plane
+
     @logging_and_warning_decorator()
     def act_get_beta_interpolator(
         self,
@@ -1794,6 +1848,7 @@ class QFieldObject(ClassBase):
             Keyword overrides merged into `opts_smooth` and `opts_grid` using
             the prefixes `smooth_` and `grid_`.
         """
+        is_new_smooth = as_bool(is_new_smooth, name="is_new_smooth")
         is_input_opts_smooth = opts_smooth is not None
         is_input_smooth_kwargs = any(key.startswith("smooth_") for key in kwargs)
         try:
@@ -1825,7 +1880,7 @@ class QFieldObject(ClassBase):
             if opts_smooth.min_line_length is UNSET:
                 opts_smooth = replace(
                     opts_smooth,
-                    min_line_length=self.default_miminum_line_length_smooth,
+                    min_line_length=self.default_minimum_line_length_smooth,
                 )
             if opts_smooth.window_length is UNSET and opts_smooth.window_ratio is UNSET:
                 opts_smooth = replace(
@@ -1872,6 +1927,11 @@ class QFieldObject(ClassBase):
     # -------------------------------
     # Readable properties and array-style access
     # -------------------------------
+
+    @property
+    def interpolator(self):
+        """Return the Q field-owned interpolator, or None before creation."""
+        return self.field.interpolator
 
     @property
     def calc_corners_index(self):

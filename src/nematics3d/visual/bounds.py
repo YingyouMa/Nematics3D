@@ -122,7 +122,7 @@ def _refresh_visual(bounds, sync_name: str):
 
 
 def _open_interact_panels(bounds, tube, figure):
-    from nematics3d.classes.visual.qt.interact_tube import InteractTube
+    from nematics3d.visual.qt.interact_tube import InteractTube
     from nematics3d.visual.qt.interact_bounds import InteractBounds
 
     InteractTube.show_once(tube, figure)

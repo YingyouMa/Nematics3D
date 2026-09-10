@@ -11,8 +11,19 @@ from importlib import import_module
 _LAZY_EXPORTS = {
     "FigureOptionsDialog": (".figure_options_dialog", "FigureOptionsDialog"),
     "ScopedConsoleDock": (".console", "ScopedConsoleDock"),
+    "InteractBounds": (".interact_bounds", "InteractBounds"),
+    "InteractDefectSection": (".interact_defect_section", "InteractDefectSection"),
     "InteractGlyphBase": (".interact_glyph_base", "InteractGlyphBase"),
+    "InteractPlane": (".interact_plane", "InteractPlane"),
     "InteractPolyData": (".interact_polydata", "InteractPolyData"),
+    "InteractSmoothedSurface": (
+        ".interact_smoothed_surface",
+        "InteractSmoothedSurface",
+    ),
+    "InteractSurfaceSampling": (
+        ".interact_surface_sampling",
+        "InteractSurfaceSampling",
+    ),
     "InteractRod": (".interact_rod", "InteractRod"),
     "InteractSphere": (".interact_sphere", "InteractSphere"),
     "InteractTube": (".interact_tube", "InteractTube"),
@@ -31,8 +42,13 @@ _LAZY_EXPORTS = {
 __all__ = [
     "FigureOptionsDialog",
     "ScopedConsoleDock",
+    "InteractBounds",
+    "InteractDefectSection",
     "InteractGlyphBase",
+    "InteractPlane",
     "InteractPolyData",
+    "InteractSmoothedSurface",
+    "InteractSurfaceSampling",
     "InteractRod",
     "InteractSphere",
     "InteractTube",

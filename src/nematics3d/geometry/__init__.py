@@ -33,6 +33,7 @@ from .rotation import (
     rotation_matrix_from_vectors,
     rotate_vector_about_axis,
 )
+from .surface import surface_triangle_coordinates
 from .smoothing import *
 from .triangulation import *
 

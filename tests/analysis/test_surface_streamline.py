@@ -1,9 +1,7 @@
-"""Focused tests for the experimental surface-streamline integrator."""
-
 import numpy as np
 import pyvista as pv
 
-from surface_streamline import integrate_surface_streamline
+from nematics3d.analysis import integrate_surface_streamline
 
 
 def test_constant_planar_field_traces_both_directions_to_boundary():
@@ -62,3 +60,42 @@ def test_existing_streamline_stops_a_new_line_at_minimum_separation():
 
     assert result.forward_status == "minimum separation"
     assert result.backward_status == "minimum separation"
+
+
+def test_azimuthal_sphere_field_closes_once_and_stays_on_surface():
+    surface = pv.Sphere(radius=1.0, theta_resolution=64, phi_resolution=32).triangulate()
+    points = np.asarray(surface.points, dtype=float)
+    directors = np.column_stack((-points[:, 1], points[:, 0], np.zeros(len(points))))
+
+    result = integrate_surface_streamline(
+        surface,
+        directors,
+        [1.0, 0.0, 0.0],
+        step_size=0.05,
+        max_length=10.0,
+        closure_tolerance=0.06,
+        minimum_closure_length=5.0,
+    )
+
+    assert result.forward_status == "closed loop"
+    assert result.backward_status == "not traced: forward branch closed loop"
+    np.testing.assert_allclose(result.positions[0], result.positions[-1], atol=1.0e-12)
+    np.testing.assert_allclose(
+        np.linalg.norm(result.positions, axis=1),
+        1.0,
+        atol=3.0e-3,
+    )
+    np.testing.assert_allclose(result.positions[:, 2], 0.0, atol=3.0e-3)
+    assert 5.5 < result.length < 7.0
+
+
+def test_normal_vertex_field_is_rejected_at_seed_after_tangent_projection():
+    surface = pv.Plane(i_resolution=4, j_resolution=4).triangulate()
+    directors = np.tile([0.0, 0.0, 1.0], (surface.n_points, 1))
+
+    try:
+        integrate_surface_streamline(surface, directors, [0.0, 0.0, 0.0])
+    except ValueError as error:
+        assert "nonzero tangent director" in str(error)
+    else:
+        raise AssertionError("Expected a normal director field to be rejected.")

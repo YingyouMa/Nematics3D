@@ -37,6 +37,13 @@ from .principal_plane import (
     nml_principal_plane_analysis,
 )
 from .sampling import sample_van_der_corput
+from .surface_director import (
+    SurfaceDirectorInterpolationResult,
+    SurfaceDirectorProjectionResult,
+    interpolate_surface_directors,
+    project_surface_directors,
+)
+from .surface_streamline import SurfaceStreamlineResult, integrate_surface_streamline
 
 __all__ = [
     "Bounds",
@@ -52,6 +59,9 @@ __all__ = [
     "QDiagonalizationResult",
     "RelaxationLengthResult",
     "ThresholdRelaxationResult",
+    "SurfaceDirectorProjectionResult",
+    "SurfaceDirectorInterpolationResult",
+    "SurfaceStreamlineResult",
     "as_bounds",
     "act_correlation",
     "act_correlation_values",
@@ -69,6 +79,9 @@ __all__ = [
     "nml_principal_plane_analysis",
     "q_diagonalize",
     "sample_van_der_corput",
+    "project_surface_directors",
+    "interpolate_surface_directors",
+    "integrate_surface_streamline",
 ]
 
 

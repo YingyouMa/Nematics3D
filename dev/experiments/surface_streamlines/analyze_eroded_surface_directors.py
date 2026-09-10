@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import pyvista as pv
 
-from director_projection import project_surface_directors
+from nematics3d.analysis import project_surface_directors
 
 
 EXAMPLE_DIR = Path(r"E:\Research\AN\example")

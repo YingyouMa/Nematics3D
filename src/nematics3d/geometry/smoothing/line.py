@@ -401,10 +401,7 @@ class SmoothedLine(HostBase):
         is_follow_owner_opts: bool = True,
         name: str | None = None,
     ):
-        # SmoothedLineFunc remains in the legacy module until it receives its
-        # own structural review. Import lazily to avoid coupling this geometry
-        # module to the line-function implementation at import time.
-        from ...classes.smoothed_line import SmoothedLineFunc
+        from .line_function import SmoothedLineFunc
 
         if name is None:
             name = f"line_func_{self.impl_linefunc_count}"

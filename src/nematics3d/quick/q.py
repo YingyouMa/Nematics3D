@@ -167,9 +167,9 @@ def quick_visualize_q(
         n=n if is_n_provided else UNSET,
         box_periodic_flag=box_periodic_flag,
         name=name,
-        default_miminum_line_length_smooth=params["smooth_min_line_length"],
+        default_minimum_line_length_smooth=params["smooth_min_line_length"],
         default_smooth_window_length=params["smooth_window_length"],
-        default_miminum_line_length_visual=params["visual_min_line_length"],
+        default_minimum_line_length_visual=params["visual_min_line_length"],
     )
     if is_visualize_lines:
         q_obj.act_lines_smooth(

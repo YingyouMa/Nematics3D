@@ -15,6 +15,7 @@ from ..logging_decorator import logging_and_warning_decorator
 from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
 from ..geometry.polydata import as_polydata_input, copy_polydata_geometry
+from ..geometry.surface import surface_triangle_coordinates
 
 
 def _as_surface_polydata_input(data, *, name: str):
@@ -212,39 +213,11 @@ def _helper_calc_sample_surface_geometry(
     surface: pv.PolyData,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Resolve closest triangles, barycentrics, and interpolated point normals."""
-    cell_ids = np.asarray(surface.find_closest_cell(points), dtype=int).reshape(-1)
-    point_ids = []
-    for cell_id in cell_ids:
-        cell_point_ids = np.asarray(surface.get_cell(int(cell_id)).point_ids, dtype=int)
-        if cell_point_ids.shape != (3,):
-            raise ValueError(
-                "Sample-normal interpolation requires a fully triangulated surface; "
-                f"closest cell {int(cell_id)} has {len(cell_point_ids)} points."
-            )
-        point_ids.append(cell_point_ids)
-
-    triangle_point_ids = np.asarray(point_ids, dtype=int)
-    triangles = np.asarray(surface.points, dtype=float)[triangle_point_ids]
-    point_offsets = np.asarray(points, dtype=float) - triangles[:, 0]
-    edge_0 = triangles[:, 1] - triangles[:, 0]
-    edge_1 = triangles[:, 2] - triangles[:, 0]
-
-    dot_00 = np.einsum("ij,ij->i", edge_0, edge_0)
-    dot_01 = np.einsum("ij,ij->i", edge_0, edge_1)
-    dot_11 = np.einsum("ij,ij->i", edge_1, edge_1)
-    dot_20 = np.einsum("ij,ij->i", point_offsets, edge_0)
-    dot_21 = np.einsum("ij,ij->i", point_offsets, edge_1)
-    denominator = dot_00 * dot_11 - dot_01 * dot_01
-    if np.any(denominator <= np.finfo(float).eps):
-        raise ValueError(
-            "Sample-normal interpolation encountered a degenerate triangle."
-        )
-
-    bary_1 = (dot_11 * dot_20 - dot_01 * dot_21) / denominator
-    bary_2 = (dot_00 * dot_21 - dot_01 * dot_20) / denominator
-    barycentric = np.column_stack((1.0 - bary_1 - bary_2, bary_1, bary_2))
-    barycentric = np.clip(barycentric, 0.0, 1.0)
-    barycentric /= np.sum(barycentric, axis=1, keepdims=True)
+    cell_ids, _, triangle_point_ids, barycentric = surface_triangle_coordinates(
+        surface,
+        points,
+        project_to_surface=False,
+    )
 
     point_normals = np.asarray(surface.point_data["Normals"], dtype=float)
     triangle_normals = point_normals[triangle_point_ids]

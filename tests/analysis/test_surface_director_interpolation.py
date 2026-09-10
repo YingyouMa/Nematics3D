@@ -1,9 +1,7 @@
-"""Focused tests for the experimental surface-director interpolator."""
-
 import numpy as np
 import pyvista as pv
 
-from director_interpolation import interpolate_surface_directors
+from nematics3d.analysis import interpolate_surface_directors
 
 
 def _square_surface():
@@ -48,9 +46,12 @@ def test_reference_director_selects_continuous_output_sign():
 def test_off_surface_queries_report_closest_points_and_distances():
     surface = _square_surface()
     vertex_directors = np.tile([1.0, 0.0, 0.0], (4, 1))
-    positions = np.array([[0.25, 0.25, 0.5]])
 
-    result = interpolate_surface_directors(surface, vertex_directors, positions)
+    result = interpolate_surface_directors(
+        surface,
+        vertex_directors,
+        [[0.25, 0.25, 0.5]],
+    )
 
     np.testing.assert_allclose(result.surface_positions, [[0.25, 0.25, 0.0]])
     np.testing.assert_allclose(result.surface_distances, [0.5])
@@ -66,3 +67,4 @@ def test_results_are_read_only():
 
     assert not result.directors.flags.writeable
     assert not result.barycentric_coordinates.flags.writeable
+

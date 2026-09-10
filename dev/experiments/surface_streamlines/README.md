@@ -3,18 +3,23 @@
 This experiment develops surface-director projection, line-field
 interpolation, seed selection, and streamline integration in separate stages.
 
-The first stage is `director_projection.py`. It assumes that one director is
-already sampled at every input surface vertex. It does not interpolate a
-volume field or integrate streamlines.
+The first stage is now the public
+`nematics3d.analysis.project_surface_directors` function. It assumes that one
+director is already sampled at every input surface vertex. It does not
+interpolate a volume field or integrate streamlines.
 
-The second stage is `director_interpolation.py`. It locates arbitrary query
-positions on the closest mesh triangles, sign-aligns the three vertex
-directors as a nematic line field, and barycentrically interpolates them. A
-reference direction may be supplied so a future streamline integrator can
+The second stage is now the public
+`nematics3d.analysis.interpolate_surface_directors` function. It locates
+arbitrary query positions on the closest mesh triangles, sign-aligns the three
+vertex directors as a nematic line field, and barycentrically interpolates
+them. A reference direction may be supplied so a streamline integrator can
 choose a continuous sign from one step to the next.
 
-The third stage is `surface_streamline.py`. It traces one nematic streamline
-in both directions with projected midpoint steps, maps every accepted point
-back to the triangle surface, and uses the previous step direction as the
-interpolator reference so the line does not reverse under an equivalent
-director-sign change.
+The third stage has also graduated into
+`nematics3d.analysis.integrate_surface_streamline`. It traces a nematic line in
+both directions with midpoint steps. Interpolated directors are explicitly
+projected onto the local smooth tangent plane before every integration step,
+and accepted positions are constrained back to the triangle surface. Closed
+loops are returned once rather than integrating the same loop independently
+in both directions. Closure distance and minimum closure length remain
+explicit user-adjustable geometric stopping policies.

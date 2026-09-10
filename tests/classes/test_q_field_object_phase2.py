@@ -22,6 +22,7 @@ from nematics3d.grid.field import (
     GridInterpolator,
     InputGridField,
 )
+from nematics3d.sample.plane_grid import OptsPlaneGrid
 from nematics3d.sample.plane_grid_polar import OptsPlaneGridPolar
 from nematics3d.analysis.disclination.section import (
     DefectSectionOmegaResult,
@@ -148,6 +149,60 @@ class TestQFieldObjectPhase2(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "act_defect_detect"):
             q.act_lines_classify()
+
+    def test_act_lines_smooth_returns_only_newly_created_eligible_smooths(self):
+        n = np.zeros((2, 2, 2, 3), dtype=float)
+        n[..., 0] = 1.0
+        q = QFieldObject(
+            n=n,
+            is_detect_defects=False,
+            is_classify_lines=False,
+            name="smooth-return-test",
+        )
+
+        long_line = DisclinationLine(
+            defect_indices=np.column_stack(
+                (np.arange(8, dtype=float), np.full(8, 0.5), np.full(8, 0.5))
+            ),
+            name="long line",
+        )
+        short_line = DisclinationLine(
+            defect_indices=np.column_stack(
+                (np.arange(4, dtype=float), np.full(4, 1.5), np.full(4, 0.5))
+            ),
+            name="short line",
+        )
+        q.objects.act_register(long_line)
+        q.objects.act_register(short_line)
+
+        result = q.act_lines_smooth(
+            min_line_length=6,
+            window_length=5,
+            order=3,
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIs(result[0], long_line.smooth)
+        self.assertEqual(len(long_line.smooths), 1)
+        self.assertEqual(len(short_line.smooths), 0)
+
+    def test_create_q_plane_helper_is_lazy_and_registers_plane(self):
+        q = QFieldObject(
+            Q=np.zeros((3, 3, 3, 5), dtype=float),
+            is_detect_defects=False,
+            is_classify_lines=False,
+        )
+        self.assertIsNone(q.interpolator)
+
+        plane = q._helper_create_q_plane(
+            opts_grid=OptsPlaneGrid(normal=(0, 0, 1)),
+            bounds=q.calc_bounds,
+            plane_name="helper-plane",
+        )
+
+        self.assertIsNotNone(q.interpolator)
+        self.assertIn(plane, q.objects)
+        self.assertEqual(plane.name, "helper-plane")
 
     def test_act_get_beta_interpolator_new_smooth_matches_direct_beta(self):
         data_path = (

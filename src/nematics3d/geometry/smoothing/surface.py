@@ -130,6 +130,11 @@ class SmoothedSurface(HostBase):
             doc="Internal read-only per-vertex displacement vectors.",
             kind="impl",
         ),
+        "visual": AttrDef(
+            doc="The PlotPolyData visual currently bound to this smoothed surface.",
+            kind="relation",
+            is_weak_by_default=False,
+        ),
         "result": AttrDef(
             doc="Read-only: final smoothed geometry-only PolyData.",
             kind="property",
@@ -199,7 +204,21 @@ class SmoothedSurface(HostBase):
             )
         return poly
 
-    def _helper_run_smoothing(self) -> None:
+    def _helper_update_visual(self, *, is_refresh_topology: bool = False) -> None:
+        """Push the current smoothed geometry into an already-bound visual."""
+        visual = self.visual
+        if visual is None:
+            return
+
+        if is_refresh_topology:
+            object.__setattr__(
+                visual,
+                "raw_poly",
+                copy_polydata_geometry(self.impl_surface_result),
+            )
+        visual.act_update_points(self.vertices)
+
+    def _helper_run_smoothing(self, *, is_refresh_visual_topology: bool = False) -> None:
         """Run PyVista smoothing from the raw geometry and store diagnostics."""
         poly = self._helper_prepare_input()
         points_initial = np.asarray(poly.points, dtype=float).copy()
@@ -244,6 +263,7 @@ class SmoothedSurface(HostBase):
         object.__setattr__(self, "impl_surface_result", result)
         object.__setattr__(self, "impl_error_vectors", error_vectors)
         object.__setattr__(self, "impl_error_scalars", error_scalars)
+        self._helper_update_visual(is_refresh_topology=is_refresh_visual_topology)
 
     @logging_and_warning_decorator()
     def _helper_commit_apply_opts_main(
@@ -273,7 +293,49 @@ class SmoothedSurface(HostBase):
             f"edge_angle={self.opts.edge_angle}, "
             f"normalize_coordinates={self.opts.normalize_coordinates}."
         )
-        self._helper_run_smoothing()
+        self._helper_run_smoothing(
+            is_refresh_visual_topology=bool(is_reapply_opts),
+        )
+
+    def act_plot(
+        self,
+        figure=None,
+        opts=None,
+        name: str | None = None,
+        opts_defaults_override: Mapping[str, Any] | None = None,
+        **kwargs,
+    ):
+        """Plot the smoothed mesh and bind its live smoothing controls."""
+        from nematics3d.visual.plot_polydata import PlotPolyData
+        from nematics3d.visual.qt.interact_smoothed_surface import (
+            InteractSmoothedSurface,
+        )
+
+        visual_old = self.visual
+        if visual_old is not None:
+            visual_old.act_remove()
+            self.act_unbind_relation_base("visual")
+
+        visual = PlotPolyData(
+            self.result,
+            figure=figure,
+            opts=opts,
+            name=self.name if name is None else name,
+            opts_defaults_override=opts_defaults_override,
+            **kwargs,
+        )
+        visual.act_bind_relation_base("owner", self, is_weak=True)
+
+        default_func = getattr(visual, "impl_interact_func", None)
+
+        def _interact():
+            if callable(default_func):
+                default_func()
+            InteractSmoothedSurface.show_once(self, visual.fig)
+
+        visual.act_set_interact_func(_interact)
+        self.act_bind_relation_base("visual", visual, is_weak=False)
+        return visual
 
     @property
     def result(self):

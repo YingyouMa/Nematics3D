@@ -1,12 +1,12 @@
 # Surface Director Projection Plan
 
-> Experimental implementation update: the first prototype now lives in
-> `dev/experiments/surface_streamlines/director_projection.py`. The initial API
-> accepts an existing `pyvista.PolyData` plus one director per surface vertex,
-> rather than reconstructing a surface from `surface_points`. This preserves
-> the exact topology that will later be used for streamline integration. The
-> older point-cloud API discussion below remains as design history for a future
-> independent-coordinate mode.
+> Implementation update: the vertex-aligned projection has graduated into
+> `src/nematics3d/analysis/surface_director.py` and is exported as
+> `nematics3d.analysis.project_surface_directors`. It accepts an existing
+> `pyvista.PolyData` plus one director per surface vertex, preserving the exact
+> topology used by later streamline experiments. The older point-cloud API
+> discussion below remains as design history for a future independent-coordinate
+> mode.
 
 ## Objective
 

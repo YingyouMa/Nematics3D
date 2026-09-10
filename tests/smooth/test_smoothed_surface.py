@@ -1,26 +1,13 @@
-import sys
-from pathlib import Path
-import types
-
 import numpy as np
 import pyvista as pv
 import pytest
-
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-PKG_DIR = SRC_DIR / "nematics3d"
-
-sys.path.insert(0, str(SRC_DIR))
-
-if "nematics3d" not in sys.modules:
-    pkg = types.ModuleType("nematics3d")
-    pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["nematics3d"] = pkg
 
 from nematics3d.geometry.smoothing.surface import (
     OptsSmoothedSurface,
     SmoothedSurface,
     SurfaceSmoothingConfigError,
 )
+from nematics3d.visual.plot_figure import PlotFigure
 
 
 def _tetra_surface(scale=1.0):
@@ -120,6 +107,36 @@ def test_smoothed_surface_opts_commit_recomputes_from_raw_surface():
     expected = _direct_smooth(mesh, surface.opts)
     np.testing.assert_allclose(surface.vertices, expected.points)
     assert not np.array_equal(surface.vertices, vertices_before)
+
+
+def test_smoothed_surface_direct_opts_update_recomputes():
+    mesh = _tetra_surface()
+    surface = SmoothedSurface(mesh, pass_band=0.2)
+    vertices_before = surface.vertices.copy()
+
+    surface.opts.pass_band = 0.02
+
+    expected = _direct_smooth(mesh, surface.opts)
+    np.testing.assert_allclose(surface.vertices, expected.points)
+    assert not np.array_equal(surface.vertices, vertices_before)
+
+
+def test_smoothed_surface_plot_tracks_live_geometry_updates():
+    mesh = _tetra_surface()
+    surface = SmoothedSurface(mesh, pass_band=0.2)
+    figure = PlotFigure(is_off_screen=True)
+
+    visual = surface.act_plot(figure=figure)
+    try:
+        assert surface.visual is visual
+        assert visual.owner is surface
+        np.testing.assert_allclose(visual.raw_coords, surface.vertices)
+
+        surface.act_commit(pass_band=0.02)
+
+        np.testing.assert_allclose(visual.raw_coords, surface.vertices)
+    finally:
+        figure.act_close()
 
 
 def test_smoothed_surface_raw_surface_commit_recomputes():

@@ -168,5 +168,17 @@ class PlotPolyData(PlotGlyph):
             scalars=self.calc_scalars,
         )
 
+    def act_update_points(self, coords) -> None:
+        """Update mesh point coordinates while preserving the stored topology."""
+        validator = type(self).__attr_defs__["raw_coords"].validator
+        coords = validator(coords, type(self).__attr_defs__["raw_coords"].doc)
+        if len(coords) != self.raw_poly.n_points:
+            raise ValueError(
+                "Updated PolyData coordinates must keep the current number of points. "
+                f"Expected {self.raw_poly.n_points}, got {len(coords)}."
+            )
+        object.__setattr__(self, "raw_coords", coords)
+        self.act_commit(is_reapply_opts=True)
+
 
 __all__ = ["OptsPolyData", "PlotPolyData"]
