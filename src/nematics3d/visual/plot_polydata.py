@@ -15,7 +15,6 @@ from nematics3d.datatypes import UNSET, Unset, as_bool, as_ColorRGB, as_number, 
 from nematics3d.geometry.polydata import as_polydata_input, copy_polydata_geometry
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_polydata import InteractPolyData
 
 
 def _materialize_polydata_with_display_data(
@@ -156,7 +155,12 @@ class PlotPolyData(PlotGlyph):
 
         object.__setattr__(self, "raw_poly", copy_polydata_geometry(poly))
         self.act_register_protected_attr(["coords", "raw_coords", "poly", "raw_poly"])
-        self.act_set_interact_func(lambda: InteractPolyData.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_polydata import InteractPolyData
+
+            return InteractPolyData.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
         self._helper_init_end()
 
     def _helper_materialize_mesh(self):

@@ -141,7 +141,7 @@ def make_labeled_slider_row(
     h.addWidget(lab_key)
 
     # ---- slider ----
-    slider = QtWidgets.QSlider(QtCore.Qt.Horizontal, row_widget)
+    slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal, row_widget)
     slider.setMinimum(int(tick_min))
     slider.setMaximum(int(tick_max))
     slider.setSingleStep(int(single_step))
@@ -153,8 +153,12 @@ def make_labeled_slider_row(
     value_box = QtWidgets.QDoubleSpinBox(row_widget)
     value_box.setDecimals(_helper_decimals_from_value_fmt(value_fmt))
     value_box.setKeyboardTracking(False)
-    value_box.setButtonSymbols(QtWidgets.QAbstractSpinBox.NoButtons)
-    value_box.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+    value_box.setButtonSymbols(
+        QtWidgets.QAbstractSpinBox.ButtonSymbols.NoButtons
+    )
+    value_box.setAlignment(
+        QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.AlignmentFlag.AlignVCenter
+    )
     value_box.setMinimumWidth(int(val_min_width))
     value_box_max = float(value_max)
     if input_out_of_range == "expand_max":
@@ -435,7 +439,10 @@ class MovePointConsole:
         if self.is_show_location:
             grid.addWidget(QtWidgets.QLabel("Location:", self.group), 0, 0, 1, 1)
             self.lab_center = QtWidgets.QLabel("", self.group)
-            self.lab_center.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            self.lab_center.setAlignment(
+                QtCore.Qt.AlignmentFlag.AlignLeft
+                | QtCore.Qt.AlignmentFlag.AlignVCenter
+            )
             grid.addWidget(self.lab_center, 0, 1, 1, 2)
 
         # ensure center exists in state
@@ -643,7 +650,7 @@ class PanelBase(QtWidgets.QWidget):
 
         self.setWindowTitle(title)
         self.setObjectName("panel")
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.Window)
 
         self.layout = QtWidgets.QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
@@ -911,7 +918,7 @@ class PanelBase(QtWidgets.QWidget):
 
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(f"Current Opts Snapshot — {self.host!s}")
-        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         layout = QtWidgets.QVBoxLayout(dialog)
 

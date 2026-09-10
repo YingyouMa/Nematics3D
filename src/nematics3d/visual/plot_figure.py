@@ -1,14 +1,17 @@
 """Figure host and camera helpers for PyVista-based Nematics3D scenes."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import numpy as np
 import pyvista as pv
 import vtk
-from pyvistaqt import BackgroundPlotter
-from qtpy import QtCore
+
+if TYPE_CHECKING:
+    from pyvistaqt import BackgroundPlotter
 
 from nematics3d.datatypes import (
     ColorRGB,
@@ -28,9 +31,22 @@ from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
 from ..core.opts import cover_value
 from ..core.registry_base import RegistryBase
-from nematics3d.visual.pick_manager import PickManager
-from nematics3d.visual.qt.console import ScopedConsoleDock
 from nematics3d.visual.scalar_bar_registry import ScalarBarRegistry
+
+
+def _get_background_plotter_type():
+    try:
+        from pyvistaqt import BackgroundPlotter
+    except ImportError:
+        return None
+    return BackgroundPlotter
+
+
+def _is_background_plotter(plotter) -> bool:
+    background_plotter_type = _get_background_plotter_type()
+    return background_plotter_type is not None and isinstance(
+        plotter, background_plotter_type
+    )
 
 
 @dataclass(slots=True, repr=False)
@@ -358,7 +374,7 @@ class PlotFigure(HostBase):
         if plotter is None:
             is_new_plotter = True
         else:
-            if not isinstance(plotter, (BackgroundPlotter, pv.Plotter)):
+            if not (_is_background_plotter(plotter) or isinstance(plotter, pv.Plotter)):
                 try:
                     raise TypeError(
                         "`plotter` for PlotFigure must be either"
@@ -381,7 +397,13 @@ class PlotFigure(HostBase):
             if is_off_screen:
                 plotter = pv.Plotter(off_screen=True)
             else:
-                plotter = BackgroundPlotter()
+                background_plotter_type = _get_background_plotter_type()
+                if background_plotter_type is None:
+                    raise ImportError(
+                        "Interactive PlotFigure requires the optional GUI dependencies. "
+                        "Install Nematics3D with the 'gui' extra."
+                    )
+                plotter = background_plotter_type()
 
         object.__setattr__(self, "entity_plotter", plotter)
         object.__setattr__(self, "impl_interact_count", 0)
@@ -425,6 +447,10 @@ class PlotFigure(HostBase):
         object.__setattr__(self, "entity_axes_widget", None)
 
         if not is_off_screen:
+            from qtpy import QtCore
+
+            from nematics3d.visual.pick_manager import PickManager
+            from nematics3d.visual.qt.console import ScopedConsoleDock
 
             def _on_interaction_start(_obj, _event):
                 pm = getattr(self, "entity_pick_manager", None)
@@ -462,7 +488,10 @@ class PlotFigure(HostBase):
 
             main_window = self.pl.app_window
             console = ScopedConsoleDock(parent=main_window)
-            main_window.addDockWidget(QtCore.Qt.BottomDockWidgetArea, console)
+            main_window.addDockWidget(
+                QtCore.Qt.DockWidgetArea.BottomDockWidgetArea,
+                console,
+            )
 
             object.__setattr__(self, "entity_console", console)
 
@@ -696,7 +725,7 @@ class PlotFigure(HostBase):
     @property
     def pl_type(self):
         """Return a short backend code: B for BackgroundPlotter, P for Plotter."""
-        if isinstance(self.pl, BackgroundPlotter):
+        if _is_background_plotter(self.pl):
             return "B"
         if isinstance(self.pl, pv.Plotter):
             return "P"
@@ -710,10 +739,13 @@ class PlotFigure(HostBase):
         try:
             if self.pl._closed:
                 return False
-            if self.pl_type == "P":
-                return True
 
-            return bool(self.pl.render_window.GetGenericWindowId())
+            # PyVistaQt/VTK versions differ in when a native window id becomes
+            # available.  In particular, modern Qt6 BackgroundPlotter instances
+            # can be fully usable while GetGenericWindowId() is still falsey.
+            # The plotter's own closed-state is the stable lifecycle contract
+            # shared by both PyVista Plotter and BackgroundPlotter.
+            return True
 
         except (AttributeError, RuntimeError, ReferenceError):
             return False
@@ -1272,7 +1304,7 @@ class PlotFigure(HostBase):
         return f"{type(self).__name__}({self.name!r})"
 
 
-FigureData = PlotFigure | BackgroundPlotter | pv.Plotter
+FigureData = PlotFigure | pv.Plotter
 
 
 @logging_and_warning_decorator()
@@ -1301,7 +1333,7 @@ def as_plotfigure(figure, opts_figure=None, logger=None):
         figure.act_commit(opts_figure)
         return figure
 
-    if isinstance(figure, (BackgroundPlotter, pv.Plotter)):
+    if _is_background_plotter(figure) or isinstance(figure, pv.Plotter):
         return PlotFigure(plotter=figure, opts=opts_figure)
 
     try:

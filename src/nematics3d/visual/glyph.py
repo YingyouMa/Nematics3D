@@ -27,7 +27,7 @@ from nematics3d.datatypes import (
     as_points,
 )
 from nematics3d.format import fmt_value, save_opts_json
-from nematics3d.geometry import find_nearest_point
+from nematics3d.geometry import extract_surface_compat, find_nearest_point
 from nematics3d.logging_decorator import logging_and_warning_decorator
 
 from nematics3d.analysis.bounds import BoundsData, as_bounds
@@ -941,7 +941,7 @@ class PlotGlyph(HostBase):
             object.__setattr__(self, "entity_silhouette", actor_silhouette)
             return
         mesh = self.entity_actor.mapper.dataset
-        surf = mesh.extract_surface().triangulate().clean()
+        surf = extract_surface_compat(mesh).triangulate().clean()
         actor_silhouette = plotter.add_silhouette(
             surf,
             color=(0, 0, 0),

@@ -17,7 +17,6 @@ from nematics3d.format import fmt_value
 from nematics3d.logging_decorator import logging_and_warning_decorator
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_rod import InteractRod
 
 LengthMode = float | Callable | Sequence
 
@@ -256,7 +255,12 @@ class PlotRod(PlotGlyph):
             )
 
         object.__setattr__(self, "calc_keep_index", None)
-        self.act_set_interact_func(lambda: InteractRod.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_rod import InteractRod
+
+            return InteractRod.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
         self._helper_init_end()
 
     def _helper_get_resolver_source_name(self, attr_name=None):

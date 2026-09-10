@@ -317,7 +317,7 @@ class PickManager:
             else None
         )
         dialog = PickSettingsDialog(self, parent=parent)
-        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dialog.destroyed.connect(
             lambda *_args: object.__setattr__(self, "_entity_settings_dialog", None)
         )
@@ -341,7 +341,7 @@ class PickManager:
             else None
         )
         dialog = FigureOptionsDialog(fig, parent=parent)
-        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
         dialog.destroyed.connect(
             lambda *_args: object.__setattr__(self, "_entity_figure_opts_dialog", None)
         )

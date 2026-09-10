@@ -305,7 +305,7 @@ class FigureOptionsDialog(QtWidgets.QDialog):
             self._opts_snapshot_dialog.close()
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle("Current PlotFigure Opts Snapshot")
-        dialog.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        dialog.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
         layout = QtWidgets.QVBoxLayout(dialog)
         label = QtWidgets.QLabel(
             "This text is a one-time snapshot when the window opens. It does not update live.",

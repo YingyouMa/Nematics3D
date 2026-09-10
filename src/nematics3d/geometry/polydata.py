@@ -6,6 +6,16 @@ import pyvista as pv
 import vtk
 
 
+def extract_surface_compat(data):
+    """Extract a surface while preserving compatibility across PyVista versions."""
+    try:
+        return data.extract_surface(algorithm="dataset_surface")
+    except TypeError as error:
+        if "unexpected keyword argument 'algorithm'" not in str(error):
+            raise
+        return data.extract_surface()
+
+
 def as_polydata_input(data, *, name: str = "polydata input") -> pv.PolyData:
     """
     Normalize supported mesh-like inputs to ``pyvista.PolyData``.
@@ -46,7 +56,10 @@ def as_polydata_input(data, *, name: str = "polydata input") -> pv.PolyData:
         if method is None:
             continue
         try:
-            candidate = method()
+            if method_name == "extract_surface":
+                candidate = extract_surface_compat(wrapped)
+            else:
+                candidate = method()
         except Exception as error:
             last_error = error
             continue
@@ -95,4 +108,5 @@ def copy_polydata_geometry(poly: pv.PolyData) -> pv.PolyData:
 __all__ = [
     "as_polydata_input",
     "copy_polydata_geometry",
+    "extract_surface_compat",
 ]

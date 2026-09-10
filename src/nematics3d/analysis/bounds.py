@@ -27,6 +27,7 @@ from ..datatypes import (
 )
 from ..geometry import (
     OBBFit,
+    extract_surface_compat,
     get_box_corners,
     rotation_matrix_from_vectors,
     select_points_in_box,
@@ -487,7 +488,7 @@ def as_bounds(input_data, name: str = "bounds") -> Bounds | None:
     if isinstance(input_data, Bounds):
         return input_data
     if isinstance(input_data, pv.PolyData):
-        surface = input_data.extract_surface().triangulate().clean()
+        surface = extract_surface_compat(input_data).triangulate().clean()
         points = np.asarray(surface.points, dtype=float)
         if points.size == 0:
             raise ValueError("clip_geometry PolyData is empty.")

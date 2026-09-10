@@ -96,12 +96,13 @@
 # - Then migrate analysis attachment paths.
 # - Finally clean compatibility shims and public API wording.
 
+from __future__ import annotations
+
 import time
 from dataclasses import replace, dataclass
-from typing import Any, ClassVar, Mapping, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Mapping, Union
 
 import numpy as np
-from pyvistaqt import BackgroundPlotter
 import pyvista as pv
 
 from ..logging_decorator import logging_and_warning_decorator
@@ -139,11 +140,6 @@ from ..analysis.disclination import (
     defect_classify_into_lines,
     defect_validity_from_mask,
 )
-from ..visual.plot_tube import OptsTube
-from ..visual.plot_rod import OptsRod
-from ..visual.plot_sphere import OptsSphere
-from ..visual.plot_delaunay import OptsDelaunay
-from ..visual.plot_figure import PlotFigure, OptsFigure
 from ..visual.color import blue_red_in_white_bg
 from ..sample.q_plane import QPlane, QPlanePolar
 from ..visual.figure_manager import FigureManager
@@ -160,6 +156,31 @@ from ..geometry.smoothing.line import OptsSmoothedLine
 from ..core.registry_base import RegistryBase
 from ..analysis.disclination.line import DisclinationLine
 from ..core.class_base import AttrDef, ClassBase
+
+if TYPE_CHECKING:
+    from pyvistaqt import BackgroundPlotter
+    from ..visual.plot_delaunay import OptsDelaunay
+    from ..visual.plot_figure import OptsFigure, PlotFigure
+    from ..visual.plot_rod import OptsRod
+    from ..visual.plot_sphere import OptsSphere
+    from ..visual.plot_tube import OptsTube
+
+
+def _new_opts_figure():
+    """Create figure options without importing the Qt-backed figure module at import time."""
+    from ..visual.plot_figure import OptsFigure
+
+    return OptsFigure()
+
+
+def _visual_option_types():
+    """Load visualization option classes only when a visualization action is used."""
+    from ..visual.plot_delaunay import OptsDelaunay
+    from ..visual.plot_rod import OptsRod
+    from ..visual.plot_sphere import OptsSphere
+    from ..visual.plot_tube import OptsTube
+
+    return OptsDelaunay, OptsRod, OptsSphere, OptsTube
 
 
 @dataclass(slots=True)
@@ -1085,6 +1106,13 @@ class QFieldObject(ClassBase):
         title: str,
         logger=None,
     ):
+        from ..visual.plot_figure import PlotFigure
+
+        try:
+            from pyvistaqt import BackgroundPlotter
+            background_plotter_types = (BackgroundPlotter,)
+        except ImportError:
+            background_plotter_types = ()
 
         is_new = as_bool(is_new, name="Whether to create a new figure", replace=True)
 
@@ -1116,7 +1144,7 @@ class QFieldObject(ClassBase):
                         figure = PlotFigure(opts=opts_figure, name=title)
                 elif isinstance(figure, PlotFigure):
                     figure.act_commit(opts_figure)
-                elif isinstance(figure, (BackgroundPlotter, pv.Plotter)):
+                elif isinstance(figure, background_plotter_types + (pv.Plotter,)):
                     figure = PlotFigure(plotter=figure, opts=opts_figure, name=title)
                 else:
                     raise ValueError(
@@ -1258,10 +1286,11 @@ class QFieldObject(ClassBase):
                 extent_color=(0, 0, 0),
             )
         """
+        OptsDelaunay, OptsRod, OptsSphere, OptsTube = _visual_option_types()
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
-            opts_figure = OptsFigure()
+            opts_figure = _new_opts_figure()
         if opts_line is None:
             opts_line = OptsTube(color="sample_van_der_corput")
 
@@ -1410,12 +1439,13 @@ class QFieldObject(ClassBase):
                 defect_radius=1.5,
             )
         """
+        OptsDelaunay, OptsRod, OptsSphere, OptsTube = _visual_option_types()
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
-            opts_figure = OptsFigure()
+            opts_figure = _new_opts_figure()
         if opts_n is None:
             opts_n = OptsRod()
         if opts_nb is None:
@@ -1547,12 +1577,13 @@ class QFieldObject(ClassBase):
                 S_opacity=0.8,
             )
         """
+        OptsDelaunay, OptsRod, OptsSphere, OptsTube = _visual_option_types()
         if opts_grid is None:
             opts_grid = OptsPlaneGrid()
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
-            opts_figure = OptsFigure()
+            opts_figure = _new_opts_figure()
         if opts_S is None:
             opts_S = OptsDelaunay()
 
@@ -1689,12 +1720,13 @@ class QFieldObject(ClassBase):
             )
         """
 
+        OptsDelaunay, OptsRod, OptsSphere, OptsTube = _visual_option_types()
         if opts_grid is None:
             opts_grid = OptsPlaneGridPolar()
         if opts_extent is None:
             opts_extent = OptsTube()
         if opts_figure is None:
-            opts_figure = OptsFigure()
+            opts_figure = _new_opts_figure()
         if opts_n is None:
             opts_n = OptsRod()
         if opts_nb is None:

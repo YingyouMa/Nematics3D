@@ -16,7 +16,6 @@ from nematics3d.surface.contour import ContourSurface
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
 from nematics3d.visual.plot_polydata import _materialize_polydata_with_display_data
-from nematics3d.visual.qt.interact_contour_surface import InteractContourSurface
 
 
 @dataclass(slots=True, repr=False)
@@ -149,9 +148,14 @@ class PlotContourSurface(PlotGlyph):
             self.impl_owner_sync_name,
             self._sync_from_owner_surface,
         )
-        self.act_set_interact_func(
-            lambda: InteractContourSurface.show_once(self, self.fig)
-        )
+        def _show_interact():
+            from nematics3d.visual.qt.interact_contour_surface import (
+                InteractContourSurface,
+            )
+
+            return InteractContourSurface.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
         self._helper_init_end()
 
     def _helper_bound_coords(self):

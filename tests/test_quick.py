@@ -81,8 +81,13 @@ def test_quick_delegates_to_qfield_workflow(monkeypatch, tmp_path):
         def act_savefig(self, path):
             calls.append(("save", path))
 
+    class FakeOptsTube:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
     monkeypatch.setattr(quick_q, "QFieldObject", FakeQObject)
     monkeypatch.setattr(quick_q, "PlotFigure", FakeFigure)
+    monkeypatch.setattr(quick_q, "OptsTube", FakeOptsTube)
 
     save_path = tmp_path / "nested" / "quick.png"
     n = np.zeros((8, 8, 8, 3))

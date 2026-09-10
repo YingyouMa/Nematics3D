@@ -1,4 +1,7 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("pyvistaqt", reason="interactive logger visualization requires GUI extra")
 
 import sys
 from pathlib import Path

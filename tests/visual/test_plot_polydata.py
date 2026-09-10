@@ -17,7 +17,7 @@ class TestPlotPolyData(unittest.TestCase):
     def test_plot_polydata_accepts_pyvista_polydata(self):
         fig = self._make_figure()
         try:
-            poly = pv.Cube().extract_surface().triangulate().clean()
+            poly = pv.Cube().triangulate().clean()
             mesh = PlotPolyData(
                 poly,
                 figure=fig,

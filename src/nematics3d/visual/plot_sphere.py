@@ -11,7 +11,6 @@ from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_sphere import InteractSphere
 
 
 @dataclass(slots=True, repr=False)
@@ -332,7 +331,12 @@ class PlotSphere(PlotGlyph):
 
         object.__setattr__(self, "calc_keep_index", None)
         self._helper_init_end()
-        self.act_set_interact_func(lambda: InteractSphere.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_sphere import InteractSphere
+
+            return InteractSphere.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
 
     def _helper_bound_coords(self):
         coords, keep_index = self._helper_filter_centers_by_bounds()

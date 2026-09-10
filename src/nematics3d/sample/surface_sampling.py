@@ -14,7 +14,11 @@ from ..datatypes import UNSET, Unset, as_bool, as_number, as_readonly_array
 from ..logging_decorator import logging_and_warning_decorator
 from ..core.class_base import AttrDef
 from ..core.host_base import HostBase, OptsBase
-from ..geometry.polydata import as_polydata_input, copy_polydata_geometry
+from ..geometry.polydata import (
+    as_polydata_input,
+    copy_polydata_geometry,
+    extract_surface_compat,
+)
 from ..geometry.surface import surface_triangle_coordinates
 
 
@@ -32,7 +36,7 @@ def _as_surface_polydata_input(data, *, name: str):
 
 def _helper_prepare_surface(poly: pv.PolyData) -> pv.PolyData:
     """Return one validated, triangulated surface with point normals attached."""
-    surface = poly.extract_surface().triangulate().clean()
+    surface = extract_surface_compat(poly).triangulate().clean()
 
     if surface.n_cells == 0:
         raise ValueError(

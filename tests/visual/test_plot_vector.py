@@ -35,7 +35,7 @@ def build_vector_debug_figure(*, is_off_screen=False):
     return figure
 
 
-def test_plot_vector_debug_figure():
+def make_plot_vector_debug_figure():
     """Return a foreground PlotFigure for interactive vector debugging."""
     figure = build_vector_debug_figure(is_off_screen=False)
     return figure
@@ -164,7 +164,7 @@ class TestPlotVector(unittest.TestCase):
                         sides=8,
                     )
                 else:
-                    fig = test_plot_vector_debug_figure()
+                    fig = make_plot_vector_debug_figure()
                     vectors = next(iter(fig.glyphs))
                 try:
                     mesh = vectors.entity_actor.mapper.dataset
@@ -206,5 +206,5 @@ class TestPlotVector(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    figure = test_plot_vector_debug_figure()
+    figure = make_plot_vector_debug_figure()
     print("Created foreground PlotVector debug figure: figure")

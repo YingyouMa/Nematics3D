@@ -4,6 +4,7 @@ import pytest
 
 from nematics3d.core.class_base import AttrDef, ClassBase
 from nematics3d.core.host_base import HostBase, OptsBase
+from nematics3d.datatypes import as_str
 
 
 def _as_positive_int(value, doc):
@@ -53,6 +54,40 @@ class DemoHost(HostBase):
     def _helper_commit_apply_opts_main(self, is_reapply_opts=False, **kwargs):
         del is_reapply_opts
         return kwargs, {}
+
+
+class DocumentedBase(ClassBase):
+    """A documented ClassBase test object.
+
+    Used to verify concrete-class documentation inspection.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, name="documented"):
+        super().__init__(name=name, name_replace="documented")
+
+
+def _counting_label_validator(value, name="input_data", replace=None):
+    CountingFieldBase.call_count += 1
+    return as_str(value, name=name, replace=replace)
+
+
+class CountingFieldBase(ClassBase):
+    __slots__ = ("raw_label",)
+    call_count = 0
+
+    __attr_defs__ = {
+        "raw_label": AttrDef(
+            doc="The label string for this instance.",
+            kind="raw",
+            validator=_counting_label_validator,
+        ),
+    }
+
+    def __init__(self, name="field", label="label"):
+        super().__init__(name=name, name_replace="field")
+        object.__setattr__(self, "raw_label", label)
 
 
 def test_show_attr_doc_resolves_raw_alias():
@@ -153,3 +188,42 @@ def test_host_readable_attrs_uses_unified_doc_path():
     assert "'value': Alias of 'raw_value'. Primary host input." in output
     assert "'tag': name identifier of the option settings" in output
     assert not hasattr(host, "show_attr_desc")
+
+
+def test_act_add_attr_can_overwrite_existing_extra_value():
+    obj = DemoBase()
+    obj.act_add_attr("tag", "Original tag doc.", default=1)
+
+    obj.act_add_attr(
+        "tag",
+        "Updated tag doc.",
+        default=2,
+        is_overwrite=True,
+    )
+
+    assert obj.tag == 2
+    assert obj.impl_extra["tag"].doc == "Updated tag doc."
+    assert obj.impl_extra["tag"].value == 2
+
+
+def test_public_raw_attr_assignment_runs_validator():
+    CountingFieldBase.call_count = 0
+    obj = CountingFieldBase()
+    assert CountingFieldBase.call_count == 0
+
+    obj.label = "alias-update"
+    assert obj.raw_label == "alias-update"
+    assert CountingFieldBase.call_count == 1
+
+    obj.raw_label = "direct-update"
+    assert obj.raw_label == "direct-update"
+    assert CountingFieldBase.call_count == 2
+
+
+def test_show_doc_returns_concrete_class_docstring():
+    obj = DocumentedBase()
+
+    assert obj.show_doc(is_return=True) == (
+        "A documented ClassBase test object.\n\n"
+        "Used to verify concrete-class documentation inspection."
+    )

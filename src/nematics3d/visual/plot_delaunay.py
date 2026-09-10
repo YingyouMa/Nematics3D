@@ -13,9 +13,9 @@ from nematics3d.datatypes import UNSET, Unset, as_ColorRGB, as_number, as_bool, 
 from nematics3d.analysis.bounds import BoundsData
 from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
+from nematics3d.geometry import extract_surface_compat
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_delaunay import InteractDelaunay
 
 
 @dataclass(slots=True, repr=False)
@@ -390,7 +390,12 @@ class PlotDelaunay(PlotGlyph):
         )
 
         object.__setattr__(self, "calc_keep_index", None)
-        self.act_set_interact_func(lambda: InteractDelaunay.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_delaunay import InteractDelaunay
+
+            return InteractDelaunay.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
 
         self._helper_init_end()
 
@@ -470,7 +475,7 @@ class PlotDelaunay(PlotGlyph):
             plotter.remove_actor(silhouette_id)
 
         mesh = self.entity_actor.mapper.dataset
-        surf = mesh.extract_surface().triangulate().clean()
+        surf = extract_surface_compat(mesh).triangulate().clean()
         outline = surf.extract_feature_edges(
             boundary_edges=True,
             feature_edges=False,

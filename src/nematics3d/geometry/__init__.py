@@ -24,6 +24,7 @@ from .points import points_membership_mask
 from .polydata import (
     as_polydata_input,
     copy_polydata_geometry,
+    extract_surface_compat,
 )
 from .rotation import (
     RotationAxisResult,

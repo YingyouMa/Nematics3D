@@ -1,6 +1,11 @@
 """Visualization adapter for :mod:`nematics3d.sample.vector_plane`."""
 
-from pyvistaqt import BackgroundPlotter
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pyvistaqt import BackgroundPlotter
 
 from nematics3d.core.opts import merge_opts_all
 from nematics3d.visual.plot_figure import OptsFigure, PlotFigure, as_plotfigure

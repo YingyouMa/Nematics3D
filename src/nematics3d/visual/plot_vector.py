@@ -18,7 +18,6 @@ from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph, _as_resolver_source_or_none
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_vector import InteractVector
 
 LengthMode = float | Callable | Sequence
 
@@ -253,7 +252,12 @@ class PlotVector(PlotGlyph):
 
         object.__setattr__(self, "calc_keep_index", None)
 
-        self.act_set_interact_func(lambda: InteractVector.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_vector import InteractVector
+
+            return InteractVector.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
 
         self._helper_init_end()
 

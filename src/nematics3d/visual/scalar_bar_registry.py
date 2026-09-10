@@ -307,6 +307,11 @@ class ScalarBarRegistry(RegistryBase):
             scalar_range = tuple(float(x) for x in source_display["clim"])
             mapper.scalar_range = scalar_range
             lut.scalar_range = scalar_range
+        # Keep the vtkScalarBarActor explicitly bound to the mapper's current
+        # lookup table.  Newer PyVista/VTK releases may replace or wrap the LUT
+        # while updating mapper state, leaving an existing scalar-bar actor
+        # attached to the previous table (and therefore its old scalar range).
+        backend.SetLookupTable(lut)
         if opts.n_colors is not None:
             backend.SetMaximumNumberOfColors(opts.n_colors)
         backend.SetTitle(source_display["title"])

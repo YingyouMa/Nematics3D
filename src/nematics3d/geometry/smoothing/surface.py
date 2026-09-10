@@ -307,9 +307,6 @@ class SmoothedSurface(HostBase):
     ):
         """Plot the smoothed mesh and bind its live smoothing controls."""
         from nematics3d.visual.plot_polydata import PlotPolyData
-        from nematics3d.visual.qt.interact_smoothed_surface import (
-            InteractSmoothedSurface,
-        )
 
         visual_old = self.visual
         if visual_old is not None:
@@ -331,6 +328,10 @@ class SmoothedSurface(HostBase):
         def _interact():
             if callable(default_func):
                 default_func()
+            from nematics3d.visual.qt.interact_smoothed_surface import (
+                InteractSmoothedSurface,
+            )
+
             InteractSmoothedSurface.show_once(self, visual.fig)
 
         visual.act_set_interact_func(_interact)

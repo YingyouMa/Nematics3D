@@ -19,7 +19,6 @@ from nematics3d.core.class_base import AttrDef
 from nematics3d.core.host_base import HostBase
 from nematics3d.visual.glyph import OptsGlyph, PlotGlyph
 from nematics3d.visual.plot_figure import FigureData
-from nematics3d.visual.qt.interact_tube import InteractTube
 
 
 #! test
@@ -435,7 +434,12 @@ class PlotTube(PlotGlyph):
         self._helper_commit_line_index({"line_index": line_index})
 
         self._helper_init_end()
-        self.act_set_interact_func(lambda: InteractTube.show_once(self, self.fig))
+        def _show_interact():
+            from nematics3d.visual.qt.interact_tube import InteractTube
+
+            return InteractTube.show_once(self, self.fig)
+
+        self.act_set_interact_func(_show_interact)
 
     # -------------------------------
     # Tube raw topology helpers

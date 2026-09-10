@@ -7,11 +7,16 @@ import numpy as np
 from ..datatypes import UNSET, as_bool
 from ..logging_decorator import logging_and_warning_decorator
 from ..q_field.q_field_object import QFieldObject
-from ..visual.plot_figure import PlotFigure
-from ..visual.plot_sphere import OptsSphere, PlotSphere
-from ..visual.plot_tube import OptsTube
 
 __all__ = ["quick_visualize_q"]
+
+
+# Optional visualization classes are resolved lazily.  Keeping these module
+# attributes also preserves the lightweight monkeypatch seam used by tests.
+PlotFigure = None
+PlotSphere = None
+OptsSphere = None
+OptsTube = None
 
 
 _DIRECTOR_SPACING_CONFIG = {
@@ -177,7 +182,11 @@ def quick_visualize_q(
             window_length=params["smooth_window_length"],
         )
 
-    figure = PlotFigure(is_off_screen=is_off_screen)
+    plot_figure_cls = PlotFigure
+    if plot_figure_cls is None:
+        from ..visual.plot_figure import PlotFigure as plot_figure_cls
+
+    figure = plot_figure_cls(is_off_screen=is_off_screen)
     if is_visualize_lines:
         q_obj.act_visualize_disclination_lines(
             figure=figure,
@@ -186,20 +195,30 @@ def quick_visualize_q(
             line_radius=params["line_radius"],
         )
     else:
-        PlotSphere(
+        plot_sphere_cls = PlotSphere
+        opts_sphere_cls = OptsSphere
+        if plot_sphere_cls is None or opts_sphere_cls is None:
+            from ..visual.plot_sphere import OptsSphere as opts_sphere_cls
+            from ..visual.plot_sphere import PlotSphere as plot_sphere_cls
+
+        plot_sphere_cls(
             coords=q_obj.calc_defect_grid,
             name="defect points",
             category="defects",
             figure=figure,
-            opts=OptsSphere(
+            opts=opts_sphere_cls(
                 color=(0.5, 0.5, 0.5),
                 radius=params["defect_radius"],
             ),
         )
 
+    opts_tube_cls = OptsTube
+    if opts_tube_cls is None:
+        from ..visual.plot_tube import OptsTube as opts_tube_cls
+
     q_obj.calc_bounds.act_visualize(
         figure=figure,
-        opts=OptsTube(radius=params["extent_radius"]),
+        opts=opts_tube_cls(radius=params["extent_radius"]),
         is_reset_camera=False,
     )
 

@@ -39,8 +39,8 @@ class LightingConsole(QtWidgets.QWidget):
 
         self.setWindowTitle(f"Lighting Controls of {host.name!r}")
         self.setObjectName(f"{parent_panel.objectName()}_lighting")
-        self.setWindowFlags(self.windowFlags() | QtCore.Qt.Window)
-        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
+        self.setWindowFlags(self.windowFlags() | QtCore.Qt.WindowType.Window)
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_DeleteOnClose, True)
 
         self.layout = QtWidgets.QVBoxLayout(self)
         self.layout.setContentsMargins(10, 10, 10, 10)
