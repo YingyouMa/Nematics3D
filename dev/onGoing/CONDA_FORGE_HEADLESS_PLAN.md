@@ -593,3 +593,129 @@ visualization, and interactive GUI dependencies.
   no-display render.  A final end-to-end Nematics3D-on-HPCC smoke test should
   be run after the current source is transferred there; do not treat the old
   HPCC source copy as equivalent to the current repository.
+
+### 2026-09-10 — Dependency relaxation audit started
+
+- Began separating actual source requirements from versions that merely
+  happen to be installed in the current development environments.
+- First conservative experiment relaxes Python from `>=3.12,<3.13` to
+  `>=3.11`, runtime NumPy from `>=2.3` to `>=1.26`, build-time NumPy from
+  `>=2.3` to `>=2.0`, SciPy from `>=1.16` to `>=1.10`, and NumExpr from
+  `>=2.14` to `>=2.10.1`.
+- The Python floor was initially considered as 3.10, then corrected to 3.11
+  after finding two uses of `@dataclass(..., weakref_slot=True)` in the Qt
+  panel implementation; `weakref_slot` was added in Python 3.11.
+- PyVista, VTK, and Qt-family lower bounds are intentionally unchanged in this
+  phase.
+- Added `dev/onGoing/DEPENDENCY_COMPATIBILITY_AUDIT.md` to record the evidence,
+  candidate floors, and validation matrix.
+- HPCC's existing Python 3.11.13 `checkQ` interpreter successfully compiled
+  the complete current `src/nematics3d` tree with `compileall`, providing an
+  independent source-level Python 3.11 acceptance check.  Exact minimum-stack
+  runtime testing remains pending because repeated long conda environment
+  creation calls through the HPCC connector were interrupted by upstream 502
+  errors.
+- Retried the minimum-stack environment creation and completed it successfully
+  as `/home/yingyouma/.conda/envs/Nematics3D_min311`: Python 3.11.16,
+  NumPy 1.26.4, SciPy 1.10.1, NumExpr 2.10.1, PyVista 0.46.4, and VTK 9.3.1.
+  The Nematics3D native extension also builds and imports in this environment.
+- The available Python-3.11 VTK 9.3.1 package is a Qt/X11 build, so this
+  minimum-version environment is for dependency compatibility, not no-display
+  rendering acceptance.  A full pytest invocation with `DISPLAY` unset reaches
+  a legacy smoothing test that renders at collection time and segfaults inside
+  VTK.  The separate OSMesa environment remains the authoritative headless
+  rendering reference.
+- Added a strict minimum-version headless environment,
+  `/home/yingyouma/.conda/envs/Nematics3D_min311_headless`, with Python 3.11.16,
+  NumPy 1.26.4, SciPy 1.10.1, NumExpr 2.10.1, PyVista 0.46.4, and
+  `vtk-base=9.3.1=*osmesa*`.
+- Verified that this environment really renders without `DISPLAY`: PyVista
+  successfully wrote an off-screen PNG, and the installed VTK metadata is an
+  `osmesa_py311` build rather than a Qt/X11 build.
+- Full headless pytest on this strict minimum stack produced
+  `980 passed, 20 failed, 1 skipped, 38 subtests passed`.
+  Eighteen failures are caused by SciPy 1.10.1 lacking the `axes=` keyword
+  currently passed to `scipy.ndimage.gaussian_filter`; two failures come from
+  tests that directly use NumPy-2.x-only `np.asarray(..., copy=False)` while
+  the candidate runtime floor is NumPy 1.26.4.  Therefore the SciPy floor
+  candidate is definitely too low, while the two NumPy failures require a
+  support-policy/test-guard decision rather than indicating a headless backend
+  failure.
+- Confirmed from SciPy 1.11.0 release notes that `gaussian_filter(..., axes=)`
+  was introduced in SciPy 1.11.0, so the candidate floor is raised to
+  `scipy>=1.11,<2`.
+- Confirmed that NumPy 1.26 exposes a real compatibility issue in
+  `SmoothedLine.__array__`, not merely a test-only issue: forwarding
+  `copy=None` to `np.asarray` fails on NumPy 1.26.  The method is now branched
+  to retain NumPy 1.26 compatibility while preserving NumPy 2.x explicit
+  copy semantics; copy-specific tests run only on NumPy >=2.
+- Validated the exact SciPy floor with SciPy 1.11.0 itself: all 20
+  Gaussian-smoothing tests pass and the required `gaussian_filter(..., axes=)`
+  API is present.
+- With the NumPy compatibility fix and version-aware tests applied, the full
+  strict-minimum OSMesa suite now passes on HPCC:
+  `1000 passed, 1 skipped, 38 subtests passed` using Python 3.11.16,
+  NumPy 1.26.4, SciPy 1.11.0, NumExpr 2.10.1, PyVista 0.46.4, and
+  VTK 9.3.1 OSMesa.
+- The focused local NumPy-2.x `SmoothedLine` suite also passes all 13 tests,
+  so the compatibility fix preserves both NumPy 1.26 and NumPy 2 behavior.
+- Restored Ruff after the local `Nematics3D` environment rebuild, normalized
+  the touched `SmoothedLine` module to the repository's current `ClassVar` and
+  import conventions, and confirmed Ruff is clean plus 13/13 focused tests.
+- Continued the visualization dependency audit below the previous conservative
+  PyVista 0.46 / VTK 9.3 floors.  Full no-display OSMesa runs pass on PyVista
+  0.45.3, 0.44.2, and 0.43.10, each with
+  `1000 passed, 1 skipped, 38 subtests passed`.
+- A combined PyVista 0.43.10 + VTK 9.2.6 OSMesa environment also passes the
+  same complete suite on Python 3.11, NumPy 1.26.4, SciPy 1.11.0, and NumExpr
+  2.10.1.  The current conservative validated core-visualization candidates
+  are therefore `pyvista>=0.43,<1` and `vtk>=9.2,<10`.
+- GUI dependency floors remain unchanged until the dedicated PyVistaQt / QtPy /
+  PyQt6 audit is complete.
+- Dedicated GUI dependency inspection then showed that the old
+  `pyvistaqt>=0.11.4` and `qtpy>=2.4` bounds were also conservative.  With
+  PyVista 0.43.10 and PyQt6 6.8.1, `pyvistaqt==0.10.0` and `qtpy==2.2.1`
+  successfully import `BackgroundPlotter`, expose the Qt6 scoped enums and
+  helpers used by Nematics3D, and import the reviewed `nematics3d.visual.qt`
+  modules plus `visual.plot_figure`.
+- A no-`DISPLAY` `BackgroundPlotter` construction attempt aborts in
+  `vtkXOpenGLRenderWindow`, which is expected for the Qt/X11 VTK package used
+  by this GUI test environment and is distinct from the accepted OSMesa
+  headless path.
+- Updated the conservative GUI candidates to `pyvistaqt>=0.10,<1` and
+  `qtpy>=2.2,<3`.  Kept `PyQt6>=6.7,<7` unchanged pending a desktop/CI test of
+  an older PyQt6 release; PyQt6 6.4.2 could not be exercised on the HPCC host
+  because its old PyPI wheel requires a newer glibc baseline and the exact old
+  conda-forge build is no longer available from the current main channel.
+- Decided not to lower PyQt6 further: `PyQt6>=6.7,<7` is the intentional
+  supported floor for now, rather than an unresolved audit item.
+- Completed the NumPy native-extension ABI cross-check.  A cp311 wheel built
+  against NumPy 2.4.6 has its exact `_core` binary load and execute correctly
+  under both NumPy 1.26.4 and NumPy 2.4.6, producing identical finite results
+  for the same Q-tensor input.  This validates build-time NumPy >=2 with
+  runtime NumPy >=1.26 for the current extension.
+- PEP 517 build isolation on HPCC tries to source-build modern NumPy because
+  the host cannot use its current manylinux wheel, then fails on the host GCC
+  4.8.  Building against the installed conda-forge NumPy 2.x environment works;
+  this is recorded as an HPCC toolchain limitation rather than a Nematics3D
+  packaging defect.
+- Added a Python 3.13.15 core validation environment.  The complete source tree
+  passes `compileall`, a cp313 wheel builds successfully, and the cp313 native
+  `_core` extension loads and executes under NumPy 2.5.3.  Full Python-3.13
+  OSMesa pytest acceptance remains unavailable because the current HPCC
+  conda-forge solver has no matching `vtk-base=*osmesa*` combination.
+- Dependency-relaxation phase is therefore considered complete for the current
+  release target.  Accepted metadata is Python >=3.11; NumPy >=1.26,<3 with
+  build NumPy >=2,<3; NumExpr >=2.10.1,<3; SciPy >=1.11,<2; PyVista >=0.43,<1;
+  VTK >=9.2,<10; GUI extras PyVistaQt >=0.10,<1, QtPy >=2.2,<3, and PyQt6
+  >=6.7,<7.
+- Added the Python 3.13 Trove classifier to match the completed cp313 source,
+  wheel, and native-extension validation.  PyQt6 remains intentionally pinned
+  at the conservative floor `>=6.7,<7`; no further relaxation is planned for
+  this release cycle.
+- Final package-metadata sanity checking is being performed from the HPCC
+  temporary source copy because the rebuilt local Nematics3D environment
+  currently lacks the `build` frontend and the local MCP does not expose
+  arbitrary package installation.  The temporary copy is synchronized to the
+  accepted dependency metadata before constructing and inspecting the final
+  wheel.

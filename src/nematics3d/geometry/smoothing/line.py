@@ -1,8 +1,9 @@
 """Savitzky-Golay smoothing and spline parameterization for polylines."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, ClassVar, Literal
 
 import numpy as np
 from scipy.interpolate import splev, splprep
@@ -13,8 +14,8 @@ from ...core.host_base import HostBase, OptsBase
 from ...core.opts import cover_value
 from ...core.registry_base import RegistryBase
 from ...datatypes import (
-    Number,
     UNSET,
+    Number,
     Unset,
     as_bool,
     as_number,
@@ -37,7 +38,7 @@ class OptsSmoothedLine(OptsBase):
     mode:                       Literal["interp", "wrap"] | Unset   = UNSET
     min_line_length:            int | Unset                         = UNSET
 
-    __attrs__ = {
+    __attrs__: ClassVar[Mapping[str, str]] = {
         **OptsBase.__attrs__,
         "window_ratio":         "window ratio for smoothing: line_length / window_length",
         "window_length":        "explicit window length for smoothing",
@@ -47,7 +48,7 @@ class OptsSmoothedLine(OptsBase):
         "min_line_length":      "minimum line length to be smoothed",
     }
 
-    impl_validators = {
+    impl_validators: ClassVar[Mapping[str, Any]] = {
         **OptsBase.impl_validators,
         "window_ratio":         lambda v, d: None if v is None else as_number(v, name=d, value_range=(1e-12, np.inf)),
         "window_length":        lambda v, d: None if v is None else as_number(v, name=d, is_integer=True),
@@ -78,7 +79,7 @@ class SmoothedLine(HostBase):
     """Smooth and parameterize a polyline while retaining its raw coordinates."""
 
     # fmt: off
-    __attr_defs__ = {
+    __attr_defs__: ClassVar[Mapping[str, AttrDef]] = {
         "raw_coords": AttrDef(
             doc="Raw input line coordinates (shape: N x D)",
             kind="raw",
@@ -423,7 +424,16 @@ class SmoothedLine(HostBase):
         return linefunc
 
     def __array__(self, dtype=None, copy=None):
-        return np.asarray(self.calc_result, dtype=dtype, copy=copy)
+        if copy is None:
+            return np.asarray(self.calc_result, dtype=dtype)
+
+        if copy:
+            return np.array(self.calc_result, dtype=dtype, copy=True)
+
+        result = np.asarray(self.calc_result, dtype=dtype)
+        if not np.shares_memory(result, self.calc_result):
+            raise ValueError("Unable to honor copy=False for the requested dtype.")
+        return result
 
     def __getitem__(self, idx):
         return self.calc_result[idx]

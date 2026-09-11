@@ -1,7 +1,8 @@
 import numpy as np
+from scipy.interpolate import splev
+
 import nematics3d.geometry.smoothing.line as smoothed_line_module
 from nematics3d.geometry.smoothing.line import SmoothedLine
-from scipy.interpolate import splev
 
 
 def _build_noisy_line(num_points=121, noise_scale=0.08, seed=7):
@@ -214,19 +215,20 @@ def test_smoothed_line_numpy_array_protocol():
         mode="interp",
     )
 
-    no_copy = np.asarray(line, copy=False)
-    assert np.shares_memory(no_copy, line.calc_result)
-
-    copied = np.asarray(line, copy=True)
-    assert not np.shares_memory(copied, line.calc_result)
-    np.testing.assert_array_equal(copied, line.calc_result)
-
     converted = np.asarray(line, dtype=np.float32)
     assert converted.dtype == np.float32
     np.testing.assert_allclose(converted, line.calc_result, rtol=1e-6, atol=1e-6)
 
-    with np.testing.assert_raises(ValueError):
-        np.asarray(line, dtype=np.float32, copy=False)
+    if np.lib.NumpyVersion(np.__version__) >= "2.0.0":
+        no_copy = np.asarray(line, copy=False)
+        assert np.shares_memory(no_copy, line.calc_result)
+
+        copied = np.asarray(line, copy=True)
+        assert not np.shares_memory(copied, line.calc_result)
+        np.testing.assert_array_equal(copied, line.calc_result)
+
+        with np.testing.assert_raises(ValueError):
+            np.asarray(line, dtype=np.float32, copy=False)
 
 
 def test_smoothed_line_result_is_readonly_without_extra_data_copy():
@@ -243,16 +245,17 @@ def test_smoothed_line_result_is_readonly_without_extra_data_copy():
 
     assert line.calc_result.flags.writeable is False
     assert line.result.flags.writeable is False
-    assert np.asarray(line, copy=False).flags.writeable is False
+    array_view = np.asarray(line)
+    assert array_view.flags.writeable is False
 
     with np.testing.assert_raises(ValueError):
         line.result[0, 0] = 0.0
     with np.testing.assert_raises(ValueError):
-        np.asarray(line, copy=False)[0, 0] = 0.0
+        array_view[0, 0] = 0.0
     with np.testing.assert_raises(ValueError):
         line[0][0] = 0.0
 
-    copied = np.asarray(line, copy=True)
+    copied = np.array(line, copy=True)
     assert copied.flags.writeable is True
     copied[0, 0] = copied[0, 0] + 1.0
 
