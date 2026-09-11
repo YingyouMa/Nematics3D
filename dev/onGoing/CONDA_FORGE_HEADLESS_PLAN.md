@@ -719,3 +719,7 @@ visualization, and interactive GUI dependencies.
   arbitrary package installation.  The temporary copy is synchronized to the
   accepted dependency metadata before constructing and inspecting the final
   wheel.
+- That final wheel metadata check passed.  The wheel records Python `>=3.11`,
+  NumPy `>=1.26,<3`, NumExpr `>=2.10.1,<3`, SciPy `>=1.11,<2`, PyVista
+  `>=0.43,<1`, VTK `>=9.2,<10`, PyVistaQt `>=0.10,<1`, QtPy `>=2.2,<3`,
+  and PyQt6 `>=6.7,<7`, with Python 3.11/3.12/3.13 classifiers present.

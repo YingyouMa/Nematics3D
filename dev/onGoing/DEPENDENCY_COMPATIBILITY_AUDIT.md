@@ -213,8 +213,9 @@ candidate floor is `scipy>=1.11,<2`.
   are `pyvista>=0.43,<1` and `vtk>=9.2,<10`.  Older releases are not being
   pursued merely to maximize nominal compatibility unless a concrete user or
   platform need appears.
-- The GUI-specific lower bounds (`pyvistaqt`, `qtpy`, and `PyQt6`) remain to
-  be audited separately before changing them.
+- At this point in the chronology the GUI-specific lower bounds (`pyvistaqt`,
+  `qtpy`, and `PyQt6`) had not yet been audited; the completed GUI audit and
+  adopted bounds are recorded below.
 
 ## Final accepted support matrix
 
@@ -252,6 +253,13 @@ not a Nematics3D packaging defect.
 The Python classifiers now include 3.11, 3.12, and 3.13. PyQt6 remains at the
 intentionally conservative floor `>=6.7,<7`; no further lowering is part of
 this release cycle.
+
+Final wheel metadata was rebuilt and inspected from the HPCC validation copy
+after synchronizing it to the accepted `pyproject.toml` values.  The generated
+wheel records `Requires-Python: >=3.11`, runtime NumPy `>=1.26,<3`,
+NumExpr `>=2.10.1,<3`, SciPy `>=1.11,<2`, PyVista `>=0.43,<1`, VTK
+`>=9.2,<10`, and GUI extras PyVistaQt `>=0.10,<1`, QtPy `>=2.2,<3`, and
+PyQt6 `>=6.7,<7`.  Its classifiers also include Python 3.11, 3.12, and 3.13.
 
 ## 2026-09-11 — GUI lower bounds and final compatibility checks
 
